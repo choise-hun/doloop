@@ -68,8 +68,11 @@
       const list = await window.ULData.integrations.list();
       if (!activeUid || activeUid !== uid || seq !== keysReqSeq) return;
       renderKeys(list);
-    } catch (_) {
+    } catch (e) {
       if (!activeUid || activeUid !== uid || seq !== keysReqSeq) return;
+      const msg = (e && e.message) || '연동 키 목록을 불러오지 못했어요.';
+      if ($('ntnKeyMsg')) say('ntnKeyMsg', msg, 'err');
+      if ($('gemKeyMsg')) say('gemKeyMsg', msg, 'err');
     }
   }
 
@@ -258,10 +261,9 @@
         resetGeminiFields();
         if ($('ntnKeyMsg')) say('ntnKeyMsg', '');
         if ($('gemKeyMsg')) say('gemKeyMsg', '');
-      }
-
-      if (nextUid) {
-        loadKeys(nextUid);
+        if (nextUid) {
+          loadKeys(nextUid);
+        }
       }
     });
 
@@ -319,6 +321,7 @@
       const btn = $('btnSaveNotionKey');
       btn.disabled = true;
       say('ntnKeyMsg', '저장 중…');
+      keysReqSeq++;
       try {
         const dto = await window.ULData.integrations.saveNotion({
           token: token || null,
@@ -358,6 +361,7 @@
       const btn = $('btnCheckNotionKey');
       btn.disabled = true;
       say('ntnKeyMsg', '연결 확인 중…');
+      keysReqSeq++;
       try {
         const r = await window.ULData.integrations.check('notion');
         if (!activeUid || reqUid !== activeUid) return;
@@ -381,6 +385,7 @@
       const btn = $('btnDelNotionKey');
       btn.disabled = true;
       say('ntnKeyMsg', '연결 해제 중…');
+      keysReqSeq++;
       try {
         await window.ULData.integrations.remove('notion');
         if (!activeUid || reqUid !== activeUid) return;
@@ -406,6 +411,7 @@
       const btn = $('btnSaveGeminiKey');
       btn.disabled = true;
       say('gemKeyMsg', '저장 중…');
+      keysReqSeq++;
       try {
         const dto = await window.ULData.integrations.saveGemini({
           apiKey: apiKey || null,
@@ -441,6 +447,7 @@
       const btn = $('btnCheckGeminiKey');
       btn.disabled = true;
       say('gemKeyMsg', '연결 확인 중…');
+      keysReqSeq++;
       try {
         const r = await window.ULData.integrations.check('gemini');
         if (!activeUid || reqUid !== activeUid) return;
@@ -463,6 +470,7 @@
       const btn = $('btnDelGeminiKey');
       btn.disabled = true;
       say('gemKeyMsg', '연결 해제 중…');
+      keysReqSeq++;
       try {
         await window.ULData.integrations.remove('gemini');
         if (!activeUid || reqUid !== activeUid) return;

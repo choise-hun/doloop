@@ -568,9 +568,11 @@ test('E8 설정 화면(settings.html) 노션 백업 ZIP 미리보기 XSS 검사'
 test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XSS 검사', async ({ page }) => {
   await setupMockAuthAndApi(page);
 
+  let integrationsListCalls = 0;
   await page.route(
     (url) => url.pathname === '/api/v1/integrations',
     async (route) => {
+      integrationsListCalls++;
       await route.fulfill({
         status: 200,
         contentType: 'application/json; charset=utf-8',
@@ -637,6 +639,9 @@ test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XS
   await expect(page.locator('#ntnSongsDb')).toHaveValue(PAYLOADS.P_SVG);
   await expect(page.locator('#ntnSessionsDb')).toHaveValue(PAYLOADS.P_ATTR);
   await expect(page.locator('#gemModel')).toHaveValue(PAYLOADS.P_JS_URL);
+
+  // 페이지 로드 및 버튼 동작 후에도 /api/v1/integrations 목록 조회가 1회만 호출되었는지 단언 (리뷰 1번)
+  expect(integrationsListCalls).toBe(1);
 
   // img[src="x"], svg[onload], 인라인 핸들러 0개 및 CSP 위반 없음
   await assertNoXssOrCsp(page);

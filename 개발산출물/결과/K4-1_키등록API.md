@@ -224,8 +224,12 @@ Running 9 tests using 1 worker
 
 ## 4. 명세와 달라진 점 및 겪은 문제
 
-1. **명세와 달라진 점:**
-   - 없음. 명세의 파일 목록, 시그니처, DTO 필드, 에러 코드 표 및 검증 규칙을 100% 일치하도록 구현하였습니다.
+1. **명세와 달라진 점 (시니어 리뷰 1~4번 반영):**
+   - **리뷰 1번 (loadKeys 중복 호출 억제):** `public/settings.js`의 `loadKeys(nextUid)`를 `auth.onChange`의 `if (!nextUid || nextUid !== activeUid)` 블록 안으로 옮겨 uid가 바뀔 때 1회만 호출되도록 수정하였습니다. 이를 통해 키 저장/해제 시 타 카드의 미저장 입력(노션 DB ID 등)이 초기화되지 않도록 보호하고, E2E `E9` 테스트에 페이지 로드 시 `/api/v1/integrations` 1회 호출 단언(`expect(integrationsListCalls).toBe(1)`)을 추가하였습니다.
+   - **리뷰 2번 (상태 변경 시 이전 목록 조회 응답 무효화):** `public/settings.js`의 6개 키 조작 버튼 핸들러에서 요청 발송 직전 `keysReqSeq++`를 호출하여, 목록 조회가 진행 중인 상태에서 저장/해제/점검을 수행했을 때 늦게 도착한 이전 조회의 응답이 방금 갱신된 카드 상태를 덮어쓰지 못하도록 무효화하였습니다.
+   - **리뷰 3번 (loadKeys 실패 사용자 피드백):** `public/settings.js`의 `loadKeys`의 빈 `catch`를 제거하고, `say('ntnKeyMsg', msg, 'err')` 및 `say('gemKeyMsg', msg, 'err')`로 에러 메시지를 표시하도록 개선하였습니다.
+   - **리뷰 4번 (서비스 레이어 중복 복호화 로직 일원화):** `IntegrationService.kt`의 `checkNotion` 및 `checkGemini`에서 중복 작성되어 있던 조회·412·복호화 로직을 제거하고, 내부 공통 함수인 `requireDecryptedNotion` 및 `requireDecryptedGemini`를 직접 호출하여 단일 진실 공급원(Single Source of Truth)을 유지하도록 단순화하였습니다.
+   - *(5~7번은 시니어 안내에 따라 K4-2 단계로 이월)*
 2. **겪은 문제:**
    - `IntegrationRoutes.kt` 작성 시 `call.parameters["provider"]`가 nullable(`String?`)이어서 `delete(userId, appId, provider)` 호출 시 컴파일 오류가 발생하였음. `if (provider == null || provider !in VALID_PROVIDERS) throw NotFoundException("지원하지 않는 연동 공급자입니다.")` 가드를 명시하여 스마트 캐스트를 통해 해결함.
    - `test/data.test.js`의 `D23` 단위 테스트에서 Node 22+ vm 샌드박스 객체 프로토타입 불일치로 `assert.deepEqual` 실패가 발생하였음 (`과거 겪은 문제 153번 패턴`). 반환 객체를 `{ ...cached }` 형태로 얕은 복사하여 비교하도록 수정하여 통과함.

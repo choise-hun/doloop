@@ -315,92 +315,21 @@ class IntegrationService(
     }
 
     suspend fun checkNotion(userId: UUID, appId: String): NotionCheckResponse {
-        validateAppId(appId)
-        val crypto = requireCrypto()
-        val database = requireDb()
-
-        val (token, songsDb, sessionsDb, notesDb) = DatabaseFactory.dbQuery(database) {
-            val row = IntegrationsTable
-                .selectAll()
-                .where {
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq appId) and
-                    (IntegrationsTable.provider eq "notion")
-                }
-                .singleOrNull()
-                ?: throw ApiException(
-                    HttpStatusCode.PreconditionFailed,
-                    "NO_KEY",
-                    "등록된 키가 없습니다. 먼저 키를 저장해 주세요."
-                )
-
-            val decryptedToken = crypto.decryptProviderKey(
-                userId = userId,
-                provider = "notion",
-                encryptedSecret = row[IntegrationsTable.encryptedSecret],
-                iv = row[IntegrationsTable.iv],
-                appId = appId
-            )
-
-            val configObj = row[IntegrationsTable.config] as? JsonObject ?: JsonObject(emptyMap())
-            val sDb = (configObj["songsDb"] as? JsonPrimitive)?.content ?: ""
-            val sessDb = (configObj["sessionsDb"] as? JsonPrimitive)?.content ?: ""
-            val nDb = (configObj["notesDb"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.takeIf { it.isNotBlank() }
-
-            DecryptedNotionIntegration(
-                token = decryptedToken,
-                songsDb = sDb,
-                sessionsDb = sessDb,
-                notesDb = nDb
-            )
-        }
-
+        val decrypted = requireDecryptedNotion(userId, appId)
         return checkClient.checkNotion(
-            token = token,
-            songsDb = songsDb,
-            sessionsDb = sessionsDb,
-            notesDb = notesDb
+            token = decrypted.token,
+            songsDb = decrypted.songsDb,
+            sessionsDb = decrypted.sessionsDb,
+            notesDb = decrypted.notesDb
         )
     }
 
     suspend fun checkGemini(userId: UUID, appId: String): GeminiCheckResponse {
-        validateAppId(appId)
-        val crypto = requireCrypto()
-        val database = requireDb()
-
-        val (apiKey, model) = DatabaseFactory.dbQuery(database) {
-            val row = IntegrationsTable
-                .selectAll()
-                .where {
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq appId) and
-                    (IntegrationsTable.provider eq "gemini")
-                }
-                .singleOrNull()
-                ?: throw ApiException(
-                    HttpStatusCode.PreconditionFailed,
-                    "NO_KEY",
-                    "등록된 키가 없습니다. 먼저 키를 저장해 주세요."
-                )
-
-            val decryptedKey = crypto.decryptProviderKey(
-                userId = userId,
-                provider = "gemini",
-                encryptedSecret = row[IntegrationsTable.encryptedSecret],
-                iv = row[IntegrationsTable.iv],
-                appId = appId
-            )
-
-            val configObj = row[IntegrationsTable.config] as? JsonObject ?: JsonObject(emptyMap())
-            val m = (configObj["model"] as? JsonPrimitive)?.content ?: DEFAULT_GEMINI_MODEL
-
-            DecryptedGeminiIntegration(
-                apiKey = decryptedKey,
-                model = m
-            )
-        }
-
-        return checkClient.checkGemini(apiKey = apiKey, model = model)
+        val decrypted = requireDecryptedGemini(userId, appId)
+        return checkClient.checkGemini(
+            apiKey = decrypted.apiKey,
+            model = decrypted.model
+        )
     }
 
     suspend fun delete(userId: UUID, appId: String, provider: String) {
