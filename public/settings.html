@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>설정 · ULeveLP</title>
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -103,6 +103,18 @@
         <button class="ghost" type="button" id="btnDelNotionKey">연결 해제</button>
       </div>
       <p class="msg" id="ntnKeyMsg" role="status"></p>
+
+      <div id="notionSyncPanel">
+        <p class="hint" id="syncStatusText">연동 꺼짐</p>
+        <p class="hint" id="syncErrorText" hidden></p>
+        <div class="row">
+          <button class="cta" type="button" id="btnSyncEnable">연동 켜기 (기존 노션 데이터 이관)</button>
+          <button class="sec" type="button" id="btnSyncDisable" hidden>연동 끄기</button>
+          <button class="sec" type="button" id="btnSyncPull">지금 노션에서 가져오기</button>
+          <button class="sec" type="button" id="btnSyncPush">지금 노션으로 보내기</button>
+        </div>
+        <p class="msg" id="syncMsg" role="status"></p>
+      </div>
     </div>
 
     <div class="panel">
@@ -120,19 +132,6 @@
       </div>
       <p class="msg" id="gemKeyMsg" role="status"></p>
     </div>
-  </section>
-
-  <section class="set-sec" id="notion" aria-labelledby="hNotion">
-    <h2 id="hNotion">노션 연결 · 플레이어와 녹음</h2>
-    <p>연습 플레이어가 위치·구간·속도, 연습 시간, 녹음을 노션 <b>악기 연습</b>에 저장할 때 거치는 중계 서버(Google Apps Script)예요.</p>
-    <ol>
-      <li><a href="https://github.com/choise-hun/ULevelP/blob/main/apps-script/README.md" target="_blank" rel="noopener">중계 서버 만들기 안내</a>대로 Apps Script를 웹 앱으로 배포</li>
-      <li>나온 <b>웹 앱 URL</b>과 스크립트 속성의 <b>PRACTICE_KEY</b>를 아래에 입력</li>
-    </ol>
-    <label class="field"><span class="lab">중계 서버 주소</span><input class="inp" id="apiUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
-    <label class="field"><span class="lab">비밀 키 (PRACTICE_KEY)</span><input class="inp" id="apiKey" type="password" autocomplete="off"></label>
-    <div class="row"><button class="sec" type="button" id="apiSave">저장 후 연결 확인</button></div>
-    <p class="msg" id="apiMsg" role="status"></p>
   </section>
 
   <section class="set-sec" id="notes" aria-labelledby="hNotes">

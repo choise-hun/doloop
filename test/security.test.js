@@ -19,7 +19,7 @@ const CSP = [
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co",
-  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://script.google.com https://script.googleusercontent.com https://api.github.com",
+  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://api.github.com",
   'frame-src https://www.youtube.com',
   "object-src 'none'",
   "base-uri 'none'",
@@ -61,8 +61,6 @@ const STORAGE_PREFIXES = ['ulp:', 'sb-'];
 const COPY_ONLY = { onlyIn: ['public/theme.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)' };
 const STORAGE_LEGACY = [
   { key: 'pp:v:', prefix: true, onlyIn: ['public/data.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)', why: '자매 앱 기기 기록. 첫 로그인 이관(FR-LOCAL-2)에서 읽기만' },
-  { key: 'pp-api', until: 'P4-5', why: 'Apps Script 중계 주소(SETTING 노션 연결 칸, practice.html#api=)' },
-  { key: 'pp-key', until: 'P4-5', why: 'Apps Script 공유 비밀(같은 칸)' },
   { key: 'sn-token', until: 'P5-3', why: 'GitHub 토큰(SETTING 학습 노트 칸)' },
   { key: 'sn-repo', until: 'P5-3', why: 'GitHub 저장소(같은 칸)' },
   { key: 'gv-theme', ...COPY_ONLY, why: '→ ulp:theme 복사' },
