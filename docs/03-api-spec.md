@@ -373,31 +373,58 @@
 ### 6.2 노션 키 등록·수정
 - **`PUT /api/v1/integrations/notion`**
 - **검증 규칙:**
-  - `token`: 최초 등록 시 필수, `^(ntn_|secret_)[A-Za-z0-9]{20,}$` 정규식 검사. 수정 시 `null`이면 기존 암호화 토큰 유지.
-  - `songsDb`, `sessionsDb`(필수), `notesDb`(선택): 32자리 16진수(`^[0-9a-f]{32}$`).
+  - `token`: 최초 등록 시 필수, `^(ntn_[A-Za-z0-9]{20,100}|secret_[A-Za-z0-9]{20,100})$` 정규식 검사. 수정 시 `null` 또는 빈 문자열이면 기존 암호화 토큰 유지(`FR-KEY-2`).
+  - `songsDb`, `sessionsDb`(필수), `notesDb`(선택): 하이픈 허용 36자리(`^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$`) 검증 후 하이픈을 제거한 소문자 32자리(`replace("-", "").lowercase()`)로 정규화되어 저장됨.
 - **Request Body:**
 ```json
 {
   "appId": "ulevelp",
   "token": "ntn_1234567890abcdefghijklmnop9a8b",
-  "songsDb": "959cbe517e224419b48ca3313895a427",
-  "sessionsDb": "6260633380b34d28989af90ddfbb4e67",
-  "notesDb": "d708a561eb574175a8bb979642b3a76a"
+  "songsDb": "959cbe51-7e22-4419-b48c-a3313895a427",
+  "sessionsDb": "62606333-80b3-4d28-989a-f90ddfbb4e67",
+  "notesDb": "d708a561-eb57-4175-a8bb-979642b3a76a"
 }
 ```
-- **Response (`200 OK`):** `{ "provider": "notion", "hint": "9a8b", "updatedAt": "2026-10-30T09:30:00Z" }`
+- **Response (`200 OK`):**
+```json
+{
+  "provider": "notion",
+  "hint": "9a8b",
+  "config": {
+    "songsDb": "959cbe517e224419b48ca3313895a427",
+    "sessionsDb": "6260633380b34d28989af90ddfbb4e67",
+    "notesDb": "d708a561eb574175a8bb979642b3a76a"
+  },
+  "updatedAt": "2026-10-30T09:30:00Z"
+}
+```
 
 ### 6.3 Gemini 키 등록·수정
 - **`PUT /api/v1/integrations/gemini`**
 - **검증 규칙:**
-  - `apiKey`: 최초 등록 시 필수, `^AIza[0-9A-Za-z_-]{30,60}$`.
+  - `apiKey`: 최초 등록 시 필수, `^AIza[0-9A-Za-z_-]{35}$`(39자, `CryptoService`). 수정 시 `null` 또는 빈 문자열이면 기존 암호화 키 유지.
   - `model`: 기본값 `gemini-flash-latest`, `^[a-z0-9][a-z0-9.-]{0,63}$`.
 - **Request Body:** `{ "appId": "ulevelp", "apiKey": "AIzaSy...", "model": "gemini-flash-latest" }`
-- **Response (`200 OK`):** `{ "provider": "gemini", "hint": "X9zQ", "updatedAt": "2026-10-30T09:30:00Z" }`
+- **Response (`200 OK`):**
+```json
+{
+  "provider": "gemini",
+  "hint": "X9zQ",
+  "config": { "model": "gemini-flash-latest" },
+  "updatedAt": "2026-10-30T09:30:00Z"
+}
+```
 
 ### 6.4 연결 유효성 점검 (`Check`)
-- **`POST /api/v1/integrations/{provider}/check`** (`provider`: `notion` | `gemini`)
-- **설명:** 서버가 DB에서 키를 복호화하여 실제 노션 DB 3개의 속성 스키마 또는 Gemini API 모델을 테스트합니다(`FR-KEY-3`).
+- **`POST /api/v1/integrations/{provider}/check?appId=ulevelp`** (`provider`: `notion` | `gemini`)
+- **설명:** 서버가 DB에서 키를 복호화하여 실제 노션 DB 3개의 필수 속성 스키마 또는 Gemini API 모델을 테스트합니다(`FR-KEY-3`).
+- **에러 응답:**
+  - `412 NO_KEY`: 해당 공급자 키가 등록되지 않음.
+  - `503 CRYPTO_UNAVAILABLE`: 서버에 마스터 암호화 키(`APP_MASTER_KEY`)가 설정되지 않음.
+  - `400 PROVIDER_KEY_INVALID`: 외부 API에서 401/403 거부됨 (`source = "notion"` 또는 `"gemini"` — 클라이언트가 `ulp:keys` 캐시를 즉시 무효화).
+  - `404 NOTION_OBJECT_NOT_FOUND`: 노션 데이터베이스/페이지를 찾을 수 없음.
+  - `400 NOTION_SCHEMA_MISMATCH`: 노션 DB에 필수 속성이 누락됨 (누락된 속성명 전체 나열).
+  - `404 GEMINI_MODEL_NOT_FOUND`: 지정한 Gemini 모델을 찾을 수 없음.
 - **Response (`200 OK` - 노션 예시):**
 ```json
 {
@@ -405,13 +432,21 @@
   "songsTitle": "연습 곡",
   "sessionsTitle": "연습 기록",
   "notesTitle": "학습 영상 노트",
-  "maxUploadMB": 5
+  "maxUploadMB": 20
+}
+```
+- **Response (`200 OK` - Gemini 예시):**
+```json
+{
+  "ok": true,
+  "model": "gemini-flash-latest"
 }
 ```
 
 ### 6.5 연결 해제
 - **`DELETE /api/v1/integrations/{provider}?appId=ulevelp`**
-- **설명:** `integrations` 행을 삭제하며, `provider=notion`인 경우 `notion_sync.enabled = false`로 함께 전환합니다(`FR-KEY-4`).
+- **설명:** `integrations` 행을 삭제하며, `provider=notion`인 경우 같은 트랜잭션에서 `notion_sync.enabled = false, lease_until = null, lease_owner = null`로 초기화합니다(`FR-KEY-4`).
+- **Response (`200 OK`):** `{ "ok": true }`
 
 ---
 
@@ -433,25 +468,57 @@
 
 ### 7.2 실시간 연동 켜기 (초기 전체 동기화 `full` 포함) 및 끄기
 - **`POST /api/v1/notion/sync/enable`**
-  - **설명:** 처음 연동을 켤 때 노션 DB 3개의 기존 곡·세션·녹음·노트를 모두 읽어 서비스로 이관(`FR-SYNC-4`)하고 `notion_links`를 연결한 뒤 `enabled = true`로 설정합니다.
+  - **설명:** 처음 연동을 켤 때 노션 DB의 기존 곡·세션·녹음·노트를 모두 읽어 서비스로 이관(`FR-SYNC-4`)하고 `notion_links`를 연결한 뒤 `enabled = true`로 설정합니다. 구글 드라이브 모드 사용 중이면 `409 NOTION_SYNC_CONFLICT`로 거부됩니다(`FR-SYNC-5`). 200MB 쿼터 초과 오디오는 건너뛰며 2회 실행 시에도 중복이 발생하지 않습니다.
   - **Response (`200 OK`):** `{ "ok": true, "importedSongs": 24, "importedSessions": 115, "importedTakes": 18, "skippedTakesByQuota": 0 }`
 - **`POST /api/v1/notion/sync/disable`**
   - **설명:** `notion_sync.enabled = false`로 전환합니다.
+  - **Response (`200 OK`):** `{ "ok": true }`
 
 ### 7.3 수동/자동 Pull 및 Push 트리거
-- **`POST /api/v1/notion/sync/pull`**: 노션에서 `last_edited_time > last_pull_at`인 변경사항을 가져옵니다(5분 쿨다운 적용, `FR-SYNC-2`).
+- **`POST /api/v1/notion/sync/pull`**: 노션에서 `last_edited_time > last_pull_at`인 변경사항을 가져옵니다(5분 쿨다운 적용 시 `429 RATE_LIMITED` 및 `retryAfter` 초 반환, `FR-SYNC-2`). **단, Pull로 반영된 변경사항은 `sync_outbox`에 절대 적재하지 않습니다(무한 루프 방지).**
+  - **Response (`200 OK`):** `{ "ok": true, "updatedSongs": 3, "updatedSessions": 7, "lastPullAt": "2026-10-30T09:30:00Z" }`
 - **`POST /api/v1/notion/sync/push`**: 클라이언트가 저장 직후 호출하는 즉시 반영 트리거(본인 대기열만 비동기 실행).
-- **`POST /internal/cron/notion-push`**: Google Cloud Scheduler가 1분마다 호출하는 배치 엔드포인트. 대기열(`sync_outbox`)이 있는 사용자들을 순회하며 처리하고(`FR-SYNC-1`), 같은 호출에서 `storage_trash` 파일 삭제와 70분 넘게 `running`인 `analysis_jobs` 정리도 합니다.
+  - **Response (`200 OK`):** `{ "ok": true, "processed": 2, "failed": 0 }`
+- **`POST /internal/cron/notion-push`**: Google Cloud Scheduler가 1분마다 호출하는 배치 엔드포인트. 대기열(`sync_outbox`)이 있는 사용자들을 순회하며 Push 처리하고(`FR-SYNC-1`), 같은 호출에서 `storage_trash` 파일 삭제(`attempts < 5`, 최대 50건)와 70분 넘게 `running`인 `analysis_jobs` 타임아웃 정리도 수행합니다.
   - **호출자 검증:** Cloud Run 서비스는 사용자용으로 공개(인증 없이 호출 허용)이므로 앱이 직접 검증합니다. `Authorization: Bearer <Google OIDC ID 토큰>`을 Google JWKS(`https://www.googleapis.com/oauth2/v3/certs`)로 서명 검증하고, `iss` = `https://accounts.google.com`, `aud` = 환경변수 `CRON_AUDIENCE`(서비스 URL), `email` = 환경변수 `CRON_SA_EMAIL` 이고 `email_verified = true`인지 확인합니다. 하나라도 틀리면 `401`.
-  - Cloud Scheduler 작업의 OIDC 설정: 서비스 계정 = `CRON_SA_EMAIL`, audience = `CRON_AUDIENCE`. 분석 Job 실행용 서비스 계정에는 `run.jobs.runWithOverrides` 권한을 줍니다.
+  - **Response (`200 OK`):** `{ "ok": true, "pushedUsers": 1, "processedOutbox": 3, "purgedTrash": 2, "timedOutJobs": 0 }`
 
 ### 7.4 노션 호환 ZIP 내보내기 및 노션 백업 ZIP 가져오기
 - **`GET /api/v1/export/zip?includeAudio=true`**
-  - **설명:** 서버에서 UTF-8 BOM CSV(`연습 곡.csv`, `연습 기록.csv`, `학습 영상 노트.csv`), 마크다운 노트, 녹음 파일, `읽어주세요.txt`를 스트리밍 ZIP으로 묶어 내려줍니다(`FR-NX-2`). (클라이언트 JSZip 생성을 위한 `GET /api/v1/export/data`도 지원)
+  - **설명:** 서버에서 UTF-8 BOM CSV(`연습 곡.csv`, `연습 기록.csv`, `학습 영상 노트.csv`), 마크다운 노트(`학습 영상 노트/*.md`), 녹음 파일(`녹음/*.m4a`), `읽어주세요.txt`를 스트리밍 ZIP으로 묶어 내려줍니다(`FR-NX-2`).
+  - **쿼리 파라미터:** `includeAudio` (기본값 true). "false" 전달 시 오디오 제외.
+  - **Response Headers:** `Content-Type: application/zip`, `Content-Disposition: attachment; filename="ULeveLP-export-${todayUtc}.zip"`, `Cache-Control: no-store`.
 - **`POST /api/v1/import/notion/preview`** (`multipart/form-data`, `file`: 노션 백업 `.zip`)
-  - **설명:** DB에 반영하지 않고 ZIP 내부 CSV와 오디오 폴더를 파싱하여 추가/갱신 예정 건수와 오류 행을 반환합니다(`FR-NX-4`).
+  - **설명:** DB에 반영하지 않고 ZIP 내부 CSV와 오디오 폴더를 파싱하여 추가/갱신 예정 건수와 오류 행, 샘플 목록을 반환합니다(`FR-NX-4`). 최대 ZIP 크기 100MB(초과 시 `413 ZIP_TOO_LARGE`), 최대 압축 해제 용량 200MB(Zip Bomb 방어, 초과 시 `400 INVALID_INPUT`), 최대 엔트리 1,000개. 15분 유효한 미리보기 토큰을 발급합니다.
+  - **Response (`200 OK`):**
+```json
+{
+  "ok": true,
+  "previewToken": "550e8400-e29b-41d4-a716-446655440000",
+  "newSongs": 12,
+  "updatedSongs": 3,
+  "sessions": 45,
+  "takes": 8,
+  "songsSample": [
+    { "title": "Autumn Leaves", "artist": "Eva Cassidy", "status": "연습중", "sessionsCount": 10 }
+  ],
+  "errors": []
+}
+```
 - **`POST /api/v1/import/notion/confirm`**
-  - **설명:** 미리보기 토큰(또는 파싱된 페이로드)을 확정하여 곡·세션·녹음을 일괄 Upsert합니다(`FR-NX-3`).
+  - **설명:** 미리보기 토큰을 확정하여 곡·세션·녹음을 단일 트랜잭션으로 일괄 Upsert합니다(`FR-NX-3`). 녹음 파일 업로드는 트랜잭션 밖에서 선행되며 200MB 쿼터 초과분은 건너뜁니다.
+  - **Request Body:** `{ "previewToken": "550e8400-e29b-41d4-a716-446655440000" }`
+  - **Response (`200 OK`):**
+```json
+{
+  "ok": true,
+  "createdSongs": 12,
+  "updatedSongs": 3,
+  "upsertedSessions": 45,
+  "importedTakes": 8,
+  "skippedTakesByQuota": 0
+}
+```
 
 ---
 
