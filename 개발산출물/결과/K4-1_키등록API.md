@@ -4,6 +4,7 @@
 - **역할:** 주니어
 - **브랜치:** `step/K4-1`
 - **상태:** `완료`
+- **PR:** #23
 
 ---
 
@@ -229,3 +230,4 @@ Running 9 tests using 1 worker
    - `IntegrationRoutes.kt` 작성 시 `call.parameters["provider"]`가 nullable(`String?`)이어서 `delete(userId, appId, provider)` 호출 시 컴파일 오류가 발생하였음. `if (provider == null || provider !in VALID_PROVIDERS) throw NotFoundException("지원하지 않는 연동 공급자입니다.")` 가드를 명시하여 스마트 캐스트를 통해 해결함.
    - `test/data.test.js`의 `D23` 단위 테스트에서 Node 22+ vm 샌드박스 객체 프로토타입 불일치로 `assert.deepEqual` 실패가 발생하였음 (`과거 겪은 문제 153번 패턴`). 반환 객체를 `{ ...cached }` 형태로 얕은 복사하여 비교하도록 수정하여 통과함.
    - Playwright 실행 시 `test-results/` 임시 폴더가 생성되었으나, 무관한 파일 커밋 방지(12대 가드레일)를 준수하여 삭제함.
+
