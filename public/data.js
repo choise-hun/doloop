@@ -345,8 +345,89 @@ window.ULData = (function () {
     });
   }
 
+  function getCachedKeys() {
+    try {
+      const raw = localStorage.getItem('ulp:keys');
+      if (!raw) return { notion: null, gemini: null };
+      const parsed = JSON.parse(raw);
+      const user = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+      if (user && user.id && parsed && parsed.uid === user.id) {
+        return {
+          notion: parsed.notion || null,
+          gemini: parsed.gemini || null,
+        };
+      }
+    } catch (_) {}
+    return { notion: null, gemini: null };
+  }
+
+  async function listIntegrations() {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/integrations?appId=ulevelp');
+    return r && Array.isArray(r.integrations) ? r.integrations : [];
+  }
+
+  async function saveNotionIntegration(input) {
+    requireLogin();
+    input = input || {};
+    const body = JSON.stringify({
+      appId: 'ulevelp',
+      token: input.token,
+      songsDb: input.songsDb,
+      sessionsDb: input.sessionsDb,
+      notesDb: input.notesDb,
+    });
+    const r = await window.ULAuth.apiFetch('/api/v1/integrations/notion', {
+      method: 'PUT',
+      body,
+    });
+    if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+      await window.ULAuth.fetchMe();
+    }
+    return r;
+  }
+
+  async function saveGeminiIntegration(input) {
+    requireLogin();
+    input = input || {};
+    const body = JSON.stringify({
+      appId: 'ulevelp',
+      apiKey: input.apiKey,
+      model: input.model,
+    });
+    const r = await window.ULAuth.apiFetch('/api/v1/integrations/gemini', {
+      method: 'PUT',
+      body,
+    });
+    if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+      await window.ULAuth.fetchMe();
+    }
+    return r;
+  }
+
+  async function checkIntegration(provider) {
+    requireLogin();
+    const path = '/api/v1/integrations/' + encodeURIComponent(provider) + '/check?appId=ulevelp';
+    return await window.ULAuth.apiFetch(path, {
+      method: 'POST',
+    });
+  }
+
+  async function removeIntegration(provider) {
+    requireLogin();
+    const path = '/api/v1/integrations/' + encodeURIComponent(provider) + '?appId=ulevelp';
+    const r = await window.ULAuth.apiFetch(path, {
+      method: 'DELETE',
+    });
+    if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+      await window.ULAuth.fetchMe();
+    }
+    return r && r.ok ? r : { ok: true };
+  }
+
   return {
     isLoggedIn,
+    getCachedKeys,
     songs: {
       list,
       byVideo,
@@ -369,6 +450,13 @@ window.ULData = (function () {
       exportZip,
       previewNotionZip,
       confirmNotionZip,
+    },
+    integrations: {
+      list: listIntegrations,
+      saveNotion: saveNotionIntegration,
+      saveGemini: saveGeminiIntegration,
+      check: checkIntegration,
+      remove: removeIntegration,
     },
     runLocalMigration,
   };

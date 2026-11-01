@@ -43,6 +43,7 @@ function createMockEnv({
 
   const mockULAuth = {
     getSession: () => session,
+    getUser: () => (session ? (session.user || (me ? { id: me.id } : { id: 'user-1' })) : null),
     getMe: () => me,
     apiFetch: async (path, opts) => {
       apiCalls.push({ path, opts });
@@ -637,5 +638,123 @@ test('D19 nx.previewNotionZip & confirmNotionZip: FormData 전송 및 confirm �
   assert.equal(env.apiCalls[1].opts.method, 'POST');
   const body = JSON.parse(env.apiCalls[1].opts.body);
   assert.deepEqual(body, { previewToken: 'f1000000-0000-4000-8000-000000000001' });
+});
+
+test('D20 비로그인 거부: integrations API 5종은 401 reject 반환', async () => {
+  const env = createMockEnv({ session: null });
+  const funcs = [
+    () => env.ULData.integrations.list(),
+    () => env.ULData.integrations.saveNotion({}),
+    () => env.ULData.integrations.saveGemini({}),
+    () => env.ULData.integrations.check('notion'),
+    () => env.ULData.integrations.remove('notion'),
+  ];
+  for (const fn of funcs) {
+    await assert.rejects(
+      () => fn(),
+      (err) => {
+        assert.equal(err.code, 'NOT_LOGGED_IN');
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+  }
+  assert.equal(env.apiCalls.length, 0);
+});
+
+test('D21 saveNotion & saveGemini 시 fetchMe 자동 호출', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/integrations/notion') {
+        return { provider: 'notion', hint: '9a8b', config: {}, updatedAt: '2026-11-01T00:00:00Z' };
+      }
+      if (path === '/api/v1/integrations/gemini') {
+        return { provider: 'gemini', hint: 'X9zQ', config: {}, updatedAt: '2026-11-01T00:00:00Z' };
+      }
+      return { ok: true };
+    },
+  });
+
+  const r1 = await env.ULData.integrations.saveNotion({ token: 't', songsDb: 'a', sessionsDb: 'b' });
+  assert.equal(r1.provider, 'notion');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/integrations/notion');
+  assert.equal(env.apiCalls[0].opts.method, 'PUT');
+  const b1 = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(b1.appId, 'ulevelp');
+  assert.equal(b1.token, 't');
+  assert.equal(env.fetchMeCount, 1);
+
+  const r2 = await env.ULData.integrations.saveGemini({ apiKey: 'k', model: 'gemini-flash-latest' });
+  assert.equal(r2.provider, 'gemini');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/integrations/gemini');
+  assert.equal(env.apiCalls[1].opts.method, 'PUT');
+  const b2 = JSON.parse(env.apiCalls[1].opts.body);
+  assert.equal(b2.appId, 'ulevelp');
+  assert.equal(b2.apiKey, 'k');
+  assert.equal(env.fetchMeCount, 2);
+});
+
+test('D22 integrations.check & remove 호출 및 fetchMe 갱신', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/integrations/notion/check?appId=ulevelp') {
+        return { ok: true, provider: 'notion', songsTitle: '곡', sessionsTitle: '기록' };
+      }
+      if (path === '/api/v1/integrations/notion?appId=ulevelp') {
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+  });
+
+  const chk = await env.ULData.integrations.check('notion');
+  assert.equal(chk.provider, 'notion');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/integrations/notion/check?appId=ulevelp');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+  assert.equal(env.fetchMeCount, 0);
+
+  const del = await env.ULData.integrations.remove('notion');
+  assert.equal(del.ok, true);
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/integrations/notion?appId=ulevelp');
+  assert.equal(env.apiCalls[1].opts.method, 'DELETE');
+  assert.equal(env.fetchMeCount, 1);
+});
+
+test('D23 getCachedKeys() uid 일치 검증', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token', user: { id: 'user-1' } },
+    me: { id: 'user-1' },
+  });
+
+  env.localStorage.setItem(
+    'ulp:keys',
+    JSON.stringify({
+      uid: 'user-1',
+      notion: { hint: '9a8b', updatedAt: '2026-11-01T00:00:00Z' },
+      gemini: { hint: 'X9zQ', updatedAt: '2026-11-01T00:00:00Z' },
+    })
+  );
+
+  // ① 현재 세션 user가 'user-1'일 때 getCachedKeys()
+  const cached1 = env.ULData.getCachedKeys();
+  assert.deepEqual({ ...cached1.notion }, { hint: '9a8b', updatedAt: '2026-11-01T00:00:00Z' });
+  assert.deepEqual({ ...cached1.gemini }, { hint: 'X9zQ', updatedAt: '2026-11-01T00:00:00Z' });
+
+  // ② 현재 세션 user가 'user-2'이거나 비로그인일 때 getCachedKeys()
+  env.setSession({ access_token: 'valid_token_2', user: { id: 'user-2' } });
+  env.setMe({ id: 'user-2' });
+  const cached2 = env.ULData.getCachedKeys();
+  assert.deepEqual({ ...cached2 }, { notion: null, gemini: null });
+
+  env.setSession(null);
+  env.setMe(null);
+  const cached3 = env.ULData.getCachedKeys();
+  assert.deepEqual({ ...cached3 }, { notion: null, gemini: null });
 });
 

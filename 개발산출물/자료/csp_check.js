@@ -55,7 +55,7 @@ const PAGES = [
   { name: '개인정보처리방침 (privacy.html)', url: 'privacy.html',
     expect: `({ title: document.querySelector('.page-title').textContent, h1: document.getElementById('privH1').textContent })` },
   { name: '설정 + 테마 버튼', url: 'settings.html', act: `document.querySelector('[data-theme="light"]').click()`,
-    expect: `({ theme: document.documentElement.dataset.theme, saved: localStorage.getItem('ulp:theme'), old: localStorage.getItem('gv-theme'), templateHref: document.getElementById('btnNotionTemplate') ? document.getElementById('btnNotionTemplate').href : null })` },
+    expect: `({ theme: document.documentElement.dataset.theme, saved: localStorage.getItem('ulp:theme'), old: localStorage.getItem('gv-theme'), templateHref: document.getElementById('btnNotionTemplate') ? document.getElementById('btnNotionTemplate').href : null, hasKeysSec: !!document.getElementById('keys') })` },
   // 대조군: 검출기가 살아 있는지. 허용 안 된 주소로 fetch, style 속성 삽입 → 위반이 잡혀야 OK
   { name: '대조군(막혀야 함)', url: 'index.html', expectBlocked: true,
     act: `(() => { fetch('https://example.com/').catch(() => {}); document.body.insertAdjacentHTML('beforeend', '<i style="color:red">x</i>'); })()` },

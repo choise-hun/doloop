@@ -565,4 +565,81 @@ test('E8 설정 화면(settings.html) 노션 백업 ZIP 미리보기 XSS 검사'
   await assertNoXssOrCsp(page);
 });
 
+test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XSS 검사', async ({ page }) => {
+  await setupMockAuthAndApi(page);
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/integrations',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({
+          integrations: [
+            {
+              provider: 'notion',
+              hint: PAYLOADS.P_IMG,
+              config: {
+                songsDb: PAYLOADS.P_SVG,
+                sessionsDb: PAYLOADS.P_ATTR,
+                notesDb: null,
+              },
+              updatedAt: '2026-11-01T00:00:00Z',
+            },
+            {
+              provider: 'gemini',
+              hint: PAYLOADS.P_IMG,
+              config: {
+                model: PAYLOADS.P_JS_URL,
+              },
+              updatedAt: '2026-11-01T00:00:00Z',
+            },
+          ],
+        }),
+      });
+    }
+  );
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/integrations/notion/check',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({
+          ok: true,
+          provider: 'notion',
+          songsTitle: PAYLOADS.P_IMG,
+          sessionsTitle: PAYLOADS.P_SVG,
+          notesTitle: null,
+          maxUploadMB: 5,
+        }),
+      });
+    }
+  );
+
+  await page.goto('/settings.html');
+
+  // #btnCheckNotionKey 클릭
+  await page.click('#btnCheckNotionKey');
+
+  // #notionKeyStatus 및 #ntnKeyMsg 에 페이로드 텍스트 존재 확인
+  const keyStatus = page.locator('#notionKeyStatus');
+  await expect(keyStatus).toBeVisible();
+  await expect(keyStatus).toContainText(PAYLOADS.P_IMG);
+
+  const ntnMsg = page.locator('#ntnKeyMsg');
+  await expect(ntnMsg).toBeVisible();
+  await expect(ntnMsg).toContainText(PAYLOADS.P_IMG);
+  await expect(ntnMsg).toContainText(PAYLOADS.P_SVG);
+
+  // #ntnSongsDb, #ntnSessionsDb, #gemModel 에도 value로 설정되었는지 확인
+  await expect(page.locator('#ntnSongsDb')).toHaveValue(PAYLOADS.P_SVG);
+  await expect(page.locator('#ntnSessionsDb')).toHaveValue(PAYLOADS.P_ATTR);
+  await expect(page.locator('#gemModel')).toHaveValue(PAYLOADS.P_JS_URL);
+
+  // img[src="x"], svg[onload], 인라인 핸들러 0개 및 CSP 위반 없음
+  await assertNoXssOrCsp(page);
+});
+
 
