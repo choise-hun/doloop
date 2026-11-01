@@ -2,10 +2,13 @@ package ulevelp.support
 
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
+import ulevelp.auth.CronOidcConfig
+import ulevelp.auth.CronOidcVerifier
 import ulevelp.auth.StaticJwksProvider
 import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.db.DatabaseConfig
 import ulevelp.module
+import ulevelp.notion.NotionClient
 import ulevelp.security.CryptoService
 import ulevelp.service.GeminiCheckResponse
 import ulevelp.service.IntegrationCheckClient
@@ -18,6 +21,7 @@ import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
+import java.security.interfaces.RSAPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.time.Clock
 import java.time.Instant
@@ -123,6 +127,93 @@ object TestJwt {
     }
 }
 
+object TestCronJwt {
+    const val TEST_CRON_AUDIENCE = "https://test-cron-service.run.app"
+    const val TEST_CRON_SA_EMAIL = "test-cron-sa@test-project.iam.gserviceaccount.com"
+    const val RSA_KID = "test-rsa-cron-key-1"
+
+    val FIXED_NOW: Instant = Instant.parse("2026-10-30T12:00:00Z")
+    val TEST_CLOCK: Clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC)
+    private val urlEncoder = Base64.getUrlEncoder().withoutPadding()
+
+    val rsaKeyPair: KeyPair = KeyPairGenerator.getInstance("RSA").apply {
+        initialize(2048)
+    }.generateKeyPair()
+
+    val cronConfig: CronOidcConfig
+
+    init {
+        val rsaPub = rsaKeyPair.public as RSAPublicKey
+        fun toUnsignedBytes(bigInt: BigInteger): ByteArray {
+            val bytes = bigInt.toByteArray()
+            return if (bytes.size > 1 && bytes[0] == 0.toByte()) {
+                bytes.copyOfRange(1, bytes.size)
+            } else {
+                bytes
+            }
+        }
+
+        val validJwksJson = buildJsonObject {
+            putJsonArray("keys") {
+                addJsonObject {
+                    put("kty", "RSA")
+                    put("alg", "RS256")
+                    put("use", "sig")
+                    put("kid", RSA_KID)
+                    put("n", urlEncoder.encodeToString(toUnsignedBytes(rsaPub.modulus)))
+                    put("e", urlEncoder.encodeToString(toUnsignedBytes(rsaPub.publicExponent)))
+                }
+            }
+        }.toString()
+
+        val jwksProvider = StaticJwksProvider.fromJwksJson(validJwksJson)
+        cronConfig = CronOidcConfig(
+            audience = TEST_CRON_AUDIENCE,
+            serviceAccountEmail = TEST_CRON_SA_EMAIL,
+            jwksProvider = jwksProvider,
+            clock = TEST_CLOCK
+        )
+    }
+
+    fun token(
+        iss: String = "https://accounts.google.com",
+        aud: String = TEST_CRON_AUDIENCE,
+        email: String = TEST_CRON_SA_EMAIL,
+        emailVerified: Boolean = true,
+        exp: Long = FIXED_NOW.epochSecond + 3600,
+        kid: String = RSA_KID,
+        keyPair: KeyPair = rsaKeyPair,
+        alg: String = "RS256"
+    ): String {
+        val headerJson = buildJsonObject {
+            put("alg", alg)
+            put("typ", "JWT")
+            put("kid", kid)
+        }.toString()
+
+        val payloadJson = buildJsonObject {
+            put("iss", iss)
+            put("aud", aud)
+            put("email", email)
+            put("email_verified", emailVerified)
+            put("exp", exp)
+        }.toString()
+
+        val headerB64 = urlEncoder.encodeToString(headerJson.toByteArray(Charsets.UTF_8))
+        val payloadB64 = urlEncoder.encodeToString(payloadJson.toByteArray(Charsets.UTF_8))
+        val signingInput = "$headerB64.$payloadB64".toByteArray(Charsets.US_ASCII)
+
+        val signatureBytes = Signature.getInstance("SHA256withRSA").run {
+            initSign(keyPair.private)
+            update(signingInput)
+            sign()
+        }
+
+        val sigB64 = urlEncoder.encodeToString(signatureBytes)
+        return "$headerB64.$payloadB64.$sigB64"
+    }
+}
+
 class FakeVideoMetaClient(
     @Volatile var meta: VideoMeta? = VideoMeta("Fake Title", "Fake Channel")
 ) : VideoMetaClient {
@@ -186,7 +277,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
     videoMetaClient: VideoMetaClient = FakeVideoMetaClient(),
     storageClient: StorageClient? = null,
     cryptoService: CryptoService? = TestCrypto.service,
-    integrationCheckClient: IntegrationCheckClient = FakeIntegrationCheckClient()
+    integrationCheckClient: IntegrationCheckClient = FakeIntegrationCheckClient(),
+    notionClient: NotionClient = FakeNotionClient(),
+    cronOidcVerifier: CronOidcVerifier? = CronOidcVerifier(TestCronJwt.cronConfig)
 ) {
     application {
         module(
@@ -197,7 +290,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
             publicAppUrl = "https://choise-hun.github.io/ULevelP/",
             storageClient = storageClient,
             cryptoService = cryptoService,
-            integrationCheckClient = integrationCheckClient
+            integrationCheckClient = integrationCheckClient,
+            notionClient = notionClient,
+            cronOidcVerifier = cronOidcVerifier
         )
     }
 }

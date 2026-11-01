@@ -16,20 +16,27 @@ import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
 import ulevelp.api.ApiException
 import ulevelp.api.respondApiError
+import ulevelp.auth.CronOidcConfig
+import ulevelp.auth.CronOidcVerifier
 import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.db.DatabaseConfig
 import ulevelp.db.DatabaseFactory
+import ulevelp.notion.HttpNotionClient
+import ulevelp.notion.NotionClient
+import ulevelp.notion.NotionPushWorker
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
 import ulevelp.routes.registerChordRoutes
-import ulevelp.routes.registerMeRoutes
-import ulevelp.routes.registerPracticeRoutes
-import ulevelp.routes.registerSongRoutes
-import ulevelp.routes.registerTakeRoutes
-import ulevelp.routes.registerSessionRoutes
 import ulevelp.routes.registerExportImportRoutes
 import ulevelp.routes.registerIntegrationRoutes
+import ulevelp.routes.registerInternalCronRoutes
+import ulevelp.routes.registerMeRoutes
+import ulevelp.routes.registerNotionSyncRoutes
+import ulevelp.routes.registerPracticeRoutes
+import ulevelp.routes.registerSessionRoutes
+import ulevelp.routes.registerSongRoutes
+import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
 import ulevelp.service.ExportImportService
 import ulevelp.service.HttpIntegrationCheckClient
@@ -82,7 +89,9 @@ fun Application.module(
     publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL")),
     storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull(),
     cryptoService: CryptoService? = CryptoService.fromEnvOrNull(),
-    integrationCheckClient: IntegrationCheckClient = HttpIntegrationCheckClient()
+    integrationCheckClient: IntegrationCheckClient = HttpIntegrationCheckClient(),
+    notionClient: NotionClient = HttpNotionClient(),
+    cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) }
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -110,6 +119,10 @@ fun Application.module(
         environment.log.warn("외부 연동 암호화 키(APP_MASTER_KEY)가 없어 키 관리가 비활성화됩니다.")
     }
 
+    if (cronOidcVerifier == null) {
+        environment.log.warn("크론 OIDC 설정(CRON_AUDIENCE / CRON_SA_EMAIL)이 없어 크론 엔드포인트 인증이 비활성화됩니다.")
+    }
+
     val profileService = ProfileService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val practiceService = PracticeService(db)
@@ -118,6 +131,14 @@ fun Application.module(
     val sessionService = SessionService(db)
     val exportImportService = ExportImportService(db, storageClient, publicAppUrl)
     val integrationService = IntegrationService(db, cryptoService, integrationCheckClient)
+    val notionPushWorker = NotionPushWorker(
+        db = db,
+        integrationService = integrationService,
+        notionClient = notionClient,
+        storageClient = storageClient,
+        storageTrashService = storageTrashService,
+        publicAppUrl = publicAppUrl
+    )
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -206,6 +227,7 @@ fun Application.module(
             registerSessionRoutes(jwtVerifier, profileService, sessionService)
             registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
+            registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker)
 
             route("{...}") {
                 handle {
@@ -230,6 +252,8 @@ fun Application.module(
                 )
             }
         }
+
+        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker)
 
         route("{path...}") {
             handle {
