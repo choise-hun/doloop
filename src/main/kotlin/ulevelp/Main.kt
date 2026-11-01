@@ -29,7 +29,12 @@ import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
 import ulevelp.routes.registerSessionRoutes
 import ulevelp.routes.registerExportImportRoutes
+import ulevelp.routes.registerIntegrationRoutes
+import ulevelp.security.CryptoService
 import ulevelp.service.ExportImportService
+import ulevelp.service.HttpIntegrationCheckClient
+import ulevelp.service.IntegrationCheckClient
+import ulevelp.service.IntegrationService
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
@@ -75,7 +80,9 @@ fun Application.module(
     allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS")),
     videoMetaClient: VideoMetaClient = YoutubeOEmbedClient(),
     publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL")),
-    storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull()
+    storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull(),
+    cryptoService: CryptoService? = CryptoService.fromEnvOrNull(),
+    integrationCheckClient: IntegrationCheckClient = HttpIntegrationCheckClient()
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -99,6 +106,10 @@ fun Application.module(
         environment.log.warn("녹음 저장소 설정(SUPABASE_URL / SUPABASE_SECRET_KEY)이 없어 녹음 업로드가 비활성화됩니다.")
     }
 
+    if (cryptoService == null) {
+        environment.log.warn("외부 연동 암호화 키(APP_MASTER_KEY)가 없어 키 관리가 비활성화됩니다.")
+    }
+
     val profileService = ProfileService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val practiceService = PracticeService(db)
@@ -106,6 +117,7 @@ fun Application.module(
     val takeService = TakeService(db, storageClient)
     val sessionService = SessionService(db)
     val exportImportService = ExportImportService(db, storageClient, publicAppUrl)
+    val integrationService = IntegrationService(db, cryptoService, integrationCheckClient)
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -193,6 +205,7 @@ fun Application.module(
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
             registerSessionRoutes(jwtVerifier, profileService, sessionService)
             registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
+            registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
 
             route("{...}") {
                 handle {

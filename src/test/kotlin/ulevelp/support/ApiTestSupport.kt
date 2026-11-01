@@ -6,6 +6,10 @@ import ulevelp.auth.StaticJwksProvider
 import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.db.DatabaseConfig
 import ulevelp.module
+import ulevelp.security.CryptoService
+import ulevelp.service.GeminiCheckResponse
+import ulevelp.service.IntegrationCheckClient
+import ulevelp.service.NotionCheckResponse
 import ulevelp.service.VideoMeta
 import ulevelp.service.VideoMetaClient
 import ulevelp.storage.StorageClient
@@ -130,10 +134,59 @@ class FakeVideoMetaClient(
     }
 }
 
+object TestCrypto {
+    val keyBytes = ByteArray(32) { (it + 1).toByte() }
+    val service = CryptoService(keyBytes)
+}
+
+class FakeIntegrationCheckClient : IntegrationCheckClient {
+    @Volatile var notionHandler: (suspend (token: String, songsDb: String, sessionsDb: String, notesDb: String?) -> NotionCheckResponse)? = null
+    @Volatile var geminiHandler: (suspend (apiKey: String, model: String) -> GeminiCheckResponse)? = null
+
+    val notionCalls = CopyOnWriteArrayList<List<String?>>()
+    val geminiCalls = CopyOnWriteArrayList<Pair<String, String>>()
+
+    override suspend fun checkNotion(
+        token: String,
+        songsDb: String,
+        sessionsDb: String,
+        notesDb: String?
+    ): NotionCheckResponse {
+        notionCalls.add(listOf(token, songsDb, sessionsDb, notesDb))
+        val handler = notionHandler
+        if (handler != null) return handler(token, songsDb, sessionsDb, notesDb)
+        return NotionCheckResponse(
+            ok = true,
+            provider = "notion",
+            songsTitle = "연습 곡",
+            sessionsTitle = "연습 기록",
+            notesTitle = if (notesDb != null) "학습 영상 노트" else null,
+            maxUploadMB = 5
+        )
+    }
+
+    override suspend fun checkGemini(
+        apiKey: String,
+        model: String
+    ): GeminiCheckResponse {
+        geminiCalls.add(apiKey to model)
+        val handler = geminiHandler
+        if (handler != null) return handler(apiKey, model)
+        return GeminiCheckResponse(
+            ok = true,
+            provider = "gemini",
+            model = model,
+            displayName = if (model == "gemini-flash-latest") "Gemini Flash Latest" else model
+        )
+    }
+}
+
 fun ApplicationTestBuilder.configureApiTestApp(
     dbConfig: DatabaseConfig,
     videoMetaClient: VideoMetaClient = FakeVideoMetaClient(),
-    storageClient: StorageClient? = null
+    storageClient: StorageClient? = null,
+    cryptoService: CryptoService? = TestCrypto.service,
+    integrationCheckClient: IntegrationCheckClient = FakeIntegrationCheckClient()
 ) {
     application {
         module(
@@ -142,7 +195,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
             allowedOrigins = listOf("http://localhost:3000"),
             videoMetaClient = videoMetaClient,
             publicAppUrl = "https://choise-hun.github.io/ULevelP/",
-            storageClient = storageClient
+            storageClient = storageClient,
+            cryptoService = cryptoService,
+            integrationCheckClient = integrationCheckClient
         )
     }
 }

@@ -204,6 +204,19 @@ class CryptoService(
             return fromBase64Key(raw, keyVersion)
         }
 
+        fun fromEnvOrNull(
+            env: Map<String, String> = System.getenv(),
+            envKey: String = "APP_MASTER_KEY",
+            keyVersion: Short = 1
+        ): CryptoService? {
+            val raw = env[envKey]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            return fromBase64Key(raw, keyVersion)
+        }
+
+        /** 32자리 16진수(하이픈 허용)를 검증한 뒤 하이픈을 제거하고 소문자 32자로 정규화한다 */
+        fun normalizeNotionDatabaseId(dbId: String): String =
+            validateNotionDatabaseId(dbId).replace("-", "").lowercase()
+
         fun isValidNotionToken(token: String): Boolean =
             NOTION_TOKEN_REGEX.matches(token.trim())
 

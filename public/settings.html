@@ -33,6 +33,10 @@
     </div>
     <div id="accUser" hidden>
       <p>로그인 계정: <b id="accEmail"></b> <span id="accName" class="hint"></span></p>
+      <div class="field" id="accQuota">
+        <span class="lab">녹음 저장 공간 (<span id="quotaText">0.0MB / 200MB</span>)</span>
+        <progress class="tl-bar" id="quotaBar" max="209715200" value="0"></progress>
+      </div>
       <div class="row">
         <button class="sec" type="button" id="btnLogout">로그아웃</button>
       </div>
@@ -77,6 +81,45 @@
     </div>
 
     <p class="msg" id="nxMsg" role="status"></p>
+  </section>
+
+  <section class="set-sec" id="keys" aria-labelledby="hKeys">
+    <h2 id="hKeys">외부 연동 키 관리 · BYOK</h2>
+    <p>개인 노션과 Google Gemini API 키를 등록하면 연습 기록 실시간 동기화와 학습 노트 분석을 쓸 수 있어요. 키는 서버에 안전하게 암호화(AES-256-GCM)되어 보관돼요.</p>
+
+    <div class="panel">
+      <div class="card-head">
+        <h3>노션 연동</h3>
+        <span class="badge" id="notionKeyStatus">미등록</span>
+      </div>
+      <p class="hint">노션 내부 통합 토큰과 데이터베이스 ID 3개를 등록해요.</p>
+      <label class="field"><span class="lab">노션 통합 토큰 (ntn_...)</span><input class="inp" id="ntnToken" type="password" placeholder="ntn_... (수정 시 비워두면 기존 키 유지)" autocomplete="off"></label>
+      <label class="field"><span class="lab">연습 곡 데이터베이스 ID</span><input class="inp" id="ntnSongsDb" type="text" placeholder="32자리 DB ID" autocomplete="off"></label>
+      <label class="field"><span class="lab">연습 기록 데이터베이스 ID</span><input class="inp" id="ntnSessionsDb" type="text" placeholder="32자리 DB ID" autocomplete="off"></label>
+      <label class="field"><span class="lab">학습 영상 노트 데이터베이스 ID (선택)</span><input class="inp" id="ntnNotesDb" type="text" placeholder="32자리 DB ID (선택)" autocomplete="off"></label>
+      <div class="row">
+        <button class="cta" type="button" id="btnSaveNotionKey">노션 키 저장</button>
+        <button class="sec" type="button" id="btnCheckNotionKey">연결 확인</button>
+        <button class="ghost" type="button" id="btnDelNotionKey">연결 해제</button>
+      </div>
+      <p class="msg" id="ntnKeyMsg" role="status"></p>
+    </div>
+
+    <div class="panel">
+      <div class="card-head">
+        <h3>Gemini 연동</h3>
+        <span class="badge" id="geminiKeyStatus">미등록</span>
+      </div>
+      <p class="hint">Google AI Studio에서 발급받은 Gemini API 키를 등록해요.</p>
+      <label class="field"><span class="lab">Gemini API 키 (AIza...)</span><input class="inp" id="gemKey" type="password" placeholder="AIza... (수정 시 비워두면 기존 키 유지)" autocomplete="off"></label>
+      <label class="field"><span class="lab">사용 모델</span><input class="inp" id="gemModel" type="text" placeholder="gemini-flash-latest" autocomplete="off"></label>
+      <div class="row">
+        <button class="cta" type="button" id="btnSaveGeminiKey">Gemini 키 저장</button>
+        <button class="sec" type="button" id="btnCheckGeminiKey">연결 확인</button>
+        <button class="ghost" type="button" id="btnDelGeminiKey">연결 해제</button>
+      </div>
+      <p class="msg" id="gemKeyMsg" role="status"></p>
+    </div>
   </section>
 
   <section class="set-sec" id="notion" aria-labelledby="hNotion">

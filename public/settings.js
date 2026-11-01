@@ -9,6 +9,72 @@
   // ---------- 노션 템플릿 · 데이터 내보내기/가져오기 (K3-1) ----------
   let currentPreviewToken = null;
   let activeUid = null;
+  let keysReqSeq = 0;
+
+  function resetNotionFields() {
+    if ($('notionKeyStatus')) {
+      $('notionKeyStatus').textContent = '미등록';
+      $('notionKeyStatus').className = 'badge';
+    }
+    if ($('ntnToken')) $('ntnToken').value = '';
+    if ($('ntnSongsDb')) $('ntnSongsDb').value = '';
+    if ($('ntnSessionsDb')) $('ntnSessionsDb').value = '';
+    if ($('ntnNotesDb')) $('ntnNotesDb').value = '';
+  }
+
+  function resetGeminiFields() {
+    if ($('geminiKeyStatus')) {
+      $('geminiKeyStatus').textContent = '미등록';
+      $('geminiKeyStatus').className = 'badge';
+    }
+    if ($('gemKey')) $('gemKey').value = '';
+    if ($('gemModel')) $('gemModel').value = '';
+  }
+
+  function renderKeys(list) {
+    list = Array.isArray(list) ? list : [];
+    const notionItem = list.find((it) => it.provider === 'notion');
+    const geminiItem = list.find((it) => it.provider === 'gemini');
+
+    if (notionItem) {
+      if ($('notionKeyStatus')) {
+        $('notionKeyStatus').textContent = '설정됨 (끝 4자리 ' + (notionItem.hint || '') + ' · ' + (notionItem.updatedAt || '').slice(0, 10) + ')';
+        $('notionKeyStatus').className = 'badge ok';
+      }
+      const cfg = notionItem.config || {};
+      if ($('ntnSongsDb') && cfg.songsDb) $('ntnSongsDb').value = cfg.songsDb;
+      if ($('ntnSessionsDb') && cfg.sessionsDb) $('ntnSessionsDb').value = cfg.sessionsDb;
+      if ($('ntnNotesDb')) $('ntnNotesDb').value = cfg.notesDb || '';
+    } else {
+      resetNotionFields();
+    }
+
+    if (geminiItem) {
+      if ($('geminiKeyStatus')) {
+        $('geminiKeyStatus').textContent = '설정됨 (끝 4자리 ' + (geminiItem.hint || '') + ' · ' + (geminiItem.updatedAt || '').slice(0, 10) + ')';
+        $('geminiKeyStatus').className = 'badge ok';
+      }
+      const cfg = geminiItem.config || {};
+      if ($('gemModel') && cfg.model) $('gemModel').value = cfg.model;
+    } else {
+      resetGeminiFields();
+    }
+  }
+
+  async function loadKeys(uid) {
+    if (!window.ULData || !window.ULData.integrations) return;
+    const seq = ++keysReqSeq;
+    try {
+      const list = await window.ULData.integrations.list();
+      if (!activeUid || activeUid !== uid || seq !== keysReqSeq) return;
+      renderKeys(list);
+    } catch (e) {
+      if (!activeUid || activeUid !== uid || seq !== keysReqSeq) return;
+      const msg = (e && e.message) || '연동 키 목록을 불러오지 못했어요.';
+      if ($('ntnKeyMsg')) say('ntnKeyMsg', msg, 'err');
+      if ($('gemKeyMsg')) say('gemKeyMsg', msg, 'err');
+    }
+  }
 
   const templateAnchor = $('btnNotionTemplate');
   if (templateAnchor && window.ULEVELP_CONFIG && window.ULEVELP_CONFIG.notionTemplateUrl) {
@@ -163,6 +229,26 @@
         $('accName').textContent = '';
       }
 
+      if (st.me) {
+        const quota = st.me.takeQuotaBytes || 209715200;
+        const used = st.me.takeUsedBytes || 0;
+        if ($('quotaBar')) {
+          $('quotaBar').max = quota;
+          $('quotaBar').value = used;
+        }
+        if ($('quotaText')) {
+          $('quotaText').textContent = (used / 1048576).toFixed(1) + 'MB / ' + Math.round(quota / 1048576) + 'MB';
+        }
+      } else {
+        if ($('quotaBar')) {
+          $('quotaBar').max = 209715200;
+          $('quotaBar').value = 0;
+        }
+        if ($('quotaText')) {
+          $('quotaText').textContent = '0.0MB / 200MB';
+        }
+      }
+
       const nextUid = st.user ? st.user.id : null;
       if (!nextUid || nextUid !== activeUid) {
         activeUid = nextUid;
@@ -171,6 +257,13 @@
         if ($('nxPreviewList')) $('nxPreviewList').replaceChildren();
         if ($('nxMsg')) say('nxMsg', '');
         if ($('inpImportZip')) $('inpImportZip').value = '';
+        resetNotionFields();
+        resetGeminiFields();
+        if ($('ntnKeyMsg')) say('ntnKeyMsg', '');
+        if ($('gemKeyMsg')) say('gemKeyMsg', '');
+        if (nextUid) {
+          loadKeys(nextUid);
+        }
       }
     });
 
@@ -210,6 +303,184 @@
         say('accMsg', e.message || '계정 삭제에 실패했어요.', 'err');
       } finally {
         $('btnDeleteAcc').disabled = false;
+      }
+    });
+  }
+
+  // ---------- 외부 연동 키 관리 · BYOK (K4-1) ----------
+  if ($('btnSaveNotionKey')) {
+    $('btnSaveNotionKey').addEventListener('click', async () => {
+      say('ntnKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('ntnKeyMsg', '로그인 후 키를 저장할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const token = $('ntnToken') ? $('ntnToken').value.trim() : '';
+      const songsDb = $('ntnSongsDb') ? $('ntnSongsDb').value.trim() : '';
+      const sessionsDb = $('ntnSessionsDb') ? $('ntnSessionsDb').value.trim() : '';
+      const notesDb = $('ntnNotesDb') ? $('ntnNotesDb').value.trim() : '';
+      const btn = $('btnSaveNotionKey');
+      btn.disabled = true;
+      say('ntnKeyMsg', '저장 중…');
+      keysReqSeq++;
+      try {
+        const dto = await window.ULData.integrations.saveNotion({
+          token: token || null,
+          songsDb,
+          sessionsDb,
+          notesDb: notesDb || null,
+        });
+        if (!activeUid || reqUid !== activeUid) return;
+        if ($('ntnToken')) $('ntnToken').value = '';
+        if (dto) {
+          if ($('notionKeyStatus')) {
+            $('notionKeyStatus').textContent = '설정됨 (끝 4자리 ' + (dto.hint || '') + ' · ' + (dto.updatedAt || '').slice(0, 10) + ')';
+            $('notionKeyStatus').className = 'badge ok';
+          }
+          if (dto.config) {
+            if ($('ntnSongsDb') && dto.config.songsDb) $('ntnSongsDb').value = dto.config.songsDb;
+            if ($('ntnSessionsDb') && dto.config.sessionsDb) $('ntnSessionsDb').value = dto.config.sessionsDb;
+            if ($('ntnNotesDb')) $('ntnNotesDb').value = dto.config.notesDb || '';
+          }
+        }
+        say('ntnKeyMsg', '✓ 노션 키를 저장했어요.', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('ntnKeyMsg', e.message || '노션 키 저장에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnCheckNotionKey')) {
+    $('btnCheckNotionKey').addEventListener('click', async () => {
+      say('ntnKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('ntnKeyMsg', '로그인 후 연결을 확인할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnCheckNotionKey');
+      btn.disabled = true;
+      say('ntnKeyMsg', '연결 확인 중…');
+      keysReqSeq++;
+      try {
+        const r = await window.ULData.integrations.check('notion');
+        if (!activeUid || reqUid !== activeUid) return;
+        const notesPart = r.notesTitle ? ' · ' + r.notesTitle : '';
+        say('ntnKeyMsg', '✓ 연결 성공 (' + (r.songsTitle || '') + ' · ' + (r.sessionsTitle || '') + notesPart + ' · 파일 ' + (r.maxUploadMB || 5) + 'MB까지)', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('ntnKeyMsg', e.message || '노션 연결 확인에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnDelNotionKey')) {
+    $('btnDelNotionKey').addEventListener('click', async () => {
+      say('ntnKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('ntnKeyMsg', '로그인 후 연결을 해제할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnDelNotionKey');
+      btn.disabled = true;
+      say('ntnKeyMsg', '연결 해제 중…');
+      keysReqSeq++;
+      try {
+        await window.ULData.integrations.remove('notion');
+        if (!activeUid || reqUid !== activeUid) return;
+        resetNotionFields();
+        say('ntnKeyMsg', '✓ 노션 연동을 해제했어요.', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('ntnKeyMsg', e.message || '노션 연동 해제에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnSaveGeminiKey')) {
+    $('btnSaveGeminiKey').addEventListener('click', async () => {
+      say('gemKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('gemKeyMsg', '로그인 후 키를 저장할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const apiKey = $('gemKey') ? $('gemKey').value.trim() : '';
+      const model = $('gemModel') ? $('gemModel').value.trim() : '';
+      const btn = $('btnSaveGeminiKey');
+      btn.disabled = true;
+      say('gemKeyMsg', '저장 중…');
+      keysReqSeq++;
+      try {
+        const dto = await window.ULData.integrations.saveGemini({
+          apiKey: apiKey || null,
+          model: model || undefined,
+        });
+        if (!activeUid || reqUid !== activeUid) return;
+        if ($('gemKey')) $('gemKey').value = '';
+        if (dto) {
+          if ($('geminiKeyStatus')) {
+            $('geminiKeyStatus').textContent = '설정됨 (끝 4자리 ' + (dto.hint || '') + ' · ' + (dto.updatedAt || '').slice(0, 10) + ')';
+            $('geminiKeyStatus').className = 'badge ok';
+          }
+          if (dto.config && dto.config.model && $('gemModel')) {
+            $('gemModel').value = dto.config.model;
+          }
+        }
+        say('gemKeyMsg', '✓ Gemini 키를 저장했어요.', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('gemKeyMsg', e.message || 'Gemini 키 저장에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnCheckGeminiKey')) {
+    $('btnCheckGeminiKey').addEventListener('click', async () => {
+      say('gemKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('gemKeyMsg', '로그인 후 연결을 확인할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnCheckGeminiKey');
+      btn.disabled = true;
+      say('gemKeyMsg', '연결 확인 중…');
+      keysReqSeq++;
+      try {
+        const r = await window.ULData.integrations.check('gemini');
+        if (!activeUid || reqUid !== activeUid) return;
+        say('gemKeyMsg', '✓ 연결 성공 (' + (r.displayName || r.model || '') + ')', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('gemKeyMsg', e.message || 'Gemini 연결 확인에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnDelGeminiKey')) {
+    $('btnDelGeminiKey').addEventListener('click', async () => {
+      say('gemKeyMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('gemKeyMsg', '로그인 후 연결을 해제할 수 있어요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnDelGeminiKey');
+      btn.disabled = true;
+      say('gemKeyMsg', '연결 해제 중…');
+      keysReqSeq++;
+      try {
+        await window.ULData.integrations.remove('gemini');
+        if (!activeUid || reqUid !== activeUid) return;
+        resetGeminiFields();
+        say('gemKeyMsg', '✓ Gemini 연동을 해제했어요.', 'ok');
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('gemKeyMsg', e.message || 'Gemini 연동 해제에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
       }
     });
   }
