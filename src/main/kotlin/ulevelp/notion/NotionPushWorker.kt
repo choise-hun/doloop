@@ -150,7 +150,7 @@ class NotionPushWorker(
 
             for (item in items) {
                 try {
-                    processItem(userId, item, notion)
+                    processItem(userId, item, notion, workerId)
 
                     // 성공 시 완료 기록
                     DatabaseFactory.dbQuery(db) {
@@ -260,22 +260,29 @@ class NotionPushWorker(
         }
 
         // 2. storage_trash 정리 및 건수 집계
-        val trashIds = DatabaseFactory.dbQuery(db) {
-            StorageTrashTable
-                .select(StorageTrashTable.id)
-                .where { StorageTrashTable.attempts less 5 }
-                .limit(50)
-                .map { it[StorageTrashTable.id] }
-        }
-        if (trashIds.isNotEmpty()) {
-            storageTrashService.purge(trashIds)
-            val remaining = DatabaseFactory.dbQuery(db) {
+        try {
+            val trashIds = DatabaseFactory.dbQuery(db) {
                 StorageTrashTable
                     .select(StorageTrashTable.id)
-                    .where { StorageTrashTable.id inList trashIds }
-                    .count()
+                    .where { StorageTrashTable.attempts less 5 }
+                    .limit(50)
+                    .map { it[StorageTrashTable.id] }
             }
-            purgedTrash = trashIds.size - remaining.toInt()
+            if (trashIds.isNotEmpty()) {
+                storageTrashService.purge(trashIds)
+                val remaining = DatabaseFactory.dbQuery(db) {
+                    StorageTrashTable
+                        .select(StorageTrashTable.id)
+                        .where { StorageTrashTable.id inList trashIds }
+                        .count()
+                }
+                purgedTrash = trashIds.size - remaining.toInt()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("크론 storage_trash 정리 실패: {}", e.message)
+            purgedTrash = 0
         }
 
         // 3. 멈춘 analysis_jobs 타임아웃 정리
@@ -305,14 +312,15 @@ class NotionPushWorker(
     private suspend fun processItem(
         userId: UUID,
         item: OutboxItem,
-        notion: DecryptedNotionIntegration
+        notion: DecryptedNotionIntegration,
+        workerId: String? = null
     ) {
         when (item.op) {
             "upsert" -> {
                 when (item.entity) {
                     "song" -> pushSongUpsert(userId, item.entityId, notion)
                     "session" -> pushSessionUpsert(userId, item.entityId, notion)
-                    "take" -> pushTakeUpsert(userId, item.entityId, notion)
+                    "take" -> pushTakeUpsert(userId, item.entityId, notion, workerId)
                     "note" -> {
                         // K4-2에서는 "note" upsert는 K5-2로 이월
                     }
@@ -589,9 +597,20 @@ class NotionPushWorker(
     private suspend fun pushTakeUpsert(
         userId: UUID,
         takeId: UUID,
-        notion: DecryptedNotionIntegration
+        notion: DecryptedNotionIntegration,
+        workerId: String? = null
     ) {
-        val takeRow = DatabaseFactory.dbQuery(db!!) {
+        val existingLink = DatabaseFactory.dbQuery(db!!) {
+            NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "take") and (NotionLinksTable.entityId eq takeId) }
+                .singleOrNull()
+        }
+        if (existingLink != null) {
+            log.info("take({})는 이미 노션에 연동되어 있으므로 업로드를 건너뜁니다.", takeId)
+            return
+        }
+
+        val takeRow = DatabaseFactory.dbQuery(db) {
             TakesTable.selectAll()
                 .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
                 .singleOrNull()
@@ -627,6 +646,18 @@ class NotionPushWorker(
         val safeTitle = songTitle.replace(Regex("[\\\\/:*?\"<>|]+"), " ").trim().take(60)
         val ext = AUDIO_MIME_TO_EXT[takeRow[TakesTable.mime].substringBefore(';').trim().lowercase()] ?: "m4a"
         val filename = "$dateStr $timeNoColon $safeTitle.$ext".trim()
+
+        // 대용량 파일 업로드 전 lease 보호 연장
+        if (workerId != null) {
+            DatabaseFactory.dbQuery(db) {
+                val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
+                NotionSyncTable.update({
+                    (NotionSyncTable.userId eq userId) and (NotionSyncTable.leaseOwner eq workerId)
+                }) {
+                    it[leaseUntil] = nowUtc.plusMinutes(LEASE_MINUTES)
+                }
+            }
+        }
 
         val fileUploadId = notionClient.uploadFile(notion.token, filename, takeRow[TakesTable.mime], audioBytes)
 
@@ -668,8 +699,8 @@ class NotionPushWorker(
         val captionBlockId = results?.getOrNull(0)?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
         val audioBlockId = results?.getOrNull(1)?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull ?: fileUploadId
 
-        // 세션 페이지 녹음 속성에 파일 첨부 (runCatching)
-        runCatching {
+        // 세션 페이지 녹음 속성에 파일 첨부 (코루틴 취소는 전파하고 일반 예외는 로그 남김)
+        try {
             val page = notionClient.retrievePage(notion.token, sessionPageId)
             val recProp = page["properties"]?.jsonObject?.get("녹음")?.jsonObject
             val curFiles = recProp?.get("files")?.jsonArray ?: JsonArray(emptyList())
@@ -717,6 +748,10 @@ class NotionPushWorker(
                 }
             }
             notionClient.updatePage(notion.token, sessionPageId, patchBody)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("세션 페이지($sessionPageId) 녹음 속성 첨부 실패: {}", e.message)
         }
 
         // notion_links 기록
@@ -730,6 +765,18 @@ class NotionPushWorker(
                 it[notionExtra] = captionBlockId
                 it[syncedAt] = nowUtc
             }
+        }
+    }
+
+    private suspend fun archiveIgnoringMissing(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: NotionApiException) {
+            // object_not_found(404)는 노션 측에서 이미 제거되었으므로 성공으로 간주
+            if (e.statusCode == 404) return
+            // 노션은 이미 아카이브된 블록/페이지 재아카이브 시 400 validation_error를 반환할 수 있음
+            if (e.statusCode == 400 && e.message?.contains("already archived", ignoreCase = true) == true) return
+            throw e
         }
     }
 
@@ -750,21 +797,25 @@ class NotionPushWorker(
 
         when (entity) {
             "take" -> {
-                runCatching {
-                    if (notionPageId.isNotBlank()) {
+                if (notionPageId.isNotBlank()) {
+                    archiveIgnoringMissing {
                         notionClient.archiveBlock(notion.token, notionPageId)
                     }
                 }
-                runCatching {
-                    if (!notionExtra.isNullOrBlank()) {
+                if (!notionExtra.isNullOrBlank()) {
+                    archiveIgnoringMissing {
                         notionClient.archiveBlock(notion.token, notionExtra)
                     }
                 }
             }
             "song", "session", "note" -> {
-                runCatching {
-                    if (notionPageId.isNotBlank()) {
-                        notionClient.updatePage(notion.token, notionPageId, buildJsonObject { put("archived", true) })
+                if (notionPageId.isNotBlank()) {
+                    archiveIgnoringMissing {
+                        notionClient.updatePage(
+                            notion.token,
+                            notionPageId,
+                            buildJsonObject { put("archived", true) }
+                        )
                     }
                 }
             }

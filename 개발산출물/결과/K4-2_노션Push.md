@@ -167,3 +167,22 @@ Running 9 tests using 1 worker
    - 테스트 작성 중 테스트 토큰에 언더스코어(`secret_notion_test_token_12345`)를 사용했으나 `CryptoService.NOTION_TOKEN_REGEX`가 `secret_[A-Za-z0-9]{20,100}`로 영숫자만 허용하여 400 거부 발생. 유효한 영숫자 토큰(`secret_1234567890abcdef1234567890abcdef`)으로 수정함.
    - 테스트 데이터 셋업 시 `NotionSyncTable`에 행이 없으면 `pushUserOutbox`의 lease 획득 쿼리가 0행을 반환하므로, 테스트 헬퍼에서 `notion_sync.enabled = true` 행을 명시적으로 INSERT하도록 보강함.
    - Playwright 테스트 실행 시 `test-results/` 폴더가 자동 생성되었으나 12대 가드레일에 따라 즉시 삭제하여 무관한 파일 커밋을 방지함.
+
+---
+
+## 5. 시니어 리뷰 반영 내역 (PR #24)
+
+1. **리뷰 1번 (필수) — 노션 아카이브 실패 시 링크 보존 및 404 무시:**
+   - `archiveIgnoringMissing` 헬퍼 메서드를 추가하여 404(`object_not_found`) 및 이미 아카이브된 경우(400 `already archived`)만 정상으로 간주하고, 500 등 일시적 외부 오류는 예외를 그대로 상위로 전파하도록 수정.
+   - 예외 발생 시 `NotionLinksTable.deleteWhere`가 실행되지 않아 링크가 보존되고, `attempts + 1` 및 `last_error`가 기록되어 추후 재시도 가능.
+   - 단위 테스트 `NP13 delete 실패 시 500 일시 오류는 notion_links 유지 및 attempts 증가, 404는 성공 간주` 추가 및 검증 완료.
+2. **리뷰 2번 (필수) — take upsert 멱등성 보장 및 lease 연장:**
+   - `pushTakeUpsert` 진입 직후 `NotionLinksTable`에 `("take", takeId)`가 이미 존재하는지 검사하여, 존재할 경우 업로드를 건너뛰도록 수정.
+   - 대용량 오디오 업로드 전 `leaseUntil`을 현재 시각 기준 5분 연장하여 작업 중 다른 워커의 중복 개입 방지.
+   - 단위 테스트 `NP14 take upsert 멱등성 검증 - 동일 take outbox 2건 시 uploadFile 1회만 호출` 추가 및 검증 완료.
+3. **리뷰 3번 (권장) — 코루틴 취소 예외(`CancellationException`) 보존:**
+   - 세션 페이지 녹음 속성에 파일 첨부하는 블록에서 `runCatching` 대신 `try-catch`로 감싸 `CancellationException`은 상위 코루틴으로 즉시 재전파하고, 일반 예외는 `log.warn`을 남기도록 수정.
+4. **리뷰 4번 (권장) — 크론 2단계 예외 격리로 3단계 타임아웃 정리 보장:**
+   - `storageTrashService.purge` 및 쓰레기통 조회 로직을 `try-catch`로 격리하여, 스토리지 삭제 중 예외가 발생하더라도 로그만 남기고 3단계(`analysis_jobs` 70분 초과 타임아웃 정리)가 중단 없이 실행되도록 보장.
+5. **체크리스트 동적 갱신:**
+   - `개발산출물/주니어_체크리스트.md`에 지적 1~4번을 일반화한 4대 규칙(외부 실패 시 로컬 상태 보존, 외부 생성 멱등성 및 lease 연장, 코루틴 취소 전파, 배치 단계별 예외 격리)을 추가함.

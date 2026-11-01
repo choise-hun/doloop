@@ -1018,4 +1018,172 @@ class NotionPushApiTest {
         val err = assertStandardError(res.bodyAsText(), 412, "NO_KEY")
         assertEquals("등록된 키가 없습니다. 먼저 키를 저장해 주세요.", err["message"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun `NP13 delete 실패 시 500 일시 오류는 notion_links 유지 및 attempts 증가, 404는 성공 간주`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKeyForUserA(client)
+
+        val songId = UUID.randomUUID()
+        val songPageId = "page-song-err"
+
+        transaction(db) {
+            NotionLinksTable.insert {
+                it[entity] = "song"
+                it[entityId] = songId
+                it[userId] = userA
+                it[notionPageId] = songPageId
+            }
+            SyncOutboxTable.insert {
+                it[userId] = userA
+                it[entity] = "song"
+                it[entityId] = songId
+                it[op] = "delete"
+            }
+        }
+
+        // 1. 500 일시 오류 발생 시
+        fakeNotionClient.updatePageHandler = { _, _, _ ->
+            throw NotionApiException(500, "internal_server_error", "노션 서버 일시 장애")
+        }
+
+        val res1 = client.post("/api/v1/notion/sync/push") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res1.status)
+        val json1 = Json.parseToJsonElement(res1.bodyAsText()).jsonObject
+        assertEquals(0, json1["processed"]?.jsonPrimitive?.int)
+        assertEquals(1, json1["failed"]?.jsonPrimitive?.int)
+
+        // notion_links 보존 확인 및 outbox attempts=1, done_at is null 확인
+        transaction(db) {
+            val linkCount = NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "song") and (NotionLinksTable.entityId eq songId) }
+                .count()
+            assertEquals(1L, linkCount)
+
+            val outboxRow = SyncOutboxTable.selectAll()
+                .where { (SyncOutboxTable.userId eq userA) and (SyncOutboxTable.entityId eq songId) }
+                .single()
+            assertEquals(1, outboxRow[SyncOutboxTable.attempts])
+            assertNull(outboxRow[SyncOutboxTable.doneAt])
+            assertNotNull(outboxRow[SyncOutboxTable.lastError])
+        }
+
+        // 2. 404 오류 발생 시 (노션에서 이미 삭제됨)
+        fakeNotionClient.updatePageHandler = { _, _, _ ->
+            throw NotionApiException(404, "object_not_found", "페이지를 찾을 수 없음")
+        }
+
+        val res2 = client.post("/api/v1/notion/sync/push") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res2.status)
+        val json2 = Json.parseToJsonElement(res2.bodyAsText()).jsonObject
+        assertEquals(1, json2["processed"]?.jsonPrimitive?.int)
+        assertEquals(0, json2["failed"]?.jsonPrimitive?.int)
+
+        // notion_links 삭제 및 outbox done_at 기록 확인
+        transaction(db) {
+            val linkCount = NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "song") and (NotionLinksTable.entityId eq songId) }
+                .count()
+            assertEquals(0L, linkCount)
+
+            val outboxRow = SyncOutboxTable.selectAll()
+                .where { (SyncOutboxTable.userId eq userA) and (SyncOutboxTable.entityId eq songId) }
+                .single()
+            assertNotNull(outboxRow[SyncOutboxTable.doneAt])
+        }
+    }
+
+    @Test
+    fun `NP14 take upsert 멱등성 검증 - 동일 take outbox 2건 시 uploadFile 1회만 호출`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKeyForUserA(client)
+
+        val songId = UUID.randomUUID()
+        val sessionId = UUID.randomUUID()
+        val takeId = UUID.randomUUID()
+        val storageKey = "takes/$userA/$takeId.m4a"
+        val fakeAudioBytes = "sample-audio-bytes".toByteArray()
+        fakeStorageClient.upload(storageKey, fakeAudioBytes, "audio/mp4")
+
+        transaction(db) {
+            SongsTable.insert {
+                it[id] = songId
+                it[userId] = userA
+                it[title] = "Autumn Leaves"
+                it[videoId] = "dQw4w9WgXcQ"
+            }
+            SessionsTable.insert {
+                it[id] = sessionId
+                it[userId] = userA
+                it[this.songId] = songId
+                it[date] = LocalDate.of(2026, 11, 1)
+                it[seconds] = 300
+                it[loops] = 5
+            }
+            TakesTable.insert {
+                it[id] = takeId
+                it[userId] = userA
+                it[this.sessionId] = sessionId
+                it[this.songId] = songId
+                it[this.storageKey] = storageKey
+                it[mime] = "audio/mp4"
+                it[recordedAt] = OffsetDateTime.ofInstant(Instant.ofEpochMilli(1730467320000L), ZoneOffset.UTC)
+                it[durationSec] = 18
+                it[sizeBytes] = fakeAudioBytes.size.toLong()
+                it[storage] = "supabase"
+            }
+
+            // 동일 take에 대해 2건의 upsert outbox 적재
+            SyncOutboxTable.insert {
+                it[userId] = userA
+                it[entity] = "take"
+                it[entityId] = takeId
+                it[op] = "upsert"
+            }
+            SyncOutboxTable.insert {
+                it[userId] = userA
+                it[entity] = "take"
+                it[entityId] = takeId
+                it[op] = "upsert"
+            }
+        }
+
+        val res = client.post("/api/v1/notion/sync/push") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val json = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals(2, json["processed"]?.jsonPrimitive?.int)
+        assertEquals(0, json["failed"]?.jsonPrimitive?.int)
+
+        // uploadFile이 1회만 호출되었는지 검증 (중복 호출 없음)
+        assertEquals(1, fakeNotionClient.uploadFileCalls.size)
+
+        // 두 outbox 항목 모두 doneAt 기록 확인
+        transaction(db) {
+            val uncompleted = SyncOutboxTable.selectAll()
+                .where { (SyncOutboxTable.userId eq userA) and (SyncOutboxTable.doneAt.isNull()) }
+                .count()
+            assertEquals(0L, uncompleted)
+
+            val links = NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "take") and (NotionLinksTable.entityId eq takeId) }
+                .count()
+            assertEquals(1L, links)
+        }
+    }
 }
