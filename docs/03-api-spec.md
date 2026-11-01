@@ -429,17 +429,20 @@
 ```json
 {
   "ok": true,
+  "provider": "notion",
   "songsTitle": "연습 곡",
   "sessionsTitle": "연습 기록",
   "notesTitle": "학습 영상 노트",
-  "maxUploadMB": 20
+  "maxUploadMB": 5
 }
 ```
 - **Response (`200 OK` - Gemini 예시):**
 ```json
 {
   "ok": true,
-  "model": "gemini-flash-latest"
+  "provider": "gemini",
+  "model": "gemini-flash-latest",
+  "displayName": "Gemini 2.5 Flash"
 }
 ```
 
@@ -468,33 +471,34 @@
 
 ### 7.2 실시간 연동 켜기 (초기 전체 동기화 `full` 포함) 및 끄기
 - **`POST /api/v1/notion/sync/enable`**
-  - **설명:** 처음 연동을 켤 때 노션 DB의 기존 곡·세션·녹음·노트를 모두 읽어 서비스로 이관(`FR-SYNC-4`)하고 `notion_links`를 연결한 뒤 `enabled = true`로 설정합니다. 구글 드라이브 모드 사용 중이면 `409 NOTION_SYNC_CONFLICT`로 거부됩니다(`FR-SYNC-5`). 200MB 쿼터 초과 오디오는 건너뛰며 2회 실행 시에도 중복이 발생하지 않습니다.
+  - **설명:** 처음 연동을 켤 때 노션 DB의 기존 곡·세션·녹음·노트를 모두 읽어 서비스로 이관(`FR-SYNC-4`)하고 `notion_links`를 연결한 뒤 `enabled = true`로 설정합니다. 구글 드라이브 모드 사용 중이면 `409 NOTION_SYNC_CONFLICT`로 거부됩니다(`FR-SYNC-5`). 이미 이관된 녹음은 다운로드 자체를 건너뛰며, 200MB 쿼터 초과 오디오는 건너뛰며 2회 실행 시에도 중복이 발생하지 않습니다.
   - **Response (`200 OK`):** `{ "ok": true, "importedSongs": 24, "importedSessions": 115, "importedTakes": 18, "skippedTakesByQuota": 0 }`
 - **`POST /api/v1/notion/sync/disable`**
   - **설명:** `notion_sync.enabled = false`로 전환합니다.
   - **Response (`200 OK`):** `{ "ok": true }`
 
 ### 7.3 수동/자동 Pull 및 Push 트리거
-- **`POST /api/v1/notion/sync/pull`**: 노션에서 `last_edited_time > last_pull_at`인 변경사항을 가져옵니다(5분 쿨다운 적용 시 `429 RATE_LIMITED` 및 `retryAfter` 초 반환, `FR-SYNC-2`). **단, Pull로 반영된 변경사항은 `sync_outbox`에 절대 적재하지 않습니다(무한 루프 방지).**
+- **`POST /api/v1/notion/sync/pull`**: 노션에서 `last_edited_time > (lastPullAt - 2분)`(분 단위 절삭 보정)인 변경사항을 가져옵니다(5분 쿨다운 적용 시 `429 RATE_LIMITED` 및 `retryAfter` 초 반환, `FR-SYNC-2`). 로컬에 미처리 Outbox 항목이 있는 엔티티는 로컬 우선으로 건너뜁니다. **단, Pull로 반영된 변경사항은 `sync_outbox`에 절대 적재하지 않습니다(무한 루프 방지).**
   - **Response (`200 OK`):** `{ "ok": true, "updatedSongs": 3, "updatedSessions": 7, "lastPullAt": "2026-10-30T09:30:00Z" }`
-- **`POST /api/v1/notion/sync/push`**: 클라이언트가 저장 직후 호출하는 즉시 반영 트리거(본인 대기열만 비동기 실행).
+- **`POST /api/v1/notion/sync/push`**: 클라이언트가 저장 직후 호출하는 즉시 반영 트리거(본인 대기열을 동기 처리 후 `{ ok, processed, failed }` 반환).
   - **Response (`200 OK`):** `{ "ok": true, "processed": 2, "failed": 0 }`
 - **`POST /internal/cron/notion-push`**: Google Cloud Scheduler가 1분마다 호출하는 배치 엔드포인트. 대기열(`sync_outbox`)이 있는 사용자들을 순회하며 Push 처리하고(`FR-SYNC-1`), 같은 호출에서 `storage_trash` 파일 삭제(`attempts < 5`, 최대 50건)와 70분 넘게 `running`인 `analysis_jobs` 타임아웃 정리도 수행합니다.
   - **호출자 검증:** Cloud Run 서비스는 사용자용으로 공개(인증 없이 호출 허용)이므로 앱이 직접 검증합니다. `Authorization: Bearer <Google OIDC ID 토큰>`을 Google JWKS(`https://www.googleapis.com/oauth2/v3/certs`)로 서명 검증하고, `iss` = `https://accounts.google.com`, `aud` = 환경변수 `CRON_AUDIENCE`(서비스 URL), `email` = 환경변수 `CRON_SA_EMAIL` 이고 `email_verified = true`인지 확인합니다. 하나라도 틀리면 `401`.
+  - Cloud Scheduler 작업의 OIDC 설정: 서비스 계정 = `CRON_SA_EMAIL`, audience = `CRON_AUDIENCE`. 분석 Job 실행용 서비스 계정에는 `run.jobs.runWithOverrides` 권한을 줍니다.
   - **Response (`200 OK`):** `{ "ok": true, "pushedUsers": 1, "processedOutbox": 3, "purgedTrash": 2, "timedOutJobs": 0 }`
 
 ### 7.4 노션 호환 ZIP 내보내기 및 노션 백업 ZIP 가져오기
 - **`GET /api/v1/export/zip?includeAudio=true`**
-  - **설명:** 서버에서 UTF-8 BOM CSV(`연습 곡.csv`, `연습 기록.csv`, `학습 영상 노트.csv`), 마크다운 노트(`학습 영상 노트/*.md`), 녹음 파일(`녹음/*.m4a`), `읽어주세요.txt`를 스트리밍 ZIP으로 묶어 내려줍니다(`FR-NX-2`).
+  - **설명:** 서버에서 UTF-8 BOM CSV(`연습 곡.csv`, `연습 기록.csv`, `학습 영상 노트.csv`), 마크다운 노트(`학습 영상 노트/*.md`), 녹음 파일(`녹음/*.m4a`), `읽어주세요.txt`를 스트리밍 ZIP으로 묶어 내려줍니다(`FR-NX-2`). (클라이언트 JSZip 생성을 위한 `GET /api/v1/export/data`도 지원)
   - **쿼리 파라미터:** `includeAudio` (기본값 true). "false" 전달 시 오디오 제외.
   - **Response Headers:** `Content-Type: application/zip`, `Content-Disposition: attachment; filename="ULeveLP-export-${todayUtc}.zip"`, `Cache-Control: no-store`.
 - **`POST /api/v1/import/notion/preview`** (`multipart/form-data`, `file`: 노션 백업 `.zip`)
-  - **설명:** DB에 반영하지 않고 ZIP 내부 CSV와 오디오 폴더를 파싱하여 추가/갱신 예정 건수와 오류 행, 샘플 목록을 반환합니다(`FR-NX-4`). 최대 ZIP 크기 100MB(초과 시 `413 ZIP_TOO_LARGE`), 최대 압축 해제 용량 200MB(Zip Bomb 방어, 초과 시 `400 INVALID_INPUT`), 최대 엔트리 1,000개. 15분 유효한 미리보기 토큰을 발급합니다.
+  - **설명:** DB에 반영하지 않고 ZIP 내부 CSV와 오디오 폴더를 파싱하여 추가/갱신 예정 건수와 오류 행, 샘플 목록을 반환합니다(`FR-NX-4`). 최대 ZIP 크기 100MB(초과 시 `413 ZIP_TOO_LARGE`), 최대 압축 해제 용량 200MB(Zip Bomb 방어, 초과 시 `400 INVALID_INPUT`), 최대 엔트리 1,000개. Cloud Run 단일 인스턴스(`max-instances=1`) 전제로 15분 유효한 인메모리 미리보기 토큰(사용자당 최대 1개)을 발급합니다.
   - **Response (`200 OK`):**
 ```json
 {
   "ok": true,
-  "previewToken": "550e8400-e29b-41d4-a716-446655440000",
+  "previewToken": "f1000000-0000-4000-8000-000000000001",
   "newSongs": 12,
   "updatedSongs": 3,
   "sessions": 45,
@@ -506,8 +510,8 @@
 }
 ```
 - **`POST /api/v1/import/notion/confirm`**
-  - **설명:** 미리보기 토큰을 확정하여 곡·세션·녹음을 단일 트랜잭션으로 일괄 Upsert합니다(`FR-NX-3`). 녹음 파일 업로드는 트랜잭션 밖에서 선행되며 200MB 쿼터 초과분은 건너뜁니다.
-  - **Request Body:** `{ "previewToken": "550e8400-e29b-41d4-a716-446655440000" }`
+  - **설명:** 미리보기 토큰을 확정하여 곡·세션을 트랜잭션으로 Upsert하고, 녹음 파일 업로드는 트랜잭션 밖에서 선행한 뒤 짧은 트랜잭션으로 `takes` 행을 커밋합니다(`FR-NX-3`). 200MB 쿼터 초과분은 건너뜁니다.
+  - **Request Body:** `{ "previewToken": "f1000000-0000-4000-8000-000000000001" }`
   - **Response (`200 OK`):**
 ```json
 {
