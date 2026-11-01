@@ -28,6 +28,8 @@ import ulevelp.routes.registerPracticeRoutes
 import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
 import ulevelp.routes.registerSessionRoutes
+import ulevelp.routes.registerExportImportRoutes
+import ulevelp.service.ExportImportService
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
@@ -103,6 +105,7 @@ fun Application.module(
     val storageTrashService = StorageTrashService(db, storageClient)
     val takeService = TakeService(db, storageClient)
     val sessionService = SessionService(db)
+    val exportImportService = ExportImportService(db, storageClient, publicAppUrl)
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -189,6 +192,7 @@ fun Application.module(
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
             registerSessionRoutes(jwtVerifier, profileService, sessionService)
+            registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
 
             route("{...}") {
                 handle {

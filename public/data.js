@@ -295,6 +295,56 @@ window.ULData = (function () {
     }
   }
 
+  async function exportZip(includeAudio) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const qs = '?includeAudio=' + (includeAudio !== false);
+    const res = await fetch('/api/v1/export/zip' + qs, {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try {
+        errData = await res.json();
+      } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('내보내기에 실패했어요 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'EXPORT_ERROR';
+      err.data = errData;
+      throw err;
+    }
+    const cd = res.headers.get('content-disposition') || '';
+    let filename = 'ULeveLP-export.zip';
+    const match = cd.match(/filename="?([^"]+)"?/);
+    if (match && match[1]) {
+      filename = match[1];
+    }
+    const blob = await res.blob();
+    return { blob, filename };
+  }
+
+  async function previewNotionZip(file) {
+    requireLogin();
+    const form = new FormData();
+    form.append('file', file, (file && file.name) || 'backup.zip');
+    return await window.ULAuth.apiFetch('/api/v1/import/notion/preview', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  async function confirmNotionZip(previewToken) {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/import/notion/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ previewToken: String(previewToken || '') }),
+    });
+  }
+
   return {
     isLoggedIn,
     songs: {
@@ -314,6 +364,11 @@ window.ULData = (function () {
       upload,
       getUrl: getTakeUrl,
       remove: removeTake,
+    },
+    nx: {
+      exportZip,
+      previewNotionZip,
+      confirmNotionZip,
     },
     runLocalMigration,
   };

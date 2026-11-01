@@ -560,3 +560,82 @@ test('D16 songs.update 필드 정제: patch 객체에서 status, memo, title 키
   assert.equal(sentBody.memo, 'm');
   assert.deepEqual({ ...updated }, { id: 'song-1', status: '보류', memo: 'm' });
 });
+
+test('D17 비로그인 거부: nx.exportZip, nx.previewNotionZip, nx.confirmNotionZip은 401 reject 반환', async () => {
+  const env = createMockEnv({ session: null });
+  const blob = new Blob(['dummy'], { type: 'application/zip' });
+  const funcs = [
+    () => env.ULData.nx.exportZip(),
+    () => env.ULData.nx.previewNotionZip(blob),
+    () => env.ULData.nx.confirmNotionZip('f1000000-0000-4000-8000-000000000001'),
+  ];
+  for (const fn of funcs) {
+    await assert.rejects(
+      () => fn(),
+      (err) => {
+        assert.equal(err.code, 'NOT_LOGGED_IN');
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+  }
+  assert.equal(env.fetchCalls.length, 0);
+  assert.equal(env.apiCalls.length, 0);
+});
+
+test('D18 nx.exportZip: includeAudio 플래그 및 헤더 전송 확인', async () => {
+  const dummyBlob = new Blob(['zipdata'], { type: 'application/zip' });
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      headers: {
+        get: (h) => (h.toLowerCase() === 'content-disposition' ? 'attachment; filename="ULeveLP-export-20261101.zip"' : null),
+      },
+      blob: async () => dummyBlob,
+    },
+  });
+
+  const res = await env.ULData.nx.exportZip(false);
+  assert.equal(env.fetchCalls.length, 1);
+  assert.equal(env.fetchCalls[0].url, '/api/v1/export/zip?includeAudio=false');
+  assert.equal(env.fetchCalls[0].opts.headers.Authorization, 'Bearer tok');
+  assert.equal(res.filename, 'ULeveLP-export-20261101.zip');
+  assert.equal(res.blob, dummyBlob);
+});
+
+test('D19 nx.previewNotionZip & confirmNotionZip: FormData 전송 및 confirm 요청 검증', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiHandler: (p, opts) => {
+      if (p === '/api/v1/import/notion/preview') {
+        return { ok: true, previewToken: 'f1000000-0000-4000-8000-000000000001', newSongs: 1 };
+      }
+      if (p === '/api/v1/import/notion/confirm') {
+        return { ok: true, createdSongs: 1 };
+      }
+      return { ok: true };
+    },
+  });
+
+  // ① preview
+  const dummyZip = new Blob(['pk0304'], { type: 'application/zip' });
+  const previewRes = await env.ULData.nx.previewNotionZip(dummyZip);
+  assert.equal(previewRes.previewToken, 'f1000000-0000-4000-8000-000000000001');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/import/notion/preview');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+  assert.ok(env.apiCalls[0].opts.body instanceof FormData);
+  assert.ok(env.apiCalls[0].opts.body.get('file'));
+
+  // ② confirm
+  const confirmRes = await env.ULData.nx.confirmNotionZip('f1000000-0000-4000-8000-000000000001');
+  assert.equal(confirmRes.createdSongs, 1);
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/import/notion/confirm');
+  assert.equal(env.apiCalls[1].opts.method, 'POST');
+  const body = JSON.parse(env.apiCalls[1].opts.body);
+  assert.deepEqual(body, { previewToken: 'f1000000-0000-4000-8000-000000000001' });
+});
+

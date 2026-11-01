@@ -509,3 +509,60 @@ test('E7 대조군(검출기 작동 확인)', async ({ page }) => {
   expect(violations.length).toBeGreaterThanOrEqual(2);
 });
 
+test('E8 설정 화면(settings.html) 노션 백업 ZIP 미리보기 XSS 검사', async ({ page }) => {
+  await setupMockAuthAndApi(page);
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/import/notion/preview',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({
+          ok: true,
+          previewToken: 'f1000000-0000-4000-8000-000000000001',
+          newSongs: 2,
+          updatedSongs: 2,
+          sessions: 4,
+          takes: 2,
+          songsSample: [
+            { videoId: 'v1111111111', title: PAYLOADS.P_IMG, artist: PAYLOADS.P_SVG, status: 'practicing', isNew: true },
+            { videoId: 'v2222222222', title: PAYLOADS.P_JS_URL, artist: PAYLOADS.P_ATTR, status: 'mastered', isNew: false },
+          ],
+          errors: [
+            { file: PAYLOADS.P_IMG, row: 2, reason: PAYLOADS.P_SVG },
+            { file: PAYLOADS.P_JS_URL, row: 3, reason: PAYLOADS.P_ATTR },
+          ],
+        }),
+      });
+    }
+  );
+
+  await page.goto('/settings.html');
+
+  // 더미 파일 입력
+  await page.setInputFiles('#inpImportZip', {
+    name: 'backup.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from('PK\x03\x04dummy'),
+  });
+
+  // 미리보기 버튼 클릭
+  await page.click('#btnPreviewZip');
+
+  // #nxPreviewBox 표시 확인
+  const previewBox = page.locator('#nxPreviewBox');
+  await expect(previewBox).toBeVisible();
+
+  // #nxPreviewList 에 페이로드 원문 텍스트 포함 확인
+  const list = page.locator('#nxPreviewList');
+  await expect(list).toContainText(PAYLOADS.P_IMG);
+  await expect(list).toContainText(PAYLOADS.P_SVG);
+  await expect(list).toContainText(PAYLOADS.P_JS_URL);
+  await expect(list).toContainText(PAYLOADS.P_ATTR);
+
+  // XSS 미발생 및 CSP 단언
+  await assertNoXssOrCsp(page);
+});
+
+

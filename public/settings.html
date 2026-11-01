@@ -49,6 +49,36 @@
     <p class="hint"><a href="privacy.html">개인정보처리방침</a></p>
   </section>
 
+  <section class="set-sec" id="nx" aria-labelledby="hNx">
+    <h2 id="hNx">노션 템플릿 · 데이터 내보내기/가져오기</h2>
+    <p>공식 템플릿을 본인 노션에 복제한 뒤, 데이터를 ZIP으로 백업하거나 노션 백업 ZIP을 서비스로 가져올 수 있어요.</p>
+    <div class="row">
+      <a class="sec" id="btnNotionTemplate" href="https://www.notion.com" target="_blank" rel="noopener">공식 노션 템플릿 복제하기 ↗</a>
+    </div>
+
+    <div class="panel">
+      <h3>데이터 내보내기</h3>
+      <p class="hint">서비스에 저장된 모든 곡, 연습 기록, 학습 영상 노트와 녹음 오디오를 노션 호환 ZIP으로 다운로드해요.</p>
+      <label class="check"><input type="checkbox" id="chkExportAudio" checked><span>녹음 오디오 파일(.m4a 등) 함께 포함</span></label>
+      <div class="row"><button class="sec" type="button" id="btnExportZip">노션 호환 ZIP 다운로드</button></div>
+    </div>
+
+    <div class="panel">
+      <h3>노션 백업 가져오기</h3>
+      <p class="hint">노션에서 내보낸 Markdown & CSV 백업 ZIP 파일(또는 ULeveLP 내보내기 ZIP)을 올려 곡과 연습 기록을 복원해요.</p>
+      <label class="field"><span class="lab">노션 백업 ZIP 파일 (Markdown & CSV 내보내기 파일)</span><input class="inp" type="file" id="inpImportZip" accept=".zip,application/zip"></label>
+      <div class="row"><button class="sec" type="button" id="btnPreviewZip">가져오기 미리보기</button></div>
+
+      <div class="panel" id="nxPreviewBox" hidden>
+        <p id="nxPreviewSummary"></p>
+        <ul class="frame-list" id="nxPreviewList"></ul>
+        <div class="row"><button class="cta" type="button" id="btnConfirmZip">가져오기 확정</button><button class="ghost" type="button" id="btnCancelZip">취소</button></div>
+      </div>
+    </div>
+
+    <p class="msg" id="nxMsg" role="status"></p>
+  </section>
+
   <section class="set-sec" id="notion" aria-labelledby="hNotion">
     <h2 id="hNotion">노션 연결 · 플레이어와 녹음</h2>
     <p>연습 플레이어가 위치·구간·속도, 연습 시간, 녹음을 노션 <b>악기 연습</b>에 저장할 때 거치는 중계 서버(Google Apps Script)예요.</p>
@@ -97,6 +127,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="site.js"></script>
 <script src="auth.js"></script>
+<script src="data.js"></script>
 <script src="settings.js"></script>
 </body>
 </html>
