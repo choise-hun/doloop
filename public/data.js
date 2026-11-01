@@ -425,6 +425,39 @@ window.ULData = (function () {
     return r && r.ok ? r : { ok: true };
   }
 
+  async function syncStatus() {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/notion/sync/status');
+  }
+
+  async function syncEnable() {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/notion/sync/enable', {
+      method: 'POST',
+    });
+  }
+
+  async function syncDisable() {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/notion/sync/disable', {
+      method: 'POST',
+    });
+  }
+
+  async function syncPull() {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/notion/sync/pull', {
+      method: 'POST',
+    });
+  }
+
+  async function syncPush() {
+    requireLogin();
+    return await window.ULAuth.apiFetch('/api/v1/notion/sync/push', {
+      method: 'POST',
+    });
+  }
+
   return {
     isLoggedIn,
     getCachedKeys,
@@ -457,6 +490,13 @@ window.ULData = (function () {
       saveGemini: saveGeminiIntegration,
       check: checkIntegration,
       remove: removeIntegration,
+    },
+    notionSync: {
+      status: syncStatus,
+      enable: syncEnable,
+      disable: syncDisable,
+      pull: syncPull,
+      push: syncPush,
     },
     runLocalMigration,
   };

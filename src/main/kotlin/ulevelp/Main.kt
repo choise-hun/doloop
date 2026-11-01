@@ -25,6 +25,7 @@ import ulevelp.db.DatabaseFactory
 import ulevelp.notion.HttpNotionClient
 import ulevelp.notion.NotionClient
 import ulevelp.notion.NotionPushWorker
+import ulevelp.notion.NotionSyncService
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
 import ulevelp.routes.registerChordRoutes
@@ -139,6 +140,12 @@ fun Application.module(
         storageTrashService = storageTrashService,
         publicAppUrl = publicAppUrl
     )
+    val notionSyncService = NotionSyncService(
+        db = db,
+        integrationService = integrationService,
+        notionClient = notionClient,
+        storageClient = storageClient
+    )
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -227,7 +234,7 @@ fun Application.module(
             registerSessionRoutes(jwtVerifier, profileService, sessionService)
             registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
-            registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker)
+            registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
 
             route("{...}") {
                 handle {

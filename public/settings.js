@@ -2,7 +2,7 @@
 'use strict';
 (function () {
   const $ = (id) => document.getElementById(id);
-  const { raw, json, notion, gh, safeUrl } = UL;
+  const { raw, json, gh, safeUrl } = UL;
   const auth = window.ULAuth;
   function say(id, text, cls) { $(id).textContent = text; $(id).className = 'msg' + (cls ? ' ' + cls : ''); }
 
@@ -73,6 +73,48 @@
       const msg = (e && e.message) || '연동 키 목록을 불러오지 못했어요.';
       if ($('ntnKeyMsg')) say('ntnKeyMsg', msg, 'err');
       if ($('gemKeyMsg')) say('gemKeyMsg', msg, 'err');
+    }
+  }
+
+  let syncReqSeq = 0;
+
+  function renderSyncStatus(s) {
+    if (!$('syncStatusText')) return;
+    if (!s || !s.enabled) {
+      $('syncStatusText').textContent = '연동 꺼짐';
+      if ($('btnSyncEnable')) $('btnSyncEnable').hidden = false;
+      if ($('btnSyncDisable')) $('btnSyncDisable').hidden = true;
+    } else {
+      let txt = '실시간 연동 켜짐 · 대기 ' + (s.pending || 0) + '건 · 실패 ' + (s.failed || 0) + '건';
+      const parts = [];
+      if (s.lastPushAt) parts.push('마지막 보냄: ' + s.lastPushAt.slice(0, 19).replace('T', ' '));
+      if (s.lastPullAt) parts.push('마지막 가져옴: ' + s.lastPullAt.slice(0, 19).replace('T', ' '));
+      if (parts.length > 0) txt += ' (' + parts.join(', ') + ')';
+      $('syncStatusText').textContent = txt;
+      if ($('btnSyncEnable')) $('btnSyncEnable').hidden = true;
+      if ($('btnSyncDisable')) $('btnSyncDisable').hidden = false;
+    }
+    if ($('syncErrorText')) {
+      if (s && s.lastError) {
+        $('syncErrorText').textContent = '오류: ' + s.lastError;
+        $('syncErrorText').hidden = false;
+      } else {
+        $('syncErrorText').textContent = '';
+        $('syncErrorText').hidden = true;
+      }
+    }
+  }
+
+  async function loadSyncStatus(uid) {
+    if (!window.ULData || !window.ULData.notionSync) return;
+    const seq = ++syncReqSeq;
+    try {
+      const s = await window.ULData.notionSync.status();
+      if (!activeUid || activeUid !== uid || seq !== syncReqSeq) return;
+      renderSyncStatus(s);
+    } catch (e) {
+      if (!activeUid || activeUid !== uid || seq !== syncReqSeq) return;
+      renderSyncStatus({ enabled: false, pending: 0, failed: 0 });
     }
   }
 
@@ -259,10 +301,13 @@
         if ($('inpImportZip')) $('inpImportZip').value = '';
         resetNotionFields();
         resetGeminiFields();
+        renderSyncStatus({ enabled: false, pending: 0, failed: 0 });
         if ($('ntnKeyMsg')) say('ntnKeyMsg', '');
         if ($('gemKeyMsg')) say('gemKeyMsg', '');
+        if ($('syncMsg')) say('syncMsg', '');
         if (nextUid) {
           loadKeys(nextUid);
+          loadSyncStatus(nextUid);
         }
       }
     });
@@ -343,6 +388,7 @@
           }
         }
         say('ntnKeyMsg', '✓ 노션 키를 저장했어요.', 'ok');
+        loadSyncStatus(reqUid);
       } catch (e) {
         if (!activeUid || reqUid !== activeUid) return;
         say('ntnKeyMsg', e.message || '노션 키 저장에 실패했어요.', 'err');
@@ -390,7 +436,9 @@
         await window.ULData.integrations.remove('notion');
         if (!activeUid || reqUid !== activeUid) return;
         resetNotionFields();
+        renderSyncStatus({ enabled: false, pending: 0, failed: 0 });
         say('ntnKeyMsg', '✓ 노션 연동을 해제했어요.', 'ok');
+        loadSyncStatus(reqUid);
       } catch (e) {
         if (!activeUid || reqUid !== activeUid) return;
         say('ntnKeyMsg', e.message || '노션 연동 해제에 실패했어요.', 'err');
@@ -485,19 +533,103 @@
     });
   }
 
-  // ---------- 노션 연결 (practice.js와 같은 키, JSON 형식) ----------
-  $('apiUrl').value = notion.url();
-  $('apiKey').value = notion.key();
-  $('apiSave').addEventListener('click', async () => {
-    json.set('pp-api', $('apiUrl').value.trim());
-    json.set('pp-key', $('apiKey').value.trim());
-    if (!notion.ok()) return say('apiMsg', '주소와 비밀 키를 모두 넣어주세요', 'err');
-    say('apiMsg', '확인 중…');
-    try {
-      const r = await notion.call('/health');
-      say('apiMsg', '✓ 연결됨 (' + r.songsTitle + ' · ' + r.sessionsTitle + (r.maxUploadMB ? ' · 파일 ' + r.maxUploadMB + 'MB까지' : '') + ')', 'ok');
-    } catch (e) { say('apiMsg', e.message, 'err'); }
-  });
+  // ---------- 실시간 노션 동기화 (K4-3) ----------
+  if ($('btnSyncEnable')) {
+    $('btnSyncEnable').addEventListener('click', async () => {
+      say('syncMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('syncMsg', '로그인이 필요해요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnSyncEnable');
+      btn.disabled = true;
+      say('syncMsg', '기존 노션 데이터를 이관하고 연동을 켜는 중…');
+      try {
+        syncReqSeq++;
+        const res = await window.ULData.notionSync.enable();
+        if (!activeUid || reqUid !== activeUid) return;
+        const quotaPart = res.skippedTakesByQuota ? ', 용량 초과 건너뜀 ' + res.skippedTakesByQuota + '개' : '';
+        say('syncMsg', '✓ 연동이 켜졌어요 (곡 ' + res.importedSongs + '개, 세션 ' + res.importedSessions + '개, 녹음 ' + res.importedTakes + '개 이관' + quotaPart + ')', 'ok');
+        await loadSyncStatus(reqUid);
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', e.message || '연동 켜기에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnSyncDisable')) {
+    $('btnSyncDisable').addEventListener('click', async () => {
+      say('syncMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('syncMsg', '로그인이 필요해요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnSyncDisable');
+      btn.disabled = true;
+      say('syncMsg', '연동을 끄는 중…');
+      try {
+        syncReqSeq++;
+        await window.ULData.notionSync.disable();
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', '✓ 연동을 껐어요.', 'ok');
+        await loadSyncStatus(reqUid);
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', e.message || '연동 끄기에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnSyncPull')) {
+    $('btnSyncPull').addEventListener('click', async () => {
+      say('syncMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('syncMsg', '로그인이 필요해요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnSyncPull');
+      btn.disabled = true;
+      say('syncMsg', '노션에서 변경사항을 가져오는 중…');
+      try {
+        syncReqSeq++;
+        const res = await window.ULData.notionSync.pull();
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', '✓ 노션에서 가져왔어요 (곡 ' + res.updatedSongs + '개, 세션 ' + res.updatedSessions + '개 갱신)', 'ok');
+        await loadSyncStatus(reqUid);
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', e.message || '노션에서 가져오기에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if ($('btnSyncPush')) {
+    $('btnSyncPush').addEventListener('click', async () => {
+      say('syncMsg', '');
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) return say('syncMsg', '로그인이 필요해요.', 'err');
+      const reqUid = activeUid || user.id;
+      const btn = $('btnSyncPush');
+      btn.disabled = true;
+      say('syncMsg', '노션으로 변경사항을 보내는 중…');
+      try {
+        syncReqSeq++;
+        const res = await window.ULData.notionSync.push();
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', '✓ 노션으로 보냈어요 (처리 ' + res.processed + '건, 실패 ' + res.failed + '건)', 'ok');
+        await loadSyncStatus(reqUid);
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        say('syncMsg', e.message || '노션으로 보내기에 실패했어요.', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
 
   // ---------- 학습 노트 ----------
   $('ghToken').value = gh.token();

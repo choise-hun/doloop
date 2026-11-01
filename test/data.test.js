@@ -758,3 +758,87 @@ test('D23 getCachedKeys() uid 일치 검증', async () => {
   assert.deepEqual({ ...cached3 }, { notion: null, gemini: null });
 });
 
+test('D24 비로그인 거부', async () => {
+  const env = createMockEnv({ session: null });
+  const fns = [
+    () => env.ULData.notionSync.status(),
+    () => env.ULData.notionSync.enable(),
+    () => env.ULData.notionSync.disable(),
+    () => env.ULData.notionSync.pull(),
+    () => env.ULData.notionSync.push(),
+  ];
+  for (const fn of fns) {
+    await assert.rejects(fn(), (err) => {
+      assert.equal(err.code, 'NOT_LOGGED_IN');
+      assert.equal(err.status, 401);
+      return true;
+    });
+  }
+});
+
+test('D25 notionSync status·enable·disable', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/notion/sync/status') {
+        return { enabled: true, pending: 0, failed: 0 };
+      }
+      if (path === '/api/v1/notion/sync/enable') {
+        return { ok: true, importedSongs: 1, importedSessions: 1, importedTakes: 1, skippedTakesByQuota: 0 };
+      }
+      if (path === '/api/v1/notion/sync/disable') {
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+  });
+
+  const st = await env.ULData.notionSync.status();
+  assert.equal(st.enabled, true);
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/notion/sync/status');
+  assert.equal(env.apiCalls[0].opts, undefined);
+
+  const en = await env.ULData.notionSync.enable();
+  assert.equal(en.ok, true);
+  assert.equal(en.importedSongs, 1);
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/notion/sync/enable');
+  assert.equal(env.apiCalls[1].opts.method, 'POST');
+
+  const dis = await env.ULData.notionSync.disable();
+  assert.equal(dis.ok, true);
+  assert.equal(env.apiCalls.length, 3);
+  assert.equal(env.apiCalls[2].path, '/api/v1/notion/sync/disable');
+  assert.equal(env.apiCalls[2].opts.method, 'POST');
+});
+
+test('D26 notionSync pull·push', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/notion/sync/pull') {
+        return { ok: true, updatedSongs: 1, updatedSessions: 1, lastPullAt: '2026-11-01T00:00:00Z' };
+      }
+      if (path === '/api/v1/notion/sync/push') {
+        return { ok: true, processed: 1, failed: 0 };
+      }
+      return { ok: true };
+    },
+  });
+
+  const pl = await env.ULData.notionSync.pull();
+  assert.equal(pl.ok, true);
+  assert.equal(pl.updatedSongs, 1);
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/notion/sync/pull');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+
+  const ps = await env.ULData.notionSync.push();
+  assert.equal(ps.ok, true);
+  assert.equal(ps.processed, 1);
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/notion/sync/push');
+  assert.equal(env.apiCalls[1].opts.method, 'POST');
+});
+
