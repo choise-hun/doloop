@@ -146,6 +146,8 @@ Running 9 tests using 1 worker
    - `ApiTestSupport.kt`의 `assertStandardError` 헬퍼 함수는 `retryAfter is JsonNull`을 강제 단언하므로, 429 응답에서 남은 초(정수)를 반환하는 PL8 검증에서는 헬퍼 대신 JSON을 직접 파싱하여 `status == 429`, `code == "RATE_LIMITED"`, `retryAfter in 1..300`을 검증하였습니다.
 3. **`test/data.test.js` D25 테스트 mock opts 검증:**
    - GET 요청인 `window.ULData.notionSync.status()`는 `apiFetch(path)` 호출 시 `opts`를 생략하므로 mock 환경에서 `env.apiCalls[0].opts`는 `undefined`로 평가되어 이를 일치하도록 단언하였습니다.
+4. **PL6 DB 타임스탬프 정밀도 손실 방지 (SECONDS 단위 절삭):**
+   - JVM의 `OffsetDateTime.now(ZoneOffset.UTC)`는 나노초 정밀도(9자리)를 가지지만 PostgreSQL의 `TIMESTAMP WITH TIME ZONE`은 마이크로초(6자리) 정밀도이므로, DB 저장 후 읽어온 `lastPullAt`의 ISO 직렬화 문자열이 테스트의 원본 나노초 문자열과 불일치하여 CI에서 500 오류가 발생했습니다. 테스트 셋업 시 `truncatedTo(ChronoUnit.SECONDS)`로 정규화하고 `Instant.parse()`로 시간값을 비교하도록 보완하였습니다.
 
 ---
 

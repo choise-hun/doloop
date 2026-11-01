@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test
 import ulevelp.db.*
 import ulevelp.support.*
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -607,8 +609,8 @@ class NotionPullAndEnableApiTest {
         }
         assertEquals(HttpStatusCode.OK, enableRes.status)
 
-        // 10분 전으로 last_pull_at 설정, sync_outbox 비움
-        val now = OffsetDateTime.now(ZoneOffset.UTC)
+        // 10분 전으로 last_pull_at 설정, sync_outbox 비움 (DB 저장 정밀도 고려하여 SECONDS 단위 절삭)
+        val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS)
         val tenMinutesAgo = now.minusMinutes(10)
         transaction(db) {
             SyncOutboxTable.deleteAll()
@@ -639,7 +641,7 @@ class NotionPullAndEnableApiTest {
         fakeNotionClient.queryDatabaseHandler = { _, databaseId, body ->
             val after = body["filter"]?.jsonObject?.get("last_edited_time")?.jsonObject?.get("after")?.jsonPrimitive?.contentOrNull
             val expectedAfter = DateTimeFormatter.ISO_INSTANT.format(tenMinutesAgo.minusMinutes(2).toInstant())
-            assertEquals(expectedAfter, after)
+            assertEquals(Instant.parse(expectedAfter), Instant.parse(after!!))
 
             if (databaseId == testSongsDb) {
                 songFilterChecked = true
