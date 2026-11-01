@@ -114,7 +114,10 @@
       renderSyncStatus(s);
     } catch (e) {
       if (!activeUid || activeUid !== uid || seq !== syncReqSeq) return;
-      renderSyncStatus({ enabled: false, pending: 0, failed: 0 });
+      if ($('syncStatusText')) {
+        $('syncStatusText').textContent = '연동 상태를 불러오지 못했어요.';
+      }
+      say('syncMsg', (e && e.message) ? e.message : '연동 상태를 불러오지 못했어요.', 'err');
     }
   }
 

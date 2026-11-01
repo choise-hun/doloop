@@ -349,33 +349,35 @@ class NotionSyncService(
                         continue
                     }
 
-                    // 트랜잭션 밖 다운로드
-                    val (bytes, _) = notionClient.downloadExternalFile(file.url)
-                    if (bytes.isEmpty() || bytes.size > TakeService.MAX_FILE_BYTES) {
-                        continue
-                    }
-
-                    // 쿼터 확인 및 업로드
-                    val withinQuota = DatabaseFactory.dbQuery(database) {
-                        val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.forUpdate().single()
-                        val quota = profile[ProfilesTable.takeQuotaBytes]
-                        val usedExpr = TakesTable.sizeBytes.sum()
-                        val usedBytes = TakesTable.select(usedExpr)
-                            .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
-                            .singleOrNull()?.get(usedExpr) ?: 0L
-                        usedBytes + bytes.size <= quota
-                    }
-
-                    if (!withinQuota) {
-                        skippedTakesByQuota++
-                        continue
-                    }
-
-                    val takeId = UUID.randomUUID()
-                    val storageKey = "$userId/$takeId.$ext"
-                    storageClient.upload(storageKey, bytes, mime)
-
+                    var storageKey: String? = null
                     try {
+                        // 트랜잭션 밖 다운로드
+                        val (bytes, _) = notionClient.downloadExternalFile(file.url)
+                        if (bytes.isEmpty() || bytes.size > TakeService.MAX_FILE_BYTES) {
+                            continue
+                        }
+
+                        // 쿼터 확인 및 업로드
+                        val withinQuota = DatabaseFactory.dbQuery(database) {
+                            val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.forUpdate().single()
+                            val quota = profile[ProfilesTable.takeQuotaBytes]
+                            val usedExpr = TakesTable.sizeBytes.sum()
+                            val usedBytes = TakesTable.select(usedExpr)
+                                .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
+                                .singleOrNull()?.get(usedExpr) ?: 0L
+                            usedBytes + bytes.size <= quota
+                        }
+
+                        if (!withinQuota) {
+                            skippedTakesByQuota++
+                            continue
+                        }
+
+                        val takeId = UUID.randomUUID()
+                        val sKey = "$userId/$takeId.$ext"
+                        storageKey = sKey
+                        storageClient.upload(sKey, bytes, mime)
+
                         DatabaseFactory.dbQuery(database) {
                             val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.forUpdate().single()
                             val quota = profile[ProfilesTable.takeQuotaBytes]
@@ -401,7 +403,7 @@ class NotionSyncService(
                                 it[TakesTable.mime] = mime
                                 it[sizeBytes] = bytes.size.toLong()
                                 it[storage] = "supabase"
-                                it[TakesTable.storageKey] = storageKey
+                                it[TakesTable.storageKey] = sKey
                                 it[memo] = ""
                                 it[createdAt] = nowUtc
                             }
@@ -417,14 +419,14 @@ class NotionSyncService(
                         }
                         importedTakes++
                     } catch (e: CancellationException) {
-                        cleanupUploadedFile(storageClient, database, storageKey)
+                        storageKey?.let { cleanupUploadedFile(storageClient, database, it) }
                         throw e
                     } catch (e: Exception) {
-                        cleanupUploadedFile(storageClient, database, storageKey)
+                        storageKey?.let { cleanupUploadedFile(storageClient, database, it) }
                         if (e is ApiException && e.code == "TAKE_QUOTA_EXCEEDED") {
                             skippedTakesByQuota++
                         } else {
-                            log.warn("녹음 DB 저장 실패: {}", e.message)
+                            log.warn("녹음 파일 가져오기 실패 (file={}): {}", file.name, e.message)
                         }
                     }
                 }
@@ -569,24 +571,28 @@ class NotionSyncService(
             }.map { Pair(it[SyncOutboxTable.entity], it[SyncOutboxTable.entityId]) }.toSet()
 
             for (ps in parsedSongs) {
-                val existingSongId = NotionLinksTable.selectAll().where {
+                val linkedSongId = NotionLinksTable.selectAll().where {
                     (NotionLinksTable.userId eq userId) and
                     (NotionLinksTable.entity eq "song") and
                     (NotionLinksTable.notionPageId eq ps.pageId)
                 }.singleOrNull()?.let { it[NotionLinksTable.entityId] }
+
+                val existingSongRow = if (linkedSongId != null) {
+                    SongsTable.selectAll().where {
+                        (SongsTable.id eq linkedSongId) and (SongsTable.userId eq userId)
+                    }.singleOrNull()
+                } else null
                     ?: SongsTable.selectAll().where {
                         (SongsTable.userId eq userId) and (SongsTable.videoId eq ps.videoId)
-                    }.singleOrNull()?.let { it[SongsTable.id] }
+                    }.singleOrNull()
 
-                if (existingSongId != null) {
+                if (existingSongRow != null) {
+                    val existingSongId = existingSongRow[SongsTable.id]
                     if (Pair("song", existingSongId) in pendingOutboxSet) {
                         // 로컬 수정사항이 아직 Push되기 전이므로 덮어쓰지 않고 건너뜀 (로컬 우선)
                         continue
                     }
-                    val oldSong = SongsTable.selectAll().where {
-                        (SongsTable.id eq existingSongId) and (SongsTable.userId eq userId)
-                    }.single()
-                    val oldLast = oldSong[SongsTable.lastDate]
+                    val oldLast = existingSongRow[SongsTable.lastDate]
                     val mergedLast = when {
                         oldLast == null -> ps.lastDate
                         ps.lastDate == null -> oldLast
@@ -631,33 +637,48 @@ class NotionSyncService(
             }
 
             for (ps in parsedSessions) {
-                val songId = NotionLinksTable.selectAll().where {
+                val linkedSongId = NotionLinksTable.selectAll().where {
                     (NotionLinksTable.userId eq userId) and
                     (NotionLinksTable.entity eq "song") and
                     (NotionLinksTable.notionPageId eq ps.songNotionPageId)
                 }.singleOrNull()?.let { it[NotionLinksTable.entityId] } ?: continue
 
-                val existingSessionId = NotionLinksTable.selectAll().where {
+                // 링크로 얻은 songId가 SongsTable에 실제로 있는지 확인
+                val songRow = SongsTable.selectAll().where {
+                    (SongsTable.id eq linkedSongId) and (SongsTable.userId eq userId)
+                }.singleOrNull()
+
+                // 곡이 로컬에 없거나 ("song", songId) 삭제/수정 outbox가 대기 중이면 세션 건너뜀 (FK 위반 방지)
+                if (songRow == null || Pair("song", linkedSongId) in pendingOutboxSet) {
+                    continue
+                }
+                val songId = linkedSongId
+
+                val linkedSessionId = NotionLinksTable.selectAll().where {
                     (NotionLinksTable.userId eq userId) and
                     (NotionLinksTable.entity eq "session") and
                     (NotionLinksTable.notionPageId eq ps.pageId)
                 }.singleOrNull()?.let { it[NotionLinksTable.entityId] }
+
+                val existingSessionRow = if (linkedSessionId != null) {
+                    SessionsTable.selectAll().where {
+                        (SessionsTable.id eq linkedSessionId) and (SessionsTable.userId eq userId)
+                    }.singleOrNull()
+                } else null
                     ?: SessionsTable.selectAll().where {
                         (SessionsTable.userId eq userId) and
                         (SessionsTable.songId eq songId) and
                         (SessionsTable.date eq ps.date)
-                    }.singleOrNull()?.let { it[SessionsTable.id] }
+                    }.singleOrNull()
 
-                if (existingSessionId != null) {
+                if (existingSessionRow != null) {
+                    val existingSessionId = existingSessionRow[SessionsTable.id]
                     if (Pair("session", existingSessionId) in pendingOutboxSet) {
                         // 로컬 수정사항 보호: 건너뜀
                         continue
                     }
-                    val oldSession = SessionsTable.selectAll().where {
-                        (SessionsTable.id eq existingSessionId) and (SessionsTable.userId eq userId)
-                    }.single()
-                    val oldSec = oldSession[SessionsTable.seconds]
-                    val oldLoops = oldSession[SessionsTable.loops]
+                    val oldSec = existingSessionRow[SessionsTable.seconds]
+                    val oldLoops = existingSessionRow[SessionsTable.loops]
                     SessionsTable.update({ (SessionsTable.id eq existingSessionId) and (SessionsTable.userId eq userId) }) {
                         it[seconds] = maxOf(oldSec, ps.seconds)
                         it[loops] = maxOf(oldLoops, ps.loops)
@@ -832,10 +853,8 @@ class NotionSyncService(
         val files = filesRaw?.mapNotNull { item ->
             val obj = item.jsonObject
             val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
-            val url = obj["file"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
-                ?: obj["external"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
-                ?: ""
-            if (name.isNotBlank() && url.isNotBlank()) NotionFileItem(name, url) else null
+            val url = obj["file"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull ?: ""
+            if (name.isNotBlank() && url.startsWith("https://", ignoreCase = true)) NotionFileItem(name, url) else null
         }.orEmpty()
 
         return NotionParsedSession(

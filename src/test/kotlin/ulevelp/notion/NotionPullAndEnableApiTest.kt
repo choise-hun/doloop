@@ -869,4 +869,232 @@ class NotionPullAndEnableApiTest {
         assertEquals(HttpStatusCode.PreconditionFailed, pullRes.status)
         assertStandardError(pullRes.bodyAsText(), 412, "NO_KEY")
     }
+
+    @Test
+    fun `리뷰 1번 enable 시 external 녹음은 다운로드하지 않고 건너뜀 (SSRF 방지)`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKey(client, tokenA)
+
+        val n1PageId = "page-song-ext"
+        val s1PageId = "page-session-ext"
+        val n1 = buildNotionSongPage(pageId = n1PageId, videoId = "dQw4w9WgXcQ", title = "SSRF Test")
+        // external URL로 구성된 세션 페이지
+        val s1 = buildJsonObject {
+            put("id", s1PageId)
+            putJsonObject("properties") {
+                putJsonObject("기록") {
+                    putJsonArray("title") {
+                        addJsonObject {
+                            put("type", "text")
+                            putJsonObject("text") { put("content", "2026-10-30 Session") }
+                            put("plain_text", "2026-10-30 Session")
+                        }
+                    }
+                }
+                putJsonObject("곡") {
+                    putJsonArray("relation") {
+                        addJsonObject { put("id", n1PageId) }
+                    }
+                }
+                putJsonObject("날짜") {
+                    putJsonObject("date") { put("start", "2026-10-30") }
+                }
+                putJsonObject("연습 시간(분)") { put("number", 10.0) }
+                putJsonObject("녹음") {
+                    putJsonArray("files") {
+                        addJsonObject {
+                            put("name", "2026-10-30_12-00-00.m4a")
+                            put("type", "external")
+                            putJsonObject("external") { put("url", "http://169.254.169.254/latest/meta-data/") }
+                        }
+                    }
+                }
+            }
+        }
+
+        fakeNotionClient.queryDatabaseHandler = { _, databaseId, _ ->
+            if (databaseId == testSongsDb) {
+                buildJsonObject {
+                    putJsonArray("results") { add(n1) }
+                    put("has_more", false)
+                }
+            } else {
+                buildJsonObject {
+                    putJsonArray("results") { add(s1) }
+                    put("has_more", false)
+                }
+            }
+        }
+
+        val res = client.post("/api/v1/notion/sync/enable") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val json = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals(0, json["importedTakes"]?.jsonPrimitive?.int)
+        assertEquals(0, fakeNotionClient.downloadExternalFileCalls.size)
+
+        transaction(db) {
+            assertEquals(0, TakesTable.selectAll().where { TakesTable.userId eq userA }.count())
+        }
+    }
+
+    @Test
+    fun `리뷰 2번 enable 시 녹음 파일 중 1개가 다운로드 실패(403)해도 전체 enable 성공 및 나머지 반영`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKey(client, tokenA)
+
+        val n1PageId = "page-song-err"
+        val s1PageId = "page-session-err"
+        val n1 = buildNotionSongPage(pageId = n1PageId, videoId = "dQw4w9WgXcQ", title = "Error Isolation")
+        val s1 = buildNotionSessionPage(
+            pageId = s1PageId,
+            songNotionPageId = n1PageId,
+            date = "2026-10-30",
+            minutes = 20.0,
+            files = listOf(
+                Pair("2026-10-30_10-00-00.m4a", "https://notion.so/signed/fail.m4a"),
+                Pair("2026-10-30_10-10-00.m4a", "https://notion.so/signed/success.m4a")
+            )
+        )
+
+        fakeNotionClient.downloadExternalFileHandler = { url ->
+            if (url.contains("fail")) {
+                throw ulevelp.notion.NotionApiException(403, "forbidden", "Forbidden")
+            } else {
+                Pair(ByteArray(1024) { 1 }, "audio/mp4")
+            }
+        }
+
+        fakeNotionClient.queryDatabaseHandler = { _, databaseId, _ ->
+            if (databaseId == testSongsDb) {
+                buildJsonObject {
+                    putJsonArray("results") { add(n1) }
+                    put("has_more", false)
+                }
+            } else {
+                buildJsonObject {
+                    putJsonArray("results") { add(s1) }
+                    put("has_more", false)
+                }
+            }
+        }
+
+        val res = client.post("/api/v1/notion/sync/enable") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val json = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals(1, json["importedTakes"]?.jsonPrimitive?.int)
+        assertTrue(json["ok"]?.jsonPrimitive?.boolean == true)
+
+        transaction(db) {
+            val syncRow = NotionSyncTable.selectAll().where { NotionSyncTable.userId eq userA }.single()
+            assertTrue(syncRow[NotionSyncTable.enabled])
+            assertEquals(1, TakesTable.selectAll().where { TakesTable.userId eq userA }.count())
+        }
+    }
+
+    @Test
+    fun `리뷰 3번 로컬에서 삭제된 곡을 가리키는 노션 세션이 있어도 pull이 200 반환 및 FK 위반 방지`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKey(client, tokenA)
+
+        val n1PageId = "page-song-del"
+        val s1PageId = "page-session-del"
+        val n1 = buildNotionSongPage(pageId = n1PageId, videoId = "dQw4w9WgXcQ", title = "To Delete")
+        val s1 = buildNotionSessionPage(
+            pageId = s1PageId,
+            songNotionPageId = n1PageId,
+            date = "2026-10-30",
+            minutes = 15.0
+        )
+
+        fakeNotionClient.queryDatabaseHandler = { _, databaseId, _ ->
+            if (databaseId == testSongsDb) {
+                buildJsonObject {
+                    putJsonArray("results") { add(n1) }
+                    put("has_more", false)
+                }
+            } else {
+                buildJsonObject {
+                    putJsonArray("results") { add(s1) }
+                    put("has_more", false)
+                }
+            }
+        }
+
+        // 1. enable 호출로 N1 곡 및 S1 세션 이관 완료
+        val enableRes = client.post("/api/v1/notion/sync/enable") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, enableRes.status)
+
+        val songId = transaction(db) {
+            SongsTable.selectAll().where {
+                (SongsTable.userId eq userA) and (SongsTable.videoId eq "dQw4w9WgXcQ")
+            }.single()[SongsTable.id]
+        }
+
+        // 2. DELETE /songs/{songId} 호출하여 로컬에서 곡 삭제 및 outbox에 delete 대기 적재
+        val deleteRes = client.delete("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, deleteRes.status)
+
+        // 3. lastPullAt을 10분 전으로 설정
+        val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS)
+        val tenMinutesAgo = now.minusMinutes(10)
+        transaction(db) {
+            NotionSyncTable.update({ NotionSyncTable.userId eq userA }) {
+                it[lastPullAt] = tenMinutesAgo
+            }
+        }
+
+        // 4. 노션에서 삭제된 N1을 가리키는 새로운 세션 S2 페이지 반환 시뮬레이션
+        val s2PageId = "page-session-s2-orphan"
+        val s2 = buildNotionSessionPage(
+            pageId = s2PageId,
+            songNotionPageId = n1PageId,
+            date = "2026-10-31",
+            minutes = 25.0
+        )
+
+        fakeNotionClient.queryDatabaseHandler = { _, databaseId, _ ->
+            if (databaseId == testSongsDb) {
+                buildJsonObject {
+                    putJsonArray("results") {}
+                    put("has_more", false)
+                }
+            } else {
+                buildJsonObject {
+                    putJsonArray("results") { add(s2) }
+                    put("has_more", false)
+                }
+            }
+        }
+
+        // 5. pull 호출 시 FK 제약조건 위반이나 NoSuchElementException 없이 200 반환 및 updatedSessions=0 검증
+        val pullRes = client.post("/api/v1/notion/sync/pull") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, pullRes.status)
+        val pullJson = Json.parseToJsonElement(pullRes.bodyAsText()).jsonObject
+        assertEquals(0, pullJson["updatedSessions"]?.jsonPrimitive?.int)
+    }
 }

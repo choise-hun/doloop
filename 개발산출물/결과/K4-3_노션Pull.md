@@ -12,14 +12,14 @@
 
 | 구분 | 경로 | 하는 일 |
 | :--- | :--- | :--- |
-| 신규 | `src/main/kotlin/ulevelp/notion/NotionSyncService.kt` | 노션 동기화 오케스트레이션 서비스 (`getStatus`, `enable` full 모드, `disable`, `pull` 증분 동기화, 5분 쿨다운, 2분 쿼리 보정, 최대 500페이지 캡, 중복 오디오 방지, outbox 충돌 방지 로컬 우선) |
-| 신규 | `src/test/kotlin/ulevelp/notion/NotionPullAndEnableApiTest.kt` | Pull/Enable API 통합 테스트 (PL1~PL10: 401, 미연동 409, 정상 pull, outbox 무한루프 방지, 로컬 우선 보존, full enable, 429 쿨다운, 500페이지 초과, 오디오 쿼터 초과) |
+| 신규 | `src/main/kotlin/ulevelp/notion/NotionSyncService.kt` | 노션 동기화 오케스트레이션 서비스 (`getStatus`, `enable` full 모드, `disable`, `pull` 증분 동기화, 5분 쿨다운, 2분 쿼리 보정, 최대 500페이지 캡, 중복 오디오 방지, outbox 충돌 방지 로컬 우선, SSRF 방지 external 차단, 개별 파일 오류 격리, 삭제 엔티티 링크/FK 안전 검사) |
+| 신규 | `src/test/kotlin/ulevelp/notion/NotionPullAndEnableApiTest.kt` | Pull/Enable API 통합 테스트 (PL1~PL10 및 리뷰 1~3번 신규 테스트 포함 13개) |
 | 수정 | `src/main/kotlin/ulevelp/routes/NotionSyncRoutes.kt` | `GET /status`, `POST /enable`, `POST /disable`, `POST /pull`, `POST /push` 엔드포인트 연결 |
 | 수정 | `src/main/kotlin/ulevelp/Main.kt` | `Application.module`에 `notionSyncService` 인스턴스 주입 및 라우트 등록 |
 | 수정 | `public/data.js` | `window.ULData.notionSync` (`status`, `enable`, `disable`, `pull`, `push`) 네임스페이스 추가 |
 | 수정 | `public/site.js` | 구형 `notion` 객체(`url`, `key`, `ok`, `call`) 및 export 제거 (`gh` 유지) |
 | 수정 | `public/settings.html` | 구 `#notion` 섹션 제거, `#keys` 카드 하단에 `#notionSyncPanel` 추가, CSP `connect-src` 갱신 |
-| 수정 | `public/settings.js` | 구 `apiUrl`/`apiKey` 핸들러 제거, `#notionSyncPanel` 이벤트(`enable`, `disable`, `pull`, `push`, `status`) 및 순번(`syncStatusSeq`) 처리 |
+| 수정 | `public/settings.js` | 구 `apiUrl`/`apiKey` 핸들러 제거, `#notionSyncPanel` 이벤트(`enable`, `disable`, `pull`, `push`, `status`), 순번(`syncStatusSeq`), 실패 피드백(`연동 상태를 불러오지 못했어요.`) 처리 |
 | 수정 | `public/index.html` | CSP `connect-src`에서 `script.google.com`·`script.googleusercontent.com` 제거 |
 | 수정 | `public/chords.html` | CSP `connect-src`에서 `script.google.com`·`script.googleusercontent.com` 제거 |
 | 수정 | `public/practice.html` | CSP `connect-src`에서 `script.google.com`·`script.googleusercontent.com` 제거 |
@@ -43,50 +43,51 @@
 TakeApiTest > T11 녹음 삭제 - 파일 제거 및 쿼터 반환() PASSED
 
 TakeApiTest > T3 쿼터 사전 거부() STANDARD_OUT
-    2026-11-01 22:50:51.210 [DefaultDispatcher-worker-7 @call-context#5698] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
-    2026-11-01 22:50:51.210 [DefaultDispatcher-worker-7 @coroutine#5699] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-111 - Starting...
-    2026-11-01 22:50:51.215 [DefaultDispatcher-worker-7 @coroutine#5699] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-111 - Added connection org.postgresql.jdbc.PgConnection@64b82c9a
-    2026-11-01 22:50:51.215 [DefaultDispatcher-worker-7 @coroutine#5699] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-111 - Start completed.
-    2026-11-01 22:50:51.215 [DefaultDispatcher-worker-7 @call-context#5698] INFO  io.ktor.test - Application started in 0.006 seconds.
-    2026-11-01 22:50:51.215 [DefaultDispatcher-worker-8 @coroutine#5700] INFO  io.ktor.test - Responding at http://localhost:80
-    2026-11-01 22:50:51.215 [DefaultDispatcher-worker-8 @coroutine#5700] INFO  io.ktor.test - Responding at https://localhost:443
-    2026-11-01 22:50:51.248 [DefaultDispatcher-worker-8] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-111 - Shutdown initiated...
-    2026-11-01 22:50:51.248 [DefaultDispatcher-worker-8] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-111 - Shutdown completed.
+    2026-11-02 02:10:48.154 [DefaultDispatcher-worker-4 @call-context#5785] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+    2026-11-02 02:10:48.154 [DefaultDispatcher-worker-4 @coroutine#5786] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-114 - Starting...
+    2026-11-02 02:10:48.159 [DefaultDispatcher-worker-4 @coroutine#5786] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-114 - Added connection org.postgresql.jdbc.PgConnection@7dd2b44
+    2026-11-02 02:10:48.159 [DefaultDispatcher-worker-4 @coroutine#5786] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-114 - Start completed.
+    2026-11-02 02:10:48.159 [DefaultDispatcher-worker-4 @call-context#5785] INFO  io.ktor.test - Application started in 0.005 seconds.
+    2026-11-02 02:10:48.159 [DefaultDispatcher-worker-2 @coroutine#5787] INFO  io.ktor.test - Responding at http://localhost:80
+    2026-11-02 02:10:48.159 [DefaultDispatcher-worker-2 @coroutine#5787] INFO  io.ktor.test - Responding at https://localhost:443
+    2026-11-02 02:10:48.193 [DefaultDispatcher-worker-6] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-114 - Shutdown initiated...
+    2026-11-02 02:10:48.194 [DefaultDispatcher-worker-6] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-114 - Shutdown completed.
 
 TakeApiTest > T3 쿼터 사전 거부() PASSED
 
 TakeApiTest > T7 크기 경계() STANDARD_OUT
-    2026-11-01 22:50:51.252 [DefaultDispatcher-worker-8 @call-context#5750] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
-    2026-11-01 22:50:51.253 [DefaultDispatcher-worker-8 @coroutine#5751] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-112 - Starting...
-    2026-11-01 22:50:51.257 [DefaultDispatcher-worker-8 @coroutine#5751] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-112 - Added connection org.postgresql.jdbc.PgConnection@5edf3e8c
-    2026-11-01 22:50:51.257 [DefaultDispatcher-worker-8 @coroutine#5751] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-112 - Start completed.
-    2026-11-01 22:50:51.258 [DefaultDispatcher-worker-8 @call-context#5750] INFO  io.ktor.test - Application started in 0.006 seconds.
-    2026-11-01 22:50:51.258 [DefaultDispatcher-worker-17 @coroutine#5752] INFO  io.ktor.test - Responding at http://localhost:80
-    2026-11-01 22:50:51.258 [DefaultDispatcher-worker-17 @coroutine#5752] INFO  io.ktor.test - Responding at https://localhost:443
-    2026-11-01 22:50:51.348 [DefaultDispatcher-worker-18] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-112 - Shutdown initiated...
-    2026-11-01 22:50:51.348 [DefaultDispatcher-worker-18] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-112 - Shutdown completed.
+    2026-11-02 02:10:48.197 [DefaultDispatcher-worker-6 @call-context#5837] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+    2026-11-02 02:10:48.198 [DefaultDispatcher-worker-6 @coroutine#5838] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-115 - Starting...
+    2026-11-02 02:10:48.203 [DefaultDispatcher-worker-6 @coroutine#5838] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-115 - Added connection org.postgresql.jdbc.PgConnection@6170225
+    2026-11-02 02:10:48.203 [DefaultDispatcher-worker-6 @coroutine#5838] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-115 - Start completed.
+    2026-11-02 02:10:48.203 [DefaultDispatcher-worker-6 @call-context#5837] INFO  io.ktor.test - Application started in 0.006 seconds.
+    2026-11-02 02:10:48.203 [DefaultDispatcher-worker-22 @coroutine#5839] INFO  io.ktor.test - Responding at http://localhost:80
+    2026-11-02 02:10:48.203 [DefaultDispatcher-worker-22 @coroutine#5839] INFO  io.ktor.test - Responding at https://localhost:443
+    2026-11-02 02:10:48.290 [DefaultDispatcher-worker-22] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-115 - Shutdown initiated...
+    2026-11-02 02:10:48.291 [DefaultDispatcher-worker-22] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-115 - Shutdown completed.
 
 TakeApiTest > T7 크기 경계() PASSED
 
 TakeApiTest > T9 mime 파라미터 제거() STANDARD_OUT
-    2026-11-01 22:50:51.352 [DefaultDispatcher-worker-18 @call-context#5806] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
-    2026-11-01 22:50:51.352 [DefaultDispatcher-worker-18 @coroutine#5807] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-113 - Starting...
-    2026-11-01 22:50:51.356 [DefaultDispatcher-worker-18 @coroutine#5807] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-113 - Added connection org.postgresql.jdbc.PgConnection@748f317d
-    2026-11-01 22:50:51.356 [DefaultDispatcher-worker-18 @coroutine#5807] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-113 - Start completed.
-    2026-11-01 22:50:51.357 [DefaultDispatcher-worker-18 @call-context#5806] INFO  io.ktor.test - Application started in 0.005 seconds.
-    2026-11-01 22:50:51.357 [DefaultDispatcher-worker-11 @coroutine#5808] INFO  io.ktor.test - Responding at http://localhost:80
-    2026-11-01 22:50:51.357 [DefaultDispatcher-worker-11 @coroutine#5808] INFO  io.ktor.test - Responding at https://localhost:443
-    2026-11-01 22:50:51.379 [DefaultDispatcher-worker-18] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-113 - Shutdown initiated...
-    2026-11-01 22:50:51.379 [DefaultDispatcher-worker-18] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-113 - Shutdown completed.
+    2026-11-02 02:10:48.298 [DefaultDispatcher-worker-22 @call-context#5893] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+    2026-11-02 02:10:48.298 [DefaultDispatcher-worker-22 @coroutine#5894] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-116 - Starting...
+    2026-11-02 02:10:48.304 [DefaultDispatcher-worker-22 @coroutine#5894] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-116 - Added connection org.postgresql.jdbc.PgConnection@58f7a9eb
+    2026-11-02 02:10:48.304 [DefaultDispatcher-worker-22 @coroutine#5894] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-116 - Start completed.
+    2026-11-02 02:10:48.304 [DefaultDispatcher-worker-22 @call-context#5893] INFO  io.ktor.test - Application started in 0.006 seconds.
+    2026-11-02 02:10:48.304 [DefaultDispatcher-worker-6 @coroutine#5895] INFO  io.ktor.test - Responding at http://localhost:80
+    2026-11-02 02:10:48.304 [DefaultDispatcher-worker-6 @coroutine#5895] INFO  io.ktor.test - Responding at https://localhost:443
+    2026-11-02 02:10:48.334 [DefaultDispatcher-worker-6] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-116 - Shutdown initiated...
+    2026-11-02 02:10:48.335 [DefaultDispatcher-worker-6] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-116 - Shutdown completed.
 
 TakeApiTest > T9 mime 파라미터 제거() PASSED
 
 TakeApiTest STANDARD_OUT
-    2026-11-01 22:50:51.398 [Test worker] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-94 - Shutdown initiated...
-    2026-11-01 22:50:51.398 [Test worker] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-94 - Shutdown completed.
+    2026-11-02 02:10:48.357 [Test worker] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-97 - Shutdown initiated...
+    2026-11-02 02:10:48.357 [Test worker] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-97 - Shutdown completed.
 
-BUILD SUCCESSFUL in 15s
+BUILD SUCCESSFUL in 14s
 5 actionable tasks: 1 executed, 4 up-to-date
+```
 ```
 
 ### 2.2 `npm test` 실행 결과 (끝 10줄)
@@ -148,6 +149,11 @@ Running 9 tests using 1 worker
    - GET 요청인 `window.ULData.notionSync.status()`는 `apiFetch(path)` 호출 시 `opts`를 생략하므로 mock 환경에서 `env.apiCalls[0].opts`는 `undefined`로 평가되어 이를 일치하도록 단언하였습니다.
 4. **PL6 DB 타임스탬프 정밀도 손실 방지 (SECONDS 단위 절삭):**
    - JVM의 `OffsetDateTime.now(ZoneOffset.UTC)`는 나노초 정밀도(9자리)를 가지지만 PostgreSQL의 `TIMESTAMP WITH TIME ZONE`은 마이크로초(6자리) 정밀도이므로, DB 저장 후 읽어온 `lastPullAt`의 ISO 직렬화 문자열이 테스트의 원본 나노초 문자열과 불일치하여 CI에서 500 오류가 발생했습니다. 테스트 셋업 시 `truncatedTo(ChronoUnit.SECONDS)`로 정규화하고 `Instant.parse()`로 시간값을 비교하도록 보완하였습니다.
+5. **시니어 리뷰 1~4번 반영 내역 (PR #25):**
+   - **리뷰 1번 (SSRF 방지):** `parseNotionSession`에서 `external` 항목을 완전히 무시하고, `file.url`만 취급하며 `https://` 스킴만 허용하도록 가드레일을 추가했습니다.
+   - **리뷰 2번 (개별 녹음 오류 격리):** `enable` 시 수십 개의 녹음 파일을 가져올 때 1개의 만료(403) 또는 다운로드/업로드 실패로 인해 전체 `enable` 트랜잭션이 중단되지 않도록, 파일 루프 내부를 개별 `try-catch`로 감싸 오류를 로깅하고 건너뛰도록 격리했습니다 (`CancellationException`은 즉시 rethrow).
+   - **리뷰 3번 (삭제 곡/세션 링크 및 FK 위반 방지):** 노션에서 가져온 세션이 가리키는 곡이 로컬에서 삭제되었거나 pending delete outbox가 존재하는 경우 FK 제약조건 위반(23503)을 방지하기 위해 `continue`로 건너뛰도록 처리하였으며, 곡/세션 갱신 시 `single()` 대신 `singleOrNull()`로 실존 여부를 검사하도록 보완했습니다.
+   - **리뷰 4번 (에러 피드백):** `public/settings.js`의 `loadSyncStatus`에서 호출 실패 시 임의로 연동 해제 버튼 상태로 바꾸던 버그를 수정하고, `연동 상태를 불러오지 못했어요.` 문구와 오류 메시지를 명확히 사용자에게 표출하도록 수정했습니다.
 
 ---
 
@@ -185,3 +191,7 @@ Running 9 tests using 1 worker
 | 6 | 동일 화면 다중 요청 시 지연 응답 버리기 (`syncStatusSeq`) | 준수 | `settings.js`에 `syncStatusSeq` 증가 및 일치 검증 적용 |
 | 7 | apps-script 디렉토리 완전 삭제 | 준수 | `apps-script/` 파일 삭제 확인 |
 | 8 | 테스트 단언 완화 금지 및 거짓 완료 금지 | 준수 | 10개 신규 테스트(PL1~PL10) 및 기존 전수 테스트 실제 실행 및 통과 |
+| 9 | SSRF 방지: 외부 사용자 입력 URL(external) 차단 및 https 스킴 검증 (리뷰 1번) | 준수 | `parseNotionSession` 가드레일 및 리뷰 1번 신규 테스트 통과 |
+| 10 | 개별 파일 실패 격리: 1개 파일 다운로드 실패 시 전체 enable 중단 방지 (리뷰 2번) | 준수 | 파일 루프 개별 try-catch 격리 및 리뷰 2번 신규 테스트 통과 |
+| 11 | 외래키 및 실존 검증: 삭제 곡/세션 링크 참조 시 NoSuchElement/FK 위반 방지 (리뷰 3번) | 준수 | `singleOrNull` 및 FK 선검사, 리뷰 3번 신규 테스트 통과 |
+| 12 | 비동기 조회 실패 피드백: 임의 UI 전환 방지 및 에러 안내 표시 (리뷰 4번) | 준수 | `settings.js` 에러 안내 렌더링 및 `npm test` 통과 |
