@@ -189,6 +189,6 @@ body.home { padding-top: 12px; }
 #nxPreviewSummary { font-weight: 700; font-size: 14px; color: var(--ink); margin: 0 0 8px 0; }
 #nxPreviewList { list-style: none; padding: 0; margin: 0 0 12px 0; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 #nxPreviewList li { padding: 4px 6px; border-radius: 4px; background: var(--surface); color: var(--ink); }
-#nxPreviewList li.err { color: #d32f2f; background: rgba(211, 47, 47, 0.08); font-weight: 500; }
+#nxPreviewList li.err { color: var(--bad); background: var(--surface2); font-weight: 500; }
 
 

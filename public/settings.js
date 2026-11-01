@@ -12,8 +12,7 @@
 
   const templateAnchor = $('btnNotionTemplate');
   if (templateAnchor && window.ULEVELP_CONFIG && window.ULEVELP_CONFIG.notionTemplateUrl) {
-    const url = safeUrl(window.ULEVELP_CONFIG.notionTemplateUrl);
-    if (url) templateAnchor.href = safeUrl(window.ULEVELP_CONFIG.notionTemplateUrl);
+    templateAnchor.href = safeUrl(window.ULEVELP_CONFIG.notionTemplateUrl);
   }
 
   if ($('btnExportZip')) {
@@ -23,12 +22,14 @@
       if (!user) {
         return say('nxMsg', '로그인 후 내보낼 수 있어요.', 'err');
       }
+      const reqUid = activeUid || user.id;
       const btn = $('btnExportZip');
       btn.disabled = true;
       say('nxMsg', 'ZIP 내보내는 중…');
       try {
         const includeAudio = $('chkExportAudio') ? $('chkExportAudio').checked : true;
         const res = await window.ULData.nx.exportZip(includeAudio);
+        if (!activeUid || reqUid !== activeUid) return;
         const url = URL.createObjectURL(res.blob);
         const a = document.createElement('a');
         a['href'] = url;
@@ -39,6 +40,7 @@
         URL.revokeObjectURL(url);
         say('nxMsg', '✓ 내보내기를 완료했어요.', 'ok');
       } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
         say('nxMsg', e.message || '내보내기 중 오류가 발생했어요.', 'err');
       } finally {
         btn.disabled = false;
@@ -58,11 +60,13 @@
       if (!file) {
         return say('nxMsg', 'ZIP 파일을 선택해 주세요.', 'err');
       }
+      const reqUid = activeUid || user.id;
       const btn = $('btnPreviewZip');
       btn.disabled = true;
       say('nxMsg', 'ZIP 분석 중…');
       try {
         const r = await window.ULData.nx.previewNotionZip(file);
+        if (!activeUid || reqUid !== activeUid) return;
         currentPreviewToken = r.previewToken;
         const summaryText = '신규 곡 ' + (r.newSongs || 0) + '개 · 갱신 곡 ' + (r.updatedSongs || 0) + '개 · 연습 기록 ' + (r.sessions || 0) + '건 · 녹음 ' + (r.takes || 0) + '건' + (r.errors && r.errors.length ? ' (오류 ' + r.errors.length + '건)' : '');
         $('nxPreviewSummary').textContent = summaryText;
@@ -91,6 +95,7 @@
         $('nxPreviewBox').hidden = false;
         say('nxMsg', '');
       } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
         currentPreviewToken = null;
         if ($('nxPreviewBox')) $('nxPreviewBox').hidden = true;
         say('nxMsg', e.message || '미리보기 중 오류가 발생했어요.', 'err');
@@ -106,11 +111,14 @@
       if (!currentPreviewToken) {
         return say('nxMsg', '미리보기 내역이 없습니다. 다시 ZIP을 선택해 주세요.', 'err');
       }
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      const reqUid = activeUid || (user && user.id) || null;
       const btn = $('btnConfirmZip');
       btn.disabled = true;
       say('nxMsg', '가져오기 반영 중…');
       try {
         const r = await window.ULData.nx.confirmNotionZip(currentPreviewToken);
+        if (!activeUid || reqUid !== activeUid) return;
         const doneText = '✓ 가져오기를 완료했어요 (신규 곡 ' + (r.createdSongs || 0) + '개, 갱신 ' + (r.updatedSongs || 0) + '개, 기록 ' + (r.upsertedSessions || 0) + '건, 녹음 ' + (r.importedTakes || 0) + '건)';
         say('nxMsg', doneText, 'ok');
         currentPreviewToken = null;
@@ -118,6 +126,7 @@
         if ($('nxPreviewList')) $('nxPreviewList').replaceChildren();
         if ($('inpImportZip')) $('inpImportZip').value = '';
       } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
         say('nxMsg', e.message || '가져오기 확정 중 오류가 발생했어요.', 'err');
       } finally {
         btn.disabled = false;

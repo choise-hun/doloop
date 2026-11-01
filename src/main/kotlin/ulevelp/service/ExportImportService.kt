@@ -305,14 +305,22 @@ class ExportImportService(
                         val songTitle = song?.get(SongsTable.title) ?: "untitled"
                         val safeTitle = sanitizeFilename(songTitle)
                         val recUtc = take[TakesTable.recordedAt].withOffsetSameInstant(ZoneOffset.UTC)
+                        val recDateStr = recUtc.toLocalDate().toString()
                         val hhmmss = recUtc.format(DateTimeFormatter.ofPattern("HHmmss"))
                         val takeIdStr = take[TakesTable.id].toString().replace("-", "")
                         val takeId8 = takeIdStr.take(8)
                         val ext = TakeService.MIME_EXT[take[TakesTable.mime]] ?: "m4a"
-                        val filename = "${sessionDate}_${hhmmss}_${safeTitle}_${takeId8}.${ext}"
+                        val filename = "${recDateStr}_${hhmmss}_${safeTitle}_${takeId8}.${ext}"
                         val relativeZipPath = "녹음/$filename"
 
-                        val audioBytes = runCatching { storageClient.download(take[TakesTable.storageKey]) }.getOrNull()
+                        val audioBytes = try {
+                            storageClient.download(take[TakesTable.storageKey])
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            log.warn("녹음 파일 다운로드 실패: key=${take[TakesTable.storageKey]}", e)
+                            null
+                        }
                         if (audioBytes != null) {
                             zip.putNextEntry(ZipEntry(relativeZipPath))
                             zip.write(audioBytes)
@@ -456,6 +464,8 @@ class ExportImportService(
         data class RawCsv(val name: String, val content: String)
         val csvEntries = mutableListOf<RawCsv>()
         val audioEntries = mutableMapOf<String, ByteArray>()
+        val audioFilenameCounts = mutableMapOf<String, Int>()
+        val uniqueAudioByFilename = mutableMapOf<String, ByteArray>()
 
         var totalUncompressedBytes = 0L
         var totalEntries = 0
@@ -501,7 +511,13 @@ class ExportImportService(
                     }
                     audioEntries[entryName] = entryBytes
                     val simpleName = entryName.substringAfterLast('/')
-                    audioEntries[simpleName] = entryBytes
+                    val newCount = (audioFilenameCounts[simpleName] ?: 0) + 1
+                    audioFilenameCounts[simpleName] = newCount
+                    if (newCount == 1) {
+                        uniqueAudioByFilename[simpleName] = entryBytes
+                    } else {
+                        uniqueAudioByFilename.remove(simpleName)
+                    }
                 }
             }
         }
@@ -729,10 +745,25 @@ class ExportImportService(
                             trimmed
                         }
                         val filename = decoded.substringAfterLast('/').substringAfterLast('\\').trim()
+                        val decodedPath = decoded.replace("\\", "/").trimStart('/')
+                        val csvDir = sessionCsvEntry.name.substringBeforeLast('/', "").replace("\\", "/").trimStart('/')
+                        val relativeToCsv = if (csvDir.isNotEmpty()) "$csvDir/$decodedPath" else decodedPath
 
-                        val bytes = audioEntries[filename] ?: audioEntries[decoded] ?: audioEntries[decoded.trimStart('/')]
+                        val bytes = audioEntries[decodedPath]
+                            ?: audioEntries[relativeToCsv]
+                            ?: run {
+                                val count = audioFilenameCounts[filename] ?: 0
+                                if (count > 1) {
+                                    errors.add(ImportRowErrorDto(file = sessionCsvEntry.name, row = rowNum, reason = "녹음 파일 이름이 ZIP 안에서 겹쳐 연결할 수 없습니다: $filename"))
+                                    null
+                                } else if (count == 1) {
+                                    uniqueAudioByFilename[filename]
+                                } else {
+                                    errors.add(ImportRowErrorDto(file = sessionCsvEntry.name, row = rowNum, reason = "녹음 파일을 ZIP 안에서 찾을 수 없습니다: $filename"))
+                                    null
+                                }
+                            }
                         if (bytes == null) {
-                            errors.add(ImportRowErrorDto(file = sessionCsvEntry.name, row = rowNum, reason = "녹음 파일을 ZIP 안에서 찾을 수 없습니다: $filename"))
                             continue
                         }
                         if (bytes.isEmpty() || bytes.size > MAX_PREVIEW_AUDIO_BYTES) {
@@ -880,7 +911,7 @@ class ExportImportService(
                         it[date] = sess.date
                         it[seconds] = sess.seconds
                         it[loops] = sess.loops
-                        if (sess.rate != null) it[rate] = sess.rate
+                        it[rate] = sess.rate
                         it[a] = sess.a
                         it[b] = sess.b
                         it[memo] = sess.memo
@@ -893,7 +924,7 @@ class ExportImportService(
                     SessionsTable.update({ (SessionsTable.id eq id) and (SessionsTable.userId eq userId) }) {
                         it[seconds] = sess.seconds
                         it[loops] = sess.loops
-                        if (sess.rate != null) it[rate] = sess.rate
+                        it[rate] = sess.rate
                         it[a] = sess.a
                         it[b] = sess.b
                         it[memo] = sess.memo
@@ -963,8 +994,12 @@ class ExportImportService(
 
                 try {
                     storageClient.upload(key, take.bytes, take.mime)
+                } catch (e: CancellationException) {
+                    cleanupUploadedFile(storageClient, database, key)
+                    throw e
                 } catch (e: Exception) {
                     log.warn("가져오기 중 스토리지 업로드 실패: key=$key", e)
+                    cleanupUploadedFile(storageClient, database, key)
                     continue
                 }
 
@@ -1005,16 +1040,15 @@ class ExportImportService(
                         OutboxRepository.enqueueIfSyncEnabled(userId, "take", takeId, "upsert")
                         importedTakes++
                     }
+                } catch (e: CancellationException) {
+                    cleanupUploadedFile(storageClient, database, key)
+                    throw e
                 } catch (e: QuotaExceededException) {
                     skippedTakesByQuota++
-                    withContext(NonCancellable) {
-                        runCatching { storageClient.delete(key) }
-                    }
+                    cleanupUploadedFile(storageClient, database, key)
                 } catch (e: Exception) {
                     log.warn("가져오기 중 DB 기록 실패, 업로드 파일 삭제: key=$key", e)
-                    withContext(NonCancellable) {
-                        runCatching { storageClient.delete(key) }
-                    }
+                    cleanupUploadedFile(storageClient, database, key)
                 }
             }
         }
@@ -1027,6 +1061,40 @@ class ExportImportService(
             importedTakes = importedTakes,
             skippedTakesByQuota = skippedTakesByQuota
         )
+    }
+
+    private suspend fun cleanupUploadedFile(
+        client: StorageClient,
+        database: Database,
+        key: String
+    ) {
+        withContext(NonCancellable) {
+            val committed = runCatching {
+                DatabaseFactory.dbQuery(database) {
+                    TakesTable.select(TakesTable.id).where { TakesTable.storageKey eq key }.limit(1).any()
+                }
+            }.getOrDefault(false)
+            if (committed) {
+                log.info("트랜잭션이 이미 커밋되었으므로 스토리지 파일($key)을 보존합니다.")
+                return@withContext
+            }
+
+            try {
+                client.delete(key)
+            } catch (delEx: Throwable) {
+                if (delEx is CancellationException) throw delEx
+                log.warn("트랜잭션 실패 후 스토리지 파일($key) 삭제 실패, storage_trash에 등록합니다.", delEx)
+                try {
+                    DatabaseFactory.dbQuery(database) {
+                        StorageTrashTable.insert {
+                            it[storageKey] = key
+                        }
+                    }
+                } catch (trashEx: Throwable) {
+                    log.warn("storage_trash 등록 실패: key=$key", trashEx)
+                }
+            }
+        }
     }
 
     companion object {

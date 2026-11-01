@@ -358,6 +358,43 @@ class ExportImportApiTest {
                 it[this.storageKey] = storageKey
                 it[memo] = ""
             }
+
+            // 리뷰 1번 검증용: 세션 2026-10-31 + recordedAt 2026-10-30T16:00:00Z (서울 10-31 01:00)
+            val sessionId2 = UUID.randomUUID()
+            val takeId2 = UUID.randomUUID()
+            val takeAudioBytes2 = "roundtrip-audio-bytes-2".toByteArray(StandardCharsets.UTF_8)
+            val storageKey2 = "$userA/$takeId2.m4a"
+            fakeStorage.objects[storageKey2] = takeAudioBytes2
+
+            SessionsTable.insert {
+                it[id] = sessionId2
+                it[userId] = userA
+                it[this.songId] = songId
+                it[date] = LocalDate.parse("2026-10-31")
+                it[seconds] = 600
+                it[loops] = 3
+                it[rate] = BigDecimal("1.00")
+                it[a] = BigDecimal("10.0")
+                it[b] = BigDecimal("20.0")
+                it[memo] = "두번째 세션 메모"
+            }
+
+            TakesTable.insert {
+                it[id] = takeId2
+                it[userId] = userA
+                it[this.sessionId] = sessionId2
+                it[this.songId] = songId
+                it[recordedAt] = OffsetDateTime.parse("2026-10-30T16:00:00Z")
+                it[a] = BigDecimal("10.0")
+                it[b] = BigDecimal("20.0")
+                it[rate] = BigDecimal("1.00")
+                it[durationSec] = 20
+                it[mime] = "audio/mp4"
+                it[sizeBytes] = takeAudioBytes2.size.toLong()
+                it[storage] = "supabase"
+                it[this.storageKey] = storageKey2
+                it[memo] = ""
+            }
         }
 
         // A의 ZIP 내보내기
@@ -374,8 +411,8 @@ class ExportImportApiTest {
         val previewToken = previewJson["previewToken"]!!.jsonPrimitive.content
         assertEquals(1, previewJson["newSongs"]!!.jsonPrimitive.int)
         assertEquals(0, previewJson["updatedSongs"]!!.jsonPrimitive.int)
-        assertEquals(1, previewJson["sessions"]!!.jsonPrimitive.int)
-        assertEquals(1, previewJson["takes"]!!.jsonPrimitive.int)
+        assertEquals(2, previewJson["sessions"]!!.jsonPrimitive.int)
+        assertEquals(2, previewJson["takes"]!!.jsonPrimitive.int)
         assertEquals(0, previewJson["errors"]!!.jsonArray.size)
 
         // ② confirm 전에는 B의 songs, sessions, takes 행이 0개
@@ -395,8 +432,8 @@ class ExportImportApiTest {
         assertEquals(HttpStatusCode.OK, confirmRes.status)
         val confirmJson = Json.parseToJsonElement(confirmRes.bodyAsText()).jsonObject
         assertEquals(1, confirmJson["createdSongs"]!!.jsonPrimitive.int)
-        assertEquals(1, confirmJson["upsertedSessions"]!!.jsonPrimitive.int)
-        assertEquals(1, confirmJson["importedTakes"]!!.jsonPrimitive.int)
+        assertEquals(2, confirmJson["upsertedSessions"]!!.jsonPrimitive.int)
+        assertEquals(2, confirmJson["importedTakes"]!!.jsonPrimitive.int)
 
         // ④ B의 복원 데이터 확인
         val bSongs = transaction(db) { SongsTable.selectAll().where { SongsTable.userId eq userB }.toList() }
@@ -410,19 +447,22 @@ class ExportImportApiTest {
         assertEquals("보이싱 \"A\", 연습", bSong[SongsTable.memo])
 
         val bSessions = transaction(db) { SessionsTable.selectAll().where { SessionsTable.userId eq userB }.toList() }
-        assertEquals(1, bSessions.size)
-        assertEquals(990, bSessions[0][SessionsTable.seconds])
+        assertEquals(2, bSessions.size)
 
-        val bTakes = transaction(db) { TakesTable.selectAll().where { TakesTable.userId eq userB }.toList() }
-        assertEquals(1, bTakes.size)
-        val bTake = bTakes[0]
-        assertEquals(OffsetDateTime.parse("2026-10-30T14:22:10Z"), bTake[TakesTable.recordedAt])
-        assertEquals(0, bTake[TakesTable.durationSec])
-        assertEquals("audio/mp4", bTake[TakesTable.mime])
-        assertEquals(BigDecimal("38.0"), bTake[TakesTable.a])
+        val bTakes = transaction(db) { TakesTable.selectAll().where { TakesTable.userId eq userB }.orderBy(TakesTable.recordedAt to org.jetbrains.exposed.sql.SortOrder.ASC).toList() }
+        assertEquals(2, bTakes.size)
+        val bTake1 = bTakes[0]
+        assertEquals(OffsetDateTime.parse("2026-10-30T14:22:10Z"), bTake1[TakesTable.recordedAt])
+        assertEquals(0, bTake1[TakesTable.durationSec])
+        assertEquals("audio/mp4", bTake1[TakesTable.mime])
+        assertEquals(BigDecimal("38.0"), bTake1[TakesTable.a])
         // 연습 기록.csv의 "0:38–0:55"에서 복원되므로 55.0
-        assertEquals(BigDecimal("55.0"), bTake[TakesTable.b])
-        assertEquals(BigDecimal("0.75"), bTake[TakesTable.rate])
+        assertEquals(BigDecimal("55.0"), bTake1[TakesTable.b])
+        assertEquals(BigDecimal("0.75"), bTake1[TakesTable.rate])
+
+        val bTake2 = bTakes[1]
+        // 리뷰 1번 핵심: 세션 날짜는 10-31이지만 recordedAt(UTC)은 10-30T16:00:00Z로 온전하게 복원됨
+        assertEquals(OffsetDateTime.parse("2026-10-30T16:00:00Z"), bTake2[TakesTable.recordedAt])
     }
 
     @Test
@@ -690,5 +730,68 @@ class ExportImportApiTest {
         }
         assertEquals(HttpStatusCode.Unauthorized, resConfirm.status)
         assertStandardError(resConfirm.bodyAsText(), 401, "UNAUTHORIZED")
+    }
+
+    @Test
+    fun `NX11 노션 폴더별 동일 파일명 오디오의 전체 경로 매칭 및 중복 단순 파일명 에러 검증`() = testApplication {
+        configureApiTestApp(dbConfig = dbConfig, storageClient = fakeStorage)
+
+        val songCsv = """
+            ${ExportImportService.UTF8_BOM}곡명,아티스트,상태,유튜브 링크,이어서 연습,마지막 위치(초),구간 시작(초),구간 끝(초),속도,마지막 연습일,메모
+            Autumn Leaves,Bill Evans,연습 중,https://www.youtube.com/watch?v=dQw4w9WgXcQ,,,,,,
+        """.trimIndent()
+
+        // session 1: 경로 지정 "기록A/Rec.m4a" -> 폴더 A 바이트 매칭
+        // session 2: 경로 지정 "기록B/Rec.m4a" -> 폴더 B 바이트 매칭
+        // session 3: 단순 파일명 "Rec.m4a" -> ZIP 내에 2개 존재하므로 충돌 에러
+        val sessionCsv = """
+            ${ExportImportService.UTF8_BOM}기록,곡,날짜,연습 시간(분),반복 횟수,속도,구간,메모,녹음
+            2026-10-30 Autumn Leaves,Autumn Leaves,2026-10-30,10,2,1.00,0:30–1:00,,"기록A/Rec.m4a"
+            2026-10-31 Autumn Leaves,Autumn Leaves,2026-10-31,15,3,1.00,0:30–1:00,,"기록B/Rec.m4a"
+            2026-11-01 Autumn Leaves,Autumn Leaves,2026-11-01,20,4,1.00,0:30–1:00,,"Rec.m4a"
+        """.trimIndent()
+
+        val audioA = "audio-bytes-A".toByteArray(StandardCharsets.UTF_8)
+        val audioB = "audio-bytes-B".toByteArray(StandardCharsets.UTF_8)
+
+        val zipBytes = createZip(
+            mapOf(
+                "연습 곡.csv" to songCsv.toByteArray(StandardCharsets.UTF_8),
+                "연습 기록.csv" to sessionCsv.toByteArray(StandardCharsets.UTF_8),
+                "기록A/Rec.m4a" to audioA,
+                "기록B/Rec.m4a" to audioB
+            )
+        )
+
+        val previewRes = client.uploadZipFile(tokenB, zipBytes)
+        assertEquals(HttpStatusCode.OK, previewRes.status)
+        val previewJson = Json.parseToJsonElement(previewRes.bodyAsText()).jsonObject
+        assertEquals(2, previewJson["takes"]!!.jsonPrimitive.int)
+        val errors = previewJson["errors"]!!.jsonArray
+        assertEquals(1, errors.size)
+        val errObj = errors[0].jsonObject
+        assertEquals(4, errObj["row"]!!.jsonPrimitive.int) // 3번째 데이터 행 (헤더=1이므로 4행)
+        assertTrue(errObj["reason"]!!.jsonPrimitive.content.contains("녹음 파일 이름이 ZIP 안에서 겹쳐 연결할 수 없습니다"))
+
+        val previewToken = previewJson["previewToken"]!!.jsonPrimitive.content
+        val confirmRes = client.post("/api/v1/import/notion/confirm") {
+            header(HttpHeaders.Authorization, "Bearer $tokenB")
+            contentType(ContentType.Application.Json)
+            setBody("""{"previewToken":"$previewToken"}""")
+        }
+        assertEquals(HttpStatusCode.OK, confirmRes.status)
+        val confirmJson = Json.parseToJsonElement(confirmRes.bodyAsText()).jsonObject
+        assertEquals(2, confirmJson["importedTakes"]!!.jsonPrimitive.int)
+
+        // DB에 저장된 각 take의 바이트가 실제 A, B에 각각 올바르게 저장되었는지 확인
+        val bTakes = transaction(db) {
+            TakesTable.selectAll()
+                .where { TakesTable.userId eq userB }
+                .orderBy(TakesTable.recordedAt to org.jetbrains.exposed.sql.SortOrder.ASC)
+                .toList()
+        }
+        assertEquals(2, bTakes.size)
+        assertContentEquals(audioA, fakeStorage.objects[bTakes[0][TakesTable.storageKey]])
+        assertContentEquals(audioB, fakeStorage.objects[bTakes[1][TakesTable.storageKey]])
     }
 }
