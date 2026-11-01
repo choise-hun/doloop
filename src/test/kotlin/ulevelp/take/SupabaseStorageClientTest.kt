@@ -136,6 +136,37 @@ class SupabaseStorageClientTest {
         assertThrows<StorageException> {
             runBlocking { client.delete("u1/t1.m4a") }
         }
+        assertThrows<StorageException> {
+            runBlocking { client.download("u1/t1.m4a") }
+        }
+    }
+
+    @Test
+    fun `C7 download - 올바른 경로 헤더로 바이트 수신`() = runBlocking {
+        responseStatus = 200
+        responseBody = "audio-bytes-data"
+        val client = SupabaseStorageClient("http://127.0.0.1:$port", "sb_secret_test")
+
+        val bytes = client.download("u1/t1.m4a")
+
+        assertEquals(1, recordedRequests.size)
+        val req = recordedRequests[0]
+        assertEquals("GET", req.method)
+        assertEquals("/storage/v1/object/takes/u1/t1.m4a", req.path)
+        assertEquals("Bearer sb_secret_test", req.headers["Authorization"]?.firstOrNull())
+        assertEquals("sb_secret_test", req.headers["Apikey"]?.firstOrNull() ?: req.headers["apikey"]?.firstOrNull())
+        assertContentEquals("audio-bytes-data".toByteArray(Charsets.UTF_8), bytes)
+    }
+
+    @Test
+    fun `C8 download - 404 실패 시 StorageException`() = runBlocking {
+        responseStatus = 404
+        responseBody = """{"error":"Not Found"}"""
+        val client = SupabaseStorageClient("http://127.0.0.1:$port", "sb_secret_test")
+
+        assertThrows<StorageException> {
+            runBlocking { client.download("u1/nonexistent.m4a") }
+        }
     }
 
     @Test

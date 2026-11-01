@@ -12,6 +12,7 @@ class FakeStorageClient : StorageClient {
     @Volatile var failUpload = false
     @Volatile var failSign = false
     @Volatile var failDelete = false
+    @Volatile var failDownload = false
     @Volatile var uploadDelayMs = 0L
     @Volatile var onUploadSuccess: ((String) -> Unit)? = null
 
@@ -39,6 +40,13 @@ class FakeStorageClient : StorageClient {
         }
         objects.remove(key)
         deleted.add(key)
+    }
+
+    override suspend fun download(key: String): ByteArray {
+        if (failDownload) {
+            throw StorageException("Fake download failure")
+        }
+        return objects[key] ?: throw StorageException("Fake object not found: $key")
     }
 }
 

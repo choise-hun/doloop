@@ -87,6 +87,40 @@ class SupabaseStorageClient(
         executeRequest("delete", request)
     }
 
+    override suspend fun download(key: String): ByteArray {
+        val targetUrl = "$supabaseUrl/storage/v1/object/$bucket/$key"
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(targetUrl))
+            .timeout(requestTimeout)
+            .header("Authorization", "Bearer $secretKey")
+            .header("apikey", secretKey)
+            .GET()
+            .build()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray())
+                val statusCode = response.statusCode()
+                if (statusCode in 200..299) {
+                    response.body() ?: byteArrayOf()
+                } else {
+                    log.warn("Supabase Storage download 실패: HTTP {}", statusCode)
+                    throw StorageException("Supabase Storage download 실패: HTTP $statusCode")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: StorageException) {
+                throw e
+            } catch (e: HttpTimeoutException) {
+                throw StorageException("Supabase Storage download 요청 타임아웃", e)
+            } catch (e: IOException) {
+                throw StorageException("Supabase Storage download 네트워크 오류", e)
+            } catch (e: Exception) {
+                throw StorageException("Supabase Storage download 예기치 않은 오류", e)
+            }
+        }
+    }
+
     private suspend fun executeRequest(action: String, request: HttpRequest): String {
         return withContext(Dispatchers.IO) {
             try {
