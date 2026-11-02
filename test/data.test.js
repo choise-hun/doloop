@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const configSrc = fs.readFileSync(path.join(ROOT, 'public', 'config.js'), 'utf8');
 const dataSrc = fs.readFileSync(path.join(ROOT, 'public', 'data.js'), 'utf8');
+const driveSrc = fs.readFileSync(path.join(ROOT, 'public', 'drive.js'), 'utf8');
 
 function createMockEnv({
   session = { access_token: 'valid_token' },
@@ -22,6 +23,7 @@ function createMockEnv({
   apiHandler = null,
   fetchResponse = { ok: true, status: 200, json: async () => ({ ok: true, keep: true }) },
   confirmAnswers = [],
+  loadDrive = false,
 } = {}) {
   const map = new Map();
   const localStorage = {
@@ -40,11 +42,16 @@ function createMockEnv({
   const fetchCalls = [];
   const confirmCalls = [];
   const answers = [...confirmAnswers];
+  const authListeners = [];
 
   const mockULAuth = {
     getSession: () => session,
     getUser: () => (session ? (session.user || (me ? { id: me.id } : { id: 'user-1' })) : null),
     getMe: () => me,
+    getAccessToken: async () => (session ? session.access_token : ''),
+    onChange: (cb) => {
+      authListeners.push(cb);
+    },
     apiFetch: async (path, opts) => {
       apiCalls.push({ path, opts });
       if (typeof apiHandler === 'function') {
@@ -93,14 +100,21 @@ function createMockEnv({
   vm.runInContext(configSrc, sandbox);
   sandbox.ULEVELP_CONFIG.apiBaseUrl = '';
   vm.runInContext(dataSrc, sandbox);
+  if (loadDrive) {
+    vm.runInContext(driveSrc, sandbox);
+  }
 
   return {
+    sandbox,
     ULData: sandbox.ULData,
     localStorage,
     storageMap: map,
     apiCalls,
     fetchCalls,
     confirmCalls,
+    triggerAuthChange(st) {
+      authListeners.forEach((cb) => cb(st));
+    },
     get fetchMeCount() {
       return fetchMeCount;
     },
@@ -1013,4 +1027,284 @@ test('D30 412 NO_KEY 및 비동기 잡 PROVIDER_KEY_INVALID: 실패 시 ulp:keys
   const cachedAfterJobs = env.ULData.getCachedKeys();
   assert.equal(cachedAfterJobs.gemini, null);
   assert.equal(cachedAfterJobs.notion.hint, '9a8b');
+});
+
+test('D31 me.update 및 Drive 저장소 전환', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: {
+      user: {
+        id: 'user-1',
+        storageProvider: 'drive',
+        driveFolderId: 'fld_12345',
+      },
+    },
+  });
+
+  const res = await env.ULData.me.update({
+    storageProvider: 'drive',
+    driveFolderId: 'fld_12345',
+  });
+
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/me');
+  assert.equal(env.apiCalls[0].opts.method, 'PATCH');
+  const body = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(body.storageProvider, 'drive');
+  assert.equal(body.driveFolderId, 'fld_12345');
+  assert.equal(env.fetchMeCount, 1);
+  assert.equal(res.user.storageProvider, 'drive');
+});
+
+test("D32 takes.upload — storageProvider === 'drive'일 때 ULDrive.uploadTake 위임", async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    me: { id: 'user-1', storageProvider: 'drive' },
+  });
+
+  let delegatedMeta = null;
+  let delegatedBlob = null;
+  env.sandbox.window.ULDrive = {
+    uploadTake: async (meta, blob) => {
+      delegatedMeta = meta;
+      delegatedBlob = blob;
+      return { id: 'take-drive-1', storage: 'drive', storageKey: 'drv_file_1' };
+    },
+  };
+
+  const meta = { songId: 'song-1', date: '2026-11-02' };
+  const blob = new Blob(['audiodata'], { type: 'audio/mp4' });
+  const result = await env.ULData.takes.upload(meta, blob);
+
+  assert.equal(env.fetchCalls.length, 0);
+  assert.equal(env.apiCalls.length, 0);
+  assert.deepEqual(delegatedMeta, meta);
+  assert.equal(delegatedBlob, blob);
+  assert.equal(result.id, 'take-drive-1');
+  assert.equal(result.storage, 'drive');
+});
+
+test('D33 takes.registerDrive & takes.migrateToDrive', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: {
+      ok: true,
+      take: { id: 'take-1', storage: 'drive', storageKey: 'drv_12345' },
+    },
+  });
+
+  // 1. registerDrive
+  const meta = {
+    songId: 'c1a2b3c4-0000-4000-8000-000000000001',
+    date: '2026-11-02',
+    recordedAt: '2026-11-02T10:00:00Z',
+    durationSec: 10,
+    mime: 'audio/mp4',
+    sizeBytes: 1024,
+    storageKey: 'drv_12345',
+  };
+  const regTake = await env.ULData.takes.registerDrive(meta);
+
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/takes');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+  assert.equal(env.apiCalls[0].opts.headers['Content-Type'], 'application/json');
+  const regBody = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(regBody.storage, 'drive');
+  assert.equal(regBody.storageKey, 'drv_12345');
+  assert.equal(regTake.storage, 'drive');
+
+  // 2. migrateToDrive
+  const migTake = await env.ULData.takes.migrateToDrive('d1000000-0000-4000-8000-000000000001', 'drv_12345');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/takes/d1000000-0000-4000-8000-000000000001/migrate-drive');
+  assert.equal(env.apiCalls[1].opts.method, 'POST');
+  assert.equal(env.apiCalls[1].opts.headers['Content-Type'], 'application/json');
+  const migBody = JSON.parse(env.apiCalls[1].opts.body);
+  assert.equal(migBody.driveFileId, 'drv_12345');
+  assert.equal(migTake.storage, 'drive');
+});
+
+test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기 및 ULEVELP_CONFIG.googleClientId 참조', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    loadDrive: true,
+  });
+
+  // Google OAuth stub
+  env.sandbox.window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: ({ callback }) => ({
+          requestAccessToken: () => callback({ access_token: 'fake_drive_token', expires_in: '3600' }),
+        }),
+      },
+    },
+  };
+  env.sandbox.window.ULEVELP_CONFIG = { googleClientId: 'fake-client-id.apps.googleusercontent.com' };
+
+  // 1. 1KB Blob (<= 5MB: multipart)
+  const smallBlob = new Blob([new Uint8Array(1024)], { type: 'audio/mp4' });
+  env.setFetchResponse(async (url, opts) => {
+    if (url.includes('uploadType=multipart')) {
+      assert.equal(opts.method, 'POST');
+      assert.equal(opts.headers.Authorization, 'Bearer fake_drive_token');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'small_drive_id' }),
+      };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  const smallId = await env.sandbox.window.ULDrive.uploadBlob(smallBlob, 'small.m4a', 'audio/mp4', 'fld_1');
+  assert.equal(smallId, 'small_drive_id');
+
+  // 2. 6MB Blob (> 5MB: resumable)
+  const largeBlob = new Blob([new Uint8Array(6 * 1024 * 1024)], { type: 'audio/mp4' });
+  const resumeUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=sess_abc';
+  let initCalled = false;
+  let putCalled = false;
+
+  env.setFetchResponse(async (url, opts) => {
+    if (url === resumeUrl) {
+      putCalled = true;
+      assert.equal(opts.method, 'PUT');
+      assert.equal(opts.headers['Content-Type'], 'audio/mp4');
+      assert.equal(opts.headers['Content-Length'], String(largeBlob.size));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'large_drive_id' }),
+      };
+    }
+    if (url.includes('uploadType=resumable')) {
+      initCalled = true;
+      assert.equal(opts.method, 'POST');
+      assert.equal(opts.headers['X-Upload-Content-Type'], 'audio/mp4');
+      assert.equal(opts.headers['X-Upload-Content-Length'], String(largeBlob.size));
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: (h) => (h.toLowerCase() === 'location' ? resumeUrl : null),
+        },
+      };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  const largeId = await env.sandbox.window.ULDrive.uploadBlob(largeBlob, 'large.m4a', 'audio/mp4', 'fld_1');
+  assert.equal(largeId, 'large_drive_id');
+  assert.equal(initCalled, true);
+  assert.equal(putCalled, true);
+});
+
+test('D35 계정 전환(A→B) 시 ULDrive 인메모리 토큰 즉시 폐기 및 이전 실패 시 고아 파일 DELETE 정리 (NFR-SEC-3, 리뷰 4번)', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'token_user_a', user: { id: 'user-a' } },
+    me: { id: 'user-a', storageProvider: 'drive', driveFolderId: 'fld_a' },
+    loadDrive: true,
+  });
+
+  let tokenClientCallCount = 0;
+  let currentToken = 'token_A';
+  env.sandbox.window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: ({ callback }) => {
+          tokenClientCallCount++;
+          return {
+            requestAccessToken: () => callback({ access_token: currentToken, expires_in: '3600' }),
+          };
+        },
+      },
+    },
+  };
+  env.sandbox.window.ULEVELP_CONFIG = { googleClientId: 'client-id.apps.googleusercontent.com' };
+
+  // 1. 사용자 A 상태에서 토큰 발급
+  const tokA = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokA, 'token_A');
+  assert.equal(tokenClientCallCount, 1);
+
+  // 만료 전 재호출 시 인메모리 토큰 재사용 확인
+  const tokA2 = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokA2, 'token_A');
+  assert.equal(tokenClientCallCount, 1);
+
+  // 2. 사용자 B로 계정 전환 (A -> B)
+  currentToken = 'token_B';
+  env.triggerAuthChange({
+    user: { id: 'user-b' },
+    session: { access_token: 'token_user_b', user: { id: 'user-b' } },
+  });
+
+  // 사용자 B 상태에서 requestToken() 호출 시 token_A가 즉시 폐기되어 새로 토큰 발급
+  const tokB = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokB, 'token_B');
+  assert.equal(tokenClientCallCount, 2);
+
+  // 3. migrateAllToDrive() 중 migrateToDrive 실패 시 고아 파일 DELETE 정리 검증
+  const deleteUrls = [];
+  env.setFetchResponse(async (url, opts) => {
+    // 1) ensureFolder search
+    if (url.includes('/files?q=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ files: [{ id: 'fld_folder_id' }] }),
+      };
+    }
+    // 2) downloadBlob
+    if (url.includes('/download')) {
+      return {
+        ok: true,
+        status: 200,
+        blob: async () => new Blob([new Uint8Array(100)], { type: 'audio/mp4' }),
+      };
+    }
+    // 3) Drive uploadBlob
+    if (url.includes('uploadType=multipart')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'uploaded_orphan_file_id' }),
+      };
+    }
+    // 4) Drive deleteFile
+    if (opts && opts.method === 'DELETE') {
+      deleteUrls.push(url);
+      return { ok: true, status: 204 };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  // sessions.list stub: 1개 supabase take 반환
+  env.sandbox.window.ULData.sessions = {
+    list: async () => ({
+      sessions: [
+        {
+          id: 'sess-1',
+          takes: [
+            { id: 'take-orphan-1', storage: 'supabase', mime: 'audio/mp4' },
+          ],
+        },
+      ],
+    }),
+  };
+
+  // migrateToDrive 실패 유도
+  env.sandbox.window.ULData.takes.migrateToDrive = async () => {
+    throw new Error('서버 DB 장애로 migrateToDrive 실패');
+  };
+
+  const res = await env.sandbox.window.ULDrive.migrateAllToDrive();
+  assert.equal(res.migrated, 0);
+  assert.equal(res.skipped, 1);
+
+  // Drive 업로드 성공 후 서버 실패 시 해당 fileId에 대해 DELETE 요청이 나갔는지 검증
+  assert.equal(deleteUrls.length, 1);
+  assert.ok(deleteUrls[0].includes('/files/uploaded_orphan_file_id'));
 });

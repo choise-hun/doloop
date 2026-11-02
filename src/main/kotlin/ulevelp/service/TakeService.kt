@@ -17,6 +17,7 @@ import ulevelp.db.OutboxRepository
 import ulevelp.db.ProfilesTable
 import ulevelp.db.SessionsTable
 import ulevelp.db.SongsTable
+import ulevelp.db.NotionSyncTable
 import ulevelp.db.StorageTrashTable
 import ulevelp.db.TakesTable
 import ulevelp.storage.StorageClient
@@ -59,6 +60,25 @@ data class TakeUploadInput(
     val durationSec: Int,
     val mime: String,
     val bytes: ByteArray
+)
+
+data class DriveTakeRegisterInput(
+    val songId: UUID,
+    val date: LocalDate,
+    val recordedAt: OffsetDateTime,
+    val a: BigDecimal?,
+    val b: BigDecimal?,
+    val rate: BigDecimal?,
+    val durationSec: Int,
+    val mime: String,
+    val sizeBytes: Long,
+    val driveFileId: String
+)
+
+data class TakeDownloadData(
+    val bytes: ByteArray,
+    val mime: String,
+    val filename: String
 )
 
 class TakeService(
@@ -372,7 +392,185 @@ class TakeService(
         }
     }
 
+    suspend fun registerDriveTake(userId: UUID, input: DriveTakeRegisterInput): TakeDto {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val songExists = SongsTable
+                .select(SongsTable.id)
+                .where { (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }
+                .singleOrNull() != null
+            if (!songExists) {
+                throw NotFoundException("곡을 찾을 수 없습니다.")
+            }
+
+            val notionSyncEnabled = NotionSyncTable
+                .select(NotionSyncTable.enabled)
+                .where { (NotionSyncTable.userId eq userId) and (NotionSyncTable.enabled eq true) }
+                .singleOrNull() != null
+            if (notionSyncEnabled) {
+                throw ApiException(
+                    HttpStatusCode.Conflict,
+                    "NOTION_SYNC_CONFLICT",
+                    "노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다."
+                )
+            }
+
+            val sessionResult = ensureSession(userId, input.songId, input.date, input.rate, input.a, input.b)
+            val sessionId = sessionResult.sessionId
+            val takeId = UUID.randomUUID()
+
+            TakesTable.insert {
+                it[id] = takeId
+                it[TakesTable.userId] = userId
+                it[TakesTable.sessionId] = sessionId
+                it[TakesTable.songId] = input.songId
+                it[recordedAt] = input.recordedAt
+                it[a] = input.a
+                it[b] = input.b
+                if (input.rate != null) {
+                    it[rate] = input.rate
+                }
+                it[durationSec] = input.durationSec
+                it[mime] = input.mime
+                it[sizeBytes] = input.sizeBytes
+                it[storage] = "drive"
+                it[storageKey] = input.driveFileId
+                it[memo] = ""
+            }
+
+            if (sessionResult.created) {
+                OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "upsert")
+            }
+
+            TakeDto(
+                id = takeId.toString(),
+                sessionId = sessionId.toString(),
+                recordedAt = DateTimeFormatter.ISO_INSTANT.format(input.recordedAt.toInstant()),
+                a = input.a?.toDouble(),
+                b = input.b?.toDouble(),
+                rate = input.rate?.toDouble(),
+                durationSec = input.durationSec,
+                mime = input.mime,
+                sizeBytes = input.sizeBytes,
+                storage = "drive",
+                storageKey = input.driveFileId,
+                memo = ""
+            )
+        }
+    }
+
+    suspend fun downloadBytes(userId: UUID, takeId: UUID): TakeDownloadData {
+        val client = storageClient
+            ?: throw ApiException(
+                HttpStatusCode.ServiceUnavailable,
+                "STORAGE_UNAVAILABLE",
+                "녹음 저장소가 설정되어 있지 않습니다."
+            )
+        val database = requireDb()
+
+        val row = DatabaseFactory.dbQuery(database) {
+            TakesTable
+                .select(TakesTable.storage, TakesTable.storageKey, TakesTable.mime)
+                .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
+                .singleOrNull() ?: throw NotFoundException("녹음을 찾을 수 없습니다.")
+        }
+
+        val storage = row[TakesTable.storage]
+        val storageKey = row[TakesTable.storageKey]
+        val mime = row[TakesTable.mime]
+
+        if (storage == "drive") {
+            throw InvalidInputException("이미 Google Drive에 저장된 녹음입니다.")
+        }
+
+        val bytes = try {
+            client.download(storageKey)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: StorageException) {
+            throw ApiException(
+                HttpStatusCode.BadGateway,
+                "STORAGE_ERROR",
+                "녹음 파일을 다운로드하지 못했습니다."
+            )
+        }
+
+        val ext = MIME_EXT[mime] ?: "bin"
+        val filename = "take-$takeId.$ext"
+        return TakeDownloadData(bytes = bytes, mime = mime, filename = filename)
+    }
+
+    suspend fun migrateToDrive(userId: UUID, takeId: UUID, driveFileId: String): Pair<TakeDto, List<Long>> {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val row = TakesTable
+                .select(
+                    TakesTable.id,
+                    TakesTable.sessionId,
+                    TakesTable.songId,
+                    TakesTable.recordedAt,
+                    TakesTable.a,
+                    TakesTable.b,
+                    TakesTable.rate,
+                    TakesTable.durationSec,
+                    TakesTable.mime,
+                    TakesTable.sizeBytes,
+                    TakesTable.storage,
+                    TakesTable.storageKey,
+                    TakesTable.memo
+                )
+                .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
+                .singleOrNull() ?: throw NotFoundException("녹음을 찾을 수 없습니다.")
+
+            val notionSyncEnabled = NotionSyncTable
+                .select(NotionSyncTable.enabled)
+                .where { (NotionSyncTable.userId eq userId) and (NotionSyncTable.enabled eq true) }
+                .singleOrNull() != null
+            if (notionSyncEnabled) {
+                throw ApiException(
+                    HttpStatusCode.Conflict,
+                    "NOTION_SYNC_CONFLICT",
+                    "노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다."
+                )
+            }
+
+            val oldStorage = row[TakesTable.storage]
+            val oldKey = row[TakesTable.storageKey]
+            val trashIds = mutableListOf<Long>()
+
+            if (oldStorage == "supabase") {
+                val trashId = StorageTrashTable.insert {
+                    it[StorageTrashTable.storageKey] = oldKey
+                } get StorageTrashTable.id
+                trashIds.add(trashId)
+            }
+
+            TakesTable.update({ (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }) {
+                it[storage] = "drive"
+                it[storageKey] = driveFileId
+            }
+
+            val takeDto = TakeDto(
+                id = row[TakesTable.id].toString(),
+                sessionId = row[TakesTable.sessionId].toString(),
+                recordedAt = DateTimeFormatter.ISO_INSTANT.format(row[TakesTable.recordedAt].toInstant()),
+                a = row[TakesTable.a]?.toDouble(),
+                b = row[TakesTable.b]?.toDouble(),
+                rate = row[TakesTable.rate]?.toDouble(),
+                durationSec = row[TakesTable.durationSec],
+                mime = row[TakesTable.mime],
+                sizeBytes = row[TakesTable.sizeBytes],
+                storage = "drive",
+                storageKey = driveFileId,
+                memo = row[TakesTable.memo]
+            )
+
+            Pair(takeDto, trashIds)
+        }
+    }
+
     companion object {
+        val DRIVE_FILE_ID_REGEX = Regex("^[A-Za-z0-9_-]{5,200}$")
         const val MAX_METADATA_BYTES = 65_536L             // 64KB
         const val MAX_FILE_BYTES = 52_428_800L            // 50MB
         const val MAX_REQUEST_BYTES = 53_477_376L         // 51MB (Content-Length 사전 거부·formFieldLimit)

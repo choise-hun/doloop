@@ -77,22 +77,25 @@
   }
 
   let syncReqSeq = 0;
+  let notionSyncEnabled = false;
 
   function renderSyncStatus(s) {
-    if (!$('syncStatusText')) return;
-    if (!s || !s.enabled) {
-      $('syncStatusText').textContent = '연동 꺼짐';
-      if ($('btnSyncEnable')) $('btnSyncEnable').hidden = false;
-      if ($('btnSyncDisable')) $('btnSyncDisable').hidden = true;
-    } else {
-      let txt = '실시간 연동 켜짐 · 대기 ' + (s.pending || 0) + '건 · 실패 ' + (s.failed || 0) + '건';
-      const parts = [];
-      if (s.lastPushAt) parts.push('마지막 보냄: ' + s.lastPushAt.slice(0, 19).replace('T', ' '));
-      if (s.lastPullAt) parts.push('마지막 가져옴: ' + s.lastPullAt.slice(0, 19).replace('T', ' '));
-      if (parts.length > 0) txt += ' (' + parts.join(', ') + ')';
-      $('syncStatusText').textContent = txt;
-      if ($('btnSyncEnable')) $('btnSyncEnable').hidden = true;
-      if ($('btnSyncDisable')) $('btnSyncDisable').hidden = false;
+    notionSyncEnabled = !!(s && s.enabled);
+    if ($('syncStatusText')) {
+      if (!notionSyncEnabled) {
+        $('syncStatusText').textContent = '연동 꺼짐';
+        if ($('btnSyncEnable')) $('btnSyncEnable').hidden = false;
+        if ($('btnSyncDisable')) $('btnSyncDisable').hidden = true;
+      } else {
+        let txt = '실시간 연동 켜짐 · 대기 ' + (s.pending || 0) + '건 · 실패 ' + (s.failed || 0) + '건';
+        const parts = [];
+        if (s.lastPushAt) parts.push('마지막 보냄: ' + s.lastPushAt.slice(0, 19).replace('T', ' '));
+        if (s.lastPullAt) parts.push('마지막 가져옴: ' + s.lastPullAt.slice(0, 19).replace('T', ' '));
+        if (parts.length > 0) txt += ' (' + parts.join(', ') + ')';
+        $('syncStatusText').textContent = txt;
+        if ($('btnSyncEnable')) $('btnSyncEnable').hidden = true;
+        if ($('btnSyncDisable')) $('btnSyncDisable').hidden = false;
+      }
     }
     if ($('syncErrorText')) {
       if (s && s.lastError) {
@@ -103,6 +106,7 @@
         $('syncErrorText').hidden = true;
       }
     }
+    renderDrivePanel(auth && typeof auth.getMe === 'function' ? auth.getMe() : null);
   }
 
   async function loadSyncStatus(uid) {
@@ -294,6 +298,8 @@
         }
       }
 
+      renderDrivePanel(st.me);
+
       const nextUid = st.user ? st.user.id : null;
       if (!nextUid || nextUid !== activeUid) {
         activeUid = nextUid;
@@ -304,10 +310,13 @@
         if ($('inpImportZip')) $('inpImportZip').value = '';
         resetNotionFields();
         resetGeminiFields();
+        notionSyncEnabled = false;
         renderSyncStatus({ enabled: false, pending: 0, failed: 0 });
         if ($('ntnKeyMsg')) say('ntnKeyMsg', '');
         if ($('gemKeyMsg')) say('gemKeyMsg', '');
         if ($('syncMsg')) say('syncMsg', '');
+        if ($('driveProviderText')) $('driveProviderText').textContent = '';
+        if ($('driveStatusMsg')) say('driveStatusMsg', '');
         if (nextUid) {
           loadKeys(nextUid);
           loadSyncStatus(nextUid);
@@ -353,6 +362,93 @@
         $('btnDeleteAcc').disabled = false;
       }
     });
+
+    if ($('btnDriveEnable')) {
+      $('btnDriveEnable').addEventListener('click', async () => {
+        say('driveStatusMsg', '');
+        $('btnDriveEnable').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          await window.ULDrive.enableDriveStorage();
+          say('driveStatusMsg', '✓ Google Drive 저장소로 전환되었어요.', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || 'Google Drive 저장소 전환에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveEnable').disabled = !!notionSyncEnabled;
+        }
+      });
+    }
+
+    if ($('btnDriveDisable')) {
+      $('btnDriveDisable').addEventListener('click', async () => {
+        say('driveStatusMsg', '');
+        $('btnDriveDisable').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          await window.ULDrive.disableDriveStorage();
+          say('driveStatusMsg', '✓ 기본 저장소로 전환되었어요.', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || '기본 저장소 전환에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveDisable').disabled = false;
+        }
+      });
+    }
+
+    if ($('btnDriveMigrate')) {
+      $('btnDriveMigrate').addEventListener('click', async () => {
+        if (!confirm('기본 저장소에 저장된 기존 녹음들을 Google Drive로 이전할까요?')) return;
+        say('driveStatusMsg', '녹음 파일 이전 중...');
+        $('btnDriveMigrate').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          const res = await window.ULDrive.migrateAllToDrive(function (p) {
+            say('driveStatusMsg', '이전 진행 중... (' + p.current + ' / ' + p.total + ')');
+          });
+          say('driveStatusMsg', '✓ 이전 완료: ' + res.migrated + '개 성공, ' + res.skipped + '개 건너뜀', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || '녹음 파일 이전에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveMigrate').disabled = !!notionSyncEnabled;
+        }
+      });
+    }
+  }
+
+  function renderDrivePanel(me) {
+    if (!$('driveStoragePanel')) return;
+    if (!me) {
+      if ($('driveProviderText')) $('driveProviderText').textContent = '';
+      if ($('driveStatusMsg')) $('driveStatusMsg').textContent = '';
+      if ($('driveConflictNotice')) $('driveConflictNotice').hidden = true;
+      return;
+    }
+    const isDrive = me.storageProvider === 'drive';
+
+    if ($('btnDriveEnable')) $('btnDriveEnable').hidden = isDrive;
+    if ($('btnDriveDisable')) $('btnDriveDisable').hidden = !isDrive;
+    if ($('btnDriveMigrate')) $('btnDriveMigrate').hidden = !isDrive;
+
+    if ($('driveProviderText')) {
+      if (isDrive) {
+        $('driveProviderText').textContent = 'Google Drive 저장소 사용 중 (폴더: ULeveLP 녹음)';
+      } else {
+        $('driveProviderText').textContent = '기본 클라우드 저장소(200MB 쿼터) 사용 중';
+      }
+    }
+
+    if ($('driveConflictNotice')) {
+      $('driveConflictNotice').hidden = !notionSyncEnabled;
+    }
+    if ($('btnDriveEnable')) {
+      $('btnDriveEnable').disabled = !!notionSyncEnabled;
+    }
+    if ($('btnDriveMigrate')) {
+      $('btnDriveMigrate').disabled = !!notionSyncEnabled;
+    }
   }
 
   // ---------- 외부 연동 키 관리 · BYOK (K4-1) ----------
