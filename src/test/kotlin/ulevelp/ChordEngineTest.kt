@@ -198,5 +198,18 @@ class ChordEngineTest {
             assertEquals("no-cache", res.headers["Cache-Control"])
         }
     }
+
+    @Test
+    fun `Z3 정적 HTML HEAD 응답 Content-Length 단일 헤더 검증`() = testApplication {
+        application {
+            module(dbConfig = null, authConfig = null)
+        }
+        val getRes = client.get("/")
+        val headRes = client.head("/")
+        assertEquals(HttpStatusCode.OK, headRes.status)
+        assertEquals(listOf(getRes.bodyAsBytes().size.toString()), headRes.headers.getAll(HttpHeaders.ContentLength))
+        assertEquals("frame-ancestors 'none'", headRes.headers["Content-Security-Policy"])
+        assertTrue(headRes.bodyAsBytes().isEmpty())
+    }
 }
 

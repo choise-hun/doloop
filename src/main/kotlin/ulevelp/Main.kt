@@ -1,6 +1,7 @@
 package ulevelp
 
 import io.ktor.http.*
+import io.ktor.http.content.OutgoingContent
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -365,8 +366,13 @@ fun Application.module(
                 }
 
                 if (method == HttpMethod.Head) {
-                    call.response.headers.append(HttpHeaders.ContentLength, targetFile.length().toString())
-                    call.respond(HttpStatusCode.OK)
+                    // Content-Length를 헤더로 직접 붙이면 엔진이 0을 한 번 더 붙여 중복된다(Cloud Run 프런트엔드가 502로 거부)
+                    val length = targetFile.length()
+                    call.respond(object : OutgoingContent.NoContent() {
+                        override val status = HttpStatusCode.OK
+                        override val contentType = contentType
+                        override val contentLength = length
+                    })
                 } else {
                     call.respondBytes(targetFile.readBytes(), contentType, HttpStatusCode.OK)
                 }
