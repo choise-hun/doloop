@@ -307,7 +307,9 @@
   - **방식 1 (`multipart/form-data`, 기본 Supabase Storage):** `metadata`(JSON 파트)와 `file`(오디오 바이너리 파트)을 전송합니다. 서버가 200MB 쿼터를 검사(`FR-TAKE-4`)하고, 당일 세션이 없으면 0분 세션을 생성(`FR-TAKE-2`)한 뒤 스토리지(`{userId}/{takeId}.{ext}`)에 저장합니다. 업로드·DB 기록 순서는 [04 3.2절](04-db-design.md) 참고.
     - `metadata`: `{ songId, date, recordedAt, a, b, rate, durationSec, mime }` — `durationSec` 0~3600초, `mime`은 `;codecs=…`를 떼고 6종(`FR-TAKE-5`) 중 하나. `sizeBytes`·`storageKey`는 서버가 정합니다(보내도 무시).
     - 파일 50MB 초과 `413 TAKE_TOO_LARGE`, 쿼터 초과 `413 TAKE_QUOTA_EXCEEDED`, 저장소 실패 `502 STORAGE_ERROR`, 저장소 미설정 `503 STORAGE_UNAVAILABLE`.
-  - **방식 2 (`application/json`, Google Drive 모드 `P6`, K6-1에서 구현):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`). K1-2~K6-1 사이에는 multipart가 아니면 `400 INVALID_INPUT`.
+  - **방식 2 (`application/json`, Google Drive 모드 `P6`, K6-1에서 구현):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`).
+    - 노션 실시간 연동이 켜져 있는 동안(`notion_sync.enabled == true`)에는 `409 NOTION_SYNC_CONFLICT`로 거부됩니다(`FR-SYNC-5`).
+    - 기본 스토리지 쿼터(`take_quota_bytes`)는 차감되지 않으며, `sync_outbox`에 적재되지 않습니다.
 - **Response (`201 Created`):** `take`는 녹음 객체(`TakeDto`) 12개 필드이며 3.4·4.2의 녹음 항목과 같습니다.
 ```json
 {
@@ -335,9 +337,19 @@
 - **Response (`200 OK`):** `{ "url": "https://<project-ref>.supabase.co/storage/v1/object/sign/takes/...?token=...", "expiresIn": 3600 }`
 - `storage = 'drive'`인 녹음은 `400 INVALID_INPUT`(브라우저가 Drive에서 직접 재생), 서명 실패 `502 STORAGE_ERROR`.
 
-### 5.3 녹음 삭제 및 드라이브 이전 갱신
-- **`DELETE /api/v1/takes/{takeId}`**: 스토리지 파일 및 `takes` 행 삭제(파일은 `storage_trash`를 거쳐 커밋 직후 삭제), 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`). 세션 행은 남깁니다. **Response (`200 OK`):** `{ "ok": true }`
-- **`POST /api/v1/takes/{takeId}/migrate-drive`** (K6-1): 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
+### 5.3 녹음 다운로드·삭제 및 드라이브 이전
+- **`GET /api/v1/takes/{takeId}/download`** (K6-1):
+  - **설명:** 기존 Supabase Storage에 저장된 녹음의 원본 오디오 바이트를 반환합니다(Google Drive 이전 시 브라우저가 다운로드 후 Drive 업로드에 사용).
+  - **헤더 & 응답:** `Cache-Control: no-store`, `Content-Type: <take.mime>`, `200 OK` 바이너리 바이트 스트림.
+  - `storage == "drive"`인 경우 `400 INVALID_INPUT` ("이미 Google Drive에 저장된 녹음입니다."). 남의 녹음은 `404 NOT_FOUND`.
+- **`DELETE /api/v1/takes/{takeId}`**:
+  - **설명:** 스토리지 파일 및 `takes` 행 삭제(파일은 `storage_trash`를 거쳐 커밋 직후 삭제), 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`). 세션 행은 남깁니다.
+  - **Response (`200 OK`):** `{ "ok": true }`
+- **`POST /api/v1/takes/{takeId}/migrate-drive`** (K6-1):
+  - **설명:** 기존 Supabase Storage 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 `storage_trash`에 넣어 삭제함으로써 쿼터를 반환합니다(`FR-DRIVE-4`).
+  - 노션 실시간 연동 중에는 `409 NOTION_SYNC_CONFLICT`로 거부됩니다(`FR-SYNC-5`).
+  - **Request Body:** `{ "driveFileId": "1a2b3c4d5e6f_drive_id" }`
+  - **Response (`200 OK`):** `{ "ok": true, "take": TakeDto }`
 
 ---
 
@@ -530,7 +542,9 @@
 
 ### 8.1 영상 분석 요청 (비동기 Job 생성)
 - **`POST /api/v1/notes/analyze`**
-- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건, 일 최대 20건 `429 RATE_LIMITED`)을 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`runWithOverrides`, 인자 `jobId`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`).
+- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건, 일 최대 20건 `429 RATE_LIMITED`)을 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`AnalyzeJobDispatcher`, 인자 `jobId`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`, `KC-D6`).
+  - `tags`: 6종(`화성`, `사운드 디자인`, `DAW/MIDI`, `리듬`, `편곡`, `믹싱`) 중 1~6개 필수.
+  - 디스패치 실패 시 즉시 `status = "failed"`로 마킹하고 `502 JOB_DISPATCH_ERROR` 반환.
 - **Request Body:**
 ```json
 {
@@ -548,8 +562,9 @@
 ```
 
 ### 8.2 분석 작업 상태 조회
-- **`GET /api/v1/notes/jobs`** (최근 작업 목록) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링)
-- **Response (`200 OK`):**
+- **`GET /api/v1/notes/jobs`** (최근 작업 목록, 최대 20건, `createdAt DESC`)
+- **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링)
+- **Response (`200 OK` - 단건):** `AnalysisJobDto` (9개 필드)
 ```json
 {
   "id": "j1000000-0000-4000-8000-000000000001",
@@ -563,12 +578,47 @@
   "finishedAt": "2026-10-30T09:11:15Z"
 }
 ```
+- **Response (`200 OK` - 목록):** `{ "jobs": [ ... ] }`
 
 ### 8.3 학습 노트 목록·상세 조회 및 수정·삭제
-- **`GET /api/v1/notes`**: 내 학습 노트 목록 조회 (`tag` 필터 지원).
-- **`GET /api/v1/notes/{noteId}`**: 노트 상세 조회(`FR-NOTE-3`). `analysis` JSON 원본과 함께 화성 진행별 렌더링된 SVG 문자열(`diagramsSvg`)을 포함해 반환하므로 프런트엔드는 별도 계산 없이 즉시 화면에 표시할 수 있습니다.
-- **`PATCH /api/v1/notes/{noteId}`**: `{ "memo": "...", "tags": ["화성", "TAB"] }` 수정.
-- **`DELETE /api/v1/notes/{noteId}`**: 노트 삭제 (노션 연동 시 노션 페이지 아카이브).
+- **`GET /api/v1/notes?tag=`**:
+  - **설명:** 로그인한 사용자의 학습 노트 목록(최대 50건, `createdAt DESC`)을 반환합니다. `tag` 쿼리 파라미터로 필터링할 수 있으며, 허용 태그는 7종(`화성`, `사운드 디자인`, `DAW/MIDI`, `리듬`, `편곡`, `믹싱`, `TAB`)입니다.
+  - **Response (`200 OK`):** `{ "notes": List<NoteSummaryDto> }` (각 노트는 14개 필드: `id, videoId, url, title, channel, tags, memo, headline, points, keywords, difficulty, model, createdAt, updatedAt`).
+- **`GET /api/v1/notes/{noteId}`**:
+  - **설명:** 노트 단건 상세 조회(`FR-NOTE-3`). `NoteSummaryDto`의 14개 필드에 더해 `analysis`(Gemini JSON 분석 결과 원본)와 `diagramsSvg`(`harmony.progressions` 인덱스별로 렌더링된 SVG 문자열 배열)를 포함한 16개 필드의 `NoteDetailDto`를 반환합니다.
+  - **Response (`200 OK`):**
+```json
+{
+  "note": {
+    "id": "n1000000-0000-4000-8000-000000000001",
+    "videoId": "dQw4w9WgXcQ",
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "재즈 기타 2-5-1 보이싱 강의",
+    "channel": "Jens Larsen",
+    "tags": ["화성", "리듬"],
+    "memo": "2분 15초 보이싱 집중",
+    "headline": "세컨더리 도미넌트와 가이드톤 연결",
+    "points": ["3도·7도 가이드톤 최소 이동"],
+    "keywords": ["세컨더리 도미넌트", "가이드톤"],
+    "difficulty": "중급",
+    "analysis": {
+      "summary": { "title": "...", "headline": "...", "points": [ { "point": "..." } ] },
+      "harmony": { "progressions": [ { "name": "ii-V-I", "chords": ["Dm7", "G7", "Cmaj7"] } ] }
+    },
+    "diagramsSvg": ["<svg ...>...</svg>"],
+    "model": "gemini-flash-latest",
+    "createdAt": "2026-10-30T09:11:15Z",
+    "updatedAt": "2026-10-30T09:11:15Z"
+  }
+}
+```
+- **`PATCH /api/v1/notes/{noteId}`**:
+  - **설명:** 노트의 `memo`, `tags`, `title` 중 하나 이상을 수정합니다(태그는 7종 허용). 수정 성공 시 `sync_outbox`에 `note` `upsert`를 적재합니다.
+  - **Request Body:** `{ "memo": "수정된 메모", "tags": ["화성", "TAB"] }`
+  - **Response (`200 OK`):** `{ "note": NoteDetailDto }`
+- **`DELETE /api/v1/notes/{noteId}`**:
+  - **설명:** 노트를 삭제하고, 노션 연동 시 노션 페이지를 아카이브(`sync_outbox` `note` `delete`)합니다. 연관된 `analysis_jobs.note_id`는 DB 외래키 `ON DELETE SET NULL`에 의해 `null`로 보존됩니다.
+  - **Response (`200 OK`):** `{ "ok": true }`
 
 ---
 
