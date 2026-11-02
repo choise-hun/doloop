@@ -397,8 +397,8 @@
   }
 
   if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
-    window.ULAuth.onChange((user) => {
-      const newUid = user ? user.id : null;
+    window.ULAuth.onChange((state) => {
+      const newUid = state && state.user ? state.user.id : (state && state.id ? state.id : (window.ULAuth.getUser ? (window.ULAuth.getUser() ? window.ULAuth.getUser().id : null) : null));
       if (newUid !== activeUid) {
         clearTimeout(pollTimer);
         activeUid = newUid;

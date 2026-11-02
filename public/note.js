@@ -663,13 +663,16 @@
     const msgEl = $('noteEditMsg');
     msgEl.textContent = '저장하는 중...';
     msgEl.className = 'msg';
+    const myUid = activeUid;
     try {
       const updated = await window.ULData.notes.update(currentNote.id, { memo, tags });
+      if (myUid !== activeUid) return;
       msgEl.textContent = '저장되었습니다.';
       msgEl.className = 'msg ok';
       renderHeader(updated);
       currentNote = updated;
     } catch (err) {
+      if (myUid !== activeUid) return;
       msgEl.textContent = err.message || '저장에 실패했어요.';
       msgEl.className = 'msg err';
     }
@@ -678,18 +681,23 @@
   // ---------- 로드 ----------
   const q = new URLSearchParams(location.search);
   const noteId = q.get('id');
+  let detailReqSeq = 0;
   let activeUid = null;
 
   async function loadDetail() {
     showLoading('학습 노트를 불러오는 중...');
+    const mySeq = ++detailReqSeq;
+    const myUid = activeUid;
     try {
       const note = await window.ULData.notes.get(noteId);
+      if (mySeq !== detailReqSeq || myUid !== activeUid) return;
       if (!note) {
         showLoading('학습 노트를 찾을 수 없어요.');
         return;
       }
       renderNote(note);
     } catch (err) {
+      if (mySeq !== detailReqSeq || myUid !== activeUid) return;
       showLoading(err.message || '학습 노트를 불러오지 못했어요.');
     }
   }
@@ -708,10 +716,12 @@
     }
 
     if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
-      window.ULAuth.onChange((user) => {
-        const uid = user ? user.id : null;
+      window.ULAuth.onChange((state) => {
+        const uid = state && state.user ? state.user.id : (state && state.id ? state.id : (window.ULAuth.getUser ? (window.ULAuth.getUser() ? window.ULAuth.getUser().id : null) : null));
         if (uid !== activeUid) {
           activeUid = uid;
+          detailReqSeq++;
+          currentNote = null;
           if (activeUid) {
             loadDetail();
           } else {
