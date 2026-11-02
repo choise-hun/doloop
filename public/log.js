@@ -338,7 +338,31 @@
 
           playBtn.addEventListener('click', function () {
             if (t.storage === 'drive') {
-              msgSpan.textContent = 'Google Drive 녹음은 드라이브 연동 단계(K6-1)에서 재생을 지원해요.';
+              if (!window.ULDrive) {
+                msgSpan.textContent = 'Google Drive 모듈이 로드되지 않았어요.';
+                return;
+              }
+              if (audio.dataset.takeId !== t.id) {
+                playBtn.disabled = true;
+                msgSpan.textContent = '드라이브에서 음원 로드 중...';
+                window.ULDrive.fetchMediaObjectUrl(t.storageKey)
+                  .then(function (blobUrl) {
+                    audio['src'] = blobUrl;
+                    audio.dataset.takeId = t.id;
+                    audio.hidden = false;
+                    msgSpan.textContent = '';
+                    audio.play().catch(function () {});
+                  })
+                  .catch(function (err) {
+                    msgSpan.textContent = (err && err.message) || '재생 실패';
+                  })
+                  .finally(function () {
+                    playBtn.disabled = false;
+                  });
+              } else {
+                audio.hidden = false;
+                audio.play().catch(function () {});
+              }
               return;
             }
             if (t.storage === 'supabase') {
@@ -840,7 +864,31 @@
 
       playBtn.addEventListener('click', function () {
         if (t.storage === 'drive') {
-          msgSpan.textContent = 'Google Drive 녹음은 드라이브 연동 단계(K6-1)에서 재생을 지원해요.';
+          if (!window.ULDrive) {
+            msgSpan.textContent = 'Google Drive 모듈이 로드되지 않았어요.';
+            return;
+          }
+          if (audio.dataset.takeId !== t.id) {
+            playBtn.disabled = true;
+            msgSpan.textContent = '드라이브에서 음원 로드 중...';
+            window.ULDrive.fetchMediaObjectUrl(t.storageKey)
+              .then(function (blobUrl) {
+                audio['src'] = blobUrl;
+                audio.dataset.takeId = t.id;
+                audio.hidden = false;
+                msgSpan.textContent = '';
+                audio.play().catch(function () {});
+              })
+              .catch(function (err) {
+                msgSpan.textContent = (err && err.message) || '재생 실패';
+              })
+              .finally(function () {
+                playBtn.disabled = false;
+              });
+          } else {
+            audio.hidden = false;
+            audio.play().catch(function () {});
+          }
           return;
         }
         if (t.storage === 'supabase') {
@@ -983,13 +1031,24 @@
       if (audio.dataset.takeId !== take.id) {
         btn.disabled = true;
         try {
-          const r = await window.ULData.takes.getUrl(take.id);
-          if (r && r.url) {
-            audio.src = safeUrl(r.url);
+          if (take.storage === 'drive') {
+            if (!window.ULDrive) {
+              alert('Google Drive 모듈이 로드되지 않았어요.');
+              return;
+            }
+            const blobUrl = await window.ULDrive.fetchMediaObjectUrl(take.storageKey);
+            audio['src'] = blobUrl;
             audio.dataset.takeId = take.id;
             await audio.play();
           } else {
-            alert('녹음 재생 주소를 받지 못했어요');
+            const r = await window.ULData.takes.getUrl(take.id);
+            if (r && r.url) {
+              audio.src = safeUrl(r.url);
+              audio.dataset.takeId = take.id;
+              await audio.play();
+            } else {
+              alert('녹음 재생 주소를 받지 못했어요');
+            }
           }
         } catch (err) {
           alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');

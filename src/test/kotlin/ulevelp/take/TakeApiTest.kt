@@ -1089,4 +1089,347 @@ class TakeApiTest {
         assertEquals("INVALID_INPUT", formItemJson["code"]?.jsonPrimitive?.content)
         assertEquals("metadata가 너무 큽니다.", formItemJson["message"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun `T22 Drive JSON 녹음 등록 및 클라우드 스토리지 쿼터 0 증가 (FR-DRIVE-2)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val meRes1 = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        val userIdA = UUID.fromString(Json.parseToJsonElement(meRes1.bodyAsText()).jsonObject["id"]!!.jsonPrimitive.content)
+
+        // 쿼터를 1000B로 매우 작게 설정
+        transaction(db) {
+            ProfilesTable.update({ ProfilesTable.id eq userIdA }) {
+                it[takeQuotaBytes] = 1000L
+            }
+        }
+
+        // 5MB Drive JSON 등록 -> 쿼터 검사 없이 등록 성공해야 함
+        val driveRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(
+                buildJsonObject {
+                    put("songId", songId)
+                    put("date", today.toString())
+                    put("recordedAt", DateTimeFormatter.ISO_INSTANT.format(OffsetDateTime.now(ZoneOffset.UTC).toInstant()))
+                    put("durationSec", 15)
+                    put("mime", "audio/mp4")
+                    put("sizeBytes", 5_000_000L)
+                    put("storage", "drive")
+                    put("storageKey", "drive_file_12345")
+                }.toString()
+            )
+        }
+        assertEquals(HttpStatusCode.Created, driveRes.status)
+        val json = Json.parseToJsonElement(driveRes.bodyAsText()).jsonObject
+        assertTrue(json["ok"]!!.jsonPrimitive.boolean)
+        val take = json["take"]!!.jsonObject
+        assertEquals("drive", take["storage"]!!.jsonPrimitive.content)
+        assertEquals("drive_file_12345", take["storageKey"]!!.jsonPrimitive.content)
+
+        // GET /api/v1/me 확인 시 takeUsedBytes == 0
+        val meRes2 = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        val meJson = Json.parseToJsonElement(meRes2.bodyAsText()).jsonObject
+        assertEquals(0L, meJson["takeUsedBytes"]!!.jsonPrimitive.long)
+    }
+
+    @Test
+    fun `T23 Drive JSON 등록 시 당일 세션 자동 생성 (ensureSession)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val driveRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(
+                buildJsonObject {
+                    put("songId", songId)
+                    put("date", today.toString())
+                    put("recordedAt", DateTimeFormatter.ISO_INSTANT.format(OffsetDateTime.now(ZoneOffset.UTC).toInstant()))
+                    put("durationSec", 20)
+                    put("mime", "audio/mp4")
+                    put("sizeBytes", 100_000L)
+                    put("storage", "drive")
+                    put("storageKey", "drive_file_session_test")
+                }.toString()
+            )
+        }
+        assertEquals(HttpStatusCode.Created, driveRes.status)
+
+        // GET /api/v1/songs/{songId} 조회 시 sessions에 seconds = 0인 세션이 자동 생성되어 있고 takes에 연결됨
+        val songRes = client.get("/api/v1/songs/$songId") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, songRes.status)
+        val songJson = Json.parseToJsonElement(songRes.bodyAsText()).jsonObject
+        val sessions = songJson["sessions"]!!.jsonArray
+        assertEquals(1, sessions.size)
+        assertEquals(0, sessions[0].jsonObject["seconds"]!!.jsonPrimitive.int)
+        val takes = songJson["takes"]!!.jsonArray
+        assertEquals(1, takes.size)
+        assertEquals("drive", takes[0].jsonObject["storage"]!!.jsonPrimitive.content)
+        assertEquals("drive_file_session_test", takes[0].jsonObject["storageKey"]!!.jsonPrimitive.content)
+        assertEquals(sessions[0].jsonObject["id"]!!.jsonPrimitive.content, takes[0].jsonObject["sessionId"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `T24 노션 연동 활성 중 Drive 녹음 등록 및 이전 409 거부 (FR-SYNC-5)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val meRes = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        val userIdA = UUID.fromString(Json.parseToJsonElement(meRes.bodyAsText()).jsonObject["id"]!!.jsonPrimitive.content)
+
+        // 먼저 일반 녹음 1개 등록
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("metadata", defaultMetadata(songId).toString())
+                        append(
+                            "file",
+                            ByteArray(100),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val takeId = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject["take"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        // notion_sync.enabled = true 설정
+        transaction(db) {
+            val exists = NotionSyncTable.selectAll().where { NotionSyncTable.userId eq userIdA }.count() > 0
+            if (exists) {
+                NotionSyncTable.update({ NotionSyncTable.userId eq userIdA }) {
+                    it[enabled] = true
+                }
+            } else {
+                NotionSyncTable.insert {
+                    it[userId] = userIdA
+                    it[enabled] = true
+                }
+            }
+        }
+
+        // 1) Drive JSON 등록 시도 -> 409 Conflict
+        val driveRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(
+                buildJsonObject {
+                    put("songId", songId)
+                    put("date", today.toString())
+                    put("recordedAt", DateTimeFormatter.ISO_INSTANT.format(OffsetDateTime.now(ZoneOffset.UTC).toInstant()))
+                    put("durationSec", 10)
+                    put("mime", "audio/mp4")
+                    put("sizeBytes", 1000L)
+                    put("storage", "drive")
+                    put("storageKey", "drv_sync_conflict")
+                }.toString()
+            )
+        }
+        assertEquals(HttpStatusCode.Conflict, driveRes.status)
+        val driveErrJson = Json.parseToJsonElement(driveRes.bodyAsText()).jsonObject
+        assertEquals("NOTION_SYNC_CONFLICT", driveErrJson["code"]!!.jsonPrimitive.content)
+
+        // 2) migrate-drive 시도 -> 409 Conflict
+        val migrateRes = client.post("/api/v1/takes/$takeId/migrate-drive") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject { put("driveFileId", "drv_mig_conflict") }.toString())
+        }
+        assertEquals(HttpStatusCode.Conflict, migrateRes.status)
+        val migErrJson = Json.parseToJsonElement(migrateRes.bodyAsText()).jsonObject
+        assertEquals("NOTION_SYNC_CONFLICT", migErrJson["code"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `T25 기존 Supabase 녹음 다운로드 (GET takes takeId download)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val rawBytes = ByteArray(1024) { (it % 256).toByte() }
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("metadata", defaultMetadata(songId).toString())
+                        append(
+                            "file",
+                            rawBytes,
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val takeId = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject["take"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        // GET /api/v1/takes/{takeId}/download
+        val dlRes = client.get("/api/v1/takes/$takeId/download") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, dlRes.status)
+        assertEquals("no-store", dlRes.headers[HttpHeaders.CacheControl])
+        val downloadedBytes = dlRes.bodyAsBytes()
+        assertEquals(1024, downloadedBytes.size)
+        assertContentEquals(rawBytes, downloadedBytes)
+    }
+
+    @Test
+    fun `T26 기존 Supabase 녹음 Drive 이전 (POST migrate-drive) 후 스토리지 파일 삭제 및 쿼터 반환 (FR-DRIVE-3)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val rawBytes = ByteArray(10000) { 1 }
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("metadata", defaultMetadata(songId).toString())
+                        append(
+                            "file",
+                            rawBytes,
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val takeId = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject["take"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        // 사전 확인: fake에 파일 존재, takeUsedBytes == 10000
+        assertEquals(1, fake.objects.size)
+        val meResBefore = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(10000L, Json.parseToJsonElement(meResBefore.bodyAsText()).jsonObject["takeUsedBytes"]!!.jsonPrimitive.long)
+
+        // POST /api/v1/takes/{takeId}/migrate-drive
+        val migRes = client.post("/api/v1/takes/$takeId/migrate-drive") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject { put("driveFileId", "drv_abcde_12345") }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, migRes.status)
+        val migJson = Json.parseToJsonElement(migRes.bodyAsText()).jsonObject
+        assertTrue(migJson["ok"]!!.jsonPrimitive.boolean)
+        val take = migJson["take"]!!.jsonObject
+        assertEquals("drive", take["storage"]!!.jsonPrimitive.content)
+        assertEquals("drv_abcde_12345", take["storageKey"]!!.jsonPrimitive.content)
+
+        // FakeStorageClient에서 기존 파일 삭제 확인
+        assertTrue(fake.objects.isEmpty())
+
+        // GET /api/v1/me 확인 시 takeUsedBytes가 0으로 복원됨
+        val meResAfter = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(0L, Json.parseToJsonElement(meResAfter.bodyAsText()).jsonObject["takeUsedBytes"]!!.jsonPrimitive.long)
+    }
+
+    @Test
+    fun `T27 잘못된 driveFileId 형식 거부 (400 INVALID_INPUT)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("metadata", defaultMetadata(songId).toString())
+                        append(
+                            "file",
+                            ByteArray(100),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val takeId = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject["take"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        val badRes = client.post("/api/v1/takes/$takeId/migrate-drive") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject { put("driveFileId", "bad id!") }.toString())
+        }
+        assertEquals(HttpStatusCode.BadRequest, badRes.status)
+        val errJson = Json.parseToJsonElement(badRes.bodyAsText()).jsonObject
+        assertEquals("INVALID_INPUT", errJson["code"]!!.jsonPrimitive.content)
+        assertEquals("driveFileId 형식이 올바르지 않습니다.", errJson["message"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `T28 타 사용자 녹음 다운로드 및 Drive 이전 차단 (404 NOT_FOUND)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+        val songIdA = createTestSong(client, tokenA)
+
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("metadata", defaultMetadata(songIdA).toString())
+                        append(
+                            "file",
+                            ByteArray(100),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val takeIdA = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject["take"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        // 사용자 B가 사용자 A의 녹음 다운로드 시도 -> 404
+        val dlRes = client.get("/api/v1/takes/$takeIdA/download") {
+            header(HttpHeaders.Authorization, "Bearer $tokenB")
+        }
+        assertEquals(HttpStatusCode.NotFound, dlRes.status)
+
+        // 사용자 B가 사용자 A의 녹음 이전 시도 -> 404
+        val migRes = client.post("/api/v1/takes/$takeIdA/migrate-drive") {
+            header(HttpHeaders.Authorization, "Bearer $tokenB")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject { put("driveFileId", "drv_user_b_attack") }.toString())
+        }
+        assertEquals(HttpStatusCode.NotFound, migRes.status)
+
+        // A의 녹음 원본 및 DB 상태 보존 확인
+        assertEquals(1, fake.objects.size)
+        transaction(db) {
+            val row = TakesTable.select(TakesTable.storage).where { TakesTable.id eq UUID.fromString(takeIdA) }.single()
+            assertEquals("supabase", row[TakesTable.storage])
+        }
+    }
 }
