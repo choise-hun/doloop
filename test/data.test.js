@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const configSrc = fs.readFileSync(path.join(ROOT, 'public', 'config.js'), 'utf8');
 const dataSrc = fs.readFileSync(path.join(ROOT, 'public', 'data.js'), 'utf8');
+const driveSrc = fs.readFileSync(path.join(ROOT, 'public', 'drive.js'), 'utf8');
 
 function createMockEnv({
   session = { access_token: 'valid_token' },
@@ -22,6 +23,7 @@ function createMockEnv({
   apiHandler = null,
   fetchResponse = { ok: true, status: 200, json: async () => ({ ok: true, keep: true }) },
   confirmAnswers = [],
+  loadDrive = false,
 } = {}) {
   const map = new Map();
   const localStorage = {
@@ -93,8 +95,12 @@ function createMockEnv({
   vm.runInContext(configSrc, sandbox);
   sandbox.ULEVELP_CONFIG.apiBaseUrl = '';
   vm.runInContext(dataSrc, sandbox);
+  if (loadDrive) {
+    vm.runInContext(driveSrc, sandbox);
+  }
 
   return {
+    sandbox,
     ULData: sandbox.ULData,
     localStorage,
     storageMap: map,
@@ -1013,4 +1019,176 @@ test('D30 412 NO_KEY 및 비동기 잡 PROVIDER_KEY_INVALID: 실패 시 ulp:keys
   const cachedAfterJobs = env.ULData.getCachedKeys();
   assert.equal(cachedAfterJobs.gemini, null);
   assert.equal(cachedAfterJobs.notion.hint, '9a8b');
+});
+
+test('D31 me.update 및 Drive 저장소 전환', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: {
+      user: {
+        id: 'user-1',
+        storageProvider: 'drive',
+        driveFolderId: 'fld_12345',
+      },
+    },
+  });
+
+  const res = await env.ULData.me.update({
+    storageProvider: 'drive',
+    driveFolderId: 'fld_12345',
+  });
+
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/me');
+  assert.equal(env.apiCalls[0].opts.method, 'PATCH');
+  const body = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(body.storageProvider, 'drive');
+  assert.equal(body.driveFolderId, 'fld_12345');
+  assert.equal(env.fetchMeCount, 1);
+  assert.equal(res.user.storageProvider, 'drive');
+});
+
+test("D32 takes.upload — storageProvider === 'drive'일 때 ULDrive.uploadTake 위임", async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    me: { id: 'user-1', storageProvider: 'drive' },
+  });
+
+  let delegatedMeta = null;
+  let delegatedBlob = null;
+  env.sandbox.window.ULDrive = {
+    uploadTake: async (meta, blob) => {
+      delegatedMeta = meta;
+      delegatedBlob = blob;
+      return { id: 'take-drive-1', storage: 'drive', storageKey: 'drv_file_1' };
+    },
+  };
+
+  const meta = { songId: 'song-1', date: '2026-11-02' };
+  const blob = new Blob(['audiodata'], { type: 'audio/mp4' });
+  const result = await env.ULData.takes.upload(meta, blob);
+
+  assert.equal(env.fetchCalls.length, 0);
+  assert.equal(env.apiCalls.length, 0);
+  assert.deepEqual(delegatedMeta, meta);
+  assert.equal(delegatedBlob, blob);
+  assert.equal(result.id, 'take-drive-1');
+  assert.equal(result.storage, 'drive');
+});
+
+test('D33 takes.registerDrive & takes.migrateToDrive', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: {
+      ok: true,
+      take: { id: 'take-1', storage: 'drive', storageKey: 'drv_12345' },
+    },
+  });
+
+  // 1. registerDrive
+  const meta = {
+    songId: 'c1a2b3c4-0000-4000-8000-000000000001',
+    date: '2026-11-02',
+    recordedAt: '2026-11-02T10:00:00Z',
+    durationSec: 10,
+    mime: 'audio/mp4',
+    sizeBytes: 1024,
+    storageKey: 'drv_12345',
+  };
+  const regTake = await env.ULData.takes.registerDrive(meta);
+
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/takes');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+  assert.equal(env.apiCalls[0].opts.headers['Content-Type'], 'application/json');
+  const regBody = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(regBody.storage, 'drive');
+  assert.equal(regBody.storageKey, 'drv_12345');
+  assert.equal(regTake.storage, 'drive');
+
+  // 2. migrateToDrive
+  const migTake = await env.ULData.takes.migrateToDrive('d1000000-0000-4000-8000-000000000001', 'drv_12345');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/takes/d1000000-0000-4000-8000-000000000001/migrate-drive');
+  assert.equal(env.apiCalls[1].opts.method, 'POST');
+  assert.equal(env.apiCalls[1].opts.headers['Content-Type'], 'application/json');
+  const migBody = JSON.parse(env.apiCalls[1].opts.body);
+  assert.equal(migBody.driveFileId, 'drv_12345');
+  assert.equal(migTake.storage, 'drive');
+});
+
+test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    loadDrive: true,
+  });
+
+  // Google OAuth stub
+  env.sandbox.window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: ({ callback }) => ({
+          requestAccessToken: () => callback({ access_token: 'fake_drive_token', expires_in: '3600' }),
+        }),
+      },
+    },
+  };
+  env.sandbox.window.ULConfig = { driveClientId: 'fake-client-id.apps.googleusercontent.com' };
+
+  // 1. 1KB Blob (<= 5MB: multipart)
+  const smallBlob = new Blob([new Uint8Array(1024)], { type: 'audio/mp4' });
+  env.setFetchResponse(async (url, opts) => {
+    if (url.includes('uploadType=multipart')) {
+      assert.equal(opts.method, 'POST');
+      assert.equal(opts.headers.Authorization, 'Bearer fake_drive_token');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'small_drive_id' }),
+      };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  const smallId = await env.sandbox.window.ULDrive.uploadBlob(smallBlob, 'small.m4a', 'audio/mp4', 'fld_1');
+  assert.equal(smallId, 'small_drive_id');
+
+  // 2. 6MB Blob (> 5MB: resumable)
+  const largeBlob = new Blob([new Uint8Array(6 * 1024 * 1024)], { type: 'audio/mp4' });
+  const resumeUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=sess_abc';
+  let initCalled = false;
+  let putCalled = false;
+
+  env.setFetchResponse(async (url, opts) => {
+    if (url === resumeUrl) {
+      putCalled = true;
+      assert.equal(opts.method, 'PUT');
+      assert.equal(opts.headers['Content-Type'], 'audio/mp4');
+      assert.equal(opts.headers['Content-Length'], String(largeBlob.size));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'large_drive_id' }),
+      };
+    }
+    if (url.includes('uploadType=resumable')) {
+      initCalled = true;
+      assert.equal(opts.method, 'POST');
+      assert.equal(opts.headers['X-Upload-Content-Type'], 'audio/mp4');
+      assert.equal(opts.headers['X-Upload-Content-Length'], String(largeBlob.size));
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: (h) => (h.toLowerCase() === 'location' ? resumeUrl : null),
+        },
+      };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  const largeId = await env.sandbox.window.ULDrive.uploadBlob(largeBlob, 'large.m4a', 'audio/mp4', 'fld_1');
+  assert.equal(largeId, 'large_drive_id');
+  assert.equal(initCalled, true);
+  assert.equal(putCalled, true);
 });

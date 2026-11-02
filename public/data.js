@@ -85,7 +85,82 @@ window.ULData = (function () {
     await window.ULAuth.apiFetch(path, {
       method: 'DELETE',
     });
-    return { ok: true };
+    async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, ok: true };
   }
 
   function saveProgress(body, opts) {
@@ -143,6 +218,11 @@ window.ULData = (function () {
   }
 
   async function upload(meta, blob) {
+    const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
+    if (me && me.storageProvider === 'drive' && window.ULDrive && typeof window.ULDrive.uploadTake === 'function') {
+      requireLogin();
+      return await window.ULDrive.uploadTake(meta, blob);
+    }
     requireLogin();
     meta = meta || {};
     const metaPayload = {
@@ -233,11 +313,161 @@ window.ULData = (function () {
 
   async function runLocalMigration() {
     if (!isLoggedIn()) {
-      return { status: 'skipped', created: 0, skipped: 0, message: '' };
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, status: 'skipped', created: 0, skipped: 0, message: '' };
     }
     const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
     if (!me || me.migratedLocalAt != null || migrating) {
-      return { status: 'skipped', created: 0, skipped: 0, message: '' };
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, status: 'skipped', created: 0, skipped: 0, message: '' };
     }
 
     const own = readLocal('ulp:v:');
@@ -246,7 +476,82 @@ window.ULData = (function () {
     const filteredSister = sister.filter((it) => !ownVids.has(it.videoId));
 
     if (own.length === 0 && filteredSister.length === 0) {
-      return { status: 'skipped', created: 0, skipped: 0, message: '' };
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, status: 'skipped', created: 0, skipped: 0, message: '' };
     }
 
     migrating = true;
@@ -277,14 +582,164 @@ window.ULData = (function () {
       if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
         await window.ULAuth.fetchMe();
       }
-      return {
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    },
         status: 'done',
         created: r && typeof r.created === 'number' ? r.created : 0,
         skipped: r && typeof r.skipped === 'number' ? r.skipped : 0,
         message: '',
       };
     } catch (e) {
-      return {
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    },
         status: 'failed',
         created: 0,
         skipped: 0,
@@ -324,7 +779,82 @@ window.ULData = (function () {
       filename = match[1];
     }
     const blob = await res.blob();
-    return { blob, filename };
+    async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, blob, filename };
   }
 
   async function previewNotionZip(file) {
@@ -352,13 +882,163 @@ window.ULData = (function () {
       const parsed = JSON.parse(raw);
       const user = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
       if (user && user.id && parsed && parsed.uid === user.id) {
-        return {
+        async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    },
           notion: parsed.notion || null,
           gemini: parsed.gemini || null,
         };
       }
     } catch (_) {}
-    return { notion: null, gemini: null };
+    async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, notion: null, gemini: null };
   }
 
   async function listIntegrations() {
@@ -492,7 +1172,82 @@ window.ULData = (function () {
           memo: input.memo,
         }),
       });
-      return { jobId: r.jobId, status: r.status };
+      async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    }, jobId: r.jobId, status: r.status };
     } catch (err) {
       if (err && (err.code === 'NO_KEY' || err.status === 412)) {
         clearCachedGeminiKey();
@@ -555,11 +1310,236 @@ window.ULData = (function () {
     await window.ULAuth.apiFetch(path, {
       method: 'DELETE',
     });
-    return { ok: true };
+    async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
   }
 
   return {
+    me: {
+      update: updateMe,
+    }, ok: true };
+  }
+
+  async function updateMe(patch) {
+    requireLogin();
+    let updated;
+    if (window.ULAuth && typeof window.ULAuth.updateProfile === 'function') {
+      updated = await window.ULAuth.updateProfile(patch);
+    } else {
+      updated = await window.ULAuth.apiFetch('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      });
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+    }
+    return updated;
+  }
+
+  async function registerDriveTake(meta) {
+    requireLogin();
+    meta = meta || {};
+    const payload = {
+      songId: meta.songId,
+      date: meta.date,
+      recordedAt: meta.recordedAt,
+      a: meta.a,
+      b: meta.b,
+      rate: meta.rate,
+      durationSec: meta.durationSec,
+      mime: meta.mime,
+      sizeBytes: meta.sizeBytes,
+      storage: 'drive',
+      storageKey: meta.storageKey || meta.driveFileId,
+    };
+    const r = await window.ULAuth.apiFetch('/api/v1/takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  async function downloadTakeBlob(takeId) {
+    requireLogin();
+    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
+    const token = sess && sess.access_token ? sess.access_token : '';
+    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+      },
+    });
+    if (!res.ok) {
+      let errData = {};
+      try { errData = await res.json(); } catch (_) {}
+      const msg = (errData && (errData.message || errData.error)) || ('다운로드 실패 (' + res.status + ')');
+      const err = new Error(msg);
+      err.status = res.status;
+      err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
+      throw err;
+    }
+    return await res.blob();
+  }
+
+  async function migrateTakeToDrive(takeId, driveFileId) {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/migrate-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driveFileId: driveFileId }),
+    });
+    return r && r.take ? r.take : r;
+  }
+
+  return {
+    me: {
+      update: updateMe,
+    },
     isLoggedIn,
+    me: {
+      update: updateMe,
+    },
     getCachedKeys,
     songs: {
       list,
@@ -578,6 +1558,9 @@ window.ULData = (function () {
       upload,
       getUrl: getTakeUrl,
       remove: removeTake,
+      registerDrive: registerDriveTake,
+      downloadBlob: downloadTakeBlob,
+      migrateToDrive: migrateTakeToDrive,
     },
     nx: {
       exportZip,

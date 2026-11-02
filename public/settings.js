@@ -294,6 +294,8 @@
         }
       }
 
+      renderDrivePanel(st.me);
+
       const nextUid = st.user ? st.user.id : null;
       if (!nextUid || nextUid !== activeUid) {
         activeUid = nextUid;
@@ -308,6 +310,7 @@
         if ($('ntnKeyMsg')) say('ntnKeyMsg', '');
         if ($('gemKeyMsg')) say('gemKeyMsg', '');
         if ($('syncMsg')) say('syncMsg', '');
+        if ($('driveStatusMsg')) say('driveStatusMsg', '');
         if (nextUid) {
           loadKeys(nextUid);
           loadSyncStatus(nextUid);
@@ -353,6 +356,93 @@
         $('btnDeleteAcc').disabled = false;
       }
     });
+
+    if ($('btnDriveEnable')) {
+      $('btnDriveEnable').addEventListener('click', async () => {
+        say('driveStatusMsg', '');
+        $('btnDriveEnable').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          await window.ULDrive.enableDriveStorage();
+          say('driveStatusMsg', '✓ Google Drive 저장소로 전환되었어요.', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || 'Google Drive 저장소 전환에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveEnable').disabled = false;
+        }
+      });
+    }
+
+    if ($('btnDriveDisable')) {
+      $('btnDriveDisable').addEventListener('click', async () => {
+        say('driveStatusMsg', '');
+        $('btnDriveDisable').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          await window.ULDrive.disableDriveStorage();
+          say('driveStatusMsg', '✓ 기본 저장소로 전환되었어요.', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || '기본 저장소 전환에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveDisable').disabled = false;
+        }
+      });
+    }
+
+    if ($('btnDriveMigrate')) {
+      $('btnDriveMigrate').addEventListener('click', async () => {
+        if (!confirm('기본 저장소에 저장된 기존 녹음들을 Google Drive로 이전할까요?')) return;
+        say('driveStatusMsg', '녹음 파일 이전 중...');
+        $('btnDriveMigrate').disabled = true;
+        try {
+          if (!window.ULDrive) throw new Error('Google Drive 모듈이 로드되지 않았습니다.');
+          const res = await window.ULDrive.migrateAllToDrive(function (p) {
+            say('driveStatusMsg', '이전 진행 중... (' + p.current + ' / ' + p.total + ')');
+          });
+          say('driveStatusMsg', '✓ 이전 완료: ' + res.migrated + '개 성공, ' + res.skipped + '개 건너뜀', 'ok');
+          if (auth && typeof auth.fetchMe === 'function') await auth.fetchMe();
+        } catch (err) {
+          say('driveStatusMsg', (err && err.message) || '녹음 파일 이전에 실패했어요.', 'err');
+        } finally {
+          $('btnDriveMigrate').disabled = false;
+        }
+      });
+    }
+  }
+
+  function renderDrivePanel(me) {
+    if (!$('driveStoragePanel')) return;
+    if (!me) {
+      if ($('driveStatusMsg')) $('driveStatusMsg').textContent = '';
+      if ($('driveConflictNotice')) $('driveConflictNotice').hidden = true;
+      return;
+    }
+    const isDrive = me.storageProvider === 'drive';
+    const isNotionSync = me.notionSync && me.notionSync.enabled;
+
+    if ($('btnDriveEnable')) $('btnDriveEnable').hidden = isDrive;
+    if ($('btnDriveDisable')) $('btnDriveDisable').hidden = !isDrive;
+    if ($('btnDriveMigrate')) $('btnDriveMigrate').hidden = !isDrive;
+
+    if ($('driveStatusMsg')) {
+      if (isDrive) {
+        say('driveStatusMsg', 'Google Drive 저장소 사용 중 (폴더: ULeveLP 녹음)', 'ok');
+      } else {
+        say('driveStatusMsg', '기본 클라우드 저장소(200MB 쿼터) 사용 중');
+      }
+    }
+
+    if ($('driveConflictNotice')) {
+      $('driveConflictNotice').hidden = !isNotionSync;
+    }
+    if ($('btnDriveEnable')) {
+      $('btnDriveEnable').disabled = !!isNotionSync;
+    }
+    if ($('btnDriveMigrate')) {
+      $('btnDriveMigrate').disabled = !!isNotionSync;
+    }
   }
 
   // ---------- 외부 연동 키 관리 · BYOK (K4-1) ----------
