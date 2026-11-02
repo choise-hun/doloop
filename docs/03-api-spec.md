@@ -533,7 +533,7 @@
 
 ### 8.1 영상 분석 요청 (비동기 Job 생성)
 - **`POST /api/v1/notes/analyze`**
-- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건 `retryAfter = 30`, UTC 당일 최대 20건 `429 RATE_LIMITED`)을 `profiles FOR UPDATE` 잠금 안에서 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`--analyze-job <jobId>`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`). 디스패치 호출이 실패하면 작업 상태를 즉시 `failed`로 바꾸고 `502 JOB_DISPATCH_ERROR`를 반환합니다.
+- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건 `retryAfter = 30`, UTC 당일 최대 20건 `429 RATE_LIMITED`)을 `profiles FOR UPDATE` 잠금 안에서 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(환경 변수 `ANALYZE_JOB_ID=<jobId>` 덮어쓰기)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`). 디스패치 호출이 실패하면 작업 상태를 즉시 `failed`로 바꾸고 `502 JOB_DISPATCH_ERROR`를 반환합니다.
 - **검증 규칙:** `url`에서 11자리 유튜브 `videoId` 추출 필수, `tags`는 `["화성", "사운드 디자인", "DAW/MIDI", "리듬", "편곡", "믹싱"]` 중 1~6개 필수, `memo`는 최대 2,000자(선택).
 - **Request Body:**
 ```json

@@ -11,6 +11,7 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
@@ -22,6 +23,11 @@ import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.db.DatabaseConfig
 import ulevelp.db.DatabaseFactory
+import ulevelp.note.AnalyzeJobDispatcher
+import ulevelp.note.CloudRunJobDispatcher
+import ulevelp.note.GeminiClient
+import ulevelp.note.HttpGeminiClient
+import ulevelp.note.LocalAsyncJobDispatcher
 import ulevelp.notion.HttpNotionClient
 import ulevelp.notion.NotionClient
 import ulevelp.notion.NotionPushWorker
@@ -33,6 +39,7 @@ import ulevelp.routes.registerExportImportRoutes
 import ulevelp.routes.registerIntegrationRoutes
 import ulevelp.routes.registerInternalCronRoutes
 import ulevelp.routes.registerMeRoutes
+import ulevelp.routes.registerNoteRoutes
 import ulevelp.routes.registerNotionSyncRoutes
 import ulevelp.routes.registerPracticeRoutes
 import ulevelp.routes.registerSessionRoutes
@@ -43,6 +50,7 @@ import ulevelp.service.ExportImportService
 import ulevelp.service.HttpIntegrationCheckClient
 import ulevelp.service.IntegrationCheckClient
 import ulevelp.service.IntegrationService
+import ulevelp.service.NoteService
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
@@ -55,6 +63,7 @@ import ulevelp.storage.StorageClient
 import ulevelp.storage.SupabaseStorageClient
 import java.io.File
 import java.net.URI
+import java.util.UUID
 
 private const val DEFAULT_ALLOWED_ORIGINS = "https://choise-hun.github.io,http://localhost:3000"
 private const val DEFAULT_PUBLIC_APP_URL = "https://choise-hun.github.io/ULevelP/"
@@ -74,7 +83,32 @@ fun parsePublicAppUrl(raw: String?): String {
     return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
 }
 
-fun main() {
+fun runAnalyzeJobCli(jobId: UUID) = runBlocking {
+    val dbConfig = DatabaseFactory.fromEnvOrNull()
+        ?: error("ANALYZE_JOB_CLI_ERROR: DB 설정(DATABASE_URL / REMOTE_DB_HOST)이 없습니다.")
+    val (_, database) = DatabaseFactory.init(dbConfig)
+    val cryptoService = CryptoService.fromEnvOrNull()
+    val integrationCheckClient = HttpIntegrationCheckClient()
+    val integrationService = IntegrationService(database, cryptoService, integrationCheckClient)
+    val videoMetaClient = YoutubeOEmbedClient()
+    val geminiClient = HttpGeminiClient()
+    val noteService = NoteService(
+        db = database,
+        integrationService = integrationService,
+        videoMetaClient = videoMetaClient,
+        geminiClient = geminiClient
+    )
+    noteService.executeJob(jobId)
+}
+
+fun main(args: Array<String>) {
+    val jobIdArg = args.indexOf("--analyze-job").takeIf { it >= 0 && it + 1 < args.size }?.let { args[it + 1] }
+        ?: System.getenv("ANALYZE_JOB_ID")?.takeIf { it.isNotBlank() }
+
+    if (jobIdArg != null) {
+        runAnalyzeJobCli(UUID.fromString(jobIdArg.trim()))
+        return
+    }
     val port = System.getenv("PORT")?.toIntOrNull() ?: 3000
     val host = System.getenv("HOST")?.takeIf { it.isNotBlank() } ?: "0.0.0.0"
     embeddedServer(Netty, port = port, host = host, module = Application::module).start(wait = true)
@@ -92,7 +126,9 @@ fun Application.module(
     cryptoService: CryptoService? = CryptoService.fromEnvOrNull(),
     integrationCheckClient: IntegrationCheckClient = HttpIntegrationCheckClient(),
     notionClient: NotionClient = HttpNotionClient(),
-    cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) }
+    cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) },
+    geminiClient: GeminiClient = HttpGeminiClient(),
+    analyzeJobDispatcher: AnalyzeJobDispatcher? = null
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -146,6 +182,18 @@ fun Application.module(
         notionClient = notionClient,
         storageClient = storageClient
     )
+    val noteService = NoteService(
+        db = db,
+        integrationService = integrationService,
+        videoMetaClient = videoMetaClient,
+        geminiClient = geminiClient
+    )
+    val cloudRunJobUri = System.getenv("CLOUD_RUN_ANALYZE_JOB_URI")?.takeIf { it.isNotBlank() }
+    val effectiveDispatcher: AnalyzeJobDispatcher = analyzeJobDispatcher ?: if (cloudRunJobUri != null) {
+        CloudRunJobDispatcher(cloudRunJobUri)
+    } else {
+        LocalAsyncJobDispatcher(runner = { jobId -> noteService.executeJob(jobId) })
+    }
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -235,6 +283,7 @@ fun Application.module(
             registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
+            registerNoteRoutes(jwtVerifier, profileService, noteService, effectiveDispatcher)
 
             route("{...}") {
                 handle {

@@ -9,6 +9,8 @@ import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.db.DatabaseConfig
 import ulevelp.module
 import ulevelp.notion.NotionClient
+import ulevelp.note.AnalyzeJobDispatcher
+import ulevelp.note.GeminiClient
 import ulevelp.security.CryptoService
 import ulevelp.service.GeminiCheckResponse
 import ulevelp.service.IntegrationCheckClient
@@ -279,7 +281,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
     cryptoService: CryptoService? = TestCrypto.service,
     integrationCheckClient: IntegrationCheckClient = FakeIntegrationCheckClient(),
     notionClient: NotionClient = FakeNotionClient(),
-    cronOidcVerifier: CronOidcVerifier? = CronOidcVerifier(TestCronJwt.cronConfig)
+    cronOidcVerifier: CronOidcVerifier? = CronOidcVerifier(TestCronJwt.cronConfig),
+    geminiClient: GeminiClient = FakeGeminiClient(),
+    analyzeJobDispatcher: AnalyzeJobDispatcher? = null
 ) {
     application {
         module(
@@ -292,7 +296,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
             cryptoService = cryptoService,
             integrationCheckClient = integrationCheckClient,
             notionClient = notionClient,
-            cronOidcVerifier = cronOidcVerifier
+            cronOidcVerifier = cronOidcVerifier,
+            geminiClient = geminiClient,
+            analyzeJobDispatcher = analyzeJobDispatcher
         )
     }
 }
