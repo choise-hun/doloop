@@ -497,6 +497,23 @@ class NotionSyncService(
             for (tid in unlinkedTakes) {
                 OutboxRepository.enqueueIfSyncEnabled(userId, "take", tid, "upsert")
             }
+
+            // 로컬 전용 노트 Outbox 적재 (notesDb가 설정된 경우)
+            if (!notion.notesDb.isNullOrBlank()) {
+                val linkedNoteIds = NotionLinksTable.select(NotionLinksTable.entityId)
+                    .where { (NotionLinksTable.userId eq userId) and (NotionLinksTable.entity eq "note") }
+                    .map { it[NotionLinksTable.entityId] }
+                    .toSet()
+
+                val unlinkedNotes = NotesTable.select(NotesTable.id)
+                    .where { NotesTable.userId eq userId }
+                    .map { it[NotesTable.id] }
+                    .filter { it !in linkedNoteIds }
+
+                for (nid in unlinkedNotes) {
+                    OutboxRepository.enqueueIfSyncEnabled(userId, "note", nid, "upsert")
+                }
+            }
         }
 
         return NotionSyncEnableResponse(

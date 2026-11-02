@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>학습 노트 · ULeveLP</title>
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -21,7 +21,12 @@
 
   <div>
     <h1 class="page-title">Notes</h1>
-    <p class="page-sub">유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 노션 <b>학습 영상 노트</b>에 정리해요. 보통 1~3분 걸려요. <a id="notionLink" target="_blank" rel="noopener" hidden>노션에서 보기 ↗</a></p>
+    <p class="page-sub">유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 학습 노트를 생성하고 노션에 자동 정리해요. 보통 1~3분 걸려요. <a id="notionLink" target="_blank" rel="noopener" hidden>노션에서 보기 ↗</a></p>
+  </div>
+
+  <div class="card key-gate-box" id="keyGateBox" hidden>
+    <p id="keyGateMsg"></p>
+    <a href="settings.html#keys">SETTING에서 Gemini 키 등록 →</a>
   </div>
 
   <form class="note-form" id="form">
@@ -45,14 +50,19 @@
     <p class="msg" id="msg" role="status"></p>
   </form>
 
-  <h2>최근 요청</h2>
-  <ul class="runs" id="runs"><li class="empty">SETTING에서 GitHub 토큰을 넣으면 기록이 보여요.</li></ul>
+  <h2>진행 및 최근 작업</h2>
+  <ul class="runs" id="jobs"><li class="empty">작업 내역이 없어요.</li></ul>
+
+  <h2>내 학습 노트</h2>
+  <div class="tags filter-tags" id="noteTagFilter" role="group" aria-label="노트 태그 필터"></div>
+  <div class="notes-list" id="notesList"><p class="empty">저장된 학습 노트가 없어요.</p></div>
 </div>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="site.js"></script>
 <script src="auth.js"></script>
+<script src="data.js"></script>
 <script src="notes.js"></script>
 </body>
 </html>

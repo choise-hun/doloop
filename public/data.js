@@ -458,6 +458,106 @@ window.ULData = (function () {
     });
   }
 
+  function clearCachedGeminiKey() {
+    try {
+      const raw = localStorage.getItem('ulp:keys');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        parsed.gemini = null;
+        localStorage.setItem('ulp:keys', JSON.stringify(parsed));
+      }
+    } catch (_) {}
+  }
+
+  function checkJobsForInvalidKey(jobs) {
+    if (!Array.isArray(jobs)) return;
+    const hasInvalid = jobs.some(
+      (j) => j && j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:')
+    );
+    if (hasInvalid) {
+      clearCachedGeminiKey();
+    }
+  }
+
+  async function noteAnalyze(input) {
+    requireLogin();
+    input = input || {};
+    try {
+      const r = await window.ULAuth.apiFetch('/api/v1/notes/analyze', {
+        method: 'POST',
+        body: JSON.stringify({
+          url: input.url,
+          tags: input.tags,
+          memo: input.memo,
+        }),
+      });
+      return { jobId: r.jobId, status: r.status };
+    } catch (err) {
+      if (err && (err.code === 'NO_KEY' || err.status === 412)) {
+        clearCachedGeminiKey();
+      }
+      throw err;
+    }
+  }
+
+  async function listNoteJobs() {
+    requireLogin();
+    const r = await window.ULAuth.apiFetch('/api/v1/notes/jobs');
+    const jobs = r && Array.isArray(r.jobs) ? r.jobs : [];
+    checkJobsForInvalidKey(jobs);
+    return jobs;
+  }
+
+  async function getNoteJob(jobId) {
+    requireLogin();
+    const path = '/api/v1/notes/jobs/' + encodeURIComponent(jobId);
+    const r = await window.ULAuth.apiFetch(path);
+    if (r) {
+      checkJobsForInvalidKey([r]);
+    }
+    return r;
+  }
+
+  async function listNotes(tag) {
+    requireLogin();
+    let path = '/api/v1/notes';
+    if (tag) path += '?tag=' + encodeURIComponent(tag);
+    const r = await window.ULAuth.apiFetch(path);
+    return r && Array.isArray(r.notes) ? r.notes : [];
+  }
+
+  async function getNote(noteId) {
+    requireLogin();
+    const path = '/api/v1/notes/' + encodeURIComponent(noteId);
+    const r = await window.ULAuth.apiFetch(path);
+    return r && r.note ? r.note : null;
+  }
+
+  async function updateNote(noteId, patch) {
+    requireLogin();
+    patch = patch || {};
+    const body = {};
+    if (patch.memo !== undefined) body.memo = patch.memo;
+    if (patch.tags !== undefined) body.tags = patch.tags;
+    if (patch.title !== undefined) body.title = patch.title;
+    const path = '/api/v1/notes/' + encodeURIComponent(noteId);
+    const r = await window.ULAuth.apiFetch(path, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return r && r.note ? r.note : null;
+  }
+
+  async function removeNote(noteId) {
+    requireLogin();
+    const path = '/api/v1/notes/' + encodeURIComponent(noteId);
+    await window.ULAuth.apiFetch(path, {
+      method: 'DELETE',
+    });
+    return { ok: true };
+  }
+
   return {
     isLoggedIn,
     getCachedKeys,
@@ -497,6 +597,15 @@ window.ULData = (function () {
       disable: syncDisable,
       pull: syncPull,
       push: syncPush,
+    },
+    notes: {
+      analyze: noteAnalyze,
+      listJobs: listNoteJobs,
+      getJob: getNoteJob,
+      list: listNotes,
+      get: getNote,
+      update: updateNote,
+      remove: removeNote,
     },
     runLocalMigration,
   };

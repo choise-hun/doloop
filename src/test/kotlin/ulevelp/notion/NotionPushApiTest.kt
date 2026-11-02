@@ -1186,4 +1186,171 @@ class NotionPushApiTest {
             assertEquals(1L, links)
         }
     }
+
+    @Test
+    fun `NP15 학습 노트(note) 신규 노션 발행 (SVG 업로드 + 100블록 초과 분할 PATCH)`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKeyForUserA(client)
+
+        val noteId = UUID.randomUUID()
+        val svgContent = """<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="40"/></svg>"""
+
+        val momentsArray = buildJsonArray {
+            for (i in 1..110) {
+                addJsonObject {
+                    put("timestamp", "0:${i.toString().padStart(2, '0')}")
+                    put("point", "포인트 $i")
+                }
+            }
+        }
+        val analysisJson = buildJsonObject {
+            putJsonObject("summary") {
+                put("headline", "한 줄 요약")
+                putJsonArray("key_points") { add(JsonPrimitive("포인트1")) }
+            }
+            put("moments", momentsArray)
+            putJsonArray("key_concepts") { add(JsonPrimitive("키워드1")) }
+            put("difficulty", "중급")
+        }
+
+        transaction(db) {
+            NotesTable.insert {
+                it[id] = noteId
+                it[userId] = userA
+                it[videoId] = "dQw4w9WgXcQ"
+                it[title] = "테스트 노트 영상"
+                it[channel] = "테스트 채널"
+                it[tags] = listOf("화성")
+                it[memo] = "메모 내용"
+                it[headline] = "한 줄 요약"
+                it[points] = listOf("포인트1")
+                it[keywords] = listOf("키워드1")
+                it[difficulty] = "중급"
+                it[analysis] = analysisJson
+                it[diagramsSvg] = buildJsonArray { add(JsonPrimitive(svgContent)) }
+                it[model] = "gemini-2.5-flash"
+            }
+            SyncOutboxTable.insert {
+                it[userId] = userA
+                it[entity] = "note"
+                it[entityId] = noteId
+                it[op] = "upsert"
+            }
+        }
+
+        val res = client.post("/api/v1/notion/sync/push") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val json = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals(1, json["processed"]?.jsonPrimitive?.int)
+        assertEquals(0, json["failed"]?.jsonPrimitive?.int)
+
+        // 1. uploadFile이 "voicing_1.svg" (image/svg+xml)로 1회 호출
+        assertEquals(1, fakeNotionClient.uploadFileCalls.size)
+        val uploadCall = fakeNotionClient.uploadFileCalls[0]
+        assertEquals("voicing_1.svg", uploadCall.filename)
+        assertEquals("image/svg+xml", uploadCall.mime)
+
+        // 2. createPageCalls에 parent.database_id == notesDb, 8개 속성, children.size == 100 전달
+        assertEquals(1, fakeNotionClient.createPageCalls.size)
+        val createCall = fakeNotionClient.createPageCalls[0]
+        assertEquals(testNotesDb, createCall.body["parent"]?.jsonObject?.get("database_id")?.jsonPrimitive?.content)
+        val props = createCall.body["properties"]?.jsonObject
+        assertNotNull(props)
+        assertEquals(8, props.size)
+        assertTrue(props.containsKey("제목"))
+        assertTrue(props.containsKey("URL"))
+        assertTrue(props.containsKey("태그"))
+        assertTrue(props.containsKey("채널"))
+        assertTrue(props.containsKey("요약"))
+        assertTrue(props.containsKey("키워드"))
+        assertTrue(props.containsKey("난이도"))
+        assertTrue(props.containsKey("메모"))
+        val children = createCall.body["children"]?.jsonArray
+        assertNotNull(children)
+        assertEquals(100, children.size)
+
+        // 3. appendBlockChildrenCalls에 나머지 블록 전달
+        assertTrue(fakeNotionClient.appendBlockChildrenCalls.isNotEmpty())
+        val totalAppended = fakeNotionClient.appendBlockChildrenCalls.sumOf { it.children.size }
+        assertTrue(totalAppended > 0)
+
+        // 4. notion_links에 ("note", noteId) 저장
+        transaction(db) {
+            val link = NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "note") and (NotionLinksTable.entityId eq noteId) }
+                .singleOrNull()
+            assertNotNull(link)
+            assertEquals(userA, link[NotionLinksTable.userId])
+            assertNotNull(link[NotionLinksTable.notionPageId])
+        }
+    }
+
+    @Test
+    fun `NP16 학습 노트(note) 수정 시 기존 노션 페이지 속성 updatePage 호출`() = testApplication {
+        configureApiTestApp(
+            dbConfig = dbConfig,
+            notionClient = fakeNotionClient,
+            storageClient = fakeStorageClient
+        )
+
+        registerNotionKeyForUserA(client)
+
+        val noteId = UUID.randomUUID()
+        val existingPageId = "page-note-existing-123"
+        transaction(db) {
+            NotesTable.insert {
+                it[id] = noteId
+                it[userId] = userA
+                it[videoId] = "dQw4w9WgXcQ"
+                it[title] = "수정된 노트 제목"
+                it[channel] = "채널"
+                it[tags] = listOf("화성", "TAB")
+                it[memo] = "수정된 메모"
+                it[headline] = "새 요약"
+                it[points] = listOf("p1")
+                it[keywords] = listOf("k1")
+                it[difficulty] = "입문"
+                it[analysis] = buildJsonObject {
+                    putJsonObject("summary") { put("headline", "새 요약") }
+                }
+                it[diagramsSvg] = JsonArray(emptyList())
+                it[model] = "gemini-2.5-flash"
+            }
+            NotionLinksTable.insert {
+                it[entity] = "note"
+                it[entityId] = noteId
+                it[userId] = userA
+                it[notionPageId] = existingPageId
+            }
+            SyncOutboxTable.insert {
+                it[userId] = userA
+                it[entity] = "note"
+                it[entityId] = noteId
+                it[op] = "upsert"
+            }
+        }
+
+        val res = client.post("/api/v1/notion/sync/push") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val json = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals(1, json["processed"]?.jsonPrimitive?.int)
+        assertEquals(0, json["failed"]?.jsonPrimitive?.int)
+
+        // createPage는 호출되지 않고 updatePage가 기존 existingPageId로 호출되었는지 검증
+        assertEquals(0, fakeNotionClient.createPageCalls.size)
+        val updateCall = fakeNotionClient.updatePageCalls.singleOrNull { it.pageId == existingPageId }
+        assertNotNull(updateCall)
+        val props = updateCall.body["properties"]?.jsonObject
+        assertNotNull(props)
+        assertEquals("수정된 노트 제목", props["제목"]?.jsonObject?.get("title")?.jsonArray?.get(0)?.jsonObject?.get("text")?.jsonObject?.get("content")?.jsonPrimitive?.content)
+    }
 }

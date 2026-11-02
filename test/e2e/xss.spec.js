@@ -647,4 +647,168 @@ test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XS
   await assertNoXssOrCsp(page);
 });
 
+test('E10 학습 노트(notes.html) 및 노트 상세(note.html) XSS 페이로드 검사', async ({ page }) => {
+  const meWithKey = {
+    ...DEFAULT_ME,
+    keys: { notion: null, gemini: { hint: '1234' } },
+  };
+  await setupMockAuthAndApi(page, { me: meWithKey });
 
+  const mockJobs = [
+    {
+      id: 'job-xss-1',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      tags: [PAYLOADS.P_IMG, PAYLOADS.P_SVG],
+      status: 'done',
+      noteId: 'b1000000-0000-4000-8000-000000000001',
+      createdAt: '2026-11-01T00:00:00Z',
+    },
+  ];
+
+  const mockNotes = [
+    {
+      id: 'b1000000-0000-4000-8000-000000000001',
+      videoId: 'dQw4w9WgXcQ',
+      title: PAYLOADS.P_IMG,
+      channel: PAYLOADS.P_SVG,
+      headline: PAYLOADS.P_JS_URL,
+      difficulty: '중급',
+      tags: ['화성'],
+      createdAt: '2026-11-01T00:00:00Z',
+      updatedAt: '2026-11-01T00:00:00Z',
+    },
+  ];
+
+  const mockNoteDetail = {
+    id: 'b1000000-0000-4000-8000-000000000001',
+    videoId: 'dQw4w9WgXcQ',
+    url: 'javascript:window.__xss=1',
+    title: PAYLOADS.P_IMG,
+    channel: PAYLOADS.P_SVG,
+    headline: PAYLOADS.P_JS_URL,
+    difficulty: '중급',
+    tags: ['화성'],
+    memo: PAYLOADS.P_ATTR,
+    points: [PAYLOADS.P_IMG, PAYLOADS.P_SVG],
+    keywords: [PAYLOADS.P_JS_URL, PAYLOADS.P_ATTR],
+    analysis: {
+      summary: {
+        headline: PAYLOADS.P_JS_URL,
+        key_points: [PAYLOADS.P_IMG],
+      },
+      harmony: {
+        progressions: [
+          {
+            name: PAYLOADS.P_IMG,
+            key: 'C',
+            instrument: PAYLOADS.P_SVG,
+            chords: [
+              {
+                symbol: PAYLOADS.P_IMG,
+                roman: 'I',
+                function: 'T',
+                frets: ['x', 'x', '10', '12', '12', '12'],
+                voicingNote: PAYLOADS.P_ATTR,
+                nuance: PAYLOADS.P_JS_URL,
+                basis: '말함',
+                timestamp: '0:15',
+              },
+            ],
+          },
+        ],
+        concepts: [PAYLOADS.P_IMG],
+      },
+      moments: [
+        {
+          timestamp: '0:30',
+          point: PAYLOADS.P_SVG,
+        },
+      ],
+      practice: [PAYLOADS.P_ATTR],
+    },
+    diagramsSvg: [
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="window.__xss=1"><circle cx="50" cy="50" r="40"/><script>window.__xss=1</script></svg>',
+    ],
+    model: 'gemini-2.5-flash',
+    createdAt: '2026-11-01T00:00:00Z',
+    updatedAt: '2026-11-01T00:00:00Z',
+  };
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/notes/jobs',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({ jobs: mockJobs }),
+      });
+    }
+  );
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/notes',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({ notes: mockNotes }),
+      });
+    }
+  );
+
+  await page.route(
+    (url) => url.pathname === '/api/v1/notes/b1000000-0000-4000-8000-000000000001',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({ note: mockNoteDetail }),
+      });
+    }
+  );
+
+  // 1. /notes.html 진입
+  await page.goto('/notes.html');
+
+  // 작업 행 및 노트 카드 렌더링 확인
+  const jobsList = page.locator('#jobs');
+  await expect(jobsList).toBeVisible();
+  await expect(jobsList).toContainText(PAYLOADS.P_IMG);
+
+  const notesList = page.locator('#notesList');
+  await expect(notesList).toBeVisible();
+  await expect(notesList).toContainText(PAYLOADS.P_IMG);
+  await expect(notesList).toContainText(PAYLOADS.P_JS_URL);
+
+  // notes.html XSS 및 CSP 검증
+  await assertNoXssOrCsp(page);
+
+  // 2. /note.html?id=... 진입
+  await page.goto('/note.html?id=b1000000-0000-4000-8000-000000000001');
+
+  // 제목, 채널, 요약, 표 렌더링 확인
+  const noteHeader = page.locator('#noteHeader');
+  await expect(noteHeader).toBeVisible();
+  await expect(page.locator('#noteTitle')).toContainText(PAYLOADS.P_IMG);
+  await expect(page.locator('#noteMeta')).toContainText(PAYLOADS.P_SVG);
+  await expect(page.locator('#noteHeadline')).toContainText(PAYLOADS.P_JS_URL);
+
+  // 표 및 타임스탬프 링크
+  const sections = page.locator('#noteSections');
+  await expect(sections).toBeVisible();
+  await expect(sections).toContainText(PAYLOADS.P_IMG);
+
+  // SVG 렌더링 확인 (악성 태그 script는 제거되고 circle만 마운트됨)
+  const svgBox = page.locator('.svg-box');
+  await expect(svgBox).toBeVisible();
+  await expect(svgBox.locator('svg circle')).toBeVisible();
+  expect(await svgBox.locator('script').count()).toBe(0);
+
+  // 체크리스트
+  const practiceBox = page.locator('#notePractice');
+  await expect(practiceBox).toBeVisible();
+  await expect(practiceBox).toContainText(PAYLOADS.P_ATTR);
+
+  // note.html XSS 및 CSP 검증
+  await assertNoXssOrCsp(page);
+});

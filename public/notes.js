@@ -1,69 +1,137 @@
-// 학습 노트(notes.html): 분석 요청 폼, GitHub Actions 최근 요청 목록
+// 학습 노트(notes.html): Gemini 분석 요청 폼, 작업 상태 폴링, 내 학습 노트 보관함
 'use strict';
 (function () {
-  const TAGS = ['화성', '사운드 디자인', 'DAW/MIDI', '리듬', '편곡', '믹싱'];
-  const WORKFLOW = 'analyze.yml';
+  const FORM_TAGS = ['화성', '사운드 디자인', 'DAW/MIDI', '리듬', '편곡', '믹싱', 'TAB'];
+  const FILTER_TAGS = ['', '화성', '사운드 디자인', 'DAW/MIDI', '리듬', '편곡', '믹싱', 'TAB'];
   const $ = (id) => document.getElementById(id);
-  const { raw, videoIdFrom, thumb, esc, safeUrl, gh } = UL;
+  const { videoIdFrom, thumb, safeUrl } = UL;
 
-  // ---------- 폼 ----------
-  const selected = new Set();
-  TAGS.forEach((t) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => {
-      if (selected.has(t)) selected.delete(t); else selected.add(t);
-      b.setAttribute('aria-pressed', String(selected.has(t)));
+  let activeUid = null;
+  let reqSeq = 0;
+  let pollTimer = null;
+  let activeJobIds = new Set();
+  let currentFilterTag = '';
+
+  function say(text, cls) {
+    const el = $('msg');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  function hasGeminiKey() {
+    if (!window.ULData || !window.ULData.isLoggedIn()) return false;
+    const cached = window.ULData.getCachedKeys ? window.ULData.getCachedKeys() : null;
+    if (cached && cached.gemini) return true;
+    const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
+    if (me && me.keys && me.keys.gemini) return true;
+    return false;
+  }
+
+  function updateKeyGate() {
+    const box = $('keyGateBox');
+    const msg = $('keyGateMsg');
+    const submitBtn = $('submit');
+    if (!box || !submitBtn) return;
+
+    if (!window.ULData || !window.ULData.isLoggedIn()) {
+      submitBtn.disabled = true;
+      box.hidden = false;
+      if (msg) msg.textContent = '로그인하고 SETTING에서 Gemini 키를 등록하면 영상 분석을 요청할 수 있어요.';
+      return;
+    }
+
+    if (!hasGeminiKey()) {
+      submitBtn.disabled = true;
+      box.hidden = false;
+      if (msg) msg.textContent = '학습 노트 분석을 쓰려면 Gemini API 키가 필요해요.';
+      return;
+    }
+
+    box.hidden = true;
+    submitBtn.disabled = false;
+  }
+
+  // ---------- 폼 태그 선택 ----------
+  const selectedTags = new Set();
+  const tagsContainer = $('tags');
+  if (tagsContainer) {
+    FORM_TAGS.forEach((t) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = t;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => {
+        if (selectedTags.has(t)) {
+          selectedTags.delete(t);
+        } else {
+          selectedTags.add(t);
+        }
+        b.setAttribute('aria-pressed', String(selectedTags.has(t)));
+      });
+      tagsContainer.appendChild(b);
     });
-    $('tags').append(b);
-  });
+  }
 
   function preview() {
-    const id = videoIdFrom($('url').value);
-    $('preview').classList.toggle('show', !!id);
-    if (id) $('preview').querySelector('img').src = thumb(id);
-  }
-  $('url').addEventListener('input', preview);
-
-  function say(text, cls) { $('msg').textContent = text; $('msg').className = 'msg' + (cls ? ' ' + cls : ''); }
-
-  let branch = '';
-  $('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = videoIdFrom($('url').value);
-    if (!id) return say('유튜브 영상 링크가 아니에요.', 'err');
-    if (!selected.size) return say('태그를 하나 이상 골라주세요.', 'err');
-    if (!gh.ok()) return say('SETTING에서 GitHub 토큰을 먼저 넣어주세요.', 'err');
-
-    $('submit').disabled = true; say('요청 보내는 중...');
-    try {
-      branch = branch || (await gh.call('')).default_branch;
-      await gh.call('/actions/workflows/' + WORKFLOW + '/dispatches', {
-        method: 'POST',
-        body: JSON.stringify({
-          ref: branch,
-          inputs: {
-            url: 'https://www.youtube.com/watch?v=' + id,
-            tags: TAGS.filter((t) => selected.has(t)).join(','),
-            memo: $('memo').value.trim(),
-          },
-        }),
-      });
-      say('요청했어요. 보통 1~3분 뒤에 노션에 정리돼요.', 'ok');
-      $('url').value = ''; $('memo').value = ''; preview();
-      watchUntil = Date.now() + 20000;
-      refresh();
-    } catch (err) {
-      say(err.message, 'err');
-    } finally {
-      $('submit').disabled = false;
+    const urlVal = $('url') ? $('url').value : '';
+    const id = videoIdFrom(urlVal);
+    const prev = $('preview');
+    if (!prev) return;
+    prev.classList.toggle('show', !!id);
+    const img = prev.querySelector('img');
+    if (img && id) {
+      img.src = thumb(id);
     }
-  });
+  }
+  if ($('url')) {
+    $('url').addEventListener('input', preview);
+  }
 
-  // ---------- 최근 요청 ----------
-  let timer = null, watchUntil = 0;
+  if ($('form')) {
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const urlInput = $('url');
+      const memoInput = $('memo');
+      const submitBtn = $('submit');
+      const rawUrl = urlInput ? urlInput.value.trim() : '';
+      const id = videoIdFrom(rawUrl);
 
+      if (!id) return say('유튜브 영상 링크가 아니에요.', 'err');
+      if (!selectedTags.size) return say('태그를 하나 이상 골라주세요.', 'err');
+      if (!hasGeminiKey()) {
+        updateKeyGate();
+        return say('Gemini API 키가 필요해요. SETTING에서 등록해 주세요.', 'err');
+      }
+
+      submitBtn.disabled = true;
+      say('분석 요청을 보내는 중...', '');
+      try {
+        const ordered = FORM_TAGS.filter((t) => selectedTags.has(t));
+        const res = await window.ULData.notes.analyze({
+          url: 'https://www.youtube.com/watch?v=' + id,
+          tags: ordered,
+          memo: memoInput ? memoInput.value.trim() : '',
+        });
+        say('분석을 요청했어요. 보통 1~3분 뒤에 정리가 완료돼요.', 'ok');
+        if (urlInput) urlInput.value = '';
+        if (memoInput) memoInput.value = '';
+        preview();
+        refreshJobsAndNotes();
+      } catch (err) {
+        if (err && (err.code === 'NO_KEY' || err.status === 412)) {
+          updateKeyGate();
+        }
+        say(err.message || '요청 실패', 'err');
+      } finally {
+        updateKeyGate();
+      }
+    });
+  }
+
+  // ---------- 시간 포맷 ----------
   function ago(iso) {
+    if (!iso) return '';
     const s = (Date.now() - new Date(iso)) / 1000;
     if (s < 60) return '방금';
     if (s < 3600) return Math.floor(s / 60) + '분 전';
@@ -71,44 +139,289 @@
     return new Date(iso).toLocaleDateString('ko-KR');
   }
 
-  function badge(run) {
-    if (run.status !== 'completed') return ['run', '분석 중'];
-    if (run.conclusion === 'success') return ['ok', '완료'];
-    if (run.conclusion === 'cancelled') return ['fail', '취소됨'];
-    return ['fail', '실패 · 로그 보기'];
+  // ---------- 작업 및 노트 렌더링 ----------
+  function renderJobs(jobs) {
+    const listEl = $('jobs');
+    if (!listEl) return;
+    while (listEl.firstChild) {
+      listEl.removeChild(listEl.firstChild);
+    }
+
+    if (!jobs || jobs.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = '진행 중이거나 최근 요청한 작업이 없어요.';
+      listEl.appendChild(li);
+      return;
+    }
+
+    jobs.forEach((job) => {
+      const li = document.createElement('li');
+      li.className = 'run';
+
+      const vid = videoIdFrom(job.url || '');
+      if (vid) {
+        const aImg = document.createElement('a');
+        aImg.href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(vid);
+        aImg.target = '_blank';
+        aImg.rel = 'noopener';
+        const img = document.createElement('img');
+        img.src = thumb(vid);
+        img.alt = '영상 썸네일';
+        aImg.appendChild(img);
+        li.appendChild(aImg);
+      } else {
+        const sp = document.createElement('span');
+        li.appendChild(sp);
+      }
+
+      const infoDiv = document.createElement('div');
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 't';
+      const tagStr = Array.isArray(job.tags) ? job.tags.join(', ') : '';
+      titleDiv.textContent = tagStr || '(태그 없음)';
+      infoDiv.appendChild(titleDiv);
+
+      const subDiv = document.createElement('div');
+      subDiv.className = 'sub';
+      const timeStr = ago(job.createdAt);
+      subDiv.textContent = (timeStr ? timeStr + ' · ' : '') + (job.url || '');
+      infoDiv.appendChild(subDiv);
+      li.appendChild(infoDiv);
+
+      const actsDiv = document.createElement('div');
+      actsDiv.className = 'acts';
+
+      const st = job.status;
+      const statusBadge = document.createElement('span');
+      if (st === 'queued') {
+        statusBadge.className = 'badge';
+        statusBadge.textContent = '대기 중';
+      } else if (st === 'running') {
+        statusBadge.className = 'badge run';
+        statusBadge.textContent = '분석 중';
+      } else if (st === 'done') {
+        statusBadge.className = 'badge ok';
+        statusBadge.textContent = '완료';
+        if (job.noteId) {
+          const noteLink = document.createElement('a');
+          noteLink.className = 'badge ok';
+          noteLink.href = 'note.html?id=' + encodeURIComponent(job.noteId);
+          noteLink.textContent = '노트 보기 →';
+          actsDiv.appendChild(noteLink);
+        }
+      } else {
+        statusBadge.className = 'badge fail';
+        statusBadge.textContent = '실패';
+        if (typeof job.error === 'string' && job.error.startsWith('PROVIDER_KEY_INVALID:')) {
+          statusBadge.textContent = '키 오류';
+        }
+      }
+      actsDiv.appendChild(statusBadge);
+      li.appendChild(actsDiv);
+
+      listEl.appendChild(li);
+    });
   }
 
-  async function refresh() {
-    clearTimeout(timer);
-    if (!gh.ok()) return;
+  function renderNotes(notes) {
+    const listEl = $('notesList');
+    if (!listEl) return;
+    while (listEl.firstChild) {
+      listEl.removeChild(listEl.firstChild);
+    }
+
+    if (!notes || notes.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = currentFilterTag ? `"${currentFilterTag}" 태그의 학습 노트가 없어요.` : '저장된 학습 노트가 없어요.';
+      listEl.appendChild(p);
+      return;
+    }
+
+    notes.forEach((n) => {
+      const card = document.createElement('div');
+      card.className = 'card note-card';
+
+      const head = document.createElement('div');
+      head.className = 'note-card-head';
+
+      const titleLink = document.createElement('a');
+      titleLink.className = 'note-card-title';
+      titleLink.href = 'note.html?id=' + encodeURIComponent(n.id);
+      titleLink.textContent = n.title || '(제목 없음)';
+      head.appendChild(titleLink);
+
+      const meta = document.createElement('div');
+      meta.className = 'note-card-meta';
+      if (n.channel) {
+        const ch = document.createElement('span');
+        ch.className = 'sub';
+        ch.textContent = n.channel;
+        meta.appendChild(ch);
+      }
+      if (n.difficulty) {
+        const diff = document.createElement('span');
+        diff.className = 'badge';
+        diff.textContent = n.difficulty;
+        meta.appendChild(diff);
+      }
+      if (Array.isArray(n.tags)) {
+        n.tags.forEach((t) => {
+          const tb = document.createElement('span');
+          tb.className = 'badge';
+          tb.textContent = t;
+          meta.appendChild(tb);
+        });
+      }
+      head.appendChild(meta);
+      card.appendChild(head);
+
+      if (n.headline) {
+        const hl = document.createElement('p');
+        hl.className = 'note-card-headline';
+        hl.textContent = n.headline;
+        card.appendChild(hl);
+      }
+
+      const acts = document.createElement('div');
+      acts.className = 'row note-card-acts';
+
+      if (n.videoId) {
+        const pracLink = document.createElement('a');
+        pracLink.className = 'cta';
+        pracLink.href = 'practice.html?v=' + encodeURIComponent(n.videoId);
+        pracLink.textContent = '▶ 연습';
+        acts.appendChild(pracLink);
+      }
+
+      const viewLink = document.createElement('a');
+      viewLink.className = 'sec';
+      viewLink.href = 'note.html?id=' + encodeURIComponent(n.id);
+      viewLink.textContent = '상세 보기';
+      acts.appendChild(viewLink);
+
+      card.appendChild(acts);
+      listEl.appendChild(card);
+    });
+  }
+
+  // ---------- 태그 필터 버튼 초기화 ----------
+  function initFilterButtons() {
+    const filterContainer = $('noteTagFilter');
+    if (!filterContainer) return;
+    while (filterContainer.firstChild) {
+      filterContainer.removeChild(filterContainer.firstChild);
+    }
+    FILTER_TAGS.forEach((tag) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = tag || '전체';
+      b.setAttribute('aria-pressed', String(currentFilterTag === tag));
+      b.addEventListener('click', () => {
+        if (currentFilterTag === tag) return;
+        currentFilterTag = tag;
+        filterContainer.querySelectorAll('button').forEach((btn) => {
+          btn.setAttribute('aria-pressed', String(btn.textContent === (tag || '전체')));
+        });
+        reqSeq++;
+        loadNotesOnly();
+      });
+      filterContainer.appendChild(b);
+    });
+  }
+
+  async function loadNotesOnly() {
+    if (!window.ULData || !window.ULData.isLoggedIn()) {
+      renderNotes([]);
+      return;
+    }
+    const mySeq = ++reqSeq;
+    const myUid = activeUid;
     try {
-      const runs = (await gh.call('/actions/workflows/' + WORKFLOW + '/runs?per_page=15')).workflow_runs;
-      $('runs').innerHTML = runs.length ? runs.map((r) => {
-        const [tags, url = ''] = r.display_title.split(' | ');
-        const id = videoIdFrom(url);
-        const [cls, label] = badge(r);
-        return '<li class="run">' +
-          (id ? '<a href="' + esc(safeUrl(url)) + '" target="_blank" rel="noopener"><img src="' + thumb(id) + '" alt=""></a>' : '<span></span>') +
-          '<div><div class="t">' + esc(tags) + '</div><div class="sub">' + esc(ago(r.created_at)) + ' · ' + esc(url) + '</div></div>' +
-          '<div class="acts">' + (id ? '<a class="badge" href="practice.html?v=' + encodeURIComponent(id) + '">▶ 연습</a>' : '') +
-          '<a class="badge ' + cls + '" href="' + esc(safeUrl(r.html_url)) + '" target="_blank" rel="noopener">' + label + '</a></div>' +
-          '</li>';
-      }).join('') : '<li class="empty">아직 요청이 없어요.</li>';
-      const active = runs.some((r) => r.status !== 'completed');
-      if (active || Date.now() < watchUntil) timer = setTimeout(refresh, 5000);
+      const notes = await window.ULData.notes.list(currentFilterTag);
+      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      renderNotes(notes);
     } catch (err) {
-      $('runs').innerHTML = '<li class="empty">' + esc(err.message) + '</li>';
+      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      console.warn('노트 목록 로드 실패', err);
     }
   }
 
-  // ---------- 시작 ----------
-  const notionUrl = raw.get('ulp:notion-notes');
-  $('notionLink').hidden = !safeUrl(notionUrl);
-  if (safeUrl(notionUrl)) $('notionLink').href = safeUrl(notionUrl);
+  async function refreshJobsAndNotes() {
+    clearTimeout(pollTimer);
+    if (!window.ULData || !window.ULData.isLoggedIn()) {
+      updateKeyGate();
+      renderJobs([]);
+      renderNotes([]);
+      return;
+    }
+
+    const mySeq = ++reqSeq;
+    const myUid = activeUid;
+    try {
+      const jobs = await window.ULData.notes.listJobs();
+      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      updateKeyGate();
+      renderJobs(jobs);
+
+      const hasActive = jobs.some((j) => j && (j.status === 'queued' || j.status === 'running'));
+      const newlyFinished = jobs.some((j) => j && j.status === 'done' && activeJobIds.has(j.id));
+      activeJobIds = new Set(jobs.filter((j) => j && (j.status === 'queued' || j.status === 'running')).map((j) => j.id));
+
+      if (newlyFinished || !jobs.some((j) => activeJobIds.has(j.id))) {
+        // 완료 작업이 생겼거나 최초 로드 시 노트 목록 새로고침
+        const notes = await window.ULData.notes.list(currentFilterTag);
+        if (mySeq !== reqSeq || myUid !== activeUid) return;
+        renderNotes(notes);
+      }
+
+      if (hasActive) {
+        pollTimer = setTimeout(refreshJobsAndNotes, 5000);
+      }
+    } catch (err) {
+      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      console.warn('작업 및 노트 조회 실패', err);
+    }
+  }
+
+  // ---------- 초기화 및 이벤트 리스너 ----------
+  initFilterButtons();
 
   // 첫 화면에서 '노트 만들기'로 왔을 때: notes.html?url=...
   const q = new URLSearchParams(location.search);
-  if (q.get('url')) { $('url').value = q.get('url'); preview(); history.replaceState(null, '', location.pathname); }
-  if (!gh.ok()) say('SETTING에서 GitHub 토큰을 넣으면 분석을 요청할 수 있어요.');
-  refresh();
+  if (q.get('url') && $('url')) {
+    $('url').value = q.get('url');
+    preview();
+    history.replaceState(null, '', location.pathname);
+  }
+
+  if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
+    window.ULAuth.onChange((user) => {
+      const newUid = user ? user.id : null;
+      if (newUid !== activeUid) {
+        clearTimeout(pollTimer);
+        activeUid = newUid;
+        reqSeq++;
+        activeJobIds.clear();
+        updateKeyGate();
+        refreshJobsAndNotes();
+      }
+    });
+  }
+
+  async function start() {
+    if (window.ULAuth && typeof window.ULAuth.getAccessToken === 'function') {
+      await window.ULAuth.getAccessToken().catch(() => {});
+    }
+    activeUid = window.ULAuth && typeof window.ULAuth.getUser === 'function' && window.ULAuth.getUser() ? window.ULAuth.getUser().id : null;
+    updateKeyGate();
+    refreshJobsAndNotes();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
 })();

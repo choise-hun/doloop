@@ -19,7 +19,7 @@ const CSP = [
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co",
-  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://api.github.com",
+  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co",
   'frame-src https://www.youtube.com',
   "object-src 'none'",
   "base-uri 'none'",
@@ -51,7 +51,6 @@ const HTML_ALLOW = [
     expr: /^(?:h|(?:fretboard|neck|chordNeck|box|wheel|scWheel|rect|cell|row)\(.*\)|cells\.join\(''\))$/,
     why: '같은 파일 안에서 이 검사를 통과한 이어 붙이기로 만든 SVG/HTML 문자열(그림 함수 결과·누적 변수)',
   },
-  { file: 'public/notes.js', kind: 'html', expr: /^(?:cls|label)$/, why: 'badge()가 돌려주는 고정 클래스 이름·문구' },
   { file: 'public/practice.js', kind: 'url', expr: 't.url', why: 'URL.createObjectURL로 만든 blob: 주소(녹음 재생·파일 저장)' },
 ];
 
@@ -61,8 +60,6 @@ const STORAGE_PREFIXES = ['ulp:', 'sb-'];
 const COPY_ONLY = { onlyIn: ['public/theme.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)' };
 const STORAGE_LEGACY = [
   { key: 'pp:v:', prefix: true, onlyIn: ['public/data.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)', why: '자매 앱 기기 기록. 첫 로그인 이관(FR-LOCAL-2)에서 읽기만' },
-  { key: 'sn-token', until: 'P5-3', why: 'GitHub 토큰(SETTING 학습 노트 칸)' },
-  { key: 'sn-repo', until: 'P5-3', why: 'GitHub 저장소(같은 칸)' },
   { key: 'gv-theme', ...COPY_ONLY, why: '→ ulp:theme 복사' },
   { key: 'gv-tab', ...COPY_ONLY, why: '→ ulp:tab 복사' },
   { key: 'pp-lead', ...COPY_ONLY, why: '→ ulp:lead 복사' },

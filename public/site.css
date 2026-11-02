@@ -202,4 +202,60 @@ body.home { padding-top: 12px; }
 #keys .badge { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid var(--line); color: var(--muted); }
 #keys .badge.ok { color: var(--good); border-color: var(--good); }
 
+/* ---------- 학습 노트 보관함 & 키 게이트 (#notes.html) ---------- */
+.key-gate-box { background: var(--surface2); border: 1px dashed var(--line); padding: 16px 20px; border-radius: 6px; margin: 16px 0; }
+.key-gate-box p { margin: 0 0 8px 0; font-size: 14px; color: var(--ink); font-weight: 500; }
+.key-gate-box a { font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.key-gate-box a:hover { text-decoration: underline; }
 
+.filter-tags { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-tags button { min-height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9999px; }
+
+.notes-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.card.note-card { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; border-radius: 6px; }
+.note-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.note-card-title { font-size: 16px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.note-card-title:hover { text-decoration: underline; }
+.note-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.note-card-headline { margin: 0; font-size: 14px; color: var(--ink); }
+.note-card-acts { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+
+/* ---------- 학습 노트 상세 (#note.html) ---------- */
+.back-link { margin: 12px 0 16px 0; font-size: 14px; }
+.back-link a { color: var(--ink); text-decoration: none; font-weight: 700; }
+.back-link a:hover { text-decoration: underline; }
+
+#noteHeader { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.note-meta { font-size: 13px; color: var(--muted); }
+.note-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+
+.summary-box { background: var(--surface2); border: 1px solid var(--line); padding: 18px 20px; border-radius: 6px; margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.summary-box h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.summary-box .headline { margin: 0; font-size: 15px; font-weight: 500; color: var(--ink); }
+.summary-box .points { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ink); }
+.keywords { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.keyword-chip { font-size: 12px; padding: 2px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; color: var(--muted); }
+
+.note-section { margin-top: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.note-section h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.progression-box, .patch-box, .rhythm-box { display: flex; flex-direction: column; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.progression-box:first-of-type, .patch-box:first-of-type, .rhythm-box:first-of-type { border-top: none; }
+.progression-box h3, .patch-box h3, .rhythm-box h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.progression-arrows { font-family: var(--font-mono, monospace); font-weight: 700; font-size: 14px; color: var(--ink); margin: 0; }
+
+.svg-box { margin-top: 10px; padding: 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; text-align: center; }
+.svg-box svg { max-width: 100%; height: auto; display: inline-block; }
+
+.mono-grid { font-family: var(--font-mono, monospace); font-size: 13px; background: var(--surface2); padding: 10px; border-radius: 4px; border: 1px solid var(--line); overflow-x: auto; margin: 4px 0; }
+.concepts-box { margin-top: 10px; background: var(--surface2); padding: 12px; border-radius: 6px; }
+.concepts-box h4 { margin: 0 0 6px 0; font-size: 13px; font-weight: 700; }
+.concepts-box ul { margin: 0; padding-left: 18px; font-size: 13px; }
+
+#noteMomentsBox, #notePracticeBox, #noteEditPanel { margin-top: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+#noteMomentsBox h2, #notePracticeBox h2, #noteEditPanel h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.moments-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.moment-item { font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
+.practice-list { display: flex; flex-direction: column; gap: 8px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ink); }
