@@ -227,7 +227,7 @@ async function setupMockAuthAndApi(page, opts = {}) {
           const fakeSession = {
             access_token: 'fake-jwt-token',
             user: {
-              id: '00000000-0000-4000-8000-000000000001',
+              id: ${JSON.stringify((opts.me && opts.me.id) || '00000000-0000-4000-8000-000000000001')},
               email: '<img src=x onerror="window.__xss=1">@example.com',
               user_metadata: { full_name: '"><svg onload="window.__xss=1">' }
             }
@@ -236,6 +236,7 @@ async function setupMockAuthAndApi(page, opts = {}) {
             auth: {
               getSession: async function() { return { data: { session: fakeSession }, error: null }; },
               onAuthStateChange: function(cb) {
+                window.__supabaseAuthListener = cb;
                 return { data: { subscription: { unsubscribe: function() {} } } };
               },
               signInWithOAuth: async function() { return { error: null }; },
@@ -872,12 +873,98 @@ test('회귀 검증: note.html 조회 지연 중 계정 전환/로그아웃 시 
   await expect(page.locator('#noteContent')).toBeHidden();
 
   // 3. 사용자 A의 지연되었던 응답이 뒤늦게 도착
+  const responsePromise = page.waitForResponse((res) => res.url().includes(`/api/v1/notes/${targetNoteId}`));
   resolveDelayedResponse();
+  await responsePromise;
 
   // 충분한 시간 대기 후에도 이전 계정의 응답이 화면에 렌더링되지 않아야 함 (myUid !== activeUid, mySeq !== detailReqSeq)
-  await page.waitForTimeout(300);
+
 
   await expect(page.locator('#noteContent')).toBeHidden();
   await expect(page.locator('#noteLoadingMsg')).toContainText('로그인이 필요해요.');
   expect(await page.locator('#noteTitle').textContent()).not.toContain('사용자 A의 비밀 학습 노트');
+  expect(await page.locator('#noteMemoInput').inputValue()).toBe('');
+});
+
+test('회귀 검증: note.html 조회 지연 중 A -> B 계정 전환 시 이전 계정(A) 응답 무시 (K5-2 2차 리뷰)', async ({ page }) => {
+  const meA = {
+    ...DEFAULT_ME,
+    id: 'user-a-00000000-0000-0000-0000-000000000001',
+    displayName: '사용자A',
+  };
+  await setupMockAuthAndApi(page, { me: meA });
+
+  const targetNoteId = 'b2000000-0000-4000-8000-000000000002';
+  const mockNoteA = {
+    id: targetNoteId,
+    title: '사용자 A의 비밀 학습 노트',
+    channel: '비밀 채널',
+    headline: '사용자 A만 볼 수 있는 핵심 요약',
+    difficulty: '중급',
+    tags: ['화성'],
+    memo: '사용자 A의 비밀 메모',
+    analysis: {
+      summary: { headline: '요약 A', key_points: ['포인트 A'] },
+      harmony: { progressions: [], concepts: [] },
+      moments: [],
+      practice: [],
+    },
+    diagramsSvg: [],
+  };
+
+  let resolveDelayedResponseA;
+  const delayedPromiseA = new Promise((resolve) => {
+    resolveDelayedResponseA = resolve;
+  });
+
+  let requestCount = 0;
+  await page.route(
+    (url) => url.pathname === `/api/v1/notes/${targetNoteId}`,
+    async (route) => {
+      requestCount++;
+      if (requestCount === 1) {
+        await delayedPromiseA;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json; charset=utf-8',
+          body: JSON.stringify({ note: mockNoteA }),
+        });
+      } else {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json; charset=utf-8',
+          body: JSON.stringify({ error: 'NOTE_NOT_FOUND', message: '학습 노트를 찾을 수 없어요.' }),
+        });
+      }
+    }
+  );
+
+  // 1. 사용자 A로 note.html 진입 -> 아직 응답이 오지 않아 로딩 상태 유지
+  await page.goto(`/note.html?id=${targetNoteId}`);
+  await expect(page.locator('#noteLoadingMsg')).toContainText('학습 노트를 불러오는 중...');
+  await expect(page.locator('#noteContent')).toBeHidden();
+
+  // 2. 응답이 아직 도착하지 않은 상태에서 사용자 B로 계정 전환 발생
+  await page.evaluate(() => {
+    const sessionB = {
+      access_token: 'fake-jwt-token-b',
+      user: {
+        id: 'user-b-00000000-0000-0000-0000-000000000002',
+        email: 'userb@example.com',
+      },
+    };
+    if (window.__supabaseAuthListener) {
+      window.__supabaseAuthListener('SIGNED_IN', sessionB);
+    }
+  });
+
+  // 3. 사용자 A의 지연되었던 첫 번째 응답이 뒤늦게 도착
+  const responsePromiseA = page.waitForResponse((res) => res.url().includes(`/api/v1/notes/${targetNoteId}`));
+  resolveDelayedResponseA();
+  await responsePromiseA;
+
+  // 4. B 화면에 A의 비밀 노트 내용이 렌더링되지 않아야 함 (myUid !== activeUid, mySeq !== detailReqSeq)
+  await expect(page.locator('#noteContent')).toBeHidden();
+  expect(await page.locator('#noteTitle').textContent()).not.toContain('사용자 A의 비밀 학습 노트');
+  expect(await page.locator('#noteMemoInput').inputValue()).toBe('');
 });

@@ -98,6 +98,43 @@
   let currentNote = null;
   const editSelectedTags = new Set();
 
+  function clearNoteDom() {
+    currentNote = null;
+    editSelectedTags.clear();
+    const memo = $('noteMemoInput');
+    if (memo) memo.value = '';
+    const msg = $('noteEditMsg');
+    if (msg) {
+      msg.textContent = '';
+      msg.className = 'msg';
+    }
+    const title = $('noteTitle');
+    if (title) title.textContent = '';
+    const meta = $('noteMeta');
+    if (meta) meta.textContent = '';
+    const diff = $('noteDifficulty');
+    if (diff) {
+      diff.textContent = '';
+      diff.hidden = true;
+    }
+    const tags = $('noteTags');
+    if (tags) tags.textContent = '';
+    const headline = $('noteHeadline');
+    if (headline) headline.textContent = '';
+    const points = $('notePoints');
+    if (points) points.textContent = '';
+    const keywords = $('noteKeywords');
+    if (keywords) keywords.textContent = '';
+    const sec = $('noteSections');
+    if (sec) sec.textContent = '';
+    const moments = $('noteMoments');
+    if (moments) moments.textContent = '';
+    const practice = $('notePractice');
+    if (practice) practice.textContent = '';
+    const editTags = $('editTags');
+    if (editTags) editTags.textContent = '';
+  }
+
   function showLoading(msg) {
     const el = $('noteLoadingMsg');
     if (el) {
@@ -717,11 +754,11 @@
 
     if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
       window.ULAuth.onChange((state) => {
-        const uid = state && state.user ? state.user.id : (state && state.id ? state.id : (window.ULAuth.getUser ? (window.ULAuth.getUser() ? window.ULAuth.getUser().id : null) : null));
+        const uid = state && state.user ? state.user.id : null;
         if (uid !== activeUid) {
           activeUid = uid;
           detailReqSeq++;
-          currentNote = null;
+          clearNoteDom();
           if (activeUid) {
             loadDetail();
           } else {
@@ -732,6 +769,7 @@
     }
 
     if (!window.ULData || !window.ULData.isLoggedIn()) {
+      clearNoteDom();
       showLoading('로그인이 필요해요.');
       return;
     }
