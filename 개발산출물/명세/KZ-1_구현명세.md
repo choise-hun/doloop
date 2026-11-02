@@ -1,6 +1,6 @@
 # KZ-1 구현 명세 — Google Cloud Run 배포 자동화 & 보안 응답 헤더 · 최종 공개 점검
 
-- **작성:** D0(시니어), 2026-11-02. 결정 근거는 `개발산출물/결과/D0_명세검토.md`.
+- **작성:** D0(시니어), 2026-11-02 (문서 리뷰 반영 완료). 결정 근거는 `개발산출물/결과/D0_명세검토.md`.
 - **역할:** 주니어. 이 명세 → `개발산출물/주니어_체크리스트.md` → "이 파일처럼"으로 지정한 기존 코드 순서로 판단한다. 셋 다 답이 없으면 멈추고 묻는다.
 - **먼저 읽기:** `개발산출물/결과/K6-1_구글드라이브.md`("KZ-1이 쓸 값"), `.github/workflows/ci.yml`, `Dockerfile`, `src/main/kotlin/ulevelp/Main.kt`, `docs/01-project-plan.md` 3·5·7절, `docs/02-requirements.md` NFR-SEC-1~3.
 - **기준 문서:** `docs/01-project-plan.md` KC-D1·KC-D3·KC-D6·KC-D7, `docs/02-requirements.md` NFR-SEC-1, `docs/03-api-spec.md` 7.3·9절.
@@ -11,9 +11,9 @@
 | 구분 | 경로 | 하는 일 |
 | --- | --- | --- |
 | 수정 | `src/main/kotlin/ulevelp/Main.kt` | 모든 응답에 `X-Frame-Options: DENY` 추가 및 정적 HTML 응답에 `Content-Security-Policy: frame-ancestors 'none'` 헤더 추가 (`NFR-SEC-1` Clickjacking 차단) |
-| 수정 | `src/test/kotlin/ulevelp/ChordEngineTest.kt` | `/api/health` 및 `/` 정적 HTML 응답의 보안 헤더(`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`) 검증 테스트 추가 (6.1절 Z1~Z2) |
+| 수정 | `src/test/kotlin/ulevelp/ChordEngineTest.kt` | API 응답 및 정적 HTML 응답의 Clickjacking 방지 보안 헤더(`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`) 검증 테스트 추가 (6절 Z1~Z2) |
 | 신규 | `.github/workflows/deploy-cloudrun.yml` | `main` 브랜치 push(GCP 변수 설정 시) 및 `workflow_dispatch`에서 Docker 이미지 빌드 → Artifact Registry push → Cloud Run 서비스(`ulevelp`) 배포 → Cloud Run Job(`analyze`) 갱신 워크플로 |
-| 신규 | `scripts/deploy-cloudrun.sh` | 로컬/CI 공용 Cloud Run 서비스(`ulevelp`), Cloud Run Job(`analyze`), Cloud Scheduler 1분 크론(`ulevelp-notion-push`) 생성·갱신 스크립트 |
+| 신규 | `scripts/deploy-cloudrun.sh` | 로컬/CI 공용 Cloud Run 서비스(`ulevelp`), Cloud Run Job(`analyze`), IAM 권한(`roles/run.developer`), Cloud Scheduler 1분 크론(`ulevelp-notion-push`) 생성·갱신 스크립트 |
 | 신규 | `개발산출물/결과/KZ-1_CloudRun배포.md` | 결과 파일 (8절) |
 | 수정 | `개발산출물/진행_코틀린서버.md` | 3·5·6·7절 갱신 |
 
@@ -53,14 +53,18 @@
   6. `bash scripts/deploy-cloudrun.sh "$IMAGE_URI"` 실행
   7. 배포된 Cloud Run 서비스 URL에 대해 `curl -fsS "$SERVICE_URL/api/health"` 스모크 테스트 확인
 
-### 2.3 `scripts/deploy-cloudrun.sh`
+### 2.3 `scripts/deploy-cloudrun.sh` (`CLOUD_RUN_ANALYZE_JOB_URI` 형식 및 IAM 권한 포함)
 
-환경변수(`GCP_PROJECT_ID`, `GCP_REGION`[기본 `asia-northeast3`], `CLOUD_RUN_SERVICE`[기본 `ulevelp`], `CLOUD_RUN_JOB`[기본 `analyze`], `RUNTIME_SA_EMAIL`, `CRON_SA_EMAIL`)를 받아 아래 3가지를 멱등하게 배포·갱신하는 셸 스크립트(`set -euo pipefail`, `chmod +x`):
+환경변수(`GCP_PROJECT_ID`, `GCP_REGION`[기본 `asia-northeast3`], `CLOUD_RUN_SERVICE`[기본 `ulevelp`], `CLOUD_RUN_JOB`[기본 `analyze`], `RUNTIME_SA_EMAIL`, `CRON_SA_EMAIL`)를 받아 아래 4가지를 멱등하게 배포·갱신하는 셸 스크립트(`set -euo pipefail`, `chmod +x`):
 1. **Cloud Run Job `analyze` 생성/갱신 (`KC-D6`):**
-   - 이미지: `$IMAGE_URI`, `--task-timeout=3600s`(60분), `--max-retries=0`, `--cpu=1`, `--memory=1Gi`, 시크릿(`DATABASE_URL`, `APP_MASTER_KEY`).
-2. **Cloud Run 서비스 `ulevelp` 배포 (`KC-D1`, `KC-D3`):**
-   - 이미지: `$IMAGE_URI`, `--allow-unauthenticated`, `--port=3000`, `--min-instances=0`, `--max-instances=1`(`ImportPreviewStore` 인메모리 캐시 정합), `--cpu-boost`, `--timeout=300s`, 환경변수(`SUPABASE_URL`, `PUBLIC_APP_URL`, `ALLOWED_ORIGINS`, `CRON_AUDIENCE`, `CRON_SA_EMAIL`, `CLOUD_RUN_ANALYZE_JOB_URI`), 시크릿(`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_MASTER_KEY`).
-3. **Cloud Scheduler 1분 크론 `ulevelp-notion-push` 생성/갱신 (`KC-D7`):**
+   - 이미지: `$IMAGE_URI`, `--service-account="${RUNTIME_SA_EMAIL}"`, `--task-timeout=3600s`(60분), `--max-retries=0`, `--cpu=1`, `--memory=1Gi`, 시크릿(`DATABASE_URL`, `APP_MASTER_KEY`).
+2. **런타임 서비스 계정(`RUNTIME_SA_EMAIL`)의 Job 실행 IAM 권한 부여 (`docs/03-api-spec.md` 7.3절):**
+   - Cloud Run 서비스(`ulevelp`)가 Cloud Run Job(`analyze`)의 `run`(`run.jobs.runWithOverrides`) API를 호출할 수 있도록 `gcloud run jobs add-iam-policy-binding "${CLOUD_RUN_JOB}" --region="${GCP_REGION}" --member="serviceAccount:${RUNTIME_SA_EMAIL}" --role="roles/run.developer"`를 실행한다.
+3. **Cloud Run 서비스 `ulevelp` 배포 (`KC-D1`, `KC-D3`):**
+   - **`CLOUD_RUN_ANALYZE_JOB_URI` 값 형식 고정:**
+     `ANALYZE_JOB_URI="https://run.googleapis.com/v2/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/jobs/${CLOUD_RUN_JOB}:run"`
+   - 이미지: `$IMAGE_URI`, `--service-account="${RUNTIME_SA_EMAIL}"`, `--allow-unauthenticated`, `--port=3000`, `--min-instances=0`, `--max-instances=1`(`ImportPreviewStore` 인메모리 캐시 정합), `--cpu-boost`, `--timeout=300s`, 환경변수(`SUPABASE_URL`, `PUBLIC_APP_URL`, `ALLOWED_ORIGINS`, `CRON_AUDIENCE`, `CRON_SA_EMAIL`, `CLOUD_RUN_ANALYZE_JOB_URI=${ANALYZE_JOB_URI}`), 시크릿(`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_MASTER_KEY`).
+4. **Cloud Scheduler 1분 크론 `ulevelp-notion-push` 생성/갱신 (`KC-D7`):**
    - 주기: `* * * * *` (매 1분)
    - 대상: `POST ${SERVICE_URL}/internal/cron/notion-push`
    - 인증: `--oidc-service-account-email="${CRON_SA_EMAIL}" --oidc-token-audience="${SERVICE_URL}"`
@@ -73,27 +77,29 @@
 
 | 대상 | 조건 | 기대 응답 / 헤더 |
 | --- | --- | --- |
-| `GET /api/health` | 정상 기동 | `200 OK`, `{"ok":true}`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` |
-| `GET /` (`index.html`) | 정적 HTML 요청 | `200 OK`, `Cache-Control: no-cache`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'` |
+| `GET /api/health` | 정상 기동 | `200 OK`, `{"ok":true}`, `X-Frame-Options: DENY` |
+| `GET /` (`index.html`) | 정적 HTML 요청 | `200 OK`, `Cache-Control: no-cache`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'` |
 
 ## 5. 처리 순서
 
 1. `Main.kt`에 `X-Frame-Options: DENY` 및 HTML 응답 `Content-Security-Policy: frame-ancestors 'none'` 헤더를 추가한다.
-2. `ChordEngineTest.kt`에 보안 헤더 검증 케이스(`Z1`, `Z2`)를 추가하고 `./gradlew test --no-daemon`을 실행한다.
+2. `ChordEngineTest.kt`에 Clickjacking 방지 보안 헤더 검증 케이스(`Z1`, `Z2`)를 추가하고 `./gradlew test --no-daemon`을 실행한다.
 3. `scripts/deploy-cloudrun.sh`와 `.github/workflows/deploy-cloudrun.yml`을 작성하고 `bash -n scripts/deploy-cloudrun.sh`로 문법 검사를 수행한다.
-4. Docker 이미지를 로컬에서 빌드(`docker build -t ulevelp-server:local .`)하고 컨테이너를 기동해 `/api/health`, `/`, 보안 헤더, `csp_check.js`(8개 화면 + 대조군), `npm test`, `npm run test:e2e`를 모두 실행해 검증한다.
+4. Docker 이미지를 로컬에서 빌드(`docker build -t ulevelp-server:local .`)하고 컨테이너를 기동해 `/api/health`, `/`, 보안 헤더, `csp_check.js`(전체 화면 + 대조군), `npm test`, `npm run test:e2e`를 모두 실행해 검증한다.
 5. **실환경 배포 및 점검 (사람 — M-KZ1 ~ M-KZ5):**
-   - **M-KZ1:** GCP 프로젝트에 Secret Manager 시크릿(`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_MASTER_KEY`) 등록 및 Cloud Run 서비스(`ulevelp`)·Cloud Run Job(`analyze`) 배포.
+   - **M-KZ1:** GCP 프로젝트에 Secret Manager 시크릿(`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_MASTER_KEY`) 등록, `RUNTIME_SA_EMAIL`에 `roles/run.developer` 및 `roles/secretmanager.secretAccessor` 부여 후 `scripts/deploy-cloudrun.sh`로 Cloud Run 서비스(`ulevelp`)·Cloud Run Job(`analyze`) 배포 (`CLOUD_RUN_ANALYZE_JOB_URI=https://run.googleapis.com/v2/projects/<project>/locations/<region>/jobs/analyze:run`).
    - **M-KZ2:** Cloud Scheduler `ulevelp-notion-push`(1분 주기, OIDC 인증) 생성 및 수동 1회 실행 시 `200 OK` 확인.
-   - **M-KZ3:** Cloud Run 서비스 URL에서 `GET /api/health` → `200 {"ok":true}` 및 `frame-ancestors 'none'` 헤더 확인.
+   - **M-KZ3:** Cloud Run 서비스 URL에서 `GET /api/health` → `200 {"ok":true}` 및 정적 루트(`/`)의 `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY` 헤더 확인.
    - **M-KZ4:** (GitHub Pages 병행 사용 시) `public/config.js`의 `apiBaseUrl`과 CSP `connect-src`에 Cloud Run 서비스 URL 반영 여부 확인, 또는 Cloud Run 단일 Origin 서빙에서 Google 로그인 → 곡 저장 → 녹음 업로드/재생 → 노션 동기화 → Gemini 학습 노트 생성 동작 확인.
    - **M-KZ5:** 아이패드 Safari(또는 모바일 뷰포트)에서 플레이어 구간 반복, 녹음, 기록 달력, 코드 연습실, 학습 노트 뷰어 점검.
 
 ## 6. 테스트 케이스 (`src/test/kotlin/ulevelp/ChordEngineTest.kt` 추가 `Z1`~`Z2`)
 
+*(기존 `ChordEngineTest.kt`에 이미 있는 `X-Content-Type-Options: nosniff` 검증과 중복하지 않고, 이 step에서 새로 추가한 Clickjacking 차단 헤더를 검증한다.)*
+
 | 이름 | 요청 | 기대 |
 | --- | --- | --- |
-| Z1 `/api/health` 상태 및 보안 헤더 검증 | `GET /api/health` | `200 OK`, 본문 `{"ok":true}`, 헤더 `X-Content-Type-Options == "nosniff"`, `X-Frame-Options == "DENY"` |
+| Z1 API 응답 `X-Frame-Options: DENY` 헤더 검증 | `GET /api/health` | `200 OK`, 헤더 `X-Frame-Options == "DENY"` (`Content-Security-Policy` 헤더는 비 HTML이므로 미포함) |
 | Z2 정적 HTML 서빙 시 Clickjacking 방지 헤더 검증 (`NFR-SEC-1`) | `GET /` 및 `GET /index.html` | `200 OK`, 헤더 `Content-Security-Policy == "frame-ancestors 'none'"`, `X-Frame-Options == "DENY"`, `Cache-Control == "no-cache"` |
 
 ## 7. 체크리스트 (자동 검증 + 실환경 확인)
