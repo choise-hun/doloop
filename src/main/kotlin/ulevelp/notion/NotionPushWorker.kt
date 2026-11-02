@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.javatime.CurrentTimestampWithTimeZone
 import org.slf4j.LoggerFactory
 import ulevelp.db.*
+import ulevelp.note.NotionNoteBlockBuilder
 import ulevelp.service.DecryptedNotionIntegration
 import ulevelp.service.IntegrationService
 import ulevelp.service.SessionService
@@ -322,7 +323,7 @@ class NotionPushWorker(
                     "session" -> pushSessionUpsert(userId, item.entityId, notion)
                     "take" -> pushTakeUpsert(userId, item.entityId, notion, workerId)
                     "note" -> {
-                        // K4-2에서는 "note" upsert는 K5-2로 이월
+                        pushNoteUpsert(userId, item.entityId, notion, workerId)
                     }
                 }
             }
@@ -766,6 +767,140 @@ class NotionPushWorker(
                 it[syncedAt] = nowUtc
             }
         }
+    }
+
+    private suspend fun pushNoteUpsert(
+        userId: UUID,
+        noteId: UUID,
+        notion: DecryptedNotionIntegration,
+        workerId: String? = null
+    ): String? {
+        val notesDb = notion.notesDb?.takeIf { it.isNotBlank() } ?: return null
+
+        val noteRow = DatabaseFactory.dbQuery(db!!) {
+            NotesTable.selectAll()
+                .where { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
+                .singleOrNull()
+        } ?: return null
+
+        val existingLink = DatabaseFactory.dbQuery(db) {
+            NotionLinksTable.selectAll()
+                .where { (NotionLinksTable.entity eq "note") and (NotionLinksTable.entityId eq noteId) }
+                .singleOrNull()
+                ?.let { it[NotionLinksTable.notionPageId] }
+        }
+
+        val videoId = noteRow[NotesTable.videoId]
+        val url = "https://www.youtube.com/watch?v=$videoId"
+        val tags = noteRow[NotesTable.tags]
+        val memo = noteRow[NotesTable.memo]
+        val title = noteRow[NotesTable.title]
+        val channel = noteRow[NotesTable.channel]
+        val headline = noteRow[NotesTable.headline]
+        val keywords = noteRow[NotesTable.keywords]
+        val difficulty = noteRow[NotesTable.difficulty]
+        val analysisObj = (noteRow[NotesTable.analysis] as? JsonObject) ?: JsonObject(emptyMap())
+        val diagramsSvgArray = (noteRow[NotesTable.diagramsSvg] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+
+        val properties = NotionNoteBlockBuilder.buildPageProperties(
+            url = url,
+            tags = tags,
+            memo = memo,
+            title = title,
+            channel = channel,
+            headline = headline,
+            keywords = keywords,
+            difficulty = difficulty
+        )
+
+        val pageId: String
+        if (existingLink != null) {
+            val patchBody = buildJsonObject { put("properties", properties) }
+            notionClient.updatePage(notion.token, existingLink, patchBody)
+            pageId = existingLink
+            DatabaseFactory.dbQuery(db) {
+                val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
+                NotionLinksTable.update({
+                    (NotionLinksTable.entity eq "note") and (NotionLinksTable.entityId eq noteId)
+                }) {
+                    it[syncedAt] = nowUtc
+                }
+            }
+        } else {
+            val harmonyUploadIds = mutableListOf<String?>()
+            for ((idx, svg) in diagramsSvgArray.withIndex()) {
+                if (svg.isBlank()) {
+                    harmonyUploadIds.add(null)
+                } else {
+                    if (workerId != null) {
+                        DatabaseFactory.dbQuery(db) {
+                            val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
+                            NotionSyncTable.update({
+                                (NotionSyncTable.userId eq userId) and (NotionSyncTable.leaseOwner eq workerId)
+                            }) {
+                                it[leaseUntil] = nowUtc.plusMinutes(LEASE_MINUTES)
+                            }
+                        }
+                    }
+                    val uploadId = try {
+                        notionClient.uploadFile(
+                            notion.token,
+                            "voicing_${idx + 1}.svg",
+                            "image/svg+xml",
+                            svg.toByteArray(Charsets.UTF_8)
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        log.warn("노트({}) SVG 업로드 실패 (idx={}): {}", noteId, idx, e.message)
+                        null
+                    }
+                    harmonyUploadIds.add(uploadId)
+                }
+            }
+
+            val blocks = NotionNoteBlockBuilder.buildBlocks(url, tags, analysisObj, harmonyUploadIds)
+            val first100 = blocks.take(100)
+            val createBody = buildJsonObject {
+                putJsonObject("parent") { put("database_id", notesDb) }
+                put("properties", properties)
+                put("children", JsonArray(first100))
+            }
+
+            val res = notionClient.createPage(notion.token, createBody)
+            pageId = res["id"]?.jsonPrimitive?.contentOrNull
+                ?: throw NotionApiException(500, "notion_error", "노션 학습 노트 페이지 생성 실패(id 없음)")
+
+            DatabaseFactory.dbQuery(db) {
+                val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
+                NotionLinksTable.insert {
+                    it[entity] = "note"
+                    it[entityId] = noteId
+                    it[NotionLinksTable.userId] = userId
+                    it[notionPageId] = pageId
+                    it[notionExtra] = null
+                    it[syncedAt] = nowUtc
+                }
+            }
+
+            if (blocks.size > 100) {
+                for (i in 100 until blocks.size step 100) {
+                    if (workerId != null) {
+                        DatabaseFactory.dbQuery(db) {
+                            val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
+                            NotionSyncTable.update({
+                                (NotionSyncTable.userId eq userId) and (NotionSyncTable.leaseOwner eq workerId)
+                            }) {
+                                it[leaseUntil] = nowUtc.plusMinutes(LEASE_MINUTES)
+                            }
+                        }
+                    }
+                    val chunk = blocks.subList(i, minOf(i + 100, blocks.size))
+                    notionClient.appendBlockChildren(notion.token, pageId, JsonArray(chunk))
+                }
+            }
+        }
+        return pageId
     }
 
     private suspend fun archiveIgnoringMissing(block: suspend () -> Unit) {

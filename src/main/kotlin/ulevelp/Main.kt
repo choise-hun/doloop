@@ -186,7 +186,8 @@ fun Application.module(
         db = db,
         integrationService = integrationService,
         videoMetaClient = videoMetaClient,
-        geminiClient = geminiClient
+        geminiClient = geminiClient,
+        notionPushWorker = notionPushWorker
     )
     val cloudRunJobUri = System.getenv("CLOUD_RUN_ANALYZE_JOB_URI")?.takeIf { it.isNotBlank() }
     val effectiveDispatcher: AnalyzeJobDispatcher = analyzeJobDispatcher ?: if (cloudRunJobUri != null) {

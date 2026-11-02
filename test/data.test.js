@@ -842,3 +842,175 @@ test('D26 notionSync pull·push', async () => {
   assert.equal(env.apiCalls[1].opts.method, 'POST');
 });
 
+test('D27 notes 비로그인 거부', async () => {
+  const env = createMockEnv({ session: null });
+  const fns = [
+    () => env.ULData.notes.analyze({ url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', tags: ['화성'] }),
+    () => env.ULData.notes.listJobs(),
+    () => env.ULData.notes.getJob('a1000000-0000-4000-8000-000000000001'),
+    () => env.ULData.notes.list(),
+    () => env.ULData.notes.get('b1000000-0000-4000-8000-000000000001'),
+    () => env.ULData.notes.update('b1000000-0000-4000-8000-000000000001', { memo: 'm' }),
+    () => env.ULData.notes.remove('b1000000-0000-4000-8000-000000000001'),
+  ];
+  for (const fn of fns) {
+    await assert.rejects(fn(), (err) => {
+      assert.equal(err.code, 'NOT_LOGGED_IN');
+      assert.equal(err.status, 401);
+      return true;
+    });
+  }
+});
+
+test('D28 notes.analyze & jobs 조회', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/notes/analyze') {
+        return { jobId: 'job-1', status: 'queued' };
+      }
+      if (path === '/api/v1/notes/jobs') {
+        return { jobs: [{ id: 'job-1', status: 'queued' }] };
+      }
+      if (path === '/api/v1/notes/jobs/a1000000-0000-4000-8000-000000000001') {
+        return { id: 'a1000000-0000-4000-8000-000000000001', status: 'done', noteId: 'note-1' };
+      }
+      return { ok: true };
+    },
+  });
+
+  const an = await env.ULData.notes.analyze({
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    tags: ['화성'],
+    memo: 'm',
+  });
+  assert.equal(an.jobId, 'job-1');
+  assert.equal(an.status, 'queued');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/notes/analyze');
+  assert.equal(env.apiCalls[0].opts.method, 'POST');
+  const anBody = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(anBody.url, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.deepEqual(anBody.tags, ['화성']);
+  assert.equal(anBody.memo, 'm');
+
+  const jobs = await env.ULData.notes.listJobs();
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].id, 'job-1');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/notes/jobs');
+
+  const j = await env.ULData.notes.getJob('a1000000-0000-4000-8000-000000000001');
+  assert.equal(j.id, 'a1000000-0000-4000-8000-000000000001');
+  assert.equal(j.status, 'done');
+  assert.equal(env.apiCalls.length, 3);
+  assert.equal(env.apiCalls[2].path, '/api/v1/notes/jobs/a1000000-0000-4000-8000-000000000001');
+});
+
+test('D29 notes.list·get·update·remove', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/notes?tag=%ED%99%94%EC%84%B1') {
+        return { notes: [{ id: 'b1000000-0000-4000-8000-000000000001', title: '화성 노트' }] };
+      }
+      if (path === '/api/v1/notes/b1000000-0000-4000-8000-000000000001' && (!opts || !opts.method)) {
+        return { note: { id: 'b1000000-0000-4000-8000-000000000001', title: '화성 노트', memo: '기존' } };
+      }
+      if (path === '/api/v1/notes/b1000000-0000-4000-8000-000000000001' && opts && opts.method === 'PATCH') {
+        return { note: { id: 'b1000000-0000-4000-8000-000000000001', memo: 'x', tags: ['화성', 'TAB'] } };
+      }
+      if (path === '/api/v1/notes/b1000000-0000-4000-8000-000000000001' && opts && opts.method === 'DELETE') {
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+  });
+
+  const list = await env.ULData.notes.list('화성');
+  assert.equal(list.length, 1);
+  assert.equal(list[0].id, 'b1000000-0000-4000-8000-000000000001');
+  assert.equal(env.apiCalls[0].path, '/api/v1/notes?tag=%ED%99%94%EC%84%B1');
+
+  const note = await env.ULData.notes.get('b1000000-0000-4000-8000-000000000001');
+  assert.equal(note.title, '화성 노트');
+  assert.equal(env.apiCalls[1].path, '/api/v1/notes/b1000000-0000-4000-8000-000000000001');
+
+  const updated = await env.ULData.notes.update('b1000000-0000-4000-8000-000000000001', {
+    memo: 'x',
+    tags: ['화성', 'TAB'],
+  });
+  assert.equal(updated.memo, 'x');
+  assert.deepEqual(updated.tags, ['화성', 'TAB']);
+  assert.equal(env.apiCalls[2].path, '/api/v1/notes/b1000000-0000-4000-8000-000000000001');
+  assert.equal(env.apiCalls[2].opts.method, 'PATCH');
+
+  const del = await env.ULData.notes.remove('b1000000-0000-4000-8000-000000000001');
+  assert.equal(del.ok, true);
+  assert.equal(env.apiCalls[3].path, '/api/v1/notes/b1000000-0000-4000-8000-000000000001');
+  assert.equal(env.apiCalls[3].opts.method, 'DELETE');
+});
+
+test('D30 412 NO_KEY 및 비동기 잡 PROVIDER_KEY_INVALID: 실패 시 ulp:keys gemini 캐시 무효화 (FR-KEY-5)', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token', user: { id: 'user-1' } },
+    me: { id: 'user-1' },
+    apiHandler: (path, opts) => {
+      if (path === '/api/v1/notes/analyze') {
+        const err = new Error('Gemini API 키가 등록되지 않았습니다.');
+        err.status = 412;
+        err.code = 'NO_KEY';
+        throw err;
+      }
+      if (path === '/api/v1/notes/jobs') {
+        return {
+          jobs: [
+            {
+              id: 'job-err',
+              status: 'failed',
+              error: 'PROVIDER_KEY_INVALID: API 키가 잘못되었습니다.',
+            },
+          ],
+        };
+      }
+      return { ok: true };
+    },
+  });
+
+  // 초기 캐시 저장
+  env.localStorage.setItem(
+    'ulp:keys',
+    JSON.stringify({
+      uid: 'user-1',
+      notion: { hint: '9a8b' },
+      gemini: { hint: '1234' },
+    })
+  );
+
+  // 1. notes.analyze 412 NO_KEY 실패 시 gemini 캐시 무효화 확인
+  await assert.rejects(
+    env.ULData.notes.analyze({ url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', tags: ['화성'] }),
+    (err) => err.code === 'NO_KEY'
+  );
+  const cachedAfterAnalyze = env.ULData.getCachedKeys();
+  assert.equal(cachedAfterAnalyze.gemini, null);
+  assert.equal(cachedAfterAnalyze.notion.hint, '9a8b');
+
+  // 2. gemini 캐시 복원 후 listJobs 호출 시 PROVIDER_KEY_INVALID 감지 확인
+  env.localStorage.setItem(
+    'ulp:keys',
+    JSON.stringify({
+      uid: 'user-1',
+      notion: { hint: '9a8b' },
+      gemini: { hint: '1234' },
+    })
+  );
+
+  const jobs = await env.ULData.notes.listJobs();
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].status, 'failed');
+
+  const cachedAfterJobs = env.ULData.getCachedKeys();
+  assert.equal(cachedAfterJobs.gemini, null);
+  assert.equal(cachedAfterJobs.notion.hint, '9a8b');
+});

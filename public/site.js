@@ -25,34 +25,5 @@ window.UL = (function () {
     try { const x = new URL(String(u || '').trim()); return x.protocol === 'https:' ? x.href : ''; } catch (e) { return ''; }
   }
 
-  // 학습 노트: 이 저장소의 analyze.yml 워크플로를 실행. 저장소는 github.io 주소에서 알아냄
-  function inferRepo() {
-    const { hostname, pathname } = location;
-    if (!hostname.endsWith('.github.io')) return '';
-    return hostname.split('.')[0] + '/' + (pathname.split('/')[1] || hostname);
-  }
-  const gh = {
-    token() { return raw.get('sn-token'); },
-    repo() { return raw.get('sn-repo') || inferRepo(); },
-    inferRepo,
-    ok() { return !!(this.token() && this.repo()); },
-    async call(path, opts) {
-      opts = opts || {};
-      const res = await fetch('https://api.github.com/repos/' + this.repo() + path, Object.assign({}, opts, {
-        headers: Object.assign({
-          Accept: 'application/vnd.github+json',
-          Authorization: 'Bearer ' + this.token(),
-          'X-GitHub-Api-Version': '2022-11-28',
-        }, opts.body ? { 'Content-Type': 'application/json' } : {}),
-      }));
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        const hint = { 401: '토큰이 잘못됐거나 만료됐어요.', 403: '토큰에 Actions 쓰기 권한이 없어요.', 404: '저장소나 워크플로를 찾지 못했어요.' }[res.status] || '';
-        throw new Error((hint + ' (' + res.status + ' ' + (detail.message || res.statusText) + ')').trim());
-      }
-      return res.status === 204 ? null : res.json();
-    },
-  };
-
-  return { raw, json, videoIdFrom, thumb, esc, safeUrl, gh };
+  return { raw, json, videoIdFrom, thumb, esc, safeUrl };
 })();

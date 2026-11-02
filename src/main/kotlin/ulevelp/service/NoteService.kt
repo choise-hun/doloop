@@ -112,7 +112,8 @@ class NoteService(
     private val videoMetaClient: VideoMetaClient,
     private val geminiClient: GeminiClient,
     private val jobTimeoutMs: Long = JOB_EXECUTION_TIMEOUT_MS,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val notionPushWorker: ulevelp.notion.NotionPushWorker? = null
 ) {
     private val logger = LoggerFactory.getLogger(NoteService::class.java)
 
@@ -365,6 +366,13 @@ class NoteService(
                     OutboxRepository.enqueueIfSyncEnabled(userId, "note", noteId, "upsert")
                 }
             }
+            try {
+                notionPushWorker?.pushUserOutbox(userId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.warn("Notion push fast-path 실패(무시됨) userId={}: {}", userId, e.message)
+            }
         } catch (e: Throwable) {
             val errMsg: String = when (e) {
                 is TimeoutCancellationException -> "분석 제한 시간(54분)을 초과하여 중단되었습니다."
@@ -456,7 +464,7 @@ class NoteService(
         val database = requireDb()
         val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
 
-        return DatabaseFactory.dbQuery(database) {
+        val updated = DatabaseFactory.dbQuery(database) {
             val exists = NotesTable.selectAll()
                 .where { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
                 .count() > 0
@@ -478,6 +486,16 @@ class NoteService(
                 .single()
             rowToNoteDetailDto(row)
         }
+
+        try {
+            notionPushWorker?.pushUserOutbox(userId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Notion push fast-path 실패(무시됨) userId={}: {}", userId, e.message)
+        }
+
+        return updated
     }
 
     suspend fun deleteNote(userId: UUID, noteId: UUID) {
@@ -492,6 +510,14 @@ class NoteService(
 
             OutboxRepository.enqueueIfSyncEnabled(userId, "note", noteId, "delete")
             NotesTable.deleteWhere { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
+        }
+
+        try {
+            notionPushWorker?.pushUserOutbox(userId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Notion push fast-path 실패(무시됨) userId={}: {}", userId, e.message)
         }
     }
 
