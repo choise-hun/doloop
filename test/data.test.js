@@ -42,11 +42,16 @@ function createMockEnv({
   const fetchCalls = [];
   const confirmCalls = [];
   const answers = [...confirmAnswers];
+  const authListeners = [];
 
   const mockULAuth = {
     getSession: () => session,
     getUser: () => (session ? (session.user || (me ? { id: me.id } : { id: 'user-1' })) : null),
     getMe: () => me,
+    getAccessToken: async () => (session ? session.access_token : ''),
+    onChange: (cb) => {
+      authListeners.push(cb);
+    },
     apiFetch: async (path, opts) => {
       apiCalls.push({ path, opts });
       if (typeof apiHandler === 'function') {
@@ -107,6 +112,9 @@ function createMockEnv({
     apiCalls,
     fetchCalls,
     confirmCalls,
+    triggerAuthChange(st) {
+      authListeners.forEach((cb) => cb(st));
+    },
     get fetchMeCount() {
       return fetchMeCount;
     },
@@ -1117,7 +1125,7 @@ test('D33 takes.registerDrive & takes.migrateToDrive', async () => {
   assert.equal(migTake.storage, 'drive');
 });
 
-test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기', async () => {
+test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기 및 ULEVELP_CONFIG.googleClientId 참조', async () => {
   const env = createMockEnv({
     session: { access_token: 'tok' },
     loadDrive: true,
@@ -1133,7 +1141,7 @@ test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기'
       },
     },
   };
-  env.sandbox.window.ULConfig = { driveClientId: 'fake-client-id.apps.googleusercontent.com' };
+  env.sandbox.window.ULEVELP_CONFIG = { googleClientId: 'fake-client-id.apps.googleusercontent.com' };
 
   // 1. 1KB Blob (<= 5MB: multipart)
   const smallBlob = new Blob([new Uint8Array(1024)], { type: 'audio/mp4' });
@@ -1191,4 +1199,112 @@ test('D34 ULDrive.uploadBlob 5MB 이하 multipart / 5MB 초과 resumable 분기'
   assert.equal(largeId, 'large_drive_id');
   assert.equal(initCalled, true);
   assert.equal(putCalled, true);
+});
+
+test('D35 계정 전환(A→B) 시 ULDrive 인메모리 토큰 즉시 폐기 및 이전 실패 시 고아 파일 DELETE 정리 (NFR-SEC-3, 리뷰 4번)', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'token_user_a', user: { id: 'user-a' } },
+    me: { id: 'user-a', storageProvider: 'drive', driveFolderId: 'fld_a' },
+    loadDrive: true,
+  });
+
+  let tokenClientCallCount = 0;
+  let currentToken = 'token_A';
+  env.sandbox.window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: ({ callback }) => {
+          tokenClientCallCount++;
+          return {
+            requestAccessToken: () => callback({ access_token: currentToken, expires_in: '3600' }),
+          };
+        },
+      },
+    },
+  };
+  env.sandbox.window.ULEVELP_CONFIG = { googleClientId: 'client-id.apps.googleusercontent.com' };
+
+  // 1. 사용자 A 상태에서 토큰 발급
+  const tokA = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokA, 'token_A');
+  assert.equal(tokenClientCallCount, 1);
+
+  // 만료 전 재호출 시 인메모리 토큰 재사용 확인
+  const tokA2 = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokA2, 'token_A');
+  assert.equal(tokenClientCallCount, 1);
+
+  // 2. 사용자 B로 계정 전환 (A -> B)
+  currentToken = 'token_B';
+  env.triggerAuthChange({
+    user: { id: 'user-b' },
+    session: { access_token: 'token_user_b', user: { id: 'user-b' } },
+  });
+
+  // 사용자 B 상태에서 requestToken() 호출 시 token_A가 즉시 폐기되어 새로 토큰 발급
+  const tokB = await env.sandbox.window.ULDrive.requestToken();
+  assert.equal(tokB, 'token_B');
+  assert.equal(tokenClientCallCount, 2);
+
+  // 3. migrateAllToDrive() 중 migrateToDrive 실패 시 고아 파일 DELETE 정리 검증
+  const deleteUrls = [];
+  env.setFetchResponse(async (url, opts) => {
+    // 1) ensureFolder search
+    if (url.includes('/files?q=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ files: [{ id: 'fld_folder_id' }] }),
+      };
+    }
+    // 2) downloadBlob
+    if (url.includes('/download')) {
+      return {
+        ok: true,
+        status: 200,
+        blob: async () => new Blob([new Uint8Array(100)], { type: 'audio/mp4' }),
+      };
+    }
+    // 3) Drive uploadBlob
+    if (url.includes('uploadType=multipart')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'uploaded_orphan_file_id' }),
+      };
+    }
+    // 4) Drive deleteFile
+    if (opts && opts.method === 'DELETE') {
+      deleteUrls.push(url);
+      return { ok: true, status: 204 };
+    }
+    throw new Error('Unexpected fetch url: ' + url);
+  });
+
+  // sessions.list stub: 1개 supabase take 반환
+  env.sandbox.window.ULData.sessions = {
+    list: async () => ({
+      sessions: [
+        {
+          id: 'sess-1',
+          takes: [
+            { id: 'take-orphan-1', storage: 'supabase', mime: 'audio/mp4' },
+          ],
+        },
+      ],
+    }),
+  };
+
+  // migrateToDrive 실패 유도
+  env.sandbox.window.ULData.takes.migrateToDrive = async () => {
+    throw new Error('서버 DB 장애로 migrateToDrive 실패');
+  };
+
+  const res = await env.sandbox.window.ULDrive.migrateAllToDrive();
+  assert.equal(res.migrated, 0);
+  assert.equal(res.skipped, 1);
+
+  // Drive 업로드 성공 후 서버 실패 시 해당 fileId에 대해 DELETE 요청이 나갔는지 검증
+  assert.equal(deleteUrls.length, 1);
+  assert.ok(deleteUrls[0].includes('/files/uploaded_orphan_file_id'));
 });

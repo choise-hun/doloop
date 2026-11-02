@@ -15,7 +15,7 @@ const ROOT = path.join(__dirname, '..');
 const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client",
-  "style-src 'self' https://fonts.googleapis.com",
+  "style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='",
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co",

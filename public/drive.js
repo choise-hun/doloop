@@ -9,27 +9,39 @@
     tokenExpiresAt = 0;
   }
 
-  // 로그아웃 또는 계정 변경 시 토큰 즉시 폐기 (NFR-SEC-3)
+  function getCurrentUid() {
+    if (window.ULAuth && typeof window.ULAuth.getUser === 'function') {
+      const u = window.ULAuth.getUser();
+      return (u && u.id) ? u.id : null;
+    }
+    return null;
+  }
+
+  let activeUid = getCurrentUid();
+
+  // 로그아웃 또는 계정 변경(A->B) 시 토큰 즉시 폐기 (NFR-SEC-3, 리뷰 4번)
   if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
     window.ULAuth.onChange(function (state) {
-      if (!state || !state.user) {
+      const nextUid = state && state.user ? state.user.id : null;
+      if (!nextUid || (activeUid && activeUid !== nextUid)) {
         clearToken();
       }
+      activeUid = nextUid;
     });
   }
 
   function getClientId() {
-    if (window.ULConfig && window.ULConfig.driveClientId) {
-      return window.ULConfig.driveClientId;
-    }
-    if (window.UL && window.UL.config && window.UL.config.driveClientId) {
-      return window.UL.config.driveClientId;
-    }
-    return (window.__DRIVE_CLIENT_ID__) || '';
+    const cfg = window.ULEVELP_CONFIG || {};
+    return String(cfg.googleClientId || '').trim();
   }
 
   async function requestToken(opts) {
     opts = opts || {};
+    const curUid = getCurrentUid();
+    if (!curUid || (activeUid && activeUid !== curUid)) {
+      clearToken();
+    }
+    activeUid = curUid;
     if (inMemoryToken && tokenExpiresAt && Date.now() < tokenExpiresAt - 60000 && !opts.force) {
       return inMemoryToken;
     }
@@ -38,9 +50,9 @@
       throw new Error('Google Identity Services가 로드되지 않았습니다.');
     }
 
-    const clientId = opts.clientId || getClientId();
+    const clientId = (opts.clientId && String(opts.clientId).trim()) || getClientId();
     if (!clientId) {
-      throw new Error('Google Drive 클라이언트 ID(driveClientId)가 설정되지 않았습니다.');
+      throw new Error('public/config.js에 googleClientId가 설정되지 않았습니다.');
     }
 
     return new Promise(function (resolve, reject) {
@@ -67,6 +79,21 @@
         reject(err);
       }
     });
+  }
+
+  async function deleteFile(fileId) {
+    if (!fileId) return;
+    try {
+      const token = await requestToken();
+      await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId), {
+        method: 'DELETE',
+        headers: {
+          Authorization: 'Bearer ' + token,
+        },
+      });
+    } catch (_) {
+      // best-effort cleanup
+    }
   }
 
   async function ensureFolder(preferredId) {
@@ -224,19 +251,24 @@
     const filename = 'take-' + Date.now() + '.' + ext;
     const driveFileId = await uploadBlob(blob, filename, meta.mime, folderId);
 
-    const registered = await window.ULData.takes.registerDrive({
-      songId: meta.songId,
-      date: meta.date,
-      recordedAt: meta.recordedAt,
-      a: meta.a,
-      b: meta.b,
-      rate: meta.rate,
-      durationSec: meta.durationSec,
-      mime: meta.mime,
-      sizeBytes: blob.size,
-      storageKey: driveFileId,
-    });
-    return registered;
+    try {
+      const registered = await window.ULData.takes.registerDrive({
+        songId: meta.songId,
+        date: meta.date,
+        recordedAt: meta.recordedAt,
+        a: meta.a,
+        b: meta.b,
+        rate: meta.rate,
+        durationSec: meta.durationSec,
+        mime: meta.mime,
+        sizeBytes: blob.size,
+        storageKey: driveFileId,
+      });
+      return registered;
+    } catch (err) {
+      await deleteFile(driveFileId);
+      throw err;
+    }
   }
 
   async function fetchMediaObjectUrl(fileId) {
@@ -254,11 +286,18 @@
     return URL.createObjectURL(blob);
   }
 
-  async function enableDriveStorage() {
-    const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
-    if (me && me.notionSync && me.notionSync.enabled) {
-      throw new Error('노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다.');
+  async function checkNotionSyncConflict() {
+    if (window.ULData && window.ULData.notionSync && typeof window.ULData.notionSync.status === 'function') {
+      const sync = await window.ULData.notionSync.status();
+      if (sync && sync.enabled) {
+        throw new Error('노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다.');
+      }
     }
+  }
+
+  async function enableDriveStorage() {
+    await checkNotionSyncConflict();
+    const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
     const folderId = await ensureFolder(me ? me.driveFolderId : null);
     const updated = await window.ULData.me.update({
       storageProvider: 'drive',
@@ -275,13 +314,11 @@
   }
 
   async function migrateAllToDrive(onProgress) {
+    await checkNotionSyncConflict();
     const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
-    if (me && me.notionSync && me.notionSync.enabled) {
-      throw new Error('노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다.');
-    }
     const folderId = await ensureFolder(me ? me.driveFolderId : null);
 
-    // 모든 세션 조회 후 supabase 저장소의 takes 수집
+    // 모든 세션 조회 후 supabase 저장소의 takes 수집 (명세 2.3절: storage === 'supabase' 대상만 이전)
     const sData = await window.ULData.sessions.list({ from: '2000-01-01', to: '2099-12-31' });
     const sessions = (sData && Array.isArray(sData.sessions)) ? sData.sessions : [];
     const targetTakes = [];
@@ -290,7 +327,7 @@
       if (Array.isArray(sess.takes)) {
         for (let tIdx = 0; tIdx < sess.takes.length; tIdx++) {
           const t = sess.takes[tIdx];
-          if (t.storage === 'supabase' || (t.storage !== 'drive' && t.storageKey)) {
+          if (t.storage === 'supabase') {
             targetTakes.push(t);
           }
         }
@@ -306,14 +343,18 @@
       if (typeof onProgress === 'function') {
         onProgress({ current: i + 1, total: total, take: take });
       }
+      let uploadedDriveFileId = null;
       try {
         const blob = await window.ULData.takes.downloadBlob(take.id);
         const ext = (take.mime && take.mime.includes('webm')) ? 'weba' : 'm4a';
         const name = 'take-' + take.id + '.' + ext;
-        const driveFileId = await uploadBlob(blob, name, take.mime, folderId);
-        await window.ULData.takes.migrateToDrive(take.id, driveFileId);
+        uploadedDriveFileId = await uploadBlob(blob, name, take.mime, folderId);
+        await window.ULData.takes.migrateToDrive(take.id, uploadedDriveFileId);
         migrated++;
       } catch (err) {
+        if (uploadedDriveFileId) {
+          await deleteFile(uploadedDriveFileId);
+        }
         console.warn('녹음 Drive 이전 실패 takeId=' + take.id, err);
         skipped++;
       }
@@ -334,4 +375,3 @@
     clearToken: clearToken,
   };
 })();
-

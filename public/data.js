@@ -606,9 +606,13 @@ window.ULData = (function () {
 
   async function downloadTakeBlob(takeId) {
     requireLogin();
-    const sess = window.ULAuth && typeof window.ULAuth.getSession === 'function' ? window.ULAuth.getSession() : null;
-    const token = sess && sess.access_token ? sess.access_token : '';
-    const res = await fetch('/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+    // ULAuth.apiFetch는 JSON 응답 전용이므로 바이너리 res.blob() 수신을 위해 직접 fetch 호출하되,
+    // 만료 토큰 갱신을 위해 await ULAuth.getAccessToken()으로 토큰을 얻고 ULEVELP_CONFIG.apiBaseUrl을 접두어로 붙인다.
+    const token = (window.ULAuth && typeof window.ULAuth.getAccessToken === 'function')
+      ? await window.ULAuth.getAccessToken()
+      : ((window.ULAuth && typeof window.ULAuth.getSession === 'function' && window.ULAuth.getSession()?.access_token) || '');
+    const apiBase = (window.ULEVELP_CONFIG && window.ULEVELP_CONFIG.apiBaseUrl) ? window.ULEVELP_CONFIG.apiBaseUrl.replace(/\/$/, '') : '';
+    const res = await fetch(apiBase + '/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
       headers: {
         Authorization: 'Bearer ' + token,
       },
