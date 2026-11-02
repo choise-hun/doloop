@@ -15,3 +15,5 @@ __pycache__/
 
 # Personal design profile (keep private)
 DESIGN.md
+
+test-results/
