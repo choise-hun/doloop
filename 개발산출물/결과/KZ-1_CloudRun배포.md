@@ -142,18 +142,48 @@ ulevelp-test
 
 배포 자동화 스크립트(`scripts/deploy-cloudrun.sh`) 및 워크플로(`.github/workflows/deploy-cloudrun.yml`) 구현이 완료되었습니다. 실제 Google Cloud 환경 배포 및 기기 점검을 위해 아래 순서로 진행합니다.
 
-### 3.1 배포 전 1회 준비 사항 (GCP 콘솔/CLI)
+### 3.1 사전 준비 (GCP 콘솔/CLI 및 GitHub 설정)
 
-1. **GCP Secret Manager 시크릿 등록:**
-   - `DATABASE_URL`: Cloud SQL 또는 Supabase PostgreSQL 연결 문자열 (`postgresql://user:pass@host:5432/db`)
-   - `SUPABASE_SECRET_KEY`: Supabase 스토리지 및 관리용 서비스 롤 시크릿 키
-   - `APP_MASTER_KEY`: 32바이트 Base64 암호화 마스터 키
-2. **서비스 계정 및 권한 부여:**
-   - 런타임 서비스 계정(`RUNTIME_SA_EMAIL`):
-     - `roles/secretmanager.secretAccessor` (시크릿 접근)
-     - `roles/run.developer` (`scripts/deploy-cloudrun.sh`가 Job에 자동 부여하지만 사전 확인 권장)
-   - 크론 호출 계정(`CRON_SA_EMAIL`):
-     - `roles/run.invoker` (Cloud Run 서비스 호출 권한)
+#### 1. Artifact Registry Docker 저장소 생성
+스크립트 실행 전, 컨테이너 이미지를 저장할 Artifact Registry 저장소를 생성합니다:
+```bash
+gcloud artifacts repositories create ulevelp \
+  --repository-format=docker \
+  --location=asia-northeast3 \
+  --description="ULevelP server container repository"
+```
+
+#### 2. Secret Manager 시크릿 등록
+- `DATABASE_URL`: Cloud SQL 또는 Supabase PostgreSQL 연결 문자열 (`postgresql://user:pass@host:5432/db`)
+- `SUPABASE_SECRET_KEY`: Supabase 스토리지 및 관리용 서비스 롤 시크릿 키
+- `APP_MASTER_KEY`: 32바이트 Base64 암호화 마스터 키
+
+#### 3. 서비스 계정 및 IAM 권한 구성
+- **배포 실행 주체 (GitHub Actions 배포 SA 또는 로컬 gcloud 로그인 계정):**
+  - `roles/run.admin`: Cloud Run 서비스·Job 배포 및 `setIamPolicy`(`--allow-unauthenticated`, `roles/run.developer` 바인딩)
+  - `roles/iam.serviceAccountUser`: 런타임 SA 및 크론 SA를 리소스에 연결
+  - `roles/cloudscheduler.admin`: Cloud Scheduler 크론 작업 생성 및 갱신
+  - `roles/artifactregistry.writer`: Artifact Registry 이미지 빌드 및 푸시
+- **런타임 서비스 계정 (`RUNTIME_SA_EMAIL`):**
+  - `roles/secretmanager.secretAccessor`: Secret Manager 시크릿 접근
+  - `roles/run.developer`: Cloud Run Job(`analyze`) 실행 권한 (`scripts/deploy-cloudrun.sh`가 자동 바인딩)
+- **크론 호출 서비스 계정 (`CRON_SA_EMAIL`):**
+  - `roles/run.invoker`: Cloud Run 서비스(`/internal/cron/notion-push`) 호출 권한
+
+#### 4. GitHub Actions 워크플로 Repository Variables (`Settings > Secrets and variables > Actions > Variables`)
+- `GCP_PROJECT_ID`: GCP 프로젝트 ID (설정 시 `deploy-cloudrun.yml` 자동 활성화)
+- `GCP_REGION`: 리전 (기본: `asia-northeast3`)
+- `GCP_WIF_PROVIDER`: Workload Identity Provider 리소스 경로
+- `GCP_DEPLOY_SA`: 배포용 서비스 계정 이메일
+- `RUNTIME_SA_EMAIL`: 런타임 서비스 계정 이메일
+- `CRON_SA_EMAIL`: 크론 호출 서비스 계정 이메일
+- `CLOUD_RUN_SERVICE`: 서비스 이름 (기본: `ulevelp`)
+- `CLOUD_RUN_JOB`: 분석 Job 이름 (기본: `analyze`)
+- `SUPABASE_URL`: Supabase 프로젝트 URL
+- `PUBLIC_APP_URL`: 공개 앱 URL (기본: `https://choise-hun.github.io/ULevelP/`)
+- `ALLOWED_ORIGINS`: CORS 허용 오리진 목록
+
+---
 
 ### 3.2 로컬 또는 GitHub Actions에서 배포 실행
 
@@ -168,9 +198,12 @@ export IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ulevelp/server:
 docker build -t "$IMAGE_URI" .
 docker push "$IMAGE_URI"
 
-# 2. 스크립트 실행 (Job, IAM, 서비스, Scheduler 자동 구성)
+# 2. 스크립트 실행 (Job deploy, IAM 바인딩, 서비스 배포, Scheduler 자동 구성)
+#    서버 env와 Cloud Scheduler audience가 FINAL_CRON_AUDIENCE로 완전 일치되어 401 오류가 방지됩니다.
 bash scripts/deploy-cloudrun.sh "$IMAGE_URI"
 ```
+
+---
 
 ### 3.3 사람 점검 체크리스트 (M-KZ1 ~ M-KZ5)
 
@@ -182,7 +215,12 @@ bash scripts/deploy-cloudrun.sh "$IMAGE_URI"
 
 ---
 
-## 4. 명세와 달라진 점 및 겪은 문제
+## 4. 명세와 달라진 점 및 겪은 문제 (PR #31 리뷰 1~5번 반영)
 
-- **명세와 달라진 점:** 없음. 명세의 모든 시그니처, 보안 헤더, 워크플로 조건, 스크립트 단계가 일치함.
+- **명세와 달라진 점 (리뷰 피드백 반영):**
+  1. **CRON_AUDIENCE 단일화 (리뷰 1번, 필수):** 서버 env(`CRON_AUDIENCE`)와 Cloud Scheduler의 `--oidc-token-audience`를 `FINAL_CRON_AUDIENCE` 단일 변수로 일치시켜, 커스텀 도메인이나 서비스 URL 지정 시 401 인증 불일치가 발생하지 않도록 개선함.
+  2. **배포 주체 권한 및 사전 리소스 명시 (리뷰 2번, 필수):** 배포 SA에 필요한 `roles/run.admin`, `roles/iam.serviceAccountUser`, `roles/cloudscheduler.admin`, `roles/artifactregistry.writer` 권한 및 Artifact Registry 저장소 생성 명령, Repository Variables 목록을 문서화함.
+  3. **첫 배포 2-Revision 생성 방지 (리뷰 3번, 권장):** 기존 URL이 없을 때만 배포 후 URL을 획득하여 1회 갱신하고, 재배포 시에는 기존 URL을 즉시 주입하여 불필요한 revision 재생성을 억제함.
+  4. **Job 생성/갱신 명령 통합 (리뷰 4번, 권장):** `gcloud run jobs deploy` 명령을 적용하여 describe/create/update 조건 분기를 멱등한 단일 명령으로 간소화함.
+  5. **배포 워크플로 보안 헤더 검증 추가 (리뷰 5번, 권장):** `.github/workflows/deploy-cloudrun.yml`의 스모크 테스트 단계에 `curl -fsSI "$SERVICE_URL/" | grep -i "frame-ancestors 'none'"`을 추가하여 Clickjacking 방어 헤더 자동 검증을 강화함.
 - **겪은 문제 및 해결:** 없음. 로컬 도커 컨테이너 빌드 후 `curl` 및 `csp_check.js`를 통해 `frame-ancestors 'none'` 및 `X-Frame-Options: DENY` 헤더와 13개 화면 무오류를 성공적으로 검증함.
