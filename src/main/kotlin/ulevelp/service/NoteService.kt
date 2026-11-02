@@ -131,10 +131,10 @@ class NoteService(
         )
 
     private fun formatTimestamp(t: OffsetDateTime?): String? =
-        t?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        t?.let { DateTimeFormatter.ISO_INSTANT.format(it.toInstant()) }
 
     private fun formatTimestampNotNull(t: OffsetDateTime): String =
-        t.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        DateTimeFormatter.ISO_INSTANT.format(t.toInstant())
 
     suspend fun requestAnalyze(
         userId: UUID,

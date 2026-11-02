@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -24,7 +25,7 @@ fun interface AnalyzeJobDispatcher {
  * 운영 환경(CLOUD_RUN_ANALYZE_JOB_URI 설정 시):
  * GCP 메타데이터 서버(http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token)
  * 또는 고정 토큰에서 Bearer 토큰을 얻어 POST $jobUri 로
- * {"overrides":{"containerOverrides":[{"args":["--analyze-job", jobId.toString()]}]}} 를 전송한다.
+ * {"overrides":{"containerOverrides":[{"env":[{"name":"ANALYZE_JOB_ID","value":"<jobId>"}]}]}} 를 전송한다.
  */
 class CloudRunJobDispatcher(
     private val jobUri: String,
@@ -41,9 +42,11 @@ class CloudRunJobDispatcher(
             putJsonObject("overrides") {
                 putJsonArray("containerOverrides") {
                     addJsonObject {
-                        putJsonArray("args") {
-                            add(kotlinx.serialization.json.JsonPrimitive("--analyze-job"))
-                            add(kotlinx.serialization.json.JsonPrimitive(jobId.toString()))
+                        putJsonArray("env") {
+                            addJsonObject {
+                                put("name", "ANALYZE_JOB_ID")
+                                put("value", jobId.toString())
+                            }
                         }
                     }
                 }
@@ -59,7 +62,7 @@ class CloudRunJobDispatcher(
             .build()
 
         val response = try {
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -75,7 +78,7 @@ class CloudRunJobDispatcher(
         logger.info("Cloud Run Job 디스패치 성공 jobId={}", jobId)
     }
 
-    private fun fetchGcpMetadataToken(): String {
+    private suspend fun fetchGcpMetadataToken(): String {
         val metadataUri = URI("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token")
         val req = HttpRequest.newBuilder()
             .uri(metadataUri)
@@ -83,7 +86,13 @@ class CloudRunJobDispatcher(
             .header("Metadata-Flavor", "Google")
             .GET()
             .build()
-        val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+        val res = try {
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw RuntimeException("GCP 메타데이터 토큰 요청 네트워크 오류: ${e.message}", e)
+        }
         if (res.statusCode() != 200) {
             throw RuntimeException("GCP 메타데이터 토큰 획득 실패 (HTTP ${res.statusCode()})")
         }

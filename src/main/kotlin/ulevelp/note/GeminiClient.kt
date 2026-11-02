@@ -3,6 +3,7 @@ package ulevelp.note
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
@@ -92,7 +93,7 @@ class HttpGeminiClient(
                 .build()
 
             val response: HttpResponse<String> = try {
-                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -121,6 +121,11 @@ class NoteSvgAndSchemaTest {
         assertEquals(135, NotionNoteBlockBuilder.seconds("2:15"))
         assertEquals(3723, NotionNoteBlockBuilder.seconds("1:02:03"))
         assertNull(NotionNoteBlockBuilder.seconds("알수없음"))
+        assertNull(NotionNoteBlockBuilder.seconds("99999999999:00"))
+
+        // text("") 빈 문자열은 원본 analyze.py처럼 빈 배열 반환 검증
+        assertTrue(NotionNoteBlockBuilder.text("").isEmpty())
+        assertTrue(NotionNoteBlockBuilder.text(null).isEmpty())
 
         val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         val linkRich = NotionNoteBlockBuilder.tsLink(url, "2:15")

@@ -8,19 +8,20 @@ object NotionNoteBlockBuilder {
 
     private val DIGITS_REGEX = Regex("""\d+""")
 
-    /** "2:15" -> 135, "1:02:03" -> 3723. 숫자가 2~3덩어리가 아니면 null */
+    /** "2:15" -> 135, "1:02:03" -> 3723. 숫자가 2~3덩어리가 아니거나 숫자가 너무 커서 int 파싱 실패 시 null */
     fun seconds(ts: String?): Int? {
         val raw = ts?.trim().orEmpty()
-        val parts = DIGITS_REGEX.findAll(raw).map { it.value.toInt() }.toList()
-        if (parts.size !in 2..3) return null
+        val parts = DIGITS_REGEX.findAll(raw).map { it.value.toIntOrNull() }.toList()
+        if (parts.size !in 2..3 || parts.any { it == null }) return null
         var total = 0
         for (p in parts) {
-            total = total * 60 + p
+            val num = p ?: return null
+            total = total * 60 + num
         }
         return total
     }
 
-    /** 2000자 단위로 쪼갠 Notion rich_text 배열 생성 */
+    /** 2000자 단위로 쪼갠 Notion rich_text 배열 생성 (빈 문자열이면 빈 배열) */
     fun text(
         content: String?,
         link: String? = null,
@@ -29,7 +30,7 @@ object NotionNoteBlockBuilder {
         color: String = "default"
     ): JsonArray {
         val str = content.orEmpty()
-        val chunks = if (str.isEmpty()) listOf("") else str.chunked(TEXT_LIMIT)
+        val chunks = str.chunked(TEXT_LIMIT)
         return buildJsonArray {
             for (c in chunks) {
                 addJsonObject {
@@ -46,9 +47,6 @@ object NotionNoteBlockBuilder {
                     }
                     putJsonObject("annotations") {
                         put("bold", bold)
-                        put("italic", false)
-                        put("strikethrough", false)
-                        put("underline", false)
                         put("code", code)
                         put("color", color)
                     }
