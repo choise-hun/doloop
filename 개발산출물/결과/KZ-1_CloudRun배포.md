@@ -3,7 +3,7 @@
 - **수행일:** 2026-11-02
 - **역할:** 주니어 (구현 명세 `개발산출물/명세/KZ-1_구현명세.md` 및 `개발산출물/주니어_체크리스트.md` 기준 구현·검증)
 - **브랜치:** `step/KZ-1`
-- **상태:** 진행 (자동 검증 완료, 사람 수행 실환경 배포 및 실기기 점검 M-KZ1 ~ M-KZ5 대기)
+- **상태:** 진행 (M-KZ1~M-KZ3 실환경 확인 완료 2026-11-02, M-KZ4~M-KZ5 사람 점검 대기)
 
 ---
 
@@ -195,8 +195,8 @@ export CRON_SA_EMAIL="ulevelp-cron@<project>.iam.gserviceaccount.com"
 export IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ulevelp/server:latest"
 
 # 1. 이미지 빌드 및 푸시
-docker build -t "$IMAGE_URI" .
-docker push "$IMAGE_URI"
+# Apple Silicon(arm64)에서는 Cloud Run용 amd64로 크로스 빌드해야 한다
+docker buildx build --platform linux/amd64 -t "$IMAGE_URI" --push .
 
 # 2. 스크립트 실행 (Job deploy, IAM 바인딩, 서비스 배포, Scheduler 자동 구성)
 #    서버 env와 Cloud Scheduler audience가 FINAL_CRON_AUDIENCE로 완전 일치되어 401 오류가 방지됩니다.
@@ -207,9 +207,30 @@ bash scripts/deploy-cloudrun.sh "$IMAGE_URI"
 
 ### 3.3 사람 점검 체크리스트 (M-KZ1 ~ M-KZ5)
 
-- [ ] **M-KZ1:** Secret Manager 시크릿 등록 및 `scripts/deploy-cloudrun.sh` 실행으로 Cloud Run 서비스(`ulevelp`)와 Job(`analyze`) 배포 확인 (`CLOUD_RUN_ANALYZE_JOB_URI=https://run.googleapis.com/v2/projects/<project>/locations/<region>/jobs/analyze:run`).
-- [ ] **M-KZ2:** Cloud Scheduler `ulevelp-notion-push`(1분 주기, OIDC 인증) 생성 및 콘솔에서 수동 1회 실행 시 `200 OK` 확인.
-- [ ] **M-KZ3:** 배포된 Cloud Run 서비스 URL에서 `GET /api/health` → `200 {"ok":true}` 및 정적 루트(`/`)의 `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY` 헤더 확인.
+- [x] **M-KZ1:** Secret Manager 시크릿 등록 및 `scripts/deploy-cloudrun.sh` 실행으로 Cloud Run 서비스(`ulevelp`)와 Job(`analyze`) 배포 확인 (`CLOUD_RUN_ANALYZE_JOB_URI=https://run.googleapis.com/v2/projects/<project>/locations/<region>/jobs/analyze:run`).
+- [x] **M-KZ2:** Cloud Scheduler `ulevelp-notion-push`(1분 주기, OIDC 인증) 생성 및 콘솔에서 수동 1회 실행 시 `200 OK` 확인.
+- [x] **M-KZ3:** 배포된 Cloud Run 서비스 URL에서 `GET /api/health` → `200 {"ok":true}` 및 정적 루트(`/`)의 `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY` 헤더 확인.
+
+#### M-KZ1 ~ M-KZ3 실환경 결과 (2026-11-02)
+
+| 항목 | 값 |
+| --- | --- |
+| 프로젝트 / 리전 | `ulevelp` / `asia-northeast3` |
+| 서비스 URL | `https://ulevelp-d5ympfsmfq-du.a.run.app` (결정적 URL `https://ulevelp-175439281655.asia-northeast3.run.app`도 200) |
+| 이미지 / revision | `asia-northeast3-docker.pkg.dev/ulevelp/ulevelp/server:e296817` / `ulevelp-00003-5g8` |
+| 런타임 SA / 크론 SA | `ulevelp-runtime@ulevelp.iam.gserviceaccount.com` / `ulevelp-cron@ulevelp.iam.gserviceaccount.com` |
+| 사전 준비 | API `run`·`artifactregistry`·`cloudscheduler`·`iam` 활성화, SA 2개 생성, 런타임 SA에 시크릿 3개 `secretAccessor`, AR 저장소 `ulevelp` 생성 (배포 주체: Owner 계정 로컬 gcloud) |
+
+```
+# M-KZ1: bash scripts/deploy-cloudrun.sh .../server:e296817 → exit=0
+Service [ulevelp] revision [ulevelp-00003-5g8] has been deployed and is serving 100 percent of traffic.
+# M-KZ2: gcloud scheduler jobs run ulevelp-notion-push → 서비스 요청 로그
+2026-11-02T12:43:42.406170Z	200	Google-Cloud-Scheduler
+# 잘못된 입력(토큰 없음): POST /internal/cron/notion-push → HTTP 401 UNAUTHORIZED
+# M-KZ3
+GET /api/health → {"ok":true} HTTP 200
+HEAD / → HTTP/2 200, x-frame-options: DENY, content-security-policy: frame-ancestors 'none', content-length: 4052
+```
 - [ ] **M-KZ4:** Cloud Run 서비스(또는 GitHub Pages)에서 Google 로그인 → 곡 저장 → 녹음 업로드/재생 → 노션 동기화 → Gemini 학습 노트 생성 정상 동작 확인.
 - [ ] **M-KZ5:** 아이패드 Safari(또는 모바일 실기기)에서 플레이어 구간 반복, 녹음, 기록 달력, 코드 연습실, 학습 노트 뷰어 UI 깨짐 없이 정상 동작 확인.
 
@@ -223,4 +244,7 @@ bash scripts/deploy-cloudrun.sh "$IMAGE_URI"
   3. **첫 배포 2-Revision 생성 방지 (리뷰 3번, 권장):** 기존 URL이 없을 때만 배포 후 URL을 획득하여 1회 갱신하고, 재배포 시에는 기존 URL을 즉시 주입하여 불필요한 revision 재생성을 억제함.
   4. **Job 생성/갱신 명령 통합 (리뷰 4번, 권장):** `gcloud run jobs deploy` 명령을 적용하여 describe/create/update 조건 분기를 멱등한 단일 명령으로 간소화함.
   5. **배포 워크플로 보안 헤더 검증 추가 (리뷰 5번, 권장):** `.github/workflows/deploy-cloudrun.yml`의 스모크 테스트 단계에 `curl -fsSI "$SERVICE_URL/" | grep -i "frame-ancestors 'none'"`을 추가하여 Clickjacking 방어 헤더 자동 검증을 강화함.
-- **겪은 문제 및 해결:** 없음. 로컬 도커 컨테이너 빌드 후 `curl` 및 `csp_check.js`를 통해 `frame-ancestors 'none'` 및 `X-Frame-Options: DENY` 헤더와 13개 화면 무오류를 성공적으로 검증함.
+- **겪은 문제 및 해결 (실환경 배포 중):**
+  1. `gcloud run deploy --set-env-vars`가 `ALLOWED_ORIGINS`의 쉼표 때문에 `Bad syntax for dict arg`로 실패 → 구분자를 `^|^`로 변경(`@`는 SA 이메일과 겹쳐 불가). 커밋 `77c8af6`.
+  2. Cloud Run에서 `HEAD /`가 502 → HEAD 분기가 `Content-Length`를 직접 붙인 뒤 빈 `respond`를 해 `Content-Length: 4052`, `0`이 중복으로 나감(로컬 curl은 허용, Google 프런트엔드는 거부). `OutgoingContent.NoContent`로 한 번만 내보내도록 수정하고 `ChordEngineTest` Z3 추가(수정 전 `expected: <[4052]> but was: <[4052, 0]>`로 실패 확인). 커밋 `e296817`.
+  3. Apple Silicon에서 빌드한 이미지는 arm64라 Cloud Run에서 못 돈다 → `docker buildx build --platform linux/amd64` 사용.
