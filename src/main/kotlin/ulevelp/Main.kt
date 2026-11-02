@@ -268,6 +268,7 @@ fun Application.module(
 
     intercept(ApplicationCallPipeline.Plugins) {
         call.response.headers.append("X-Content-Type-Options", "nosniff")
+        call.response.headers.append("X-Frame-Options", "DENY")
     }
 
     val canonicalPublicRoot = publicDir.canonicalFile
@@ -359,6 +360,9 @@ fun Application.module(
                     HttpHeaders.CacheControl,
                     if (ext == "html") "no-cache" else "public, max-age=300"
                 )
+                if (ext == "html") {
+                    call.response.headers.append("Content-Security-Policy", "frame-ancestors 'none'")
+                }
 
                 if (method == HttpMethod.Head) {
                     call.response.headers.append(HttpHeaders.ContentLength, targetFile.length().toString())

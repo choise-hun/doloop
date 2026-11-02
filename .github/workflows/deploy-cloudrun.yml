@@ -1,0 +1,66 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cloudrun-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    if: vars.GCP_PROJECT_ID != ''
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast3' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'ulevelp' }}
+      CLOUD_RUN_JOB: ${{ vars.CLOUD_RUN_JOB || 'analyze' }}
+      RUNTIME_SA_EMAIL: ${{ vars.RUNTIME_SA_EMAIL }}
+      CRON_SA_EMAIL: ${{ vars.CRON_SA_EMAIL }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://vefrfhafmiiivpgjhqiu.supabase.co' }}
+      PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://choise-hun.github.io/ULevelP/' }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io,http://localhost:3000' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication for Artifact Registry
+        run: |
+          gcloud auth configure-docker "${{ env.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and Push Docker image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/ulevelp/server:${IMAGE_TAG}"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+
+      - name: Deploy Service, Job, and Scheduler
+        run: |
+          bash scripts/deploy-cloudrun.sh "$IMAGE_URI"
+
+      - name: Smoke test deployed service
+        run: |
+          SERVICE_URL=$(gcloud run services describe "${{ env.CLOUD_RUN_SERVICE }}" --region="${{ env.GCP_REGION }}" --project="${{ env.GCP_PROJECT_ID }}" --format='value(status.url)')
+          echo "Testing deployed service: ${SERVICE_URL}"
+          curl -fsS "${SERVICE_URL}/api/health"
+

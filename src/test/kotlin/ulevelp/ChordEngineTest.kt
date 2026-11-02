@@ -173,5 +173,30 @@ class ChordEngineTest {
         assertEquals(HttpStatusCode.OK, indexRes.status)
         assertTrue(indexRes.bodyAsText().contains("<!doctype html>", ignoreCase = true))
     }
+
+    @Test
+    fun `Z1 API 응답 X-Frame-Options DENY 헤더 검증`() = testApplication {
+        application {
+            module(dbConfig = null, authConfig = null)
+        }
+        val res = client.get("/api/health")
+        assertEquals(HttpStatusCode.OK, res.status)
+        assertEquals("DENY", res.headers["X-Frame-Options"])
+        assertNull(res.headers["Content-Security-Policy"])
+    }
+
+    @Test
+    fun `Z2 정적 HTML 서빙 시 Clickjacking 방지 헤더 검증`() = testApplication {
+        application {
+            module(dbConfig = null, authConfig = null)
+        }
+        for (path in listOf("/", "/index.html")) {
+            val res = client.get(path)
+            assertEquals(HttpStatusCode.OK, res.status)
+            assertEquals("frame-ancestors 'none'", res.headers["Content-Security-Policy"])
+            assertEquals("DENY", res.headers["X-Frame-Options"])
+            assertEquals("no-cache", res.headers["Cache-Control"])
+        }
+    }
 }
 
