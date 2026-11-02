@@ -37,7 +37,7 @@
   - `STORAGE_UNAVAILABLE` (`503`): 서버에 녹음 저장소(`SUPABASE_SECRET_KEY`)가 설정되지 않음
   - `STORAGE_ERROR` (`502`): Supabase Storage 업로드·서명 URL 발급 실패
   - `NO_KEY` (`412`): 해당 기능에 필요한 노션/Gemini 키 미등록 (`FR-KEY-GATE`)
-  - `PROVIDER_KEY_INVALID` (`400` / `401` / `403`): 등록된 노션 토큰 또는 Gemini 키가 외부 API에서 거부됨 → 클라이언트는 `ulp:keys` 캐시 초기화
+  - `PROVIDER_KEY_INVALID` (`400` / `401` / `403`): 등록된 노션 토큰 또는 Gemini 키가 외부 API에서 거부됨(Gemini는 401/403 또는 본문에 "API_KEY_INVALID"가 포함된 400 시 키 무효 판정, 일반 400[비공개·길이 초과 영상 등]은 GEMINI_API_ERROR로 처리되어 키 캐시 유지) → 클라이언트는 `ulp:keys` 캐시 초기화
   - `NOTION_OBJECT_NOT_FOUND` (`404`): 노션 DB를 찾을 수 없거나 페이지에 통합이 연결되지 않음
   - `TAKE_QUOTA_EXCEEDED` (`413`): 기본 스토리지 녹음 용량 한도(200MB) 초과
   - `RATE_LIMITED` (`429`): 요청 빈도 제한 초과 (`retryAfter` 초 반환)
@@ -307,7 +307,7 @@
   - **방식 1 (`multipart/form-data`, 기본 Supabase Storage):** `metadata`(JSON 파트)와 `file`(오디오 바이너리 파트)을 전송합니다. 서버가 200MB 쿼터를 검사(`FR-TAKE-4`)하고, 당일 세션이 없으면 0분 세션을 생성(`FR-TAKE-2`)한 뒤 스토리지(`{userId}/{takeId}.{ext}`)에 저장합니다. 업로드·DB 기록 순서는 [04 3.2절](04-db-design.md) 참고.
     - `metadata`: `{ songId, date, recordedAt, a, b, rate, durationSec, mime }` — `durationSec` 0~3600초, `mime`은 `;codecs=…`를 떼고 6종(`FR-TAKE-5`) 중 하나. `sizeBytes`·`storageKey`는 서버가 정합니다(보내도 무시).
     - 파일 50MB 초과 `413 TAKE_TOO_LARGE`, 쿼터 초과 `413 TAKE_QUOTA_EXCEEDED`, 저장소 실패 `502 STORAGE_ERROR`, 저장소 미설정 `503 STORAGE_UNAVAILABLE`.
-  - **방식 2 (`application/json`, Google Drive 모드 `P6`, K6-1에서 구현):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`). K1-2~K6-1 사이에는 multipart가 아니면 `400 INVALID_INPUT`.
+  - **방식 2 (`application/json`, Google Drive 모드 `P6`, K6-1에서 구현):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`). K1-2~K6-1 사이에는 multipart가 아니면 `400 INVALID_INPUT`. 노션 실시간 연동이 켜진 상태(notion_sync.enabled = true)에서는 409 NOTION_SYNC_CONFLICT로 거부합니다(FR-SYNC-5).
 - **Response (`201 Created`):** `take`는 녹음 객체(`TakeDto`) 12개 필드이며 3.4·4.2의 녹음 항목과 같습니다.
 ```json
 {
@@ -329,15 +329,18 @@
 }
 ```
 
-### 5.2 녹음 재생용 서명 URL 발급
+### 5.2 녹음 재생용 서명 URL 발급 및 원본 다운로드
 - **`GET /api/v1/takes/{takeId}/url`**
-- **설명:** Supabase Storage에 저장된 녹음에 대해 60분간 유효한 서명 URL(`createSignedUrl`)을 반환합니다(`FR-TAKE-6`).
-- **Response (`200 OK`):** `{ "url": "https://<project-ref>.supabase.co/storage/v1/object/sign/takes/...?token=...", "expiresIn": 3600 }`
-- `storage = 'drive'`인 녹음은 `400 INVALID_INPUT`(브라우저가 Drive에서 직접 재생), 서명 실패 `502 STORAGE_ERROR`.
+  - **설명:** Supabase Storage에 저장된 녹음에 대해 60분간 유효한 서명 URL(`createSignedUrl`)을 반환합니다(`FR-TAKE-6`).
+  - **Response (`200 OK`):** `{ "url": "https://<project-ref>.supabase.co/storage/v1/object/sign/takes/...?token=...", "expiresIn": 3600 }`
+  - `storage = 'drive'`인 녹음은 `400 INVALID_INPUT`(브라우저가 Drive에서 직접 재생), 서명 실패 `502 STORAGE_ERROR`.
+- **`GET /api/v1/takes/{takeId}/download`** (K6-1)
+  - **설명:** 기존 Supabase Storage에 저장된 녹음을 사용자 Google Drive로 이전할 때 브라우저가 원본 오디오 바이트를 다운로드하기 위해 호출합니다(`FR-DRIVE-3`).
+  - **Response (`200 OK`):** 오디오 바이너리 (`Content-Type: <mime>`, `Cache-Control: private, no-store`). `storage = 'drive'`인 녹음은 `400 INVALID_INPUT`, 스토리지 다운로드 실패는 `502 STORAGE_ERROR`.
 
 ### 5.3 녹음 삭제 및 드라이브 이전 갱신
 - **`DELETE /api/v1/takes/{takeId}`**: 스토리지 파일 및 `takes` 행 삭제(파일은 `storage_trash`를 거쳐 커밋 직후 삭제), 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`). 세션 행은 남깁니다. **Response (`200 OK`):** `{ "ok": true }`
-- **`POST /api/v1/takes/{takeId}/migrate-drive`** (K6-1): 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
+- **`POST /api/v1/takes/{takeId}/migrate-drive`** (K6-1): 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`(`^[A-Za-z0-9_-]{5,200}$`)를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 `storage_trash`를 거쳐 즉시 삭제해 쿼터를 반환합니다(`FR-DRIVE-3`). 노션 실시간 연동이 켜진 상태에서는 `409 NOTION_SYNC_CONFLICT`로 거부합니다(`FR-SYNC-5`). **Response (`200 OK`):** `{ "ok": true, "take": { ... } }`
 
 ---
 
@@ -530,7 +533,8 @@
 
 ### 8.1 영상 분석 요청 (비동기 Job 생성)
 - **`POST /api/v1/notes/analyze`**
-- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건, 일 최대 20건 `429 RATE_LIMITED`)을 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`runWithOverrides`, 인자 `jobId`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`).
+- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건 `retryAfter = 30`, UTC 당일 최대 20건 `429 RATE_LIMITED`)을 `profiles FOR UPDATE` 잠금 안에서 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`--analyze-job <jobId>`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`). 디스패치 호출이 실패하면 작업 상태를 즉시 `failed`로 바꾸고 `502 JOB_DISPATCH_ERROR`를 반환합니다.
+- **검증 규칙:** `url`에서 11자리 유튜브 `videoId` 추출 필수, `tags`는 `["화성", "사운드 디자인", "DAW/MIDI", "리듬", "편곡", "믹싱"]` 중 1~6개 필수, `memo`는 최대 2,000자(선택).
 - **Request Body:**
 ```json
 {
@@ -542,22 +546,22 @@
 - **Response (`202 Accepted`):**
 ```json
 {
-  "jobId": "j1000000-0000-4000-8000-000000000001",
+  "jobId": "a1000000-0000-4000-8000-000000000001",
   "status": "queued"
 }
 ```
 
 ### 8.2 분석 작업 상태 조회
-- **`GET /api/v1/notes/jobs`** (최근 작업 목록) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링)
-- **Response (`200 OK`):**
+- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 9개 필드). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
+- **Response (`200 OK` - 단건 예시):**
 ```json
 {
-  "id": "j1000000-0000-4000-8000-000000000001",
+  "id": "a1000000-0000-4000-8000-000000000001",
   "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "tags": ["화성", "리듬"],
   "status": "done",
   "error": null,
-  "noteId": "n1000000-0000-4000-8000-000000000001",
+  "noteId": "b1000000-0000-4000-8000-000000000001",
   "createdAt": "2026-10-30T09:10:00Z",
   "startedAt": "2026-10-30T09:10:01Z",
   "finishedAt": "2026-10-30T09:11:15Z"
@@ -565,10 +569,60 @@
 ```
 
 ### 8.3 학습 노트 목록·상세 조회 및 수정·삭제
-- **`GET /api/v1/notes`**: 내 학습 노트 목록 조회 (`tag` 필터 지원).
-- **`GET /api/v1/notes/{noteId}`**: 노트 상세 조회(`FR-NOTE-3`). `analysis` JSON 원본과 함께 화성 진행별 렌더링된 SVG 문자열(`diagramsSvg`)을 포함해 반환하므로 프런트엔드는 별도 계산 없이 즉시 화면에 표시할 수 있습니다.
-- **`PATCH /api/v1/notes/{noteId}`**: `{ "memo": "...", "tags": ["화성", "TAB"] }` 수정.
-- **`DELETE /api/v1/notes/{noteId}`**: 노트 삭제 (노션 연동 시 노션 페이지 아카이브).
+- **`GET /api/v1/notes`**: 내 학습 노트 요약 목록 조회 (`?tag=` 선택 필터: `화성`, `사운드 디자인`, `DAW/MIDI`, `리듬`, `편곡`, `믹싱`, `TAB` 7종 지원). **Response (`200 OK`):** `{ "notes": [ NoteSummaryDto, ... ] }` (`NoteSummaryDto`는 `NoteDetailDto`에서 `analysis`와 `diagramsSvg`를 뺀 14개 필드).
+- **`GET /api/v1/notes/{noteId}`**: 노트 상세 조회(`FR-NOTE-3`). `analysis` JSON 원본과 함께 `harmony.progressions` 인덱스별 렌더링된 SVG 문자열 배열(`diagramsSvg`)을 포함한 `NoteDetailDto`(16개 필드)를 `{ "note": { ... } }`로 반환합니다.
+```json
+{
+  "note": {
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "videoId": "dQw4w9WgXcQ",
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "세컨더리 도미넌트 보이싱 실전",
+    "channel": "Jazz Guitar Lab",
+    "tags": ["화성", "리듬"],
+    "memo": "2분 15초 세컨더리 도미넌트 보이싱 집중 분석",
+    "headline": "V7/ii와 V7/V에서의 가이드톤 반음계 연결을 다룹니다.",
+    "points": ["3도와 7도 가이드톤 최소 이동", "컴핑 시 2·4박 뒤쪽 싱코페이션"],
+    "keywords": ["Secondary Dominant", "Guide Tone", "Comping"],
+    "difficulty": "중급",
+    "model": "gemini-2.5-pro",
+    "analysis": {
+      "title": "세컨더리 도미넌트 보이싱 실전",
+      "channel": "Jazz Guitar Lab",
+      "headline": "V7/ii와 V7/V에서의 가이드톤 반음계 연결을 다룹니다.",
+      "difficulty": "중급",
+      "points": ["3도와 7도 가이드톤 최소 이동", "컴핑 시 2·4박 뒤쪽 싱코페이션"],
+      "keywords": ["Secondary Dominant", "Guide Tone", "Comping"],
+      "harmony": {
+        "instrument": "기타",
+        "progressions": [
+          {
+            "section": "A파트",
+            "timestamp": "02:15",
+            "key": "C major",
+            "roman": "Imaj7 - VI7 - iim7 - V7",
+            "chords": ["Cmaj7", "A7", "Dm7", "G7"],
+            "role": "VI7(A7)의 C#이 Dm7의 C로 반음 하행 해결"
+          }
+        ]
+      },
+      "rhythm": [
+        {
+          "timestamp": "03:10",
+          "groove": "미디엄 스윙 4비트에 찰스턴 리듬 변형",
+          "tip": "메트로놈을 2·4박에 두고 첫 박 뒤 8분음표 액센트 연습"
+        }
+      ],
+      "practice": ["느린 템포(BPM 70)에서 가이드톤 2성부만 먼저 연결하기"]
+    },
+    "diagramsSvg": ["<svg xmlns=\"http://www.w3.org/2000/svg\" ...>...</svg>"],
+    "createdAt": "2026-10-30T09:11:15Z",
+    "updatedAt": "2026-10-30T09:11:15Z"
+  }
+}
+```
+- **`PATCH /api/v1/notes/{noteId}`**: `{ "memo": "...", "tags": ["화성", "TAB"], "title": "..." }`(셋 중 하나 이상 필수) 수정 및 노션 연동 시 `sync_outbox` `note` `upsert` 적재. **Response (`200 OK`):** `{ "note": { ... } }`.
+- **`DELETE /api/v1/notes/{noteId}`**: 노트 삭제 및 노션 연동 시 노션 페이지 아카이브(`sync_outbox` `note` `delete`). **Response (`200 OK`):** `{ "ok": true }`.
 
 ---
 
