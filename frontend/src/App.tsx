@@ -3,6 +3,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell, AppShellVariant, ActiveNavKey } from './components/layout/AppShell';
+import { HomePage } from './pages/HomePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,28 +44,8 @@ export function App(): React.ReactElement {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <RouteShellPage
-                title="ULeveLP"
-                subtitle="DIVE INTO SOUND"
-                variant="default"
-                activeNav="home"
-              />
-            }
-          />
-          <Route
-            path="/index.html"
-            element={
-              <RouteShellPage
-                title="ULeveLP"
-                subtitle="DIVE INTO SOUND"
-                variant="default"
-                activeNav="home"
-              />
-            }
-          />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/index.html" element={<HomePage />} />
           <Route
             path="/chords.html"
             element={
