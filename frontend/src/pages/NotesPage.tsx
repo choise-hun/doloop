@@ -30,6 +30,10 @@ function formatAgo(iso?: string | null): string {
 }
 
 export function NotesPage(): React.ReactElement {
+  useEffect(() => {
+    document.title = '학습 노트 · ULeveLP';
+  }, []);
+
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
 

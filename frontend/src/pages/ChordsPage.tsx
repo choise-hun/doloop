@@ -103,6 +103,10 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function ChordsPage(): React.ReactElement {
+  useEffect(() => {
+    document.title = '기타 코드 연습실';
+  }, []);
+
   // 초기 탭 결정
   const [activeTab, setActiveTab] = useState<ChordTabId>(() => {
     if (typeof window !== 'undefined') {

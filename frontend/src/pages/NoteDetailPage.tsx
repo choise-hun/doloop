@@ -37,6 +37,10 @@ function TimestampCell({ ts, videoId }: { ts?: string; videoId?: string }): Reac
 }
 
 export function NoteDetailPage(): React.ReactElement {
+  useEffect(() => {
+    document.title = '학습 노트 상세 · ULeveLP';
+  }, []);
+
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
 
