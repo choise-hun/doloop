@@ -42,10 +42,14 @@ export function NotesPage(): React.ReactElement {
   const [jobs, setJobs] = useState<AnalysisJobDto[]>([]);
   const [notes, setNotes] = useState<NoteSummaryDto[]>([]);
   const [filterTag, setFilterTag] = useState('');
+  const filterTagRef = useRef(filterTag);
+  filterTagRef.current = filterTag;
+
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [localHasKeyOverride, setLocalHasKeyOverride] = useState(false);
 
-  const reqSeqRef = useRef(0);
+  const notesReqSeqRef = useRef(0);
+  const jobsReqSeqRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeJobIdsRef = useRef<Set<string>>(new Set());
 
@@ -79,17 +83,17 @@ export function NotesPage(): React.ReactElement {
       setNotes([]);
       return;
     }
-    const mySeq = ++reqSeqRef.current;
+    const mySeq = ++notesReqSeqRef.current;
     try {
       const list = await apiClient.notes.list(tag);
-      if (mySeq !== reqSeqRef.current || auth.getUser()?.id !== uid) return;
+      if (mySeq !== notesReqSeqRef.current || auth.getUser()?.id !== uid) return;
       setNotes(Array.isArray(list) ? list : []);
     } catch {
       /* ignore background error */
     }
   };
 
-  const refreshJobsAndNotes = async (uid: string | null, tag: string) => {
+  const refreshJobsAndNotes = async (uid: string | null) => {
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -100,10 +104,10 @@ export function NotesPage(): React.ReactElement {
       return;
     }
 
-    const mySeq = ++reqSeqRef.current;
+    const mySeq = ++jobsReqSeqRef.current;
     try {
       const fetchedJobs = await apiClient.notes.listJobs();
-      if (mySeq !== reqSeqRef.current || auth.getUser()?.id !== uid) return;
+      if (mySeq !== jobsReqSeqRef.current || auth.getUser()?.id !== uid) return;
 
       const safeJobs = Array.isArray(fetchedJobs) ? fetchedJobs : [];
       setJobs(safeJobs);
@@ -122,14 +126,12 @@ export function NotesPage(): React.ReactElement {
       );
 
       if (newlyFinished || !safeJobs.some((j) => activeJobIdsRef.current.has(j.id))) {
-        const fetchedNotes = await apiClient.notes.list(tag);
-        if (mySeq !== reqSeqRef.current || auth.getUser()?.id !== uid) return;
-        setNotes(Array.isArray(fetchedNotes) ? fetchedNotes : []);
+        void loadNotesOnly(filterTagRef.current, uid);
       }
 
       if (hasActive) {
         pollTimerRef.current = setTimeout(() => {
-          void refreshJobsAndNotes(uid, tag);
+          void refreshJobsAndNotes(uid);
         }, 5000);
       }
     } catch {
@@ -140,7 +142,8 @@ export function NotesPage(): React.ReactElement {
   useEffect(() => {
     setLocalHasKeyOverride(false);
     activeJobIdsRef.current.clear();
-    void refreshJobsAndNotes(activeUid, filterTag);
+    void refreshJobsAndNotes(activeUid);
+    void loadNotesOnly(filterTagRef.current, activeUid);
     return () => {
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
@@ -179,7 +182,7 @@ export function NotesPage(): React.ReactElement {
       setFormMsg({ text: '분석을 요청했어요. 보통 1~3분 뒤에 정리가 완료돼요.', kind: 'ok' });
       setUrlVal('');
       setMemoVal('');
-      void refreshJobsAndNotes(activeUid, filterTag);
+      void refreshJobsAndNotes(activeUid);
     } catch (err: any) {
       if (err && (err.code === 'NO_KEY' || err.status === 412)) {
         setLocalHasKeyOverride(false);
@@ -364,6 +367,7 @@ export function NotesPage(): React.ReactElement {
             onClick={() => {
               if (filterTag === tag) return;
               setFilterTag(tag);
+              filterTagRef.current = tag;
               void loadNotesOnly(tag, activeUid);
             }}
           >
@@ -431,3 +435,4 @@ export function NotesPage(): React.ReactElement {
 }
 
 export default NotesPage;
+

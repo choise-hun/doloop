@@ -7,7 +7,8 @@
   const { videoIdFrom, thumb, safeUrl } = UL;
 
   let activeUid = null;
-  let reqSeq = 0;
+  let notesReqSeq = 0;
+  let jobsReqSeq = 0;
   let pollTimer = null;
   let activeJobIds = new Set();
   let currentFilterTag = '';
@@ -326,7 +327,7 @@
         filterContainer.querySelectorAll('button').forEach((btn) => {
           btn.setAttribute('aria-pressed', String(btn.textContent === (tag || '전체')));
         });
-        reqSeq++;
+        notesReqSeq++;
         loadNotesOnly();
       });
       filterContainer.appendChild(b);
@@ -338,14 +339,14 @@
       renderNotes([]);
       return;
     }
-    const mySeq = ++reqSeq;
+    const mySeq = ++notesReqSeq;
     const myUid = activeUid;
     try {
       const notes = await window.ULData.notes.list(currentFilterTag);
-      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      if (mySeq !== notesReqSeq || myUid !== activeUid) return;
       renderNotes(notes);
     } catch (err) {
-      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      if (mySeq !== notesReqSeq || myUid !== activeUid) return;
       console.warn('노트 목록 로드 실패', err);
     }
   }
@@ -359,14 +360,14 @@
       return;
     }
 
-    const mySeq = ++reqSeq;
+    const mySeq = ++jobsReqSeq;
     const myUid = activeUid;
     try {
       const jobs = await window.ULData.notes.listJobs();
       if (Array.isArray(jobs) && jobs.some((j) => j && j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:'))) {
         localHasKeyOverride = false;
       }
-      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      if (mySeq !== jobsReqSeq || myUid !== activeUid) return;
       updateKeyGate();
       renderJobs(jobs);
 
@@ -375,17 +376,15 @@
       activeJobIds = new Set(jobs.filter((j) => j && (j.status === 'queued' || j.status === 'running')).map((j) => j.id));
 
       if (newlyFinished || !jobs.some((j) => activeJobIds.has(j.id))) {
-        // 완료 작업이 생겼거나 최초 로드 시 노트 목록 새로고침
-        const notes = await window.ULData.notes.list(currentFilterTag);
-        if (mySeq !== reqSeq || myUid !== activeUid) return;
-        renderNotes(notes);
+        // 완료 작업이 생겼거나 최초 로드 시 최신 필터로 노트 목록 새로고침
+        loadNotesOnly();
       }
 
       if (hasActive) {
         pollTimer = setTimeout(refreshJobsAndNotes, 5000);
       }
     } catch (err) {
-      if (mySeq !== reqSeq || myUid !== activeUid) return;
+      if (mySeq !== jobsReqSeq || myUid !== activeUid) return;
       console.warn('작업 및 노트 조회 실패', err);
     }
   }
@@ -407,7 +406,8 @@
       if (newUid !== activeUid) {
         clearTimeout(pollTimer);
         activeUid = newUid;
-        reqSeq++;
+        notesReqSeq++;
+        jobsReqSeq++;
         activeJobIds.clear();
         localHasKeyOverride = false;
         updateKeyGate();

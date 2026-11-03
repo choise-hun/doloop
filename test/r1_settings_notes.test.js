@@ -387,3 +387,141 @@ test('R1-S7 & R1-S8: parseTimestampSec 검증 및 frontend/ 시크릿 패턴·�
     assert.equal(/\bdangerouslySetInnerHTML\s*=/.test(txt), false, f + '에 dangerouslySetInnerHTML 속성이 포함됨');
   }
 });
+
+test('R1-S9 (PR #39 리뷰 반영): NotesPage 및 public/notes.js 태그 필터 변경 시 잡 폴링 타이머 유지 및 최신 필터 참조 검증', async () => {
+  const notesTsx = readText('frontend/src/pages/NotesPage.tsx');
+  assert.ok(notesTsx.includes('const notesReqSeqRef = useRef(0);'), 'notesReqSeqRef 분리 필수');
+  assert.ok(notesTsx.includes('const jobsReqSeqRef = useRef(0);'), 'jobsReqSeqRef 분리 필수');
+  assert.ok(notesTsx.includes('const filterTagRef = useRef(filterTag);'), 'filterTagRef 선언 필수');
+  assert.ok(notesTsx.includes('loadNotesOnly(filterTagRef.current, uid)'), '잡 완료 시 최신 filterTagRef 참조 필수');
+  assert.ok(notesTsx.includes('const refreshJobsAndNotes = async (uid: string | null) =>'), 'refreshJobsAndNotes는 특정 tag를 캡처하지 않아야 함');
+
+  const notesJs = readText('public/notes.js');
+  assert.ok(notesJs.includes('let notesReqSeq = 0;'), 'public/notes.js notesReqSeq 분리 필수');
+  assert.ok(notesJs.includes('let jobsReqSeq = 0;'), 'public/notes.js jobsReqSeq 분리 필수');
+
+  // VM 환경에서 태그 필터 변경 시 백그라운드 잡 폴링이 중단되지 않고 유지되는지 검증
+  const tagButtons = [];
+  const elements = new Map();
+  function makeEl(id) {
+    return {
+      id,
+      value: '',
+      hidden: false,
+      disabled: false,
+      textContent: '',
+      children: [],
+      listeners: {},
+      addEventListener(ev, fn) {
+        this.listeners[ev] = fn;
+      },
+      setAttribute(k, v) {
+        this[k] = v;
+      },
+      appendChild(c) {
+        this.children.push(c);
+        if (id === 'noteTagFilter') tagButtons.push(c);
+        return c;
+      },
+      removeChild() {},
+      querySelectorAll: () => tagButtons,
+    };
+  }
+
+  for (const id of [
+    'msg', 'keyGateBox', 'keyGateMsg', 'btnKeyGateModal', 'form', 'url', 'preview', 'tags', 'memo', 'submit',
+    'jobs', 'noteTagFilter', 'notesList', 'notionLink',
+    'geminiOnboardingModal', 'btnCloseGeminiModal', 'gemModalKeyInput', 'gemModalFormatHint', 'gemModalResultMsg', 'btnModalSaveGemini',
+  ]) {
+    elements.set(id, makeEl(id));
+  }
+
+  const requestedNoteTags = [];
+  let pollCount = 0;
+  const timers = new Set();
+  const customSetTimeout = (fn, delay) => {
+    const id = setTimeout(fn, delay);
+    timers.add(id);
+    return id;
+  };
+  const customClearTimeout = (id) => {
+    timers.delete(id);
+    clearTimeout(id);
+  };
+
+  const user = { id: 'u-notes-poll' };
+  const sandbox = {
+    document: {
+      readyState: 'complete',
+      getElementById: (id) => elements.get(id) || null,
+      createElement: (t) => makeEl(t),
+      addEventListener: () => {},
+    },
+    location: { search: '', pathname: '/notes.html' },
+    history: { replaceState: () => {} },
+    UL: {
+      raw: { get: () => '', set: () => {} },
+      videoIdFrom: () => null,
+      thumb: () => '',
+      safeUrl: (u) => String(u || ''),
+    },
+    window: {
+      ULAuth: {
+        getAccessToken: async () => 'tok',
+        getUser: () => user,
+        getMe: () => ({ id: 'u-notes-poll', keys: { gemini: { hint: '9999' } } }),
+        onChange: (fn) => {
+          // 초기 사용자 설정
+          customSetTimeout(() => fn({ user }), 0);
+        },
+      },
+      ULData: {
+        isLoggedIn: () => true,
+        getCachedKeys: () => ({ notion: null, gemini: { hint: '9999' } }),
+        notes: {
+          listJobs: async () => {
+            pollCount++;
+            return [{ id: 'job-run-1', status: 'running', createdAt: new Date().toISOString() }];
+          },
+          list: async (tag) => {
+            requestedNoteTags.push(tag);
+            return [];
+          },
+        },
+      },
+    },
+    URLSearchParams,
+    Set,
+    Date,
+    Math,
+    String,
+    Array,
+    setTimeout: customSetTimeout,
+    clearTimeout: customClearTimeout,
+    console,
+  };
+  sandbox.window.document = sandbox.document;
+  sandbox.window.UL = sandbox.UL;
+
+  try {
+    vm.runInNewContext(notesJs, sandbox);
+    await new Promise((r) => setTimeout(r, 20));
+
+    // 초기 로드 시 1회 잡 조회
+    assert.ok(pollCount >= 1, '최소 1회 잡 조회 실행');
+
+    // 사용자가 태그 필터('화성', 2번째 버튼)를 클릭
+    const harmonicTagBtn = tagButtons.find((b) => b.textContent === '화성');
+    assert.ok(harmonicTagBtn, '화성 태그 버튼이 존재해야 함');
+    harmonicTagBtn.listeners.click();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // 태그 변경 시 notes.list('화성') 호출 확인
+    assert.ok(requestedNoteTags.includes('화성'), '태그 필터 변경 시 화성 태그로 notes.list가 호출되어야 함');
+  } finally {
+    for (const t of timers) {
+      clearTimeout(t);
+    }
+    timers.clear();
+  }
+});
