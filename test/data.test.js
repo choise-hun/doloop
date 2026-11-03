@@ -1308,3 +1308,105 @@ test('D35 계정 전환(A→B) 시 ULDrive 인메모리 토큰 즉시 폐기 및
   assert.equal(deleteUrls.length, 1);
   assert.ok(deleteUrls[0].includes('/files/uploaded_orphan_file_id'));
 });
+
+test('D36 takes.upload — replaceOldSongTakes: true 전달 시 metadata JSON에 9번째 키로 포함되고 생략/false 시 기존 8개 키 유지 (E1-1 정합)', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { ok: true, take: { id: 't-replace-1' } },
+  });
+
+  const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/mp4' });
+
+  // 1) replaceOldSongTakes: false -> 기존과 동일하게 8개 키만 포함
+  await env.ULData.takes.upload(
+    {
+      songId: 's1',
+      date: '2026-11-03',
+      recordedAt: '2026-11-03T00:00:00.000Z',
+      a: 1,
+      b: 2,
+      rate: 1,
+      durationSec: 5,
+      mime: 'audio/mp4',
+      replaceOldSongTakes: false,
+    },
+    blob
+  );
+  const form1 = env.apiCalls[0].opts.body;
+  const parsed1 = JSON.parse(await form1.get('metadata').text());
+  assert.deepEqual(Object.keys(parsed1).sort(), ['a', 'b', 'date', 'durationSec', 'mime', 'rate', 'recordedAt', 'songId']);
+  assert.equal(parsed1.replaceOldSongTakes, undefined);
+
+  // 2) replaceOldSongTakes: true -> 9번째 키로 replaceOldSongTakes: true 포함
+  await env.ULData.takes.upload(
+    {
+      songId: 's2',
+      date: '2026-11-03',
+      recordedAt: '2026-11-03T00:00:00.000Z',
+      a: null,
+      b: null,
+      rate: 0.75,
+      durationSec: 12,
+      mime: 'audio/mp4',
+      replaceOldSongTakes: true,
+    },
+    blob
+  );
+  const form2 = env.apiCalls[1].opts.body;
+  const parsed2 = JSON.parse(await form2.get('metadata').text());
+  assert.deepEqual(Object.keys(parsed2).sort(), [
+    'a',
+    'b',
+    'date',
+    'durationSec',
+    'mime',
+    'rate',
+    'recordedAt',
+    'replaceOldSongTakes',
+    'songId',
+  ]);
+  assert.equal(parsed2.replaceOldSongTakes, true);
+});
+
+test('D37 integrations.saveGemini — verify 옵션 전달 및 루트 IntegrationDto(verified, displayName) 반환 (E1-1 정합)', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'valid_token' },
+    apiHandler: (p, opts) => {
+      if (p === '/api/v1/integrations/gemini') {
+        const reqBody = JSON.parse(opts.body);
+        return {
+          provider: 'gemini',
+          hint: 'X9zQ',
+          config: { model: reqBody.model || 'gemini-flash-latest' },
+          updatedAt: '2026-11-03T00:00:00Z',
+          verified: reqBody.verify !== false,
+          displayName: reqBody.verify === false ? null : 'Gemini 1.5 Flash',
+        };
+      }
+      return { ok: true };
+    },
+  });
+
+  // 1) verify: true 명시
+  const res1 = await env.ULData.integrations.saveGemini({
+    apiKey: 'k',
+    model: 'gemini-flash-latest',
+    verify: true,
+  });
+  const sent1 = JSON.parse(env.apiCalls[0].opts.body);
+  assert.equal(sent1.verify, true);
+  assert.equal(res1.verified, true);
+  assert.equal(res1.displayName, 'Gemini 1.5 Flash');
+  assert.equal(env.fetchMeCount, 1);
+
+  // 2) verify: false 명시
+  const res2 = await env.ULData.integrations.saveGemini({
+    model: 'gemini-1.5-pro',
+    verify: false,
+  });
+  const sent2 = JSON.parse(env.apiCalls[1].opts.body);
+  assert.equal(sent2.verify, false);
+  assert.equal(res2.verified, false);
+  assert.equal(res2.displayName, null);
+  assert.equal(env.fetchMeCount, 2);
+});

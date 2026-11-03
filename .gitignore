@@ -17,3 +17,5 @@ __pycache__/
 DESIGN.md
 
 test-results/
+dist/
+playwright-report/
