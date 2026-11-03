@@ -106,7 +106,7 @@ const routes = {
     });
   },
 
-  // 스케일 구성음과 지판 위치. circle=5|4 면 5도권(또는 4도권) 12키 순환
+  // 스케일 구성음과 지판 위치. circle=5|4 면 5도권(또는 4도권) 12키 순환, block=1..5 면 CAGED 블럭 및 표준 루프 시퀀스
   '/api/scale': (q) => {
     const root = noteParam(q.get('root') || 'C', 'root');
     const type = q.get('type') || 'major';
@@ -118,11 +118,89 @@ const routes = {
     }
     const tuning = CT.TUNING_BY[q.get('tuning') || 'g6'];
     if (!tuning) throw new BadRequest('tuning 은 ' + CT.TUNINGS.map((t) => t.id).join(', ') + ' 중 하나');
+    const blockRaw = q.get('block');
+    if (blockRaw != null && blockRaw !== '') {
+      if (type === 'harmMinor' || type === 'melMinor') {
+        throw new BadRequest('화성·가락단음계(harmMinor, melMinor)는 CAGED 5블럭(block)을 지원하지 않습니다');
+      }
+      const blockId = intParam(blockRaw, 'block', 1, 1, 5);
+      const info = CT.scaleInfo(root, type);
+      const blk = CT.scaleBlocks(root, type, tuning.open, tuning.frets)[blockId - 1];
+      const seq = CT.scaleBlockSeq(blk.notes);
+      const mapNote = (n) => ({
+        string: tuning.open.length - n.s,
+        fret: n.f,
+        pitch: n.pitch,
+        note: n.name,
+        degree: n.deg,
+        isRoot: n.isRoot,
+        isLowestRoot: Boolean(n.isLowestRoot),
+      });
+      return {
+        name: info.name,
+        notes: info.notes.map((n) => ({ name: n.name, degree: n.deg })),
+        block: {
+          blockId: blk.blockId,
+          shape: blk.shape,
+          label: blk.label,
+          lo: blk.lo,
+          hi: blk.hi,
+          notes: blk.notes.map(mapNote),
+        },
+        positions: blk.notes.map(mapNote),
+        sequence: seq.map(mapNote),
+      };
+    }
     const lo = intParam(q.get('lo'), 'lo', 0, 0, tuning.frets), hi = intParam(q.get('hi'), 'hi', 12, lo, tuning.frets);
     const info = CT.scaleInfo(root, type);
     return {
       name: info.name, notes: info.notes.map((n) => ({ name: n.name, degree: n.deg })),
       positions: CT.scaleOnBoard(root, type, tuning.open, lo, hi).map((n) => ({ string: tuning.open.length - n.s, fret: n.f, note: n.name, degree: n.deg })),
+    };
+  },
+
+  // 더블 스탑 (3도 · 6도 · 4도)
+  '/api/double-stops': (q) => {
+    const root = noteParam(q.get('root') || 'C', 'root');
+    const type = q.get('type') || q.get('scale') || 'major';
+    if (!CT.SCALE_BY[type]) throw new BadRequest('type 은 ' + CT.SCALES.map((s) => s.id).join(', ') + ' 중 하나');
+    const interval = q.get('interval') || '3rd';
+    if (!CT.DOUBLE_STOP_INTERVALS.some((d) => d.id === interval)) {
+      throw new BadRequest('interval 은 ' + CT.DOUBLE_STOP_INTERVALS.map((d) => d.id).join(', ') + ' 중 하나');
+    }
+    const tuning = CT.TUNING_BY[q.get('tuning') || 'g6'];
+    if (!tuning) throw new BadRequest('tuning 은 ' + CT.TUNINGS.map((t) => t.id).join(', ') + ' 중 하나');
+    const nStrings = tuning.open.length;
+    const defPairStr = interval === '6th' ? '1-3' : '1-2';
+    const rawPair = (q.get('pair') || q.get('strings') || defPairStr).split(/[-,\s]+/).filter(Boolean);
+    if (rawPair.length !== 2) throw new BadRequest('pair 는 두 줄 번호입니다 (예: 1-2, 2-3, 1-3)');
+    const s1 = intParam(rawPair[0], 'pair', 1, 1, nStrings);
+    const s2 = intParam(rawPair[1], 'pair', 2, 1, nStrings);
+    if (s1 === s2) throw new BadRequest('서로 다른 두 줄을 선택해야 합니다');
+    const pair = [nStrings - Math.max(s1, s2), nStrings - Math.min(s1, s2)];
+    const lo = intParam(q.get('lo'), 'lo', 0, 0, tuning.frets);
+    const hi = intParam(q.get('hi'), 'hi', 17, lo, tuning.frets);
+    const info = CT.scaleInfo(root, type);
+    const pairs = CT.doubleStops({ rootPc: root, scaleId: type, interval, pair, open: tuning.open, lo, hi });
+    return {
+      name: info.name,
+      interval,
+      strings: Math.min(s1, s2) + '-' + Math.max(s1, s2),
+      count: pairs.length,
+      pairs: pairs.map((p) => ({
+        step: p.step,
+        label: p.label,
+        span: p.span,
+        isRootPair: p.isRootPair,
+        notes: p.notes.map((n) => ({
+          string: nStrings - n.s,
+          fret: n.f,
+          pitch: n.pitch,
+          note: n.name,
+          degree: n.deg,
+          isRoot: n.isRoot,
+        })),
+      })),
     };
   },
 
