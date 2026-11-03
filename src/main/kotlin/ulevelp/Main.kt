@@ -102,6 +102,12 @@ fun runAnalyzeJobCli(jobId: UUID) = runBlocking {
     noteService.executeJob(jobId)
 }
 
+// React 빌드(spa.html)가 대신 서빙하는 HTML 진입 경로 (RZ-3)
+private val SPA_ENTRY_PAGES = setOf(
+    "index.html", "chords.html", "practice.html", "log.html",
+    "notes.html", "note.html", "settings.html", "privacy.html"
+)
+
 fun main(args: Array<String>) {
     val jobIdArg = args.indexOf("--analyze-job").takeIf { it >= 0 && it + 1 < args.size }?.let { args[it + 1] }
         ?: System.getenv("ANALYZE_JOB_ID")?.takeIf { it.isNotBlank() }
@@ -129,7 +135,8 @@ fun Application.module(
     notionClient: NotionClient = HttpNotionClient(),
     cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) },
     geminiClient: GeminiClient = HttpGeminiClient(),
-    analyzeJobDispatcher: AnalyzeJobDispatcher? = null
+    analyzeJobDispatcher: AnalyzeJobDispatcher? = null,
+    uiMode: String = System.getenv("ULP_UI").orEmpty()
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -273,6 +280,8 @@ fun Application.module(
     }
 
     val canonicalPublicRoot = publicDir.canonicalFile
+    // ULP_UI=legacy면 spa.html이 있어도 옛 public/*.html을 서빙한다(재빌드 없는 롤백 스위치)
+    val spaEnabled = uiMode.trim().lowercase() != "legacy" && File(canonicalPublicRoot, "spa.html").isFile
 
     routing {
         registerChordRoutes()
@@ -333,7 +342,8 @@ fun Application.module(
                     segments.joinToString(File.separator)
                 }
 
-                val targetFile = File(canonicalPublicRoot, relPath).canonicalFile
+                val servedPath = if (spaEnabled && relPath in SPA_ENTRY_PAGES) "spa.html" else relPath
+                val targetFile = File(canonicalPublicRoot, servedPath).canonicalFile
                 val rootPrefix = canonicalPublicRoot.path + File.separator
                 if (targetFile.path != canonicalPublicRoot.path && !targetFile.path.startsWith(rootPrefix)) {
                     call.respondText("Forbidden", ContentType.Text.Plain.withCharset(Charsets.UTF_8), HttpStatusCode.Forbidden)
