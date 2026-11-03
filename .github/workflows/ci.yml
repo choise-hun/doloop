@@ -129,7 +129,10 @@ jobs:
         run: |
           docker run -d --name app-legacy -e ULP_UI=legacy -p 3001:3000 guitar-chord-lab:ci
           for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:3001/api/health >/dev/null 2>&1 && break; sleep 1; done
-          ! curl -fsS http://127.0.0.1:3001/ | grep -q 'id="root"'
+          # 응답을 먼저 받아 curl 실패를 잡는다(`! a | b`는 컨테이너가 안 떠도 통과한다)
+          BODY=$(curl -fsS http://127.0.0.1:3001/)
+          if grep -q 'id="root"' <<<"$BODY"; then echo "legacy 모드인데 React가 서빙됨"; exit 1; fi
+          grep -q 'src="home.js"' <<<"$BODY"
       - name: Cleanup
         if: always()
         run: |
