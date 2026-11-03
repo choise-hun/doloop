@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
 import { useAuth } from '../lib/auth';
-import { apiClient, LocalSongRecord, NoteSummaryDto, SongDto } from '../lib/apiClient';
+import { apiClient, LocalSongRecord, NoteDetailDto, NoteSummaryDto, SongDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import {
   buildPracticeResumeHref,
@@ -102,14 +102,30 @@ export function HomePage(): React.ReactElement {
         setActiveDates([]);
       });
 
-    // 최근 학습 노트 조회
+    // 최근 학습 노트 조회 및 상세 병렬 조회로 코드 진행 추출 (PR #38 리뷰 반영)
     apiClient.notes
       .list()
-      .then((notes) => {
+      .then(async (notes) => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
         const safeNotes = Array.isArray(notes) ? notes : [];
         setRecentNote(safeNotes[0] || null);
-        const extracted = extractProgressionsFromNotes(safeNotes);
+
+        // 상위 최대 3개 노트 상세를 병렬 조회하여 analysis(화성 진행) 확보
+        const topNotes = safeNotes.slice(0, 3);
+        const detailNotes: NoteDetailDto[] = [];
+        await Promise.all(
+          topNotes.map(async (n) => {
+            try {
+              const detail = await apiClient.notes.get(n.id);
+              if (detail) detailNotes.push(detail);
+            } catch {
+              /* 개별 노트 상세 조회 실패 격리 */
+            }
+          })
+        );
+
+        if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
+        const extracted = extractProgressionsFromNotes(detailNotes.length > 0 ? detailNotes : safeNotes);
         setRefList(extracted.reference);
         setArchList(extracted.archive);
         setRefIdx(0);

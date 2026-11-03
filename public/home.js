@@ -394,16 +394,62 @@
         .catch(() => {});
     }
 
-    // 최근 학습 노트 조회
+    // 최근 학습 노트 조회 및 상세 병렬 조회로 코드 진행 카드 연동 (PR #38 리뷰 반영)
     if (D.notes && typeof D.notes.list === 'function') {
       D.notes
         .list()
-        .then((notes) => {
+        .then(async (notes) => {
           const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
           const curUid = curU ? curU.id : null;
           if (mySeq !== homeReqSeq || myUid !== curUid) return;
           const safeNotes = Array.isArray(notes) ? notes : [];
           renderRecentNote(safeNotes[0] || null);
+
+          if (safeNotes.length > 0 && typeof D.notes.get === 'function') {
+            const topNotes = safeNotes.slice(0, 3);
+            const userRef = [];
+            const userArch = [];
+            await Promise.all(
+              topNotes.map(async (n) => {
+                try {
+                  const detail = await D.notes.get(n.id);
+                  const progs =
+                    detail && detail.analysis && detail.analysis.harmony && Array.isArray(detail.analysis.harmony.progressions)
+                      ? detail.analysis.harmony.progressions
+                      : [];
+                  progs.forEach((p) => {
+                    const chords = Array.isArray(p && p.chords)
+                      ? p.chords.map((c) => String((c && c.symbol) || '').trim()).filter(Boolean)
+                      : [];
+                    if (chords.length >= 2) {
+                      const isRef = Array.isArray(detail.tags) && detail.tags.includes('편곡');
+                      const item = {
+                        chords: chords.join(' - '),
+                        title: String(p.name || detail.title || '화성 노트 진행'),
+                        key: String(p.key || '분석 노트'),
+                        src: 'AI',
+                        noteId: detail.id,
+                      };
+                      if (isRef) userRef.push(item);
+                      else userArch.push(item);
+                    }
+                  });
+                } catch (e) {
+                  /* 개별 노트 상세 실패 격리 */
+                }
+              })
+            );
+
+            const curU2 = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+            const curUid2 = curU2 ? curU2.id : null;
+            if (mySeq !== homeReqSeq || myUid !== curUid2) return;
+
+            refItems = userRef.length > 0 ? userRef.concat(SEED_REF) : SEED_REF.slice();
+            archItems = userArch.length > 0 ? userArch.concat(SEED_ARCH) : SEED_ARCH.slice();
+            refIdx = 0;
+            archIdx = 0;
+            renderProgressionCards();
+          }
         })
         .catch(() => {
           const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;

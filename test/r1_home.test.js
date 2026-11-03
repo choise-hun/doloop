@@ -380,3 +380,123 @@ test('R1-H7 & R1-H8: public/home.js 비로그인/로그인 위젯 바인딩·랜
   assert.ok(!elements.get('songs').innerHTML.includes('Secret Song A'));
   assert.ok(elements.get('songs').innerHTML.includes('로그인하면 내 연습 곡이 여기 보여요'));
 });
+
+test('R1-H9 (PR #38 리뷰 반영): 로그인 시 notes.list + notes.get 상세 조회를 통해 사용자 노트 진행이 코드 진행 카드로 연동됨을 검증', async () => {
+  const elements = new Map();
+  function makeEl(id) {
+    const el = {
+      id,
+      value: '',
+      hidden: false,
+      textContent: '',
+      innerHTML: '',
+      className: '',
+      href: '',
+      src: '',
+      dataset: {},
+      children: [],
+      listeners: {},
+      classList: { toggle() {} },
+      addEventListener(ev, fn) { el.listeners[ev] = fn; },
+      appendChild(child) { el.children.push(child); return child; },
+      replaceChildren() { el.children = []; },
+      click() {},
+    };
+    return el;
+  }
+
+  for (const id of [
+    'go', 'goUrl', 'goPick', 'goThumb', 'goPlay', 'goNote', 'goMsg',
+    'weeklyStreakCard', 'streakDays', 'streakChallengeBar', 'streakChallengeText', 'streakDots',
+    'recentSongCard', 'recentSongGo', 'recentSongBody', 'recentSongEmpty', 'recentSongThumb', 'recentSongTitle', 'recentSongSegment', 'recentSongResume',
+    'modes', 'songs',
+    'recentNoteCard', 'recentNoteBody', 'recentNoteEmpty', 'recentNoteThumb', 'recentNoteTitle', 'recentNoteHeadline', 'recentNoteLink',
+    'progRefBox', 'progRefKey', 'progRefChords', 'progRefTitle', 'btnRandRef',
+    'progArchBox', 'progArchKey', 'progArchChords', 'progArchTitle', 'btnRandArch',
+    'notionBig', 'notionLinks', 'nlPractice', 'nlNotes', 'copy',
+  ]) {
+    elements.set(id, makeEl(id));
+  }
+
+  const currentUser = { id: 'user-note-owner' };
+  let getNoteCalled = false;
+
+  const sandbox = {
+    document: {
+      getElementById: (id) => elements.get(id) || null,
+      createElement: (tag) => makeEl(tag),
+    },
+    UL: {
+      raw: { get: () => '', set: () => {} },
+      json: { get: (_k, d) => d, set: () => {} },
+      videoIdFrom: (v) => String(v || '').trim(),
+      thumb: (id) => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg',
+      esc: (s) => String(s ?? ''),
+      safeUrl: (u) => (String(u || '').startsWith('https://') ? String(u) : ''),
+    },
+    window: {
+      ULAuth: {
+        getUser: () => currentUser,
+        onChange: (cb) => {
+          cb({ user: currentUser });
+        },
+      },
+      ULData: {
+        isLoggedIn: () => true,
+        listLocalSongs: () => [],
+        songs: {
+          list: async () => [],
+        },
+        sessions: {
+          list: async () => ({ calendar: [], sessions: [] }),
+        },
+        notes: {
+          list: async () => [
+            { id: 'note-jazz-1', videoId: 'jNQXAC9IVRw', title: '재즈 보이싱 특강', channel: '재즈피아노' },
+          ],
+          get: async (id) => {
+            getNoteCalled = true;
+            return {
+              id,
+              videoId: 'jNQXAC9IVRw',
+              title: '재즈 보이싱 특강',
+              tags: ['편곡'], // 편곡 -> REFERENCE
+              analysis: {
+                harmony: {
+                  progressions: [
+                    {
+                      name: '재즈 투파이브원 순환',
+                      key: 'Bb Major',
+                      chords: [{ symbol: 'Cm9' }, { symbol: 'F13' }, { symbol: 'BbM9' }],
+                    },
+                  ],
+                },
+              },
+            };
+          },
+        },
+      },
+    },
+    Date,
+    Math,
+    Number,
+    String,
+    Array,
+    Set,
+    encodeURIComponent,
+    isFinite,
+  };
+  sandbox.window.document = sandbox.document;
+  sandbox.window.UL = sandbox.UL;
+
+  vm.runInNewContext(readText('public/home.js'), sandbox);
+
+  // 비동기 노트 목록 및 상세 조회 완료 대기
+  await new Promise((r) => setTimeout(r, 50));
+
+  assert.ok(getNoteCalled, 'D.notes.get이 호출되어 상세 분석을 가져와야 함');
+  assert.equal(elements.get('progRefChords').textContent, 'Cm9 - F13 - BbM9');
+  assert.ok(elements.get('progRefTitle').textContent.includes('출처: AI'));
+  assert.equal(elements.get('progRefChords').href, 'note.html?id=note-jazz-1');
+  assert.equal(elements.get('progRefKey').textContent, 'Bb Major');
+});
