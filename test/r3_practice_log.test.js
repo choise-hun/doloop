@@ -754,3 +754,18 @@ test('R3-P10: PracticePage.module.css, LogPage.module.css, public/practice.css �
     assert.ok(!text.includes('dangerouslySetInnerHTML'), `${rel}에 dangerouslySetInnerHTML 사용 금지`);
   }
 });
+
+// -------------------------------------------------------------
+// R3-P11: A/B 비교 듣기 비동기 URL 조회 중 페어 변경/로그아웃 레이스 방어 검증 (PR #43 리뷰 1번)
+// -------------------------------------------------------------
+test('R3-P11: LogPage.tsx 및 public/log.js A/B 비교 슬롯 재생 비동기 레이스 방어 토큰 검증', () => {
+  const reactSrc = readText('frontend/src/pages/LogPage.tsx');
+  assert.ok(reactSrc.includes('abReqSeqRef = useRef(0);'), 'LogPage.tsx에 abReqSeqRef 선언 필수');
+  assert.ok(reactSrc.includes('abPairRef = useRef'), 'LogPage.tsx에 abPairRef 선언 필수');
+  assert.ok(reactSrc.includes('const isSlotValid = () => {'), 'handlePlayAbSlot 내 isSlotValid 가드 필수');
+  assert.ok(reactSrc.includes('if (!isSlotValid()) return;'), 'await 복귀 후 및 src 할당 직전 isSlotValid 가드 필수');
+
+  const vanillaSrc = readText('public/log.js');
+  assert.ok(vanillaSrc.includes('let abReqSeq = 0;'), 'public/log.js에 abReqSeq 선언 필수');
+  assert.ok(vanillaSrc.includes('function isSlotValid() {'), 'public/log.js playSlot 내 isSlotValid 가드 필수');
+});

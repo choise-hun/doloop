@@ -19,6 +19,7 @@
   let logReqSeq = 0;
   let songsReqSeq = 0;
   let detailReqSeq = 0;
+  let abReqSeq = 0;
 
   function todayStr() {
     const d = new Date();
@@ -103,6 +104,7 @@
     logReqSeq++;
     songsReqSeq++;
     detailReqSeq++;
+    abReqSeq++;
     sessionsData = null;
     selectedDate = null;
     songsCache = null;
@@ -954,6 +956,7 @@
 
   // -------------------- A/B 교차 비교 듣기 패널 (FR-LIB-3) --------------------
   function updateAbPanel() {
+    abReqSeq++;
     const abPanel = document.getElementById('abPanel');
     const audioA = document.getElementById('abAudioA');
     const audioB = document.getElementById('abAudioB');
@@ -1025,11 +1028,22 @@
       };
     }
 
-    // 재생 버튼 연결
+    // 재생 버튼 연결 (PR #43 리뷰 1번: 비동기 URL 조회 중 페어 변경/로그아웃 레이스 방어)
     async function playSlot(take, audio, btn) {
       if (!audio) return;
       if (audio.dataset.takeId !== take.id) {
+        const myToken = ++abReqSeq;
+        const myUid = currentUid;
         btn.disabled = true;
+
+        function isSlotValid() {
+          if (myToken !== abReqSeq) return false;
+          if (!currentUid || currentUid !== myUid) return false;
+          if (audio === audioA && (!takeA || takeA.id !== take.id)) return false;
+          if (audio === audioB && (!takeB || takeB.id !== take.id)) return false;
+          return true;
+        }
+
         try {
           if (take.storage === 'drive') {
             if (!window.ULDrive) {
@@ -1037,23 +1051,29 @@
               return;
             }
             const blobUrl = await window.ULDrive.fetchMediaObjectUrl(take.storageKey);
+            if (!isSlotValid()) return;
             audio['src'] = blobUrl;
             audio.dataset.takeId = take.id;
-            await audio.play();
+            await audio.play().catch(function () {});
           } else {
             const r = await window.ULData.takes.getUrl(take.id);
+            if (!isSlotValid()) return;
             if (r && r.url) {
               audio.src = safeUrl(r.url);
               audio.dataset.takeId = take.id;
-              await audio.play();
+              await audio.play().catch(function () {});
             } else {
               alert('녹음 재생 주소를 받지 못했어요');
             }
           }
         } catch (err) {
-          alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+          if (isSlotValid()) {
+            alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+          }
         } finally {
-          btn.disabled = false;
+          if (myToken === abReqSeq) {
+            btn.disabled = false;
+          }
         }
       } else {
         if (audio.paused) {

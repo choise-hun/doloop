@@ -430,6 +430,10 @@ export function LogPage(): React.ReactElement {
   const audioBRef = useRef<HTMLAudioElement | null>(null);
   const [abBusySlot, setAbBusySlot] = useState<'A' | 'B' | null>(null);
 
+  // A/B 재생 비동기 레이스 방어 토큰 및 최신 페어 레프 (PR #43 리뷰 1번)
+  const abReqSeqRef = useRef(0);
+  const abPairRef = useRef<[TakeDto, TakeDto] | null>(null);
+
   // 요청 순번 레프 (주니어 체크리스트 51행)
   const logReqSeqRef = useRef(0);
   const songsReqSeqRef = useRef(0);
@@ -451,11 +455,13 @@ export function LogPage(): React.ReactElement {
     logReqSeqRef.current++;
     songsReqSeqRef.current++;
     detailReqSeqRef.current++;
+    abReqSeqRef.current++;
     setSessionsData(null);
     setSelectedDate(null);
     setSongsList([]);
     setDetailData(null);
     setAbSelected([]);
+    setAbBusySlot(null);
     setMsg({ text: '', kind: '' });
     clearAudioEl(audioARef.current);
     clearAudioEl(audioBRef.current);
@@ -507,6 +513,7 @@ export function LogPage(): React.ReactElement {
   const loadSongDetailView = async (uid: string | null, sId: string) => {
     if (!uid || !apiClient.isLoggedIn()) return;
     const mySeq = ++detailReqSeqRef.current;
+    abReqSeqRef.current++;
     setMsg({ text: '곡 상세 정보를 불러오는 중...', kind: '' });
     try {
       const data = await apiClient.songs.get(sId);
@@ -551,7 +558,7 @@ export function LogPage(): React.ReactElement {
     }
   }, [activeUid, detailSongId, activeTab, songFilter]);
 
-  // A/B 선택된 테이크 계산 및 슬롯 식별자 변경 시 오디오 리셋 (주니어 체크리스트 58·59행)
+  // A/B 선택된 테이크 계산 및 슬롯 식별자 변경 시 오디오 리셋 (주니어 체크리스트 58·59행, PR #43 리뷰 1번)
   const detailTakes = detailData?.takes || [];
   const abPair: [TakeDto, TakeDto] | null =
     abSelected.length === 2
@@ -563,6 +570,9 @@ export function LogPage(): React.ReactElement {
       : null;
 
   useEffect(() => {
+    abPairRef.current = abPair;
+    abReqSeqRef.current++;
+    setAbBusySlot(null);
     if (!abPair) {
       clearAudioEl(audioARef.current);
       clearAudioEl(audioBRef.current);
@@ -589,30 +599,50 @@ export function LogPage(): React.ReactElement {
       }
     }
     if (audioEl.dataset.takeId !== take.id) {
+      const myToken = ++abReqSeqRef.current;
+      const myUid = activeUid;
       setAbBusySlot(slot);
+
+      // 비동기 복귀 후 슬롯·인증·페어 유효성 검증 (PR #43 리뷰 1번)
+      const isSlotValid = () => {
+        if (myToken !== abReqSeqRef.current) return false;
+        if (!activeUid || activeUid !== myUid || !apiClient.isLoggedIn()) return false;
+        const currentSlotTake = slot === 'A' ? abPairRef.current?.[0] : abPairRef.current?.[1];
+        if (!currentSlotTake || currentSlotTake.id !== take.id) return false;
+        return true;
+      };
+
       try {
         if (take.storage === 'drive') {
           const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
+          if (!isSlotValid()) return;
           const valid = safeAudioUrl(blobUrl);
           if (!valid) throw new Error('유효하지 않은 오디오 주소예요');
+          if (!isSlotValid()) return;
           audioEl['src'] = valid;
           audioEl.dataset.takeId = take.id;
           await audioEl.play().catch(() => {});
         } else {
           const r = await apiClient.takes.getUrl(take.id);
+          if (!isSlotValid()) return;
           const valid = r && r.url ? safeAudioUrl(r.url) : '';
           if (!valid) {
             window.alert('녹음 재생 주소를 받지 못했어요');
             return;
           }
+          if (!isSlotValid()) return;
           audioEl['src'] = valid;
           audioEl.dataset.takeId = take.id;
           await audioEl.play().catch(() => {});
         }
       } catch (err: any) {
-        window.alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+        if (isSlotValid()) {
+          window.alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+        }
       } finally {
-        setAbBusySlot(null);
+        if (myToken === abReqSeqRef.current) {
+          setAbBusySlot(null);
+        }
       }
     } else if (audioEl.paused) {
       await audioEl.play().catch(() => {});
@@ -1121,3 +1151,4 @@ export function LogPage(): React.ReactElement {
 }
 
 export default LogPage;
+
