@@ -153,6 +153,33 @@ export function getDoubleStopPairs(numStrings: number, interval: DoubleStopInter
 }
 
 /**
+ * 악기 줄 수(4~7현)와 음정('3rd'|'6th'|'4th'), 현재 줄 쌍을 받아 유효한 줄 쌍으로 정규화한다.
+ * 이전 악기(예: 6현 [4,5])에서 줄 수가 적은 악기(예: 4현 [0,1,2,3])로 전환되거나 음정이 바뀔 때 렌더링 동기 크래시를 방지한다.
+ */
+export function getSafeDoubleStopPair(
+  numStrings: number,
+  interval: DoubleStopIntervalId,
+  currentPair?: [number, number] | null
+): [number, number] {
+  const n = Math.max(4, numStrings);
+  const isPairValid =
+    Array.isArray(currentPair) &&
+    currentPair.length === 2 &&
+    currentPair[0] >= 0 &&
+    currentPair[1] < n &&
+    currentPair[0] < currentPair[1] &&
+    (interval === '6th' ? currentPair[1] - currentPair[0] === 2 : currentPair[1] - currentPair[0] === 1);
+
+  if (isPairValid && currentPair) {
+    return [currentPair[0], currentPair[1]];
+  }
+  if (interval === '6th') {
+    return [Math.max(0, n - 3), n - 1];
+  }
+  return [Math.max(0, n - 2), n - 1];
+}
+
+/**
  * CAGED 블럭 정규 음 배열과 scaleBlockSeq 시퀀스로부터 4대 이정표 요약(시작 최저 루트 -> 1번줄 끝 -> 최저현 최저음 -> 최저 루트 복귀)을 생성한다.
  */
 export function formatBlockSeqSummary(

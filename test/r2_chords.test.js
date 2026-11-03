@@ -509,3 +509,74 @@ test('R2-C9: CSS 순백(#ffffff/#fff) 0건, 중간 곡률 0건, frontend/ 인라
   assert.ok(!allTsx.includes('style={{'), 'style={{ must be 0 in React components');
   assert.ok(!allTsx.includes('dangerouslySetInnerHTML'), 'dangerouslySetInnerHTML must be 0');
 });
+
+test('R2-C10 (PR #41 리뷰 반영): 악기 변경 시 더블 스탑 줄 쌍 동기 정규화 및 렌더 크래시 방지 검증', () => {
+  const diagramsCode = readText('frontend/src/components/chords/ChordDiagrams.tsx');
+  const chordsTsx = readText('frontend/src/pages/ChordsPage.tsx');
+
+  // 1. getSafeDoubleStopPair 함수 선언 및 구현 정적 대조
+  assert.ok(diagramsCode.includes('export function getSafeDoubleStopPair'), 'getSafeDoubleStopPair must be exported');
+  assert.ok(diagramsCode.includes("interval === '6th' ? currentPair[1] - currentPair[0] === 2 : currentPair[1] - currentPair[0] === 1"));
+  assert.ok(diagramsCode.includes('Math.max(0, n - 3), n - 1'));
+  assert.ok(diagramsCode.includes('Math.max(0, n - 2), n - 1'));
+
+  // 정규화 알고리즘 단위 검증
+  function getSafeDoubleStopPair(numStrings, interval, currentPair) {
+    const n = Math.max(4, numStrings);
+    const isPairValid =
+      Array.isArray(currentPair) &&
+      currentPair.length === 2 &&
+      currentPair[0] >= 0 &&
+      currentPair[1] < n &&
+      currentPair[0] < currentPair[1] &&
+      (interval === '6th' ? currentPair[1] - currentPair[0] === 2 : currentPair[1] - currentPair[0] === 1);
+
+    if (isPairValid && currentPair) {
+      return [currentPair[0], currentPair[1]];
+    }
+    if (interval === '6th') {
+      return [Math.max(0, n - 3), n - 1];
+    }
+    return [Math.max(0, n - 2), n - 1];
+  }
+
+  // 6현 기타 기본 줄 쌍 [4, 5] 에서 4현 베이스로 전환 시
+  const safePair4 = getSafeDoubleStopPair(4, '3rd', [4, 5]);
+  assert.deepEqual(safePair4, [2, 3], 'Should normalize out-of-range pair [4, 5] to [2, 3] on 4-string bass');
+
+  // 6도(6th) 음정 시 건너뛴 줄 쌍 [1, 3] 정규화
+  const safePair6th = getSafeDoubleStopPair(4, '6th', [4, 5]);
+  assert.deepEqual(safePair6th, [1, 3], 'Should normalize out-of-range pair to [1, 3] for 6th on 4-string bass');
+
+  // 이미 유효한 줄 쌍은 그대로 유지
+  assert.deepEqual(getSafeDoubleStopPair(4, '3rd', [1, 2]), [1, 2], 'Valid pair should be preserved');
+
+  // 2. CT.doubleStops 호출 시 크래시 없이 정상 스텝 배열 생성 검증
+  const b4Tuning = CT.TUNING_BY.b4;
+  assert.doesNotThrow(() => {
+    const steps = CT.doubleStops({
+      rootPc: 0,
+      scaleId: 'major',
+      interval: '3rd',
+      pair: safePair4,
+      open: b4Tuning.open,
+      lo: 0,
+      hi: b4Tuning.frets,
+    });
+    assert.ok(steps.length >= 7, 'Must produce diatonic double stops for 4-string bass');
+  }, 'CT.doubleStops must not throw with normalized pair');
+
+  // 3. ChordsPage.tsx 정적 검증
+  assert.ok(
+    chordsTsx.includes('effectiveDsPair'),
+    'ChordsPage.tsx must compute effectiveDsPair synchronously during render'
+  );
+  assert.ok(
+    chordsTsx.includes('pair: effectiveDsPair'),
+    'CT.doubleStops must receive effectiveDsPair instead of stale dsPair'
+  );
+  assert.ok(
+    chordsTsx.includes('getSafeDoubleStopPair(nextTun.open.length, dsInterval, dsPair)'),
+    'Instrument change handler must update dsPair atomically with safe pair'
+  );
+});

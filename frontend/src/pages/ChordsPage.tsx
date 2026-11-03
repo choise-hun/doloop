@@ -23,6 +23,7 @@ import {
   geNotesToDiagram,
   geTones,
   getDoubleStopPairs,
+  getSafeDoubleStopPair,
   NeckSvg,
   pitchesOf,
   q4Tones,
@@ -837,36 +838,32 @@ export function ChordsPage(): React.ReactElement {
     [dsTuning.open.length, dsInterval]
   );
 
-  // 악기 또는 음정 변경 시 안전한 줄 쌍 동기화
-  useEffect(() => {
-    const n = dsTuning.open.length;
-    const isPairValid =
-      dsPair[0] >= 0 &&
-      dsPair[1] < n &&
-      dsPair[0] < dsPair[1] &&
-      (dsPair[1] - dsPair[0] === 1 || dsPair[1] - dsPair[0] === 2);
+  // PR #41 리뷰 반영: 렌더 타임에 현재 악기 현 수와 음정에 맞는 유효한 줄 쌍을 동기 계산
+  // 이전 악기(6현 [4,5])에서 줄 수가 적은 악기(4현)로 전환될 때 useEffect 대기 중 크래시 방지
+  const effectiveDsPair = useMemo(
+    () => getSafeDoubleStopPair(dsTuning.open.length, dsInterval, dsPair),
+    [dsTuning.open.length, dsInterval, dsPair]
+  );
 
-    if (!isPairValid) {
-      if (dsInterval === '6th') {
-        setDsPair([Math.max(0, n - 3), n - 1]);
-      } else {
-        setDsPair([n - 2, n - 1]);
-      }
+  // 악기 또는 음정 변경 시 상태 동기화 (렌더 타임 정규화 후 비동기 상태 일치)
+  useEffect(() => {
+    if (dsPair[0] !== effectiveDsPair[0] || dsPair[1] !== effectiveDsPair[1]) {
+      setDsPair(effectiveDsPair);
       setDsSel(0);
     }
-  }, [dsTuning.open.length, dsInterval, dsPair]);
+  }, [effectiveDsPair, dsPair]);
 
   const dsStepsList = useMemo(() => {
     return CT.doubleStops({
       rootPc: dsRoot,
       scaleId: dsScale,
       interval: dsInterval,
-      pair: dsPair,
+      pair: effectiveDsPair,
       open: dsTuning.open,
       lo: 0,
       hi: dsTuning.frets,
     });
-  }, [dsRoot, dsScale, dsInterval, dsPair, dsTuning.open, dsTuning.frets]);
+  }, [dsRoot, dsScale, dsInterval, effectiveDsPair, dsTuning.open, dsTuning.frets]);
 
   const safeDsSel = Math.min(dsSel, Math.max(0, dsStepsList.length - 1));
   const activeDsPair = dsStepsList[safeDsSel];
@@ -2422,7 +2419,13 @@ export function ChordsPage(): React.ReactElement {
                   type="button"
                   className={styles.chip}
                   aria-pressed={dsInst === t.id}
-                  onClick={() => setDsInst(t.id)}
+                  onClick={() => {
+                    const nextTun = CT.TUNING_BY[t.id] || CT.TUNING_BY.g6;
+                    const nextPair = getSafeDoubleStopPair(nextTun.open.length, dsInterval, dsPair);
+                    setDsInst(t.id);
+                    setDsPair(nextPair);
+                    setDsSel(0);
+                  }}
                 >
                   {t.name}
                   <small>{t.open.length}현 · {t.frets}f</small>
@@ -2486,11 +2489,10 @@ export function ChordsPage(): React.ReactElement {
                   className={styles.chip}
                   aria-pressed={dsInterval === iv.id}
                   onClick={() => {
+                    const nextPair = getSafeDoubleStopPair(dsTuning.open.length, iv.id, dsPair);
                     setDsInterval(iv.id);
-                    if (iv.id === '6th') {
-                      const n = dsTuning.open.length;
-                      setDsPair([Math.max(0, n - 3), n - 1]);
-                    }
+                    setDsPair(nextPair);
+                    setDsSel(0);
                   }}
                 >
                   {iv.name}
@@ -2504,7 +2506,7 @@ export function ChordsPage(): React.ReactElement {
             <span className={styles.lab}>줄 쌍 선택</span>
             <div id="ds-pair" className={styles.chips}>
               {dsPairOptions.map((opt) => {
-                const isSel = dsPair[0] === opt.pair[0] && dsPair[1] === opt.pair[1];
+                const isSel = effectiveDsPair[0] === opt.pair[0] && effectiveDsPair[1] === opt.pair[1];
                 return (
                   <button
                     key={opt.key}
@@ -2556,7 +2558,7 @@ export function ChordsPage(): React.ReactElement {
         <div className={styles.panel}>
           <h3 id="ds-title" className={styles.h3}>
             {CT.NAMES[dsRoot]} {dsScale} · {CT.DOUBLE_STOP_INTERVALS.find((i) => i.id === dsInterval)?.name} (
-            {dsTuning.open.length - dsPair[1]}-{dsTuning.open.length - dsPair[0]}번줄)
+            {dsTuning.open.length - effectiveDsPair[1]}-{dsTuning.open.length - effectiveDsPair[0]}번줄)
           </h3>
           <div className={styles.scroll}>
             <div id="ds-board">
