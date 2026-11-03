@@ -20,8 +20,8 @@ object ChordApi {
         "/api/circle",
         "/api/matrix",
         "/api/scale",
-        "/api/interpret",
         "/api/double-stops",
+        "/api/interpret",
     )
 
     private val NOTE_MAP = mapOf(
@@ -227,6 +227,16 @@ object ChordApi {
         }
     }
 
+    private fun boardNoteJson(nStrings: Int, n: CT.BoardNote): JsonObject = buildJsonObject {
+        put("string", nStrings - n.s)
+        put("fret", n.f)
+        put("pitch", n.pitch)
+        put("note", n.name)
+        put("degree", n.deg)
+        put("isRoot", n.isRoot)
+        put("isLowestRoot", n.isLowestRoot)
+    }
+
     fun scale(q: Parameters): JsonElement {
         val root = noteParam(q["root"].takeUnless { it.isNullOrEmpty() } ?: "C", "root")
         val type = q["type"].takeUnless { it.isNullOrEmpty() } ?: "major"
@@ -253,22 +263,18 @@ object ChordApi {
         val tuningId = q["tuning"].takeUnless { it.isNullOrEmpty() } ?: "g6"
         val tuning = CT.TUNING_BY[tuningId]
             ?: throw BadRequestException("tuning 은 ${CT.TUNINGS.joinToString(", ") { it.id }} 중 하나")
-        val info = CT.scaleInfo(root, type)
-
-        if (q["block"] != null) {
-            val blockId = intParam(q["block"], "block", 1, 1, 5)
-            val blocks = CT.scaleBlocks(root, type, tuning.open, tuning.frets)
-            val b = blocks.firstOrNull { it.blockId == blockId } ?: blocks[0]
-            val seq = CT.scaleBlockSeq(b.notes)
+        val blockRaw = q["block"]?.takeUnless { it.isEmpty() }
+        if (blockRaw != null) {
+            if (type == "harmMinor" || type == "melMinor") {
+                throw BadRequestException("화성·가락단음계(harmMinor, melMinor)는 CAGED 5블럭(block)을 지원하지 않습니다")
+            }
+            val blockId = intParam(blockRaw, "block", 1, 1, 5)
+            val info = CT.scaleInfo(root, type)
+            val blk = CT.scaleBlocks(root, type, tuning.open, tuning.frets)[blockId - 1]
+            val seq = CT.scaleBlockSeq(blk.notes)
+            val nStrings = tuning.open.size
             return buildJsonObject {
                 put("name", info.name)
-                putJsonObject("block") {
-                    put("id", b.blockId)
-                    put("shape", b.shape)
-                    put("label", b.label)
-                    put("lo", b.lo)
-                    put("hi", b.hi)
-                }
                 putJsonArray("notes") {
                     for (n in info.notes) {
                         addJsonObject {
@@ -277,37 +283,21 @@ object ChordApi {
                         }
                     }
                 }
-                putJsonArray("positions") {
-                    for (n in b.notes) {
-                        addJsonObject {
-                            put("string", tuning.open.size - n.s)
-                            put("fret", n.f)
-                            put("note", n.name)
-                            put("degree", n.deg)
-                            put("pitch", n.pitch)
-                            put("isRoot", n.isRoot)
-                            put("isLowestRoot", n.isLowestRoot)
-                        }
-                    }
+                putJsonObject("block") {
+                    put("blockId", blk.blockId)
+                    put("shape", blk.shape)
+                    put("label", blk.label)
+                    put("lo", blk.lo)
+                    put("hi", blk.hi)
+                    putJsonArray("notes") { blk.notes.forEach { add(boardNoteJson(nStrings, it)) } }
                 }
-                putJsonArray("sequence") {
-                    for (n in seq) {
-                        addJsonObject {
-                            put("string", tuning.open.size - n.s)
-                            put("fret", n.f)
-                            put("note", n.name)
-                            put("degree", n.deg)
-                            put("pitch", n.pitch)
-                            put("isRoot", n.isRoot)
-                            put("isLowestRoot", n.isLowestRoot)
-                        }
-                    }
-                }
+                putJsonArray("positions") { blk.notes.forEach { add(boardNoteJson(nStrings, it)) } }
+                putJsonArray("sequence") { seq.forEach { add(boardNoteJson(nStrings, it)) } }
             }
         }
-
         val lo = intParam(q["lo"], "lo", 0, 0, tuning.frets)
         val hi = intParam(q["hi"], "hi", 12, lo, tuning.frets)
+        val info = CT.scaleInfo(root, type)
         val positions = CT.scaleOnBoard(root, type, tuning.open, lo, hi)
         return buildJsonObject {
             put("name", info.name)
@@ -332,63 +322,68 @@ object ChordApi {
         }
     }
 
-    fun doubleStops(q: Parameters): JsonArray {
+    fun doubleStops(q: Parameters): JsonObject {
         val root = noteParam(q["root"].takeUnless { it.isNullOrEmpty() } ?: "C", "root")
-        val type = q["type"].takeUnless { it.isNullOrEmpty() } ?: "major"
+        val type = q["type"]?.takeUnless { it.isEmpty() } ?: q["scale"]?.takeUnless { it.isEmpty() } ?: "major"
         if (!CT.SCALE_BY.containsKey(type)) {
             throw BadRequestException("type 은 ${CT.SCALES.joinToString(", ") { it.id }} 중 하나")
         }
         val interval = q["interval"].takeUnless { it.isNullOrEmpty() } ?: "3rd"
-        if (!CT.DOUBLE_STOP_INTERVAL_BY.containsKey(interval)) {
+        if (!CT.DOUBLE_STOP_BY.containsKey(interval)) {
             throw BadRequestException("interval 은 ${CT.DOUBLE_STOP_INTERVALS.joinToString(", ") { it.id }} 중 하나")
         }
         val tuningId = q["tuning"].takeUnless { it.isNullOrEmpty() } ?: "g6"
         val tuning = CT.TUNING_BY[tuningId]
             ?: throw BadRequestException("tuning 은 ${CT.TUNINGS.joinToString(", ") { it.id }} 중 하나")
-
-        val stringsParam = q["strings"] ?: q["pair"]
-        val pair = if (!stringsParam.isNullOrEmpty()) {
-            val tokens = stringsParam.split(Regex("[-,\\s]+")).filter { it.isNotEmpty() }
-            if (tokens.size != 2) throw BadRequestException("strings 는 두 개의 줄 번호여야 합니다 (예: 1-2)")
-            val n1 = tokens[0].toIntOrNull() ?: throw BadRequestException("줄 번호는 정수여야 합니다")
-            val n2 = tokens[1].toIntOrNull() ?: throw BadRequestException("줄 번호는 정수여야 합니다")
-            if (n1 !in 1..tuning.open.size || n2 !in 1..tuning.open.size) {
-                throw BadRequestException("줄 번호는 1~${tuning.open.size} 사이여야 합니다")
-            }
-            val s1 = tuning.open.size - n1
-            val s2 = tuning.open.size - n2
-            listOf(s1, s2)
-        } else null
-
+        val nStrings = tuning.open.size
+        val defPairStr = if (interval == "6th") "1-3" else "1-2"
+        val rawPairStr = q["pair"]?.takeUnless { it.isEmpty() } ?: q["strings"]?.takeUnless { it.isEmpty() } ?: defPairStr
+        val rawPair = rawPairStr.split(Regex("[-,\\s]+")).filter { it.isNotEmpty() }
+        if (rawPair.size != 2) {
+            throw BadRequestException("pair 는 두 줄 번호입니다 (예: 1-2, 2-3, 1-3)")
+        }
+        val s1 = intParam(rawPair[0], "pair", 1, 1, nStrings)
+        val s2 = intParam(rawPair[1], "pair", 2, 1, nStrings)
+        if (s1 == s2) {
+            throw BadRequestException("서로 다른 두 줄을 선택해야 합니다")
+        }
+        val pair = listOf(nStrings - maxOf(s1, s2), nStrings - minOf(s1, s2))
         val lo = intParam(q["lo"], "lo", 0, 0, tuning.frets)
-        val hi = intParam(q["hi"], "hi", 17.coerceAtMost(tuning.frets), lo, tuning.frets)
-
-        val list = CT.doubleStops(
-            rootPc = root,
-            scaleId = type,
-            interval = interval,
-            pair = pair,
-            open = tuning.open,
-            lo = lo,
-            hi = hi,
+        val hi = intParam(q["hi"], "hi", 17, lo, tuning.frets)
+        val info = CT.scaleInfo(root, type)
+        val pairs = CT.doubleStops(
+            CT.DoubleStopOpts(
+                rootPc = root,
+                scaleId = type,
+                interval = interval,
+                pair = pair,
+                open = tuning.open,
+                lo = lo,
+                hi = hi,
+            )
         )
-
-        return buildJsonArray {
-            for (ds in list) {
-                addJsonObject {
-                    put("step", ds.step)
-                    put("label", ds.label)
-                    put("span", ds.span)
-                    put("isRootPair", ds.isRootPair)
-                    putJsonArray("notes") {
-                        for (n in ds.notes) {
-                            addJsonObject {
-                                put("string", tuning.open.size - n.s)
-                                put("fret", n.f)
-                                put("note", n.name)
-                                put("degree", n.deg)
-                                put("pitch", n.pitch)
-                                put("isRoot", n.isRoot)
+        return buildJsonObject {
+            put("name", info.name)
+            put("interval", interval)
+            put("strings", "${minOf(s1, s2)}-${maxOf(s1, s2)}")
+            put("count", pairs.size)
+            putJsonArray("pairs") {
+                for (p in pairs) {
+                    addJsonObject {
+                        put("step", p.step)
+                        put("label", p.label)
+                        put("span", p.span)
+                        put("isRootPair", p.isRootPair)
+                        putJsonArray("notes") {
+                            for (n in p.notes) {
+                                addJsonObject {
+                                    put("string", nStrings - n.s)
+                                    put("fret", n.f)
+                                    put("pitch", n.pitch)
+                                    put("note", n.name)
+                                    put("degree", n.deg)
+                                    put("isRoot", n.isRoot)
+                                }
                             }
                         }
                     }
@@ -460,11 +455,10 @@ fun Route.registerChordRoutes() {
     get("/api/scale") {
         call.respondNoStoreJson(HttpStatusCode.OK, ChordApi.scale(call.request.queryParameters))
     }
-    get("/api/interpret") {
-        call.respondNoStoreJson(HttpStatusCode.OK, ChordApi.interpret(call.request.queryParameters))
-    }
     get("/api/double-stops") {
         call.respondNoStoreJson(HttpStatusCode.OK, ChordApi.doubleStops(call.request.queryParameters))
     }
+    get("/api/interpret") {
+        call.respondNoStoreJson(HttpStatusCode.OK, ChordApi.interpret(call.request.queryParameters))
+    }
 }
-

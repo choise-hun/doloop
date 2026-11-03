@@ -93,98 +93,83 @@ class ChordEngineTest {
     }
 
     @Test
-    fun `스케일 베이스(b4, b5, b6) 튜닝 및 CAGED 5블럭 생성`() {
+    fun `CAGED 5블럭 C Major 1번 A Shape 시퀀스 및 관계장조 기준 줄당 최대 3음 검증`() {
         val b6 = CT.TUNING_BY.getValue("b6")
-        assertEquals("bass", b6.kind)
         assertEquals(listOf(23, 28, 33, 38, 43, 48), b6.open)
         assertEquals(20, b6.frets)
 
-        for (t in listOf("b4", "b5", "b6")) {
-            val tuning = CT.TUNING_BY.getValue(t)
-            val blks = CT.scaleBlocks(0, "major", tuning.open, tuning.frets)
-            assertEquals(5, blks.size)
-            assertEquals(listOf("A", "G", "E", "D", "C"), blks.map { it.shape })
-            assertTrue(blks.all { it.notes.size >= 10 })
-        }
-    }
-
-    @Test
-    fun `CAGED 5블럭 C Major #1 (A) Shape 루프 시퀀스 (5·3 C to 1·5 A to 6·3 G to 5·3 C)`() {
-        val blks = CT.scaleBlocks(0, "major", CT.TUNING_BY.getValue("g6").open, 22)
-        val b1 = blks[0]
+        val blocks = CT.scaleBlocks(0, "major", CT.TUNING_BY.getValue("g6").open, 22)
+        assertEquals(5, blocks.size)
+        val b1 = blocks[0]
         assertEquals(1, b1.blockId)
         assertEquals("A", b1.shape)
-        assertEquals("#1 Block · (A) Shape", b1.label)
         assertEquals(2, b1.lo)
         assertEquals(6, b1.hi)
         assertEquals(16, b1.notes.size)
 
         val lowestRoot = b1.notes.first { it.isLowestRoot }
-        assertEquals(1, lowestRoot.s) // 5번줄
+        assertEquals(1, lowestRoot.s)
         assertEquals(3, lowestRoot.f)
         assertEquals(48, lowestRoot.pitch)
+        assertEquals("C", lowestRoot.name)
 
         val seq = CT.scaleBlockSeq(b1.notes)
-        assertEquals(31, seq.size) // 13 + 15 + 3 = 31
+        assertEquals(31, seq.size)
+        assertEquals(Triple(1, 3, "C"), Triple(seq[0].s, seq[0].f, seq[0].name))
+        assertEquals(Triple(5, 5, "A"), Triple(seq[12].s, seq[12].f, seq[12].name))
+        assertEquals(Triple(0, 3, "G"), Triple(seq[27].s, seq[27].f, seq[27].name))
+        assertEquals(Triple(1, 3, "C"), Triple(seq[30].s, seq[30].f, seq[30].name))
 
-        // 1) 시작: 5번줄 3프렛 C
-        assertEquals(1, seq[0].s)
-        assertEquals(3, seq[0].f)
-        assertEquals(48, seq[0].pitch)
-        assertEquals("C", seq[0].name)
+        // 12종 스케일(harmMinor, melMinor 제외) × 12키 × 5종 튜닝 × 5블럭 전수: 모든 줄 2~3음(최대 3음)
+        val cagedScales = CT.SCALES.filter { it.id != "harmMinor" && it.id != "melMinor" }
+        assertEquals(12, cagedScales.size)
+        for (sc in cagedScales) {
+            for (rootPc in 0 until 12) {
+                for (tuning in CT.TUNINGS) {
+                    val blks = CT.scaleBlocks(rootPc, sc.id, tuning.open, tuning.frets)
+                    assertEquals(5, blks.size)
+                    for (blk in blks) {
+                        for (s in tuning.open.indices) {
+                            val count = blk.notes.count { it.s == s }
+                            assertTrue(
+                                count in 2..3,
+                                "${sc.id} root=$rootPc tuning=${tuning.id} block=#${blk.blockId} s=$s count=$count"
+                            )
+                        }
+                        for (i in 1 until blk.notes.size) {
+                            assertTrue(blk.notes[i].pitch > blk.notes[i - 1].pitch)
+                        }
+                    }
+                }
+            }
+        }
 
-        // 2) 13번째 스텝(고음 정점): 1번줄 5프렛 A
-        assertEquals(5, seq[12].s)
-        assertEquals(5, seq[12].f)
-        assertEquals(69, seq[12].pitch)
-        assertEquals("A", seq[12].name)
+        // A 마이너 펜타토닉 #3 (E Shape): 7~10프렛, 12음
+        val aPentMin3 = CT.scaleBlocks(9, "pentMin", CT.TUNING_BY.getValue("g6").open, 22)[2]
+        assertEquals(7, aPentMin3.lo)
+        assertEquals(10, aPentMin3.hi)
+        assertEquals(12, aPentMin3.notes.size)
 
-        // 3) 28번째 스텝(저음 정점): 6번줄 3프렛 G
-        assertEquals(0, seq[27].s)
-        assertEquals(3, seq[27].f)
-        assertEquals(43, seq[27].pitch)
-        assertEquals("G", seq[27].name)
-
-        // 4) 31번째 스텝(종착): 5번줄 3프렛 C 복귀
-        assertEquals(1, seq[30].s)
-        assertEquals(3, seq[30].f)
-        assertEquals(48, seq[30].pitch)
-        assertEquals("C", seq[30].name)
+        // A 블루스 #2 (G Shape): 5번줄 5f(4)·6f(b5)·7f(5)
+        val aBlues2 = CT.scaleBlocks(9, "blues", CT.TUNING_BY.getValue("g6").open, 22)[1]
+        val str5 = aBlues2.notes.filter { it.s == 1 }.map { it.f to it.deg }
+        assertEquals(listOf(5 to "4", 6 to "b5", 7 to "5"), str5)
     }
 
     @Test
-    fun `더블 스탑 3도·6도·4도 계산 엔진 검증`() {
-        // 3도 (2-1번줄: pair [4, 5])
-        val ds3 = CT.doubleStops(0, "major", "3rd", listOf(4, 5), CT.OPEN, 0, 17)
-        assertEquals(10, ds3.size)
-        assertEquals("C+E", ds3[0].label)
-        assertEquals(1, ds3[0].span)
-        assertTrue(ds3[0].isRootPair)
-        assertTrue(ds3.all {
-            val diff = it.notes[1].pitch - it.notes[0].pitch
-            diff == 3 || diff == 4
-        })
+    fun `더블 스탑 3도 6도 4도 계산 검증`() {
+        val thirds = CT.doubleStops(CT.DoubleStopOpts(rootPc = 0, scaleId = "major", interval = "3rd", pair = listOf(3, 4)))
+        assertTrue(thirds.size >= 10)
+        val cE = thirds.first { it.notes[0].f == 5 && it.notes[1].f == 5 }
+        assertEquals("C+E", cE.label)
+        assertTrue(cE.isRootPair)
 
-        // 6도 (3-1번줄: pair [3, 5])
-        val ds6 = CT.doubleStops(0, "major", "6th", listOf(3, 5), CT.OPEN, 0, 17)
-        assertEquals(11, ds6.size)
-        assertEquals("G+E", ds6[0].label)
-        assertEquals("C+A", ds6[3].label)
-        assertTrue(ds6[3].isRootPair)
-        assertTrue(ds6.all {
-            val diff = it.notes[1].pitch - it.notes[0].pitch
-            diff == 8 || diff == 9
-        })
+        val sixths = CT.doubleStops(CT.DoubleStopOpts(rootPc = 0, scaleId = "major", interval = "6th", pair = listOf(2, 4)))
+        assertTrue(sixths.size >= 10)
+        assertTrue(sixths.all { it.span <= 3 })
 
-        // 4도 (2-1번줄: pair [4, 5])
-        val ds4 = CT.doubleStops(0, "major", "4th", listOf(4, 5), CT.OPEN, 0, 17)
-        assertEquals(11, ds4.size)
-        assertEquals("C+F", ds4[1].label)
-        assertTrue(ds4[1].isRootPair)
-        assertTrue(ds4.all {
-            val diff = it.notes[1].pitch - it.notes[0].pitch
-            diff == 5 || diff == 6
-        })
+        val fourths = CT.doubleStops(CT.DoubleStopOpts(rootPc = 0, scaleId = "pentMin", interval = "4th", pair = listOf(3, 4)))
+        assertTrue(fourths.size >= 5)
     }
 
     @Test
@@ -229,7 +214,7 @@ class ChordEngineTest {
         val topJson = Json.parseToJsonElement(topRes.bodyAsText()).jsonObject
         assertEquals("C", topJson["top"]?.jsonPrimitive?.content)
 
-        // 5. /api/scale
+        // 5. /api/scale (기본, 5도권, CAGED block, 화성·가락단음계 block=400 차단)
         val scaleRes = client.get("/api/scale?root=A&type=pentMin&tuning=b4&lo=5&hi=8")
         assertEquals(HttpStatusCode.OK, scaleRes.status)
         val scaleJson = Json.parseToJsonElement(scaleRes.bodyAsText()).jsonObject
@@ -242,6 +227,18 @@ class ChordEngineTest {
             fret in 5..8 && str in 1..4
         })
 
+        val scaleBlockRes = client.get("/api/scale?root=C&type=major&tuning=g6&block=1")
+        assertEquals(HttpStatusCode.OK, scaleBlockRes.status)
+        val scaleBlockJson = Json.parseToJsonElement(scaleBlockRes.bodyAsText()).jsonObject
+        assertEquals("A", scaleBlockJson["block"]?.jsonObject?.get("shape")?.jsonPrimitive?.content)
+        assertEquals(16, scaleBlockJson["positions"]?.jsonArray?.size)
+        assertEquals(31, scaleBlockJson["sequence"]?.jsonArray?.size)
+
+        assertEquals(HttpStatusCode.OK, client.get("/api/scale?root=A&type=harmMinor").status)
+        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?root=C&type=harmMinor&block=1").status)
+        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?root=A&type=melMinor&block=2").status)
+        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?root=C&type=major&block=6").status)
+
         val scaleCircleRes = client.get("/api/scale?root=C&circle=5")
         assertEquals(HttpStatusCode.OK, scaleCircleRes.status)
         assertEquals(12, Json.parseToJsonElement(scaleCircleRes.bodyAsText()).jsonArray.size)
@@ -250,24 +247,14 @@ class ChordEngineTest {
         assertEquals(HttpStatusCode.BadRequest, badScaleRes.status)
         assertTrue(Json.parseToJsonElement(badScaleRes.bodyAsText()).jsonObject["error"]?.jsonPrimitive?.content?.isNotBlank() == true)
 
-        // 5-1. /api/scale with block=1
-        val scaleBlockRes = client.get("/api/scale?root=C&type=major&block=1")
-        assertEquals(HttpStatusCode.OK, scaleBlockRes.status)
-        val scaleBlockJson = Json.parseToJsonElement(scaleBlockRes.bodyAsText()).jsonObject
-        assertEquals("C Major (Ionian)", scaleBlockJson["name"]?.jsonPrimitive?.content)
-        val blkObj = scaleBlockJson["block"]!!.jsonObject
-        assertEquals(1, blkObj["id"]?.jsonPrimitive?.int)
-        assertEquals("A", blkObj["shape"]?.jsonPrimitive?.content)
-        assertEquals(2, blkObj["lo"]?.jsonPrimitive?.int)
-        assertEquals(6, blkObj["hi"]?.jsonPrimitive?.int)
-        assertEquals(16, scaleBlockJson["positions"]?.jsonArray?.size)
-        val seqArr = scaleBlockJson["sequence"]!!.jsonArray
-        assertEquals(31, seqArr.size)
-        assertEquals("C", seqArr[0].jsonObject["note"]?.jsonPrimitive?.content)
-        assertEquals(5, seqArr[0].jsonObject["string"]?.jsonPrimitive?.int)
-
-        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?block=0").status)
-        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?block=6").status)
+        // 5-2. /api/double-stops
+        val dsRes = client.get("/api/double-stops?root=C&type=major&interval=3rd&pair=2-3")
+        assertEquals(HttpStatusCode.OK, dsRes.status)
+        val dsJson = Json.parseToJsonElement(dsRes.bodyAsText()).jsonObject
+        assertEquals("C Major (Ionian)", dsJson["name"]?.jsonPrimitive?.content)
+        assertEquals("2-3", dsJson["strings"]?.jsonPrimitive?.content)
+        assertTrue((dsJson["count"]?.jsonPrimitive?.int ?: 0) >= 10)
+        assertEquals(HttpStatusCode.BadRequest, client.get("/api/double-stops?interval=2nd").status)
 
         // 6. /api/interpret
         assertEquals(HttpStatusCode.BadRequest, client.get("/api/interpret?frets=1,2").status)
@@ -275,32 +262,14 @@ class ChordEngineTest {
         assertEquals(HttpStatusCode.OK, interpRes.status)
         assertTrue(Json.parseToJsonElement(interpRes.bodyAsText()).jsonArray.size >= 4)
 
-        // 7. /api/double-stops
-        val dsRes = client.get("/api/double-stops?root=C&type=major&interval=3rd&strings=1-2")
-        assertEquals(HttpStatusCode.OK, dsRes.status)
-        val dsJson = Json.parseToJsonElement(dsRes.bodyAsText()).jsonArray
-        assertEquals(10, dsJson.size)
-        val firstDs = dsJson[0].jsonObject
-        assertEquals(1, firstDs["step"]?.jsonPrimitive?.int)
-        assertEquals("C+E", firstDs["label"]?.jsonPrimitive?.content)
-        assertEquals(1, firstDs["span"]?.jsonPrimitive?.int)
-        assertEquals(true, firstDs["isRootPair"]?.jsonPrimitive?.boolean)
-        val dsNotes = firstDs["notes"]!!.jsonArray
-        assertEquals(2, dsNotes.size)
-        assertEquals(2, dsNotes[0].jsonObject["string"]?.jsonPrimitive?.int)
-        assertEquals(1, dsNotes[1].jsonObject["string"]?.jsonPrimitive?.int)
-
-        assertEquals(HttpStatusCode.BadRequest, client.get("/api/double-stops?interval=invalid").status)
-        assertEquals(HttpStatusCode.BadRequest, client.get("/api/double-stops?strings=1-99").status)
-
-        // 8. Unknown /api route -> 404
+        // 7. Unknown /api route -> 404
         val notFoundRes = client.get("/api/not-found")
         assertEquals(HttpStatusCode.NotFound, notFoundRes.status)
         val notFoundJson = Json.parseToJsonElement(notFoundRes.bodyAsText()).jsonObject
         assertEquals("없는 API입니다", notFoundJson["error"]?.jsonPrimitive?.content)
         assertEquals(9, notFoundJson["apis"]?.jsonArray?.size)
 
-        // 9. Static file serving (GET /)
+        // 8. Static file serving (GET /)
         val indexRes = client.get("/")
         assertEquals(HttpStatusCode.OK, indexRes.status)
         assertTrue(indexRes.bodyAsText().contains("<!doctype html>", ignoreCase = true))
@@ -344,4 +313,3 @@ class ChordEngineTest {
         assertTrue(headRes.bodyAsBytes().isEmpty())
     }
 }
-

@@ -1,5 +1,7 @@
 package ulevelp.chord
 
+import kotlin.math.abs
+
 object ChordTheory {
     val OPEN = listOf(40, 45, 50, 55, 59, 64) // index 0 = 6번줄(저음 E)
     val NAMES = listOf("C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B")
@@ -164,7 +166,7 @@ object ChordTheory {
         var best: Int? = null
         for (f in 1..14) {
             if (pc(OPEN[0] + f) == pc(rootPc + q.iv[startSlot])) {
-                if (best == null || kotlin.math.abs(f - nearFret) < kotlin.math.abs(best - nearFret)) {
+                if (best == null || abs(f - nearFret) < abs(best - nearFret)) {
                     best = f
                 }
             }
@@ -356,20 +358,14 @@ object ChordTheory {
     )
     val SCALE_BY = SCALES.associateBy { it.id }
 
-    data class TuningDef(
-        val id: String,
-        val name: String,
-        val open: List<Int>,
-        val frets: Int,
-        val kind: String = if (id.startsWith("b")) "bass" else "guitar",
-    )
+    data class TuningDef(val id: String, val name: String, val open: List<Int>, val frets: Int, val kind: String = "guitar")
 
     val TUNINGS = listOf(
-        TuningDef("g6", "기타 (6현)", listOf(40, 45, 50, 55, 59, 64), 22),
-        TuningDef("g7", "기타 (7현)", listOf(35, 40, 45, 50, 55, 59, 64), 22),
-        TuningDef("b4", "베이스 (4현)", listOf(28, 33, 38, 43), 20),
-        TuningDef("b5", "베이스 (5현)", listOf(23, 28, 33, 38, 43), 20),
-        TuningDef("b6", "베이스 (6현)", listOf(23, 28, 33, 38, 43, 48), 20),
+        TuningDef("g6", "기타 (6현)", listOf(40, 45, 50, 55, 59, 64), 22, "guitar"),
+        TuningDef("g7", "기타 (7현)", listOf(35, 40, 45, 50, 55, 59, 64), 22, "guitar"),
+        TuningDef("b4", "베이스 (4현)", listOf(28, 33, 38, 43), 20, "bass"),
+        TuningDef("b5", "베이스 (5현)", listOf(23, 28, 33, 38, 43), 20, "bass"),
+        TuningDef("b6", "베이스 (6현)", listOf(23, 28, 33, 38, 43, 48), 20, "bass"),
     )
     val TUNING_BY = TUNINGS.associateBy { it.id }
 
@@ -451,151 +447,126 @@ object ChordTheory {
         }
     }
 
-    data class CagedForm(
-        val blockId: Int,
-        val shape: String,
-        val label: String,
-        val offset: Int,
-        val span: Int,
-    )
+    // ---------- CAGED 5블럭 스케일 & 표준 루프 시퀀스 ----------
+    data class CagedFormDef(val blockId: Int, val shape: String, val label: String, val loOff: Int, val hiOff: Int)
+    data class ScaleBlock(val blockId: Int, val shape: String, val label: String, val lo: Int, val hi: Int, val notes: List<BoardNote>)
 
     val CAGED_FORMS = listOf(
-        CagedForm(1, "A", "#1 Block · (A) Shape", -1, 4),
-        CagedForm(2, "G", "#2 Block · (G) Shape", 1, 4),
-        CagedForm(3, "E", "#3 Block · (E) Shape", 4, 3),
-        CagedForm(4, "D", "#4 Block · (D) Shape", 6, 4),
-        CagedForm(5, "C", "#5 Block · (C) Shape", 9, 3),
+        CagedFormDef(1, "A", "#1 Block · (A) Shape", -1, 3),
+        CagedFormDef(2, "G", "#2 Block · (G) Shape", 1, 5),
+        CagedFormDef(3, "E", "#3 Block · (E) Shape", 4, 7),
+        CagedFormDef(4, "D", "#4 Block · (D) Shape", 6, 10),
+        CagedFormDef(5, "C", "#5 Block · (C) Shape", 9, 12),
     )
 
-    data class ScaleBlock(
-        val blockId: Int,
-        val shape: String,
-        val label: String,
-        val lo: Int,
-        val hi: Int,
-        val notes: List<BoardNote>,
-    )
-
+    // CAGED 블럭 창은 관계장조(Relative Major) 기준으로 정렬한다 (A 마이너 = C 장조 폼).
     fun scaleBlocks(
         rootPc: Int,
         scaleId: String,
         open: List<Int> = OPEN,
         maxFret: Int = 22,
     ): List<ScaleBlock> {
+        val relMajorOffset = mapOf(
+            "major" to 0, "minor" to 3, "pentMaj" to 0, "pentMin" to 3, "blues" to 3, "majBlues" to 0,
+            "dorian" to 10, "phrygian" to 8, "lydian" to 7, "mixolydian" to 5, "locrian" to 1,
+            "harmMinor" to 3, "melMinor" to 3, "wholeTone" to 0,
+        )
+        val tuningOpen = if (open.isNotEmpty()) open else OPEN
         val info = scaleInfo(rootPc, scaleId)
         val byPc = info.notes.associateBy { it.pc }
-
-        var fA = pc(rootPc - 9)
+        val relOffset = relMajorOffset[scaleId] ?: info.scale.rel
+        val relMajorPc = pc(info.root + relOffset)
+        var fA = pc(relMajorPc - 9)
         if (fA < 2) fA += 12
 
         return CAGED_FORMS.map { form ->
-            var lo = fA + form.offset
-            var hi = lo + form.span
-            if (hi > maxFret && lo - 12 >= 0) {
+            var lo = fA + form.loOff
+            var hi = fA + form.hiOff
+            if (hi > maxFret) {
                 lo -= 12
                 hi -= 12
-            } else if (lo < 0) {
-                lo += 12
-                hi += 12
             }
-
             val center = (lo + hi) / 2.0
-            data class Cand(
-                val s: Int,
-                val f: Int,
-                val pitch: Int,
-                val deg: String,
-                val name: String,
-                val isRoot: Boolean,
-                val dist: Double,
-            )
-
-            val candidates = mutableListOf<Cand>()
-            open.forEachIndexed { s, o ->
-                for (f in lo..hi) {
-                    if (f in 0..maxFret) {
-                        val p = o + f
-                        val n = byPc[pc(p)]
-                        if (n != null) {
-                            candidates.add(
-                                Cand(s, f, p, n.deg, n.name, n.iv == 0, kotlin.math.abs(f - center))
-                            )
-                        }
-                    }
+            val byPitch = sortedMapOf<Int, MutableList<BoardNote>>()
+            tuningOpen.forEachIndexed { s, o ->
+                val fStart = lo.coerceAtLeast(0)
+                val fEnd = hi.coerceAtMost(maxFret)
+                for (f in fStart..fEnd) {
+                    val pitch = o + f
+                    val n = byPc[pc(pitch)] ?: continue
+                    byPitch.getOrPut(pitch) { mutableListOf() }
+                        .add(BoardNote(s, f, pitch, n.deg, n.name, n.iv == 0))
                 }
             }
-
-            val byPitch = candidates.groupBy { it.pitch }
-            val stringCount = IntArray(open.size)
-            val selected = mutableListOf<Cand>()
-
-            for (p in byPitch.keys.sorted()) {
-                val cands = byPitch.getValue(p)
-                val chosen = if (cands.size == 1) {
-                    cands[0]
-                } else {
-                    cands.sortedWith(
-                        compareBy<Cand> { stringCount[it.s] }
-                            .thenBy { it.dist }
-                    )[0]
-                }
-                selected.add(chosen)
-                stringCount[chosen.s]++
-            }
-
-            selected.sortBy { it.pitch }
-            var foundLowestRoot = false
-            val finalNotes = selected.map { c ->
-                val isLowest = c.isRoot && !foundLowestRoot
-                if (isLowest) foundLowestRoot = true
-                BoardNote(
-                    s = c.s,
-                    f = c.f,
-                    pitch = c.pitch,
-                    deg = c.deg,
-                    name = c.name,
-                    isRoot = c.isRoot,
-                    isLowestRoot = isLowest,
+            val stringCount = IntArray(tuningOpen.size)
+            val chosen = mutableListOf<BoardNote>()
+            var lastS = 0
+            for ((_, allCands) in byPitch) {
+                val monoCands = allCands.filter { it.s >= lastS }
+                val pool = (if (monoCands.isNotEmpty()) monoCands else allCands).sortedWith(
+                    compareBy<BoardNote> { stringCount[it.s] }
+                        .thenBy { abs(it.f - center) }
+                        .thenBy { it.s }
                 )
+                val pick = pool.first()
+                stringCount[pick.s]++
+                lastS = pick.s
+                chosen.add(pick)
             }
-
+            val lowestRootIdx = chosen.indexOfFirst { it.isRoot }
+            val notes = chosen.mapIndexed { i, n -> n.copy(isLowestRoot = i == lowestRootIdx) }
             ScaleBlock(
                 blockId = form.blockId,
                 shape = form.shape,
                 label = form.label,
                 lo = lo,
                 hi = hi,
-                notes = finalNotes,
+                notes = notes,
             )
         }
     }
 
     fun scaleBlockSeq(blockNotes: List<BoardNote>): List<BoardNote> {
-        val m = blockNotes.size
-        if (m < 2) return blockNotes
-        var r = blockNotes.indexOfFirst { it.isRoot }
-        if (r < 0) r = 0
-        val seg1 = blockNotes.subList(r, m)
-        val seg2 = blockNotes.subList(0, m - 1).reversed()
-        val seg3 = if (r > 0) blockNotes.subList(1, r + 1) else emptyList()
+        if (blockNotes.isEmpty()) return emptyList()
+        val b = blockNotes.sortedBy { it.pitch }
+        val m = b.size
+        if (m == 1) return listOf(b[0])
+        val foundRoot = b.indexOfFirst { it.isRoot }
+        val r = if (foundRoot >= 0) foundRoot else 0
+        val seg1 = b.subList(r, m)
+        val seg2 = b.subList(0, m - 1).asReversed()
+        val seg3 = if (r > 0) b.subList(1, r + 1) else emptyList()
         return seg1 + seg2 + seg3
     }
 
-    data class DoubleStopInterval(
+    // ---------- 더블 스탑 (3도 · 6도 · 4도) ----------
+    data class DoubleStopIntervalDef(
         val id: String,
         val name: String,
         val degreeStep: Int,
+        val minSemi: Int,
+        val maxSemi: Int,
         val desc: String,
     )
 
     val DOUBLE_STOP_INTERVALS = listOf(
-        DoubleStopInterval("3rd", "3도 (3rds)", 2, "인접 줄 중심의 가장 대중적인 화음 (R&B·팝)"),
-        DoubleStopInterval("6th", "6도 (6ths)", 5, "한 줄 건너뛰거나 인접 줄로 연주하는 따뜻한 화음 (네오소울·재즈)"),
-        DoubleStopInterval("4th", "4도 (4ths)", 3, "같은 프렛 바레 위주의 모던하고 단단한 화음 (모던재즈·펑크)"),
+        DoubleStopIntervalDef("3rd", "3도 (3rds)", 2, 3, 4, "인접 줄 중심의 가장 대중적인 화음 (R&B·팝)"),
+        DoubleStopIntervalDef("6th", "6도 (6ths)", 5, 8, 9, "한 줄 건너뛰거나 인접 줄로 연주하는 따뜻한 화음 (네오소울·재즈)"),
+        DoubleStopIntervalDef("4th", "4도 (4ths)", 3, 5, 6, "같은 프렛 바레 위주의 모던하고 단단한 화음 (모던재즈·펑크)"),
     )
-    val DOUBLE_STOP_INTERVAL_BY = DOUBLE_STOP_INTERVALS.associateBy { it.id }
+    val DOUBLE_STOP_BY = DOUBLE_STOP_INTERVALS.associateBy { it.id }
 
-    data class DoubleStop(
+    data class DoubleStopOpts(
+        val rootPc: Int = 0,
+        val scaleId: String = "major",
+        val interval: String = "3rd",
+        val pair: List<Int>? = null,
+        val open: List<Int> = OPEN,
+        val lo: Int = 0,
+        val hi: Int = 17,
+    )
+
+    data class DoubleStopPair(
         val step: Int,
         val notes: List<BoardNote>,
         val span: Int,
@@ -603,89 +574,52 @@ object ChordTheory {
         val isRootPair: Boolean,
     )
 
-    fun doubleStops(
-        rootPc: Int,
-        scaleId: String,
-        interval: String = "3rd",
-        pair: List<Int>? = null,
-        open: List<Int> = OPEN,
-        lo: Int = 0,
-        hi: Int = 17,
-    ): List<DoubleStop> {
-        val ivDef = DOUBLE_STOP_INTERVAL_BY[interval]
-            ?: throw IllegalArgumentException("unknown interval $interval")
-        val degreeStep = ivDef.degreeStep
-
-        val actualPair = if (pair == null || pair.size < 2) {
-            if (interval == "6th") {
-                listOf((open.size - 3).coerceAtLeast(0), open.size - 1)
-            } else {
-                listOf((open.size - 2).coerceAtLeast(0), open.size - 1)
-            }
+    fun doubleStops(opts: DoubleStopOpts): List<DoubleStopPair> {
+        val ivDef = DOUBLE_STOP_BY[opts.interval]
+            ?: throw IllegalArgumentException("unknown double-stop interval ${opts.interval}")
+        val tuningOpen = if (opts.open.isNotEmpty()) opts.open else OPEN
+        val effPair = if (opts.pair != null && opts.pair.size == 2) {
+            opts.pair
+        } else if (opts.interval == "6th") {
+            listOf((tuningOpen.size - 3).coerceAtLeast(0), tuningOpen.size - 1)
         } else {
-            pair
+            listOf((tuningOpen.size - 2).coerceAtLeast(0), tuningOpen.size - 1)
         }
-        val sLow = minOf(actualPair[0], actualPair[1])
-        val sHigh = maxOf(actualPair[0], actualPair[1])
+        val sLow = minOf(effPair[0], effPair[1])
+        val sHigh = maxOf(effPair[0], effPair[1])
+        require(sLow >= 0 && sHigh < tuningOpen.size && sLow != sHigh) { "invalid string pair" }
 
-        val info = scaleInfo(rootPc, scaleId)
+        val info = scaleInfo(opts.rootPc, opts.scaleId)
         val k = info.notes.size
-        val pcToIndex = info.notes.mapIndexed { idx, n -> n.pc to idx }.toMap()
+        val degIndexByPc = info.notes.mapIndexed { i, n -> n.pc to i }.toMap()
+        val board = scaleOnBoard(opts.rootPc, opts.scaleId, tuningOpen, opts.lo, opts.hi)
+        val lowNotes = board.filter { it.s == sLow }.sortedBy { it.pitch }
+        val highNotes = board.filter { it.s == sHigh }.sortedBy { it.pitch }
 
-        data class ScaleCand(val s: Int, val f: Int, val pitch: Int, val deg: String, val name: String, val isRoot: Boolean, val idx: Int)
-
-        val lowNotes = mutableListOf<ScaleCand>()
-        for (f in lo..hi) {
-            val pitch = open[sLow] + f
-            val p = pc(pitch)
-            val idx = pcToIndex[p]
-            if (idx != null) {
-                val n = info.notes[idx]
-                lowNotes.add(ScaleCand(sLow, f, pitch, n.deg, n.name, n.iv == 0, idx))
-            }
-        }
-
-        val highNotes = mutableListOf<ScaleCand>()
-        for (f in lo..hi) {
-            val pitch = open[sHigh] + f
-            val p = pc(pitch)
-            val idx = pcToIndex[p]
-            if (idx != null) {
-                val n = info.notes[idx]
-                highNotes.add(ScaleCand(sHigh, f, pitch, n.deg, n.name, n.iv == 0, idx))
-            }
-        }
-
-        val results = mutableListOf<DoubleStop>()
+        val out = mutableListOf<DoubleStopPair>()
         for (nLow in lowNotes) {
-            val targetIdx = (nLow.idx + degreeStep) % k
-            for (nHigh in highNotes) {
-                if (nHigh.idx != targetIdx) continue
-                if (kotlin.math.abs(nHigh.f - nLow.f) > 3) continue
-                if (nHigh.pitch <= nLow.pitch) continue
-
-                val semitones = nHigh.pitch - nLow.pitch
-                if (interval == "3rd" && (semitones < 3 || semitones > 4)) continue
-                if (interval == "4th" && (semitones < 5 || semitones > 6)) continue
-                if (interval == "6th" && (semitones < 8 || semitones > 9)) continue
-
-                results.add(
-                    DoubleStop(
-                        step = 0,
-                        notes = listOf(
-                            BoardNote(nLow.s, nLow.f, nLow.pitch, nLow.deg, nLow.name, nLow.isRoot),
-                            BoardNote(nHigh.s, nHigh.f, nHigh.pitch, nHigh.deg, nHigh.name, nHigh.isRoot),
-                        ),
-                        span = kotlin.math.abs(nHigh.f - nLow.f),
-                        label = "${nLow.name}+${nHigh.name}",
-                        isRootPair = nLow.isRoot || nHigh.isRoot,
-                    )
+            val i = degIndexByPc.getValue(pc(nLow.pitch))
+            val targetPc = info.notes[(i + ivDef.degreeStep) % k].pc
+            val cands = highNotes.filter { nHigh ->
+                val diff = nHigh.pitch - nLow.pitch
+                if (diff <= 0 || abs(nHigh.f - nLow.f) > 3) return@filter false
+                if (k == 7) {
+                    pc(nHigh.pitch) == targetPc && diff <= 11
+                } else {
+                    diff in ivDef.minSemi..ivDef.maxSemi
+                }
+            }.sortedWith(compareBy<BoardNote> { abs(it.f - nLow.f) }.thenBy { it.pitch })
+            val nHigh = cands.firstOrNull() ?: continue
+            out.add(
+                DoubleStopPair(
+                    step = out.size + 1,
+                    notes = listOf(nLow, nHigh),
+                    span = abs(nHigh.f - nLow.f),
+                    label = "${nLow.name}+${nHigh.name}",
+                    isRootPair = nLow.isRoot || nHigh.isRoot,
                 )
-            }
+            )
         }
-
-        results.sortBy { it.notes[0].pitch }
-        return results.mapIndexed { idx, ds -> ds.copy(step = idx + 1) }
+        return out
     }
 }
-
