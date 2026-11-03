@@ -4,7 +4,7 @@
 - **역할:** 주니어
 - **브랜치:** `step/RZ-2` (base `main`)
 - **근거 명세서:** `개발산출물/명세/RZ-2_구현명세.md`
-- **상태:** **진행** — 코드·테스트·Docker 스모크는 통과했으나, 최종 검증에서 명세 전제와 다른 점 2건(§5)이 나와 React 화면은 아직 운영 경로에 연결되지 않는다. 시니어 판단 후 마무리한다.
+- **상태:** **완료** — 빌드·배포 통합 범위는 완료. §5-2 남은 2건은 RZ-3-0 검토에서 신규 step `RZ-3`으로 이관(`결과/RZ-3-0_명세검토.md`)
 
 ---
 
@@ -128,7 +128,7 @@ $ npm run test:e2e
 | Supabase SRI 자리표시자 해시 | `public/index.html`의 실제 해시 | 실제 해시 사용 (자리표시자면 SDK 로드 차단) |
 | `frontend/index.html` 전체 교체(CSP meta 없음, 다른 폰트) | 기존 CSP meta 존재 | 기존 파일에 스크립트 3줄만 추가 (CSP 유지, RN-D9) |
 | Stage 1에 `frontend`만 복사 | `musicEngine.ts`가 `public/lib/theory.js`·`voicing.js` import | `COPY public/lib ./public/lib` 추가 (없으면 `Could not resolve "../../../public/lib/theory.js"`로 빌드 실패) |
-| `main.tsx` import로 `window.ULevelPAuth/Api/Drive` 등록 | 세 모듈은 해당 전역을 등록하지 않음(`drive.ts`만 `window.ULDrive`) | import만 추가. 전역 등록 코드는 명세에 없어 추가하지 않음 |
+| `main.tsx` import로 `window.ULevelPAuth/Api/Drive` 등록 | 세 모듈은 실제 이름 `window.ULAuth`(`auth.ts:356`)·`window.ULData`(`apiClient.ts:950`)·`window.ULDrive`(`drive.ts:410`)로 이미 등록한다(명세의 이름이 틀림). ※ 처음엔 "등록 안 함"으로 잘못 적었다가 RZ-3-0 검토에서 정정 | import만 추가 (import 시점에 위 전역이 등록된다) |
 | Dockerfile `chown -R`, `NODE_ENV`, `gradlew dependencies` | 기존 Dockerfile엔 없음, Ktor는 `NODE_ENV` 미사용 | 기존 ENV·CRLF 처리(`sed`) 유지, 불필요 줄 생략 |
 
 ### 5-2. 남은 문제 (시니어 판단 필요 — RZ-2를 `진행`으로 둔 이유)
@@ -144,4 +144,4 @@ $ npm run test:e2e
 - [x] `Dockerfile` 3단계 멀티스테이지, `dist/index.html` → `./public/spa.html`
 - [x] `deploy-cloudrun.yml` `workflow_run`(CI 성공 조건) 전환, `head_sha` 체크아웃
 - [x] `npm test` 기존 + `r3_practice_log` + `rz2_deploy` 전부 통과 (126/126)
-- [ ] React 화면 운영 연결 및 ChordsPage 빌드 크래시 — §5-2, 시니어 결정 대기
+- [x] React 화면 운영 연결 및 ChordsPage 빌드 크래시 — §5-2, RZ-3으로 이관(RZ-3-0 결정)
