@@ -1,8 +1,13 @@
 name: Deploy to Cloud Run
 
+# main에 올라간 커밋은 CI가 성공한 뒤에만 배포한다(push 직접 트리거 금지)
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -17,7 +22,16 @@ jobs:
   deploy:
     name: Build & Deploy to Cloud Run
     runs-on: ubuntu-latest
-    if: vars.GCP_PROJECT_ID != ''
+    if: >-
+      vars.GCP_PROJECT_ID != '' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event != 'pull_request'
+        )
+      )
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast3' }}
@@ -29,8 +43,10 @@ jobs:
       PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://choise-hun.github.io/ULevelP/' }}
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io,http://localhost:3000' }}
     steps:
-      - name: Checkout repository
+      - name: Checkout repository at verified commit
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -47,7 +63,7 @@ jobs:
 
       - name: Build and Push Docker image
         env:
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           IMAGE_URI="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/ulevelp/server:${IMAGE_TAG}"
           echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
@@ -62,7 +78,8 @@ jobs:
         run: |
           SERVICE_URL=$(gcloud run services describe "${{ env.CLOUD_RUN_SERVICE }}" --region="${{ env.GCP_REGION }}" --project="${{ env.GCP_PROJECT_ID }}" --format='value(status.url)')
           echo "Testing deployed service: ${SERVICE_URL}"
-          curl -fsS "${SERVICE_URL}/api/health"
+          curl -fsS --retry 5 --retry-delay 3 "${SERVICE_URL}/api/health"
+          curl -fsS "${SERVICE_URL}/config.js" | grep -q 'ULEVELP_CONFIG'
           echo "Testing clickjacking security header (frame-ancestors 'none')"
           curl -fsSI "${SERVICE_URL}/" | grep -i "frame-ancestors 'none'"
 
