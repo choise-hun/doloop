@@ -35,7 +35,9 @@ data class IntegrationDto(
     val provider: String,
     val hint: String,
     val config: JsonObject,
-    val updatedAt: String
+    val updatedAt: String,
+    val verified: Boolean = false,
+    val displayName: String? = null
 )
 
 @Serializable
@@ -54,7 +56,8 @@ data class SaveNotionKeyInput(
 data class SaveGeminiKeyInput(
     val appId: String,
     val apiKey: String?,
-    val model: String
+    val model: String,
+    val verify: Boolean = true
 )
 
 data class DecryptedNotionIntegration(
@@ -236,12 +239,46 @@ class IntegrationService(
         }
 
         val rawApiKey = input.apiKey?.trim()?.takeIf { it.isNotEmpty() }
-        val encryptedPayload: EncryptedPayload? = if (rawApiKey != null) {
+        val targetApiKey: String?
+        val encryptedPayload: EncryptedPayload?
+        val database = requireDb()
+
+        if (rawApiKey != null) {
             try {
-                crypto.encryptProviderKey(userId, "gemini", rawApiKey, appId = input.appId)
+                encryptedPayload = crypto.encryptProviderKey(userId, "gemini", rawApiKey, appId = input.appId)
             } catch (e: InvalidIntegrationKeyException) {
                 throw InvalidInputException(e.message)
             }
+            targetApiKey = rawApiKey
+        } else {
+            val existingSecret = DatabaseFactory.dbQuery(database) {
+                IntegrationsTable
+                    .selectAll()
+                    .where {
+                        (IntegrationsTable.userId eq userId) and
+                        (IntegrationsTable.appId eq input.appId) and
+                        (IntegrationsTable.provider eq "gemini")
+                    }
+                    .singleOrNull()
+            } ?: throw InvalidInputException("최초 등록 시 Gemini API 키(apiKey)가 필요합니다.")
+
+            targetApiKey = if (input.verify) {
+                crypto.decryptProviderKey(
+                    userId = userId,
+                    provider = "gemini",
+                    encryptedSecret = existingSecret[IntegrationsTable.encryptedSecret],
+                    iv = existingSecret[IntegrationsTable.iv],
+                    appId = input.appId
+                )
+            } else {
+                null
+            }
+            encryptedPayload = null
+        }
+
+        // 트랜잭션 밖 실시간 핑 검증
+        val checkRes = if (input.verify && targetApiKey != null) {
+            checkClient.checkGemini(targetApiKey, model)
         } else {
             null
         }
@@ -250,7 +287,6 @@ class IntegrationService(
             put("model", model)
         }
 
-        val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
             val existing = IntegrationsTable
                 .selectAll()
@@ -260,10 +296,6 @@ class IntegrationService(
                     (IntegrationsTable.provider eq "gemini")
                 }
                 .singleOrNull()
-
-            if (existing == null && encryptedPayload == null) {
-                throw InvalidInputException("최초 등록 시 Gemini API 키(apiKey)가 필요합니다.")
-            }
 
             val now = OffsetDateTime.now(ZoneOffset.UTC)
             if (existing == null) {
@@ -309,7 +341,9 @@ class IntegrationService(
                 provider = "gemini",
                 hint = updatedRow[IntegrationsTable.hint],
                 config = updatedRow[IntegrationsTable.config] as? JsonObject ?: configJson,
-                updatedAt = formatTimestamp(updatedRow[IntegrationsTable.updatedAt])
+                updatedAt = formatTimestamp(updatedRow[IntegrationsTable.updatedAt]),
+                verified = input.verify,
+                displayName = checkRes?.displayName
             )
         }
     }

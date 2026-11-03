@@ -144,6 +144,8 @@ fun Route.registerTakeRoutes(
                     throw InvalidInputException("mime 값이 올바르지 않습니다.")
                 }
 
+                val replaceOldSongTakes = metaJson.optBoolean("replaceOldSongTakes", false)
+
                 val input = TakeUploadInput(
                     songId = songId,
                     date = date,
@@ -153,7 +155,8 @@ fun Route.registerTakeRoutes(
                     rate = rate,
                     durationSec = durationSec,
                     mime = normalizedMime,
-                    bytes = bytes
+                    bytes = bytes,
+                    replaceOldSongTakes = replaceOldSongTakes
                 )
 
                 val takeDto = takeService.upload(user.id, input)
