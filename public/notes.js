@@ -11,6 +11,7 @@
   let pollTimer = null;
   let activeJobIds = new Set();
   let currentFilterTag = '';
+  let localHasKeyOverride = false;
 
   function say(text, cls) {
     const el = $('msg');
@@ -21,6 +22,7 @@
 
   function hasGeminiKey() {
     if (!window.ULData || !window.ULData.isLoggedIn()) return false;
+    if (localHasKeyOverride) return true;
     const cached = window.ULData.getCachedKeys ? window.ULData.getCachedKeys() : null;
     if (cached && cached.gemini) return true;
     const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
@@ -361,6 +363,9 @@
     const myUid = activeUid;
     try {
       const jobs = await window.ULData.notes.listJobs();
+      if (Array.isArray(jobs) && jobs.some((j) => j && j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:'))) {
+        localHasKeyOverride = false;
+      }
       if (mySeq !== reqSeq || myUid !== activeUid) return;
       updateKeyGate();
       renderJobs(jobs);
@@ -404,8 +409,105 @@
         activeUid = newUid;
         reqSeq++;
         activeJobIds.clear();
+        localHasKeyOverride = false;
         updateKeyGate();
         refreshJobsAndNotes();
+      }
+    });
+  }
+
+  // ---------- Gemini 1분 온보딩 모달 (R1-2) ----------
+  const GEMINI_KEY_RE = /^AIza[0-9A-Za-z\-_]{35}$/;
+
+  function checkModalKeyFormat() {
+    const inp = $('gemModalKeyInput');
+    const hint = $('gemModalFormatHint');
+    const saveBtn = $('btnModalSaveGemini');
+    if (!inp || !hint || !saveBtn) return '';
+    const trimmed = inp.value.trim();
+    if (!trimmed) {
+      hint.textContent = 'AIza로 시작하는 39자리 API 키를 붙여넣어 주세요.';
+      hint.className = 'hint';
+      saveBtn.disabled = true;
+      return '';
+    }
+    if (GEMINI_KEY_RE.test(trimmed)) {
+      hint.textContent = '✓ 형식이 올바릅니다 (39자)';
+      hint.className = 'msg ok';
+      saveBtn.disabled = false;
+      return trimmed;
+    }
+    hint.textContent = 'AIza로 시작하는 39자리 키 전체를 복사해 주세요 (현재 ' + trimmed.length + '자)';
+    hint.className = 'msg err';
+    saveBtn.disabled = true;
+    return '';
+  }
+
+  function openGeminiModal() {
+    const modal = $('geminiOnboardingModal');
+    if (!modal) return;
+    if ($('gemModalKeyInput')) $('gemModalKeyInput').value = '';
+    if ($('gemModalResultMsg')) {
+      $('gemModalResultMsg').textContent = '';
+      $('gemModalResultMsg').className = 'msg';
+    }
+    checkModalKeyFormat();
+    modal.hidden = false;
+  }
+
+  function closeGeminiModal() {
+    const modal = $('geminiOnboardingModal');
+    if (modal) modal.hidden = true;
+  }
+
+  if ($('btnKeyGateModal')) {
+    $('btnKeyGateModal').addEventListener('click', openGeminiModal);
+  }
+  if ($('btnCloseGeminiModal')) {
+    $('btnCloseGeminiModal').addEventListener('click', closeGeminiModal);
+  }
+  if ($('gemModalKeyInput')) {
+    $('gemModalKeyInput').addEventListener('input', checkModalKeyFormat);
+  }
+  if ($('btnModalSaveGemini')) {
+    $('btnModalSaveGemini').addEventListener('click', async () => {
+      const validKey = checkModalKeyFormat();
+      if (!validKey) return;
+      if (!window.ULData || !window.ULData.isLoggedIn()) {
+        if ($('gemModalResultMsg')) {
+          $('gemModalResultMsg').textContent = '로그인 후 키를 저장할 수 있어요.';
+          $('gemModalResultMsg').className = 'msg err';
+        }
+        return;
+      }
+      const btn = $('btnModalSaveGemini');
+      btn.disabled = true;
+      if ($('gemModalResultMsg')) {
+        $('gemModalResultMsg').textContent = 'Gemini API 키 유효성을 실시간으로 확인하는 중…';
+        $('gemModalResultMsg').className = 'msg';
+      }
+      try {
+        const dto = await window.ULData.integrations.saveGemini({
+          apiKey: validKey,
+          model: 'gemini-flash-latest',
+          verify: true,
+        });
+        localHasKeyOverride = true;
+        if ($('gemModalResultMsg')) {
+          const modelLabel = dto && dto.displayName ? ' · ' + dto.displayName : '';
+          $('gemModalResultMsg').textContent = '✓ 연결 완료! 무료 Gemini 모델이 정상 작동합니다 (끝 4자리 ' + ((dto && dto.hint) || '') + modelLabel + ')';
+          $('gemModalResultMsg').className = 'msg ok';
+        }
+        if ($('gemModalKeyInput')) $('gemModalKeyInput').value = '';
+        closeGeminiModal();
+        updateKeyGate();
+      } catch (e) {
+        if ($('gemModalResultMsg')) {
+          $('gemModalResultMsg').textContent = e.message || 'Gemini API 키 검증 및 저장에 실패했어요.';
+          $('gemModalResultMsg').className = 'msg err';
+        }
+      } finally {
+        btn.disabled = false;
       }
     });
   }

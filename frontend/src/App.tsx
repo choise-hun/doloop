@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell, AppShellVariant, ActiveNavKey } from './components/layout/AppShell';
 import { HomePage } from './pages/HomePage';
+import { SettingsPage } from './pages/SettingsPage';
+import { NotesPage } from './pages/NotesPage';
+import { NoteDetailPage } from './pages/NoteDetailPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,51 +84,10 @@ export function App(): React.ReactElement {
               />
             }
           />
-          <Route
-            path="/notes.html"
-            element={
-              <RouteShellPage
-                title="Notes"
-                subtitle="Gemini 영상 분석 학습 노트 보관함"
-                variant="narrow"
-                activeNav="notes"
-              />
-            }
-          />
-          <Route
-            path="/note.html"
-            element={
-              <RouteShellPage
-                title="학습 노트 상세"
-                subtitle="인앱 학습 노트 상세 뷰어"
-                variant="narrow"
-                activeNav="notes"
-              />
-            }
-          />
-          <Route
-            path="/settings.html"
-            element={
-              <RouteShellPage
-                title="Setting"
-                subtitle="계정·Google Drive·노션·Gemini 키 설정"
-                variant="narrow"
-                activeNav="settings"
-                showThemeToggle
-              />
-            }
-          />
-          <Route
-            path="/privacy.html"
-            element={
-              <RouteShellPage
-                title="Privacy"
-                subtitle="ULeveLP 개인정보처리방침"
-                variant="narrow"
-                activeNav="privacy"
-              />
-            }
-          />
+          <Route path="/notes.html" element={<NotesPage />} />
+          <Route path="/note.html" element={<NoteDetailPage />} />
+          <Route path="/settings.html" element={<SettingsPage />} />
+          <Route path="/privacy.html" element={<PrivacyPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
@@ -132,4 +95,3 @@ export function App(): React.ReactElement {
 }
 
 export default App;
-
