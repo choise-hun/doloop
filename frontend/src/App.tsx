@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell, AppShellVariant, ActiveNavKey } from './components/layout/AppShell';
 import { HomePage } from './pages/HomePage';
+import { ChordsPage } from './pages/ChordsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NotesPage } from './pages/NotesPage';
 import { NoteDetailPage } from './pages/NoteDetailPage';
@@ -50,18 +51,7 @@ export function App(): React.ReactElement {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/index.html" element={<HomePage />} />
-          <Route
-            path="/chords.html"
-            element={
-              <RouteShellPage
-                title="기타 코드 연습실"
-                subtitle="스케일·코드톤·보이싱·5도권·코드 재해석·2-5-1·더블 스탑"
-                variant="default"
-                activeNav="chords"
-                showThemeToggle
-              />
-            }
-          />
+          <Route path="/chords.html" element={<ChordsPage />} />
           <Route
             path="/practice.html"
             element={

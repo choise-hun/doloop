@@ -57,8 +57,28 @@
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
       o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.07);
     }
+    function bassPluck(midi, t, dur) {
+      const c = ensure(); if (!c) return;
+      dur = dur || 1.05;
+      const f = hz(midi);
+      const o1 = c.createOscillator(), o2 = c.createOscillator(), g2 = c.createGain(), g = c.createGain();
+      o1.type = 'triangle'; o1.frequency.setValueAtTime(f, t);
+      o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
+      g2.gain.setValueAtTime(0.28, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.32, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(master);
+      o1.start(t); o2.start(t); o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+    }
+    function doubleStop(midis, t, dur, isBass) {
+      const c = ensure(); if (!c) return;
+      const fn = isBass ? bassPluck : pluck;
+      fn(midis[0], t, dur || 1.1, 0.2);
+      fn(midis[1], t, dur || 1.1, 0.2);
+    }
     const now = () => { const c = ensure(); return c ? c.currentTime : 0; };
-    return { ensure, pluck, chord, bass, click, now };
+    return { ensure, pluck, bassPluck, doubleStop, chord, bass, click, now };
   })();
 
   // 박 단위 스케줄러 (탭마다 하나씩)
@@ -133,18 +153,18 @@
   // notes: ctx = 배경으로 흐리게 깔 음, press = 실제로 누를 음. block = 손 위치 상자 {lo, hi}
   function neck(o) {
     const open = o.open || CT.OPEN;
-    const n = open.length, VW = 1000, L = 30, R = 14, T = 20, GAP = 30;
+    const n = open.length, VW = 1000, L = 38, R = 14, T = 20, GAP = o.isBass ? 34 : 30;
     const showOpen = o.lo === 0, first = Math.max(1, o.lo), OW = showOpen ? 40 : 0;
-    const xL = L + OW, W = (VW - xL - R) / (o.hi - first + 1);
+    const xL = L + OW, W = (VW - xL - R) / Math.max(1, o.hi - first + 1);
     const H = T + GAP * (n - 1) + 40;
     const fx = (x) => (o.flip ? VW - x : x);
-    const xOf = (f) => fx(f === 0 ? L + OW / 2 - 4 : xL + (f - first + 0.5) * W);
-    const lineX = (f) => (f < first ? L : xL + (f - first + 1) * W); // f번 프렛 오른쪽 줄
+    const xOf = (f) => fx(f === 0 ? L + OW / 2 - 2 : xL + (f - first + 0.5) * W);
+    const lineX = (f) => (f < first ? L : xL + (f - first + 1) * W);
     const yOf = (s) => T + (n - 1 - s) * GAP;
     const mid = T + GAP * (n - 1) / 2;
     const rect = (x1, x2, y, h, cls, rx) => '<rect class="' + cls + '" x="' + Math.min(fx(x1), fx(x2)) + '" y="' + y + '" width="' + Math.abs(x2 - x1) + '" height="' + h + '" rx="' + (rx || 0) + '"/>';
     let h = '<svg class="fb sb" viewBox="0 0 ' + VW + ' ' + H + '" role="img" aria-label="' + esc(o.label || '지판') + '">';
-    h += rect(xL, VW - R, T - 8, GAP * (n - 1) + 16, 'wood', 3);
+    h += rect(xL, VW - R, T - 8, GAP * (n - 1) + 16, 'wood', 0);
     [3, 5, 7, 9, 15, 17, 19, 21].forEach((f) => { if (f >= first && f <= o.hi) h += '<circle class="inlay" cx="' + xOf(f) + '" cy="' + mid + '" r="5"/>'; });
     if (12 >= first && 12 <= o.hi) h += '<circle class="inlay" cx="' + xOf(12) + '" cy="' + (mid - GAP) + '" r="5"/><circle class="inlay" cx="' + xOf(12) + '" cy="' + (mid + GAP) + '" r="5"/>';
     for (let f = first - 1; f <= o.hi; f++) {
@@ -153,18 +173,19 @@
     }
     for (let s = 0; s < n; s++) {
       h += '<line class="str" stroke-width="' + (2.4 - s * 1.5 / Math.max(1, n - 1)).toFixed(2) + '" x1="' + fx(showOpen ? L : xL) + '" x2="' + fx(VW - R) + '" y1="' + yOf(s) + '" y2="' + yOf(s) + '"/>';
-      h += '<text class="slab" x="' + fx(12) + '" y="' + yOf(s) + '">' + NOTE[CT.pc(open[s])].replace(/b$/, '♭') + '</text>';
+      h += '<text class="slab" x="' + fx(18) + '" y="' + yOf(s) + '">' + (n - s) + '·' + NOTE[CT.pc(open[s])].replace(/b$/, '♭') + '</text>';
     }
     if (o.block) {
       const bl = Math.max(o.lo, o.block.lo), bh = Math.min(o.hi, o.block.hi);
-      if (bl <= bh) h += rect(lineX(bl - 1) - 2, lineX(bh) + 2, T - 17, GAP * (n - 1) + 34, 'blk', 8);
+      if (bl <= bh) h += rect(lineX(bl - 1) - 2, lineX(bh) + 2, T - 17, GAP * (n - 1) + 34, 'blk', 0);
     }
     for (let f = o.lo; f <= o.hi; f++) h += '<text class="flab' + ([3, 5, 7, 9, 12, 15, 17, 19, 21].includes(f) ? ' mark' : '') + '" x="' + xOf(f) + '" y="' + (T + GAP * (n - 1) + 28) + '">' + f + '</text>';
     o.notes.forEach((m) => {
       if (m.f < o.lo || m.f > o.hi) return;
       const x = xOf(m.f), y = yOf(m.s);
       const text = m.text != null ? m.text : (m.deg || '');
-      h += '<g class="nd ' + DOT_CLS(m) + (m.ctx ? ' ctx' : '') + (m.press ? ' press' : '') + '" data-p="' + (m.pitch != null ? m.pitch : open[m.s] + m.f) + '"><circle cx="' + x + '" cy="' + y + '" r="' + (m.ctx ? 10 : m.press ? 13 : 12) + '"/><text x="' + x + '" y="' + y + '">' + esc(text) + '</text></g>';
+      const isLr = Boolean(m.lowestRoot || m.isLowestRoot);
+      h += '<g class="nd ' + DOT_CLS(m) + (m.ctx ? ' ctx' : '') + (m.press ? ' press' : '') + (isLr ? ' lowestRoot' : '') + '" data-p="' + (m.pitch != null ? m.pitch : open[m.s] + m.f) + '"><circle cx="' + x + '" cy="' + y + '" r="' + (m.ctx ? 10 : m.press ? 13 : 12) + '"/>' + (isLr ? '<circle class="lr-ring" cx="' + x + '" cy="' + y + '" r="16"/>' : '') + '<text x="' + x + '" y="' + y + '">' + esc(text) + '</text></g>';
     });
     return h + '</svg>';
   }
@@ -236,7 +257,7 @@
   function setPlayBtn(btn, on) { btn.textContent = on ? '정지' : '재생'; btn.setAttribute('aria-pressed', on); }
 
   // ================= 탭 =================
-  const TABS = ['scale', 'tone', 'matrix', 'circle', 'reint', 'tf'];
+  const TABS = ['scale', 'tone', 'matrix', 'circle', 'reint', 'tf', 'ds'];
   function showTab(id) {
     stopAll();
     document.querySelectorAll('.playbtn').forEach((b) => setPlayBtn(b, false));
@@ -721,24 +742,49 @@
   }
   $('a-vplay').addEventListener('click', playTf);
 
-  // ================= 6. 스케일 연습 =================
-  const sc = { mode: 'simple', root: 0, type: 'pentMaj', label: 'deg', inst: 'g6', hand: 'right', dir: 1, bars: 0, range: 'oct', rootOnly: false, ci: 0, zoom: 10, pos: 0, now: null };
+  // ================= 6. 스케일 연습 (베이스 4·5·6현 & CAGED 5블럭 시퀀스) =================
+  const sc = { mode: 'simple', root: 0, type: 'pentMaj', label: 'deg', inst: 'g6', block: 1, hand: 'right', dir: 1, bars: 0, range: 'oct', rootOnly: false, ci: 0, zoom: 10, pos: 0, now: null };
   const scT = makeTransport();
   noteOptions($('sc-root'), 0);
   $('sc-type').innerHTML = CT.SCALES.map((s) => '<option value="' + s.id + '"' + (s.id === sc.type ? ' selected' : '') + '>' + esc(s.name) + '</option>').join('');
   $('sc-inst').innerHTML = CT.TUNINGS.map((t) => '<option value="' + t.id + '"' + (t.id === sc.inst ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
-  const scTuning = () => CT.TUNING_BY[sc.inst];
+  const scTuning = () => CT.TUNING_BY[sc.inst] || CT.TUNING_BY.g6;
+  const scIsCagedUnsupported = () => sc.type === 'harmMinor' || sc.type === 'melMinor';
+  const scEffBlock = () => (scIsCagedUnsupported() ? 0 : sc.block);
   const scCircle = () => CT.scaleCircle(sc.root, sc.type, sc.dir);
   const scKey = (ci) => (sc.mode === 'circle' ? scCircle()[ci == null ? sc.ci : ci] : CT.scaleInfo(sc.root, sc.type));
-  // 보이는 프렛 범위: zoom = 줄인 칸 수, pos = 시작 프렛
+  const scPlayNote = (midi, t, dur) => {
+    if (scTuning().kind === 'bass') AU.bassPluck(midi, t, dur || 0.55);
+    else AU.pluck(midi, t, dur || 0.5, 0.2);
+  };
+
+  function scActiveBlock(key) {
+    const eff = scEffBlock();
+    if (!eff) return null;
+    const tun = scTuning();
+    const blocks = CT.scaleBlocks(key.root, sc.type, tun.open, tun.frets);
+    return blocks.find((b) => b.blockId === eff) || blocks[0] || null;
+  }
+
+  function scAlignWindowToBlock(blk) {
+    if (!blk) return;
+    const maxF = scTuning().frets, count = maxF + 1 - sc.zoom;
+    const targetLo = Math.max(0, blk.lo - 1);
+    const targetHi = Math.min(maxF, blk.hi + 1);
+    if (targetLo < sc.pos || targetHi > sc.pos + count - 1) {
+      sc.pos = Math.max(0, Math.min(maxF + 1 - count, targetLo));
+    }
+  }
+
   function scWindow() {
     const maxF = scTuning().frets, count = maxF + 1 - sc.zoom;
     sc.pos = Math.max(0, Math.min(sc.pos, maxF + 1 - count));
     return { lo: sc.pos, hi: sc.pos + count - 1, maxF, count };
   }
 
-  // 재생 순서: 보이는 범위 안에서 위치를 정하고 상행 후 하행
   function scSeq(key) {
+    const blk = scActiveBlock(key);
+    if (blk) return CT.scaleBlockSeq(blk.notes);
     const { lo, hi } = scWindow();
     const all = CT.scaleOnBoard(key.root, sc.type, scTuning().open, lo, hi);
     if (!all.length) return [];
@@ -771,11 +817,47 @@
     return h + '</svg>';
   }
 
+  const CAGED_BLOCK_CHIPS = [
+    { v: 1, label: '#1 (A) Shape' },
+    { v: 2, label: '#2 (G) Shape' },
+    { v: 3, label: '#3 (E) Shape' },
+    { v: 4, label: '#4 (D) Shape' },
+    { v: 5, label: '#5 (C) Shape' },
+    { v: 0, label: '전체 지판' },
+  ];
+
   function drawScale() {
     const circle = sc.mode === 'circle';
     const tun = scTuning(), win = scWindow();
     const keys = circle ? scCircle() : null;
     const key = circle ? keys[sc.ci] : CT.scaleInfo(sc.root, sc.type);
+    const blk = scActiveBlock(key);
+
+    chips($('sc-inst-chips'), CT.TUNINGS.map((t) => ({ v: t.id, label: t.name, sub: t.open.length + '현 · ' + t.frets + 'f' })), sc.inst, (v) => {
+      sc.inst = v;
+      $('sc-inst').value = v;
+      sc.zoom = Math.max(0, scTuning().frets + 1 - 13);
+      sc.pos = 0;
+      scAlignWindowToBlock(scActiveBlock(scKey()));
+      drawScale();
+    });
+
+    chips($('sc-block'), CAGED_BLOCK_CHIPS, scEffBlock(), (v) => {
+      sc.block = +v;
+      scAlignWindowToBlock(scActiveBlock(scKey()));
+      drawScale();
+    });
+    const blockEl = $('sc-block');
+    if (scIsCagedUnsupported()) {
+      blockEl.querySelectorAll('.chip').forEach((b) => {
+        if (+b.dataset.v > 0) b.disabled = true;
+      });
+      $('sc-block-msg').hidden = false;
+      $('sc-block-msg').textContent = '화성·가락단음계는 CAGED 5블럭 대신 전체 지판 모드로 표시됩니다 (3NPS 7포지션 후보).';
+    } else {
+      $('sc-block-msg').hidden = true;
+    }
+
     chips($('sc-mode'), [{ v: 'simple', label: '단순 스케일' }, { v: 'circle', label: '5도권 순환' }], sc.mode, (v) => { sc.mode = v; sc.ci = 0; drawScale(); });
     chips($('sc-label'), [{ v: 'deg', label: '도수' }, { v: 'name', label: '음이름' }, { v: 'none', label: '없음' }], sc.label, (v) => { sc.label = v; drawScale(); });
     chips($('sc-hand'), [{ v: 'right', label: '오른손' }, { v: 'left', label: '왼손' }], sc.hand, (v) => { sc.hand = v; drawScale(); });
@@ -794,17 +876,56 @@
     posEl.max = win.maxF + 1 - win.count; posEl.value = sc.pos; posEl.disabled = +posEl.max === 0;
 
     const now = sc.now;
+    const blkKeySet = blk ? new Set(blk.notes.map((n) => n.s + ':' + n.f)) : null;
+    const lrNode = blk ? blk.notes.find((n) => n.isLowestRoot) : null;
+    const lrKey = lrNode ? lrNode.s + ':' + lrNode.f : '';
+
     const notes = CT.scaleOnBoard(key.root, sc.type, tun.open, win.lo, win.hi)
       .map((n) => {
         const isNow = !!now && now.s === n.s && now.f === n.f;
+        const keyStr = n.s + ':' + n.f;
+        const isPress = blk ? blkKeySet.has(keyStr) : true;
+        const isLowest = blk ? (keyStr === lrKey) : false;
         return Object.assign({}, n, {
-          cls: n.isRoot ? 'root' : 'guide', now: isNow,
+          cls: n.isRoot ? 'root' : 'guide',
+          now: isNow,
+          ctx: blk ? !isPress : false,
+          press: blk ? isPress : false,
+          lowestRoot: isLowest,
+          isLowestRoot: isLowest,
           moved: circle && key.added.includes(n.name),
           text: sc.label === 'name' ? n.name : sc.label === 'deg' ? n.deg : '',
         });
       })
       .filter((n) => !sc.rootOnly || n.isRoot || n.now);
-    $('sc-board').innerHTML = neck({ open: tun.open, lo: win.lo, hi: win.hi, notes, flip: sc.hand === 'left', label: key.name + ' 지판' });
+    $('sc-board').innerHTML = neck({
+      open: tun.open,
+      isBass: tun.kind === 'bass',
+      lo: win.lo,
+      hi: win.hi,
+      notes,
+      flip: sc.hand === 'left',
+      block: blk ? { lo: blk.lo, hi: blk.hi } : null,
+      label: key.name + ' 지판',
+    });
+
+    const seq = scSeq(key);
+    if (blk) {
+      const sorted = blk.notes.slice().sort((a, b) => a.pitch - b.pitch);
+      const lowN = sorted[0], highN = sorted[sorted.length - 1];
+      const startN = seq[0], endN = seq[seq.length - 1];
+      const fmt = (n) => (tun.open.length - n.s) + '·' + n.f + ' (' + n.name + ')';
+      const summary = '[시작: 최저 루트 ' + fmt(startN) + '] → [1번줄 끝 ' + fmt(highN) + '] → [' + tun.open.length + '번줄 최저 ' + fmt(lowN) + '] → [마무리: 최저 루트 ' + fmt(endN) + '] (총 ' + seq.length + '스텝)';
+      $('sc-seq').innerHTML = '<div class="seq-summary">' + esc(summary) + '</div>' + seq.map((n) => {
+        const isNow = !!now && now.s === n.s && now.f === n.f;
+        return '<span class="seqn' + (n.isRoot ? ' root' : '') + (isNow ? ' now' : '') + '">' + (tun.open.length - n.s) + '·' + n.f + '<b>' + esc(n.name) + '</b></span>';
+      }).join('');
+    } else {
+      $('sc-seq').innerHTML = seq.map((n) => {
+        const isNow = !!now && now.s === n.s && now.f === n.f;
+        return '<span class="seqn' + (n.isRoot ? ' root' : '') + (isNow ? ' now' : '') + '">' + (tun.open.length - n.s) + '·' + n.f + '<b>' + esc(n.name) + '</b></span>';
+      }).join('');
+    }
 
     if (circle) {
       const prev = keys[(sc.ci + 11) % 12], nxt = keys[(sc.ci + 1) % 12];
@@ -819,11 +940,12 @@
   function scKeySound() { const k = scKey(); AU.bass(36 + k.root, AU.now() + 0.02, 1.2); }
   function scMove(d) { if (sc.mode !== 'circle') return; sc.ci = (sc.ci + d + 12) % 12; drawScale(); scKeySound(); }
 
-  $('sc-root').addEventListener('change', (e) => { sc.root = +e.target.value; sc.ci = 0; drawScale(); });
-  $('sc-type').addEventListener('change', (e) => { sc.type = e.target.value; drawScale(); });
+  $('sc-root').addEventListener('change', (e) => { sc.root = +e.target.value; sc.ci = 0; scAlignWindowToBlock(scActiveBlock(scKey())); drawScale(); });
+  $('sc-type').addEventListener('change', (e) => { sc.type = e.target.value; scAlignWindowToBlock(scActiveBlock(scKey())); drawScale(); });
   $('sc-inst').addEventListener('change', (e) => {
     sc.inst = e.target.value;
-    sc.zoom = Math.max(0, scTuning().frets + 1 - 13); sc.pos = 0; // 기본: 0~12프렛
+    sc.zoom = Math.max(0, scTuning().frets + 1 - 13); sc.pos = 0;
+    scAlignWindowToBlock(scActiveBlock(scKey()));
     drawScale();
   });
   $('sc-zoom').addEventListener('input', (e) => { sc.zoom = +e.target.value; drawScale(); });
@@ -833,7 +955,7 @@
   $('sc-bpm').addEventListener('change', (e) => scT.setBpm(+e.target.value || 90));
   $('sc-prev').addEventListener('click', () => scMove(-1));
   $('sc-nextb').addEventListener('click', () => scMove(1));
-  $('sc-board').addEventListener('click', (e) => { const g = e.target.closest('.nd'); if (g) AU.pluck(+g.dataset.p, AU.now() + 0.02, 1, 0.2); });
+  $('sc-board').addEventListener('click', (e) => { const g = e.target.closest('.nd'); if (g) scPlayNote(+g.dataset.p, AU.now() + 0.02, 1); });
   document.addEventListener('keydown', (e) => {
     if ($('pane-scale').hidden || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); scMove(1); }
@@ -847,7 +969,6 @@
         if (seq !== null && sc.mode === 'circle') ci = (sc.ci + 1) % 12;
         else ci = sc.ci;
         seq = scSeq(scKey(ci));
-        // 키 하나 길이: 스케일 한 바퀴를 마디 단위로 올림, 또는 정한 마디 수 (8분음표 8개 = 1마디)
         len = sc.mode === 'circle' && sc.bars ? sc.bars * 8 : Math.max(8, Math.ceil(seq.length / 8) * 8);
         k = 0;
         if (sc.mode === 'circle') AU.bass(36 + scKey(ci).root, t, 60 / (+$('sc-bpm').value || 90) * 2);
@@ -856,15 +977,159 @@
       if (i % 2 === 0) AU.click(t, i % 8 === 0);
       const looped = sc.mode === 'circle' && sc.bars;
       const n = seq.length && (looped || i < seq.length) ? seq[i % seq.length] : null;
-      if (n) AU.pluck(n.pitch, t, 0.5, 0.2);
+      if (n) scPlayNote(n.pitch, t, 0.5);
       const keyAt = ci;
       setTimeout(() => { if (!scT.running) return; sc.ci = keyAt; sc.now = n; drawScale(); }, delay);
     }, 2);
     if (ok) setPlayBtn($('sc-play'), true);
   });
 
+  // ================= 7. 더블 스탑 연습 =================
+  const ds = { root: 0, scale: 'major', inst: 'g6', interval: '3rd', pair: [4, 5], dir: 'round', bpm: 75, sel: 0 };
+  const dsT = makeTransport();
+  noteOptions($('ds-root'), 0);
+  const DS_SCALES = [
+    { id: 'major', name: 'Major (Ionian)' },
+    { id: 'minor', name: 'Natural Minor (Aeolian)' },
+    { id: 'dorian', name: 'Dorian' },
+    { id: 'mixolydian', name: 'Mixolydian' },
+    { id: 'pentMaj', name: 'Pentatonic Major' },
+    { id: 'pentMin', name: 'Pentatonic Minor' },
+  ];
+  $('ds-scale').innerHTML = DS_SCALES.map((s) => '<option value="' + s.id + '"' + (s.id === ds.scale ? ' selected' : '') + '>' + esc(s.name) + '</option>').join('');
+  const dsTuning = () => CT.TUNING_BY[ds.inst] || CT.TUNING_BY.g6;
+
+  function dsPairOptions() {
+    const n = dsTuning().open.length;
+    const adj = [], skp = [];
+    for (let sHigh = n - 1; sHigh >= 1; sHigh--) {
+      const sLow = sHigh - 1;
+      adj.push({ v: sLow + '-' + sHigh, pair: [sLow, sHigh], label: (n - sHigh) + '-' + (n - sLow) + '번줄' });
+    }
+    for (let sHigh = n - 1; sHigh >= 2; sHigh--) {
+      const sLow = sHigh - 2;
+      skp.push({ v: sLow + '-' + sHigh, pair: [sLow, sHigh], label: (n - sHigh) + '-' + (n - sLow) + '번줄', sub: ds.interval === '6th' ? '6도 추천' : '건너뛴 줄' });
+    }
+    return adj.concat(skp);
+  }
+
+  function ensureDsPair() {
+    const n = dsTuning().open.length;
+    if (ds.pair[0] < 0 || ds.pair[1] >= n || ds.pair[0] >= ds.pair[1]) {
+      ds.pair = ds.interval === '6th' ? [Math.max(0, n - 3), n - 1] : [n - 2, n - 1];
+      ds.sel = 0;
+    }
+  }
+
+  function dsSteps() {
+    ensureDsPair();
+    return CT.doubleStops({
+      rootPc: ds.root,
+      scaleId: ds.scale,
+      interval: ds.interval,
+      pair: ds.pair,
+      open: dsTuning().open,
+      lo: 0,
+      hi: dsTuning().frets,
+    });
+  }
+
+  function playDsStep(idx) {
+    const steps = dsSteps();
+    if (!steps[idx]) return;
+    const st = steps[idx];
+    AU.doubleStop([st.notes[0].pitch, st.notes[1].pitch], AU.now() + 0.02, 1.1, dsTuning().kind === 'bass');
+    ds.sel = idx;
+    drawDoubleStop();
+  }
+
+  function drawDoubleStop() {
+    ensureDsPair();
+    chips($('ds-inst'), CT.TUNINGS.map((t) => ({ v: t.id, label: t.name, sub: t.open.length + '현 · ' + t.frets + 'f' })), ds.inst, (v) => {
+      ds.inst = v; ensureDsPair(); drawDoubleStop();
+    });
+    chips($('ds-interval'), CT.DOUBLE_STOP_INTERVALS.map((iv) => ({ v: iv.id, label: iv.name, sub: iv.desc })), ds.interval, (v) => {
+      ds.interval = v;
+      const n = dsTuning().open.length;
+      if (v === '6th') ds.pair = [Math.max(0, n - 3), n - 1];
+      else ds.pair = [n - 2, n - 1];
+      ds.sel = 0;
+      drawDoubleStop();
+    });
+    const popts = dsPairOptions();
+    const pKey = ds.pair[0] + '-' + ds.pair[1];
+    chips($('ds-pair'), popts, pKey, (v) => {
+      const found = popts.find((p) => p.v === v);
+      if (found) { ds.pair = found.pair; ds.sel = 0; drawDoubleStop(); }
+    });
+    chips($('ds-dir'), [{ v: 'up', label: '상행' }, { v: 'down', label: '하행' }, { v: 'round', label: '왕복' }], ds.dir, (v) => { ds.dir = v; drawDoubleStop(); });
+
+    const steps = dsSteps();
+    if (ds.sel >= steps.length) ds.sel = 0;
+    const curStep = steps[ds.sel] || null;
+    const tun = dsTuning();
+    $('ds-title').textContent = NOTE[ds.root] + ' ' + (DS_SCALES.find((s) => s.id === ds.scale)?.name || '') + ' · ' + (CT.DOUBLE_STOP_INTERVALS.find((i) => i.id === ds.interval)?.name || '') + ' (' + (tun.open.length - ds.pair[1]) + '-' + (tun.open.length - ds.pair[0]) + '번줄)';
+    $('ds-status').textContent = '다이어토닉 더블 스탑 ' + steps.length + '개 스텝';
+
+    const activePitches = curStep ? [curStep.notes[0].pitch, curStep.notes[1].pitch] : [];
+    const allNotes = CT.scaleOnBoard(ds.root, ds.scale, tun.open, 0, tun.frets);
+    const bNotes = allNotes.map((n) => {
+      const isNow = activePitches.includes(n.pitch);
+      return Object.assign({}, n, {
+        cls: n.isRoot ? 'root' : '',
+        ctx: !isNow,
+        press: isNow,
+        now: isNow,
+      });
+    });
+    $('ds-board').innerHTML = neck({ open: tun.open, isBass: tun.kind === 'bass', lo: 0, hi: tun.frets, notes: bNotes, label: '더블 스탑 지판' });
+
+    $('ds-steps').innerHTML = steps.map((st, idx) => {
+      const isSel = idx === ds.sel;
+      const n0 = st.notes[0], n1 = st.notes[1];
+      return '<button type="button" class="cell pick' + (isSel ? ' sel' : '') + '" data-i="' + idx + '"><b>' + esc(st.label) + '</b><span>' + esc(n0.name) + '+' + esc(n1.name) + ' (' + esc(n0.deg) + '+' + esc(n1.deg) + ')</span><em>' + (tun.open.length - n0.s) + '·' + (+n0.f) + 'f + ' + (tun.open.length - n1.s) + '·' + (+n1.f) + 'f</em></button>';
+    }).join('');
+    $('ds-steps').querySelectorAll('.cell').forEach((c) => c.addEventListener('click', () => {
+      playDsStep(+c.dataset.i);
+    }));
+  }
+
+  $('ds-root').addEventListener('change', (e) => { ds.root = +e.target.value; ds.sel = 0; drawDoubleStop(); });
+  $('ds-scale').addEventListener('change', (e) => { ds.scale = e.target.value; ds.sel = 0; drawDoubleStop(); });
+  $('ds-bpm').addEventListener('change', (e) => dsT.setBpm(+e.target.value || 75));
+  $('ds-board').addEventListener('click', (e) => {
+    const g = e.target.closest('.nd');
+    if (g) {
+      const pitch = +g.dataset.p;
+      const steps = dsSteps();
+      const found = steps.findIndex((s) => s.notes[0].pitch === pitch || s.notes[1].pitch === pitch);
+      if (found >= 0) playDsStep(found);
+    }
+  });
+  $('ds-play').addEventListener('click', () => {
+    if (dsT.running) { dsT.stop(); setPlayBtn($('ds-play'), false); return; }
+    const steps = dsSteps();
+    if (!steps.length) return;
+    const ord = [];
+    const up = [...Array(steps.length).keys()];
+    if (ds.dir === 'up') ord.push(...up);
+    else if (ds.dir === 'down') ord.push(...up.slice().reverse());
+    else ord.push(...up, ...up.slice(1, -1).reverse());
+
+    let step = 0;
+    const ok = dsT.start(+$('ds-bpm').value || 75, (b, t, delay) => {
+      const k = ord[step % ord.length];
+      const st = steps[k];
+      AU.doubleStop([st.notes[0].pitch, st.notes[1].pitch], t, 1.0, dsTuning().kind === 'bass');
+      AU.click(t, step % 4 === 0);
+      setTimeout(() => { if (!dsT.running) return; ds.sel = k; drawDoubleStop(); }, delay);
+      step++;
+    });
+    if (ok) setPlayBtn($('ds-play'), true);
+  });
+
   // ================= 시작 =================
-  drawTone(); drawMatrix(); drawCircle(); drawReint(); newQuiz(); runA(); drawScale();
+  drawTone(); drawMatrix(); drawCircle(); drawReint(); newQuiz(); runA(); drawScale(); drawDoubleStop();
   // 라이트/다크: 고르기 전에는 시스템 설정을 따름
   function applyTheme(t) {
     if (t) document.documentElement.dataset.theme = t;
@@ -881,6 +1146,6 @@
 
   let startTab = 'scale';
   try { const s = localStorage.getItem('ulp:tab'); if (s && TABS.includes(s)) startTab = s; } catch (e) { /* 무시 */ }
-  if (/^#(tone|matrix|circle|reint|tf|scale)$/.test(location.hash)) startTab = location.hash.slice(1);
+  if (/^#(tone|matrix|circle|reint|tf|scale|ds)$/.test(location.hash)) startTab = location.hash.slice(1);
   showTab(startTab);
 })();

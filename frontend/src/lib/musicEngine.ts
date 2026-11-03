@@ -87,10 +87,13 @@ export interface DoubleStopOptions {
 
 export interface AudioEngine {
   resume(): Promise<void>;
+  now(): number;
   pluck(midi: number, when?: number, dur?: number): void;
   bassPluck(midi: number, when?: number, dur?: number): void;
+  bass(midi: number, when?: number, dur?: number): void;
   chord(midis: number[], when?: number, dur?: number): void;
   doubleStop(midis: [number, number], when?: number, dur?: number, isBass?: boolean): void;
+  click(when?: number, accent?: boolean): void;
 }
 
 const CT_MOD: any = (rawCT as any).default || rawCT;
@@ -163,8 +166,10 @@ export const GE = {
   OPEN: GE_MOD.OPEN as number[],
   STR_LABEL: GE_MOD.STR_LABEL as string[],
   NAMES: GE_MOD.NAMES as string[],
+  DEG: GE_MOD.DEG as Record<string, [number, string]>,
   CH: GE_MOD.CH as Record<string, string[]>,
   DOMS: GE_MOD.DOMS as string[],
+  pc: GE_MOD.pc as (n: number) => number,
   chordTones: GE_MOD.chordTones,
   chordName: GE_MOD.chordName as (root: number, q: string) => string,
   pentPcs: GE_MOD.pentPcs as (root: number, type: 'min' | 'maj') => number[],
@@ -172,7 +177,7 @@ export const GE = {
   trans: GE_MOD.trans,
   search251: GE_MOD.search251,
   topNoteDominants: GE_MOD.topNoteDominants,
-  fretStr: GE_MOD.fretStr,
+  fretStr: GE_MOD.fretStr as (v: { frets: number[] }) => string,
 };
 
 export function midiToFreq(midi: number): number {
@@ -200,6 +205,11 @@ export function createAudioEngine(ctxProvider?: () => any): AudioEngine {
     if (c && c.state === 'suspended' && typeof c.resume === 'function') {
       await c.resume();
     }
+  }
+
+  function now(): number {
+    const c = ensureContext();
+    return c && typeof c.currentTime === 'number' ? c.currentTime : 0;
   }
 
   function pluck(midi: number, when?: number, dur = 0.85): void {
@@ -260,6 +270,24 @@ export function createAudioEngine(ctxProvider?: () => any): AudioEngine {
     oHarm.stop(t0 + dur + 0.02);
   }
 
+  function bass(midi: number, when?: number, dur = 0.9): void {
+    const c = ensureContext();
+    if (!c) return;
+    const t0 = typeof when === 'number' ? when : c.currentTime;
+    const f = midiToFreq(midi);
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.42, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + dur + 0.05);
+  }
+
   function chord(midis: number[], when?: number, dur = 1.4): void {
     const c = ensureContext();
     if (!c) return;
@@ -279,14 +307,33 @@ export function createAudioEngine(ctxProvider?: () => any): AudioEngine {
     fn(midis[1], t0, dur);
   }
 
+  function click(when?: number, accent = false): void {
+    const c = ensureContext();
+    if (!c) return;
+    const t0 = typeof when === 'number' ? when : c.currentTime;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(accent ? 1760 : 1180, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(accent ? 0.12 : 0.06, t0 + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + 0.07);
+  }
+
   return {
     resume,
+    now,
     pluck,
     bassPluck,
+    bass,
     chord,
     doubleStop,
+    click,
   };
 }
 
 export const audioEngine = createAudioEngine();
-
