@@ -8,6 +8,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.plugins.forwardedheaders.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -202,6 +203,15 @@ fun Application.module(
         CloudRunJobDispatcher(cloudRunJobUri)
     } else {
         LocalAsyncJobDispatcher(runner = { jobId -> noteService.executeJob(jobId) })
+    }
+
+    // Cloud Run은 TLS를 끝내고 http로 넘긴다. X-Forwarded-Proto로 https를 알아야 CORS가 같은 출처를 알아본다.
+    // 호스트·클라이언트 IP 헤더는 위조될 수 있어 믿지 않는다
+    install(XForwardedHeaders) {
+        hostHeaders.clear()
+        forHeaders.clear()
+        portHeaders.clear()
+        httpsFlagHeaders.clear()
     }
 
     install(CORS) {
