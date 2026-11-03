@@ -33,6 +33,7 @@
     <button class="tab" role="tab" id="tab-circle" aria-selected="false">4 · 탑노트 5도권</button>
     <button class="tab" role="tab" id="tab-reint" aria-selected="false">5 · 코드 재해석</button>
     <button class="tab" role="tab" id="tab-tf" aria-selected="false">6 · 2-5-1 탐색</button>
+    <button class="tab" role="tab" id="tab-ds" aria-selected="false">7 · 더블 스탑 연습</button>
   </nav>
 
   <!-- 1. 스케일 연습 -->
@@ -51,14 +52,17 @@
         </div>
       </div>
       <div class="scroll" id="sc-board"></div>
+      <div class="seq" id="sc-seq" aria-label="CAGED 블럭 연주 시퀀스"></div>
       <div class="sc-sliders">
         <label class="sc-sl"><span>전체 보기</span><input type="range" id="sc-zoom" min="0" max="18" value="10" aria-label="확대"><span>확대</span></label>
         <label class="sc-sl"><span>◀ 낮은 프렛</span><input type="range" id="sc-pos" min="0" max="10" value="0" aria-label="보이는 프렛 위치"><span>높은 프렛 ▶</span></label>
       </div>
-      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>스케일 구성음</span><span id="sc-leg-moved" hidden><i class="m"></i>직전 키에서 바뀐 음</span><span><i class="n"></i>지금 칠 음</span><span>점을 누르면 소리가 나요</span></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>스케일 구성음</span><span><i class="lowest-k"></i>블럭 시작·종착 최저 루트</span><span id="sc-leg-moved" hidden><i class="m"></i>직전 키에서 바뀐 음</span><span><i class="n"></i>지금 칠 음</span><span>점을 누르면 소리가 나요</span></div>
     </div>
     <div class="panel">
       <h3 class="h3 sc-sec">프렛보드 설정</h3>
+      <div class="field wide"><span class="lab">악기 선택 (기타 / 베이스)</span><div class="chips" id="sc-inst-chips"></div></div>
+      <div class="field wide"><span class="lab">CAGED 5블럭 포지션 (관계장조 창 기준)</span><div class="chips" id="sc-block"></div><span class="note" id="sc-block-msg" hidden></span></div>
       <div class="controls">
         <div class="field"><span class="lab">연습 방식</span><div class="chips" id="sc-mode"></div></div>
         <div class="field"><label for="sc-root" id="sc-root-lab">루트 음</label><select id="sc-root"></select></div>
@@ -226,6 +230,29 @@
       <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도</span><span><i class="o"></i>5도·텐션</span><span><i class="ctxk"></i><span id="a-vctxl">펜타토닉 (펜타 도수)</span></span><span><i class="blkk"></i>프렛 창</span><span>아래 결과의 코드를 누르면 여기에 표시돼요</span></div>
     </div>
     <div id="a-out-list" class="results"></div>
+  </section>
+
+  <!-- 7. 더블 스탑 연습 -->
+  <section class="pane" id="pane-ds" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>3도 · 6도 · 4도 더블 스탑.</b> 스케일 위에서 두 줄 화음(Double-Stop)을 인접 줄 또는 한 줄 건너뛴 줄 쌍으로 익히고 두 음을 동시에 울려 하모니 감각을 키웁니다.</p>
+      <div class="field wide"><span class="lab">악기 선택</span><div class="chips" id="ds-inst"></div></div>
+      <div class="controls">
+        <div class="field"><label for="ds-root">루트 음</label><select id="ds-root"></select></div>
+        <div class="field"><label for="ds-scale">스케일 종류</label><select id="ds-scale"></select></div>
+        <div class="field"><label for="ds-bpm">BPM</label><input id="ds-bpm" type="number" min="30" max="200" value="75"></div>
+      </div>
+      <div class="field"><span class="lab">더블 스탑 음정</span><div class="chips" id="ds-interval"></div></div>
+      <div class="field"><span class="lab">줄 쌍 선택</span><div class="chips" id="ds-pair"></div></div>
+      <div class="row"><div class="chips" id="ds-dir"></div><button class="playbtn" id="ds-play" aria-pressed="false">재생</button><span class="status" id="ds-status"></span></div>
+    </div>
+    <div class="panel">
+      <h3 class="h3" id="ds-title"></h3>
+      <div class="scroll" id="ds-board"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>더블 스탑 구성음</span><span><i class="ctxk"></i>지판 전체 스케일 음</span><span><i class="blkk"></i>현재 짚는 두 음 범위</span><span><i class="n"></i>지금 울리는 두 음</span></div>
+      <h3 class="h3">다이어토닉 더블 스탑 스텝 (카드를 누르면 두 음이 동시에 울려요)</h3>
+      <div class="strip" id="ds-steps"></div>
+    </div>
   </section>
 
 </div>
