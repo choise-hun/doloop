@@ -27,6 +27,21 @@ export function HomePage(): React.ReactElement {
 
   // 1. 유튜브 링크 빠른 시작 상태
   const [goUrl, setGoUrl] = useState('');
+  const goUrlRef = useRef<HTMLInputElement | null>(null);
+
+  // csp_check.js처럼 el.value 대입 후 native input 이벤트만 보내는 경우에도 상태를 맞춘다
+  useEffect(() => {
+    const el = goUrlRef.current;
+    if (!el) return;
+    const handleNativeInput = (e: Event) => {
+      const target = e.target as HTMLInputElement | null;
+      if (target && typeof target.value === 'string') {
+        setGoUrl(target.value);
+      }
+    };
+    el.addEventListener('input', handleNativeInput);
+    return () => el.removeEventListener('input', handleNativeInput);
+  }, []);
   const [geminiModalOpen, setGeminiModalOpen] = useState(false);
   const pickedVideoId = videoIdFrom(goUrl);
   const hasInvalidUrl = Boolean(goUrl.trim() && !pickedVideoId);
@@ -210,6 +225,7 @@ export function HomePage(): React.ReactElement {
           <input
             className="inpField"
             id="goUrl"
+            ref={goUrlRef}
             type="url"
             inputMode="url"
             autoComplete="off"
