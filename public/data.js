@@ -160,6 +160,9 @@ window.ULData = (function () {
       durationSec: meta.durationSec,
       mime: meta.mime,
     };
+    if (meta.replaceOldSongTakes === true) {
+      metaPayload.replaceOldSongTakes = true;
+    }
     const ext = EXT[meta.mime] || 'webm';
     const filename = 'take.' + ext;
     const form = new FormData();
@@ -395,14 +398,17 @@ window.ULData = (function () {
   async function saveGeminiIntegration(input) {
     requireLogin();
     input = input || {};
-    const body = JSON.stringify({
+    const payload = {
       appId: 'ulevelp',
       apiKey: input.apiKey,
       model: input.model,
-    });
+    };
+    if (input.verify !== undefined) {
+      payload.verify = Boolean(input.verify);
+    }
     const r = await window.ULAuth.apiFetch('/api/v1/integrations/gemini', {
       method: 'PUT',
-      body,
+      body: JSON.stringify(payload),
     });
     if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
       await window.ULAuth.fetchMe();

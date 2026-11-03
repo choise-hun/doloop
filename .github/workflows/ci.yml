@@ -48,7 +48,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-      # 외부 의존성이 없으므로 install 단계 없이 바로 테스트합니다
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       - run: npm test
 
   e2e-security:
