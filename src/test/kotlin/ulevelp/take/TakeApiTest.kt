@@ -1610,5 +1610,12 @@ class TakeApiTest {
             "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다.",
             err["message"]?.jsonPrimitive?.content
         )
+
+        // 사전 검증(트랜잭션 A)으로 차단되어 스토리지 파일 및 DB 녹음이 생성되지 않았음 확인
+        assertEquals(0, fake.objects.size)
+        transaction(db) {
+            val takes1 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
+            assertEquals(0, takes1.size)
+        }
     }
 }

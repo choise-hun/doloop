@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import org.slf4j.LoggerFactory
@@ -297,7 +298,14 @@ class TakeService(
                     .where { (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }
                     .singleOrNull() ?: throw NotFoundException("곡을 찾을 수 없습니다.")
 
-                // 2) 최근 연습 곡 재검증
+                // 2) profiles FOR UPDATE 잠금 선획득 (동시 업로드 정합성 보장)
+                val quota = ProfilesTable
+                    .select(ProfilesTable.takeQuotaBytes)
+                    .where { ProfilesTable.id eq userId }
+                    .forUpdate(ForUpdateOption.ForUpdate)
+                    .single()[ProfilesTable.takeQuotaBytes]
+
+                // 3) 잠금 획득 후 최근 연습 곡 재검증
                 val hasNewerOtherSong = SongsTable
                     .select(SongsTable.id)
                     .where {
@@ -315,7 +323,7 @@ class TakeService(
                     )
                 }
 
-                // 3) 타 곡 supabase 녹음 재확인
+                // 4) 잠금 획득 후 타 곡 supabase 녹음 재확인
                 val otherSongTakes = TakesTable
                     .select(TakesTable.id, TakesTable.storageKey, TakesTable.sizeBytes)
                     .where {
@@ -333,13 +341,7 @@ class TakeService(
                     )
                 }
 
-                // 4) profiles FOR UPDATE 및 쿼터 재검사
-                val quota = ProfilesTable
-                    .select(ProfilesTable.takeQuotaBytes)
-                    .where { ProfilesTable.id eq userId }
-                    .forUpdate(ForUpdateOption.ForUpdate)
-                    .single()[ProfilesTable.takeQuotaBytes]
-
+                // 5) 쿼터 재검사
                 val sumExpr = TakesTable.sizeBytes.sum()
                 val totalUsed = TakesTable
                     .select(sumExpr)
@@ -363,9 +365,10 @@ class TakeService(
                     )
                 }
 
-                // 5) 타 곡 supabase 녹음 교체 (replaceOldSongTakes == true)
+                // 6) 타 곡 supabase 녹음 교체: 조회한 id 목록(oldIds)으로 원자적 삭제 및 trash 적재
                 val trashIds = mutableListOf<Long>()
                 if (input.replaceOldSongTakes && otherSongTakes.isNotEmpty()) {
+                    val oldIds = otherSongTakes.map { it[TakesTable.id] }
                     for (oldTake in otherSongTakes) {
                         val oldTakeId = oldTake[TakesTable.id]
                         val oldStorageKey = oldTake[TakesTable.storageKey]
@@ -378,11 +381,11 @@ class TakeService(
                     TakesTable.deleteWhere {
                         (TakesTable.userId eq userId) and
                         (TakesTable.storage eq "supabase") and
-                        (TakesTable.songId neq input.songId)
+                        (TakesTable.id inList oldIds)
                     }
                 }
 
-                // 6) SongsTable.lastDate 및 updatedAt 갱신
+                // 7) SongsTable.lastDate 및 updatedAt 갱신
                 val currentLastDate = songRow[SongsTable.lastDate]
                 if (currentLastDate == null || currentLastDate < input.date) {
                     SongsTable.update({ (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }) {
@@ -391,11 +394,11 @@ class TakeService(
                     }
                 }
 
-                // 7) ensureSession
+                // 8) ensureSession
                 val sessionResult = ensureSession(userId, input.songId, input.date, input.rate, input.a, input.b)
                 val sessionId = sessionResult.sessionId
 
-                // 8) TakesTable.insert
+                // 9) TakesTable.insert
                 TakesTable.insert {
                     it[id] = takeId
                     it[TakesTable.userId] = userId
@@ -415,13 +418,13 @@ class TakeService(
                     it[memo] = ""
                 }
 
-                // 9) Outbox 적재
+                // 10) Outbox 적재
                 if (sessionResult.created) {
                     OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "upsert")
                 }
                 OutboxRepository.enqueueIfSyncEnabled(userId, "take", takeId, "upsert")
 
-                // 10) TakeDto 생성
+                // 11) TakeDto 생성
                 val dto = TakeDto(
                     id = takeId.toString(),
                     sessionId = sessionId.toString(),

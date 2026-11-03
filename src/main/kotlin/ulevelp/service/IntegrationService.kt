@@ -239,7 +239,7 @@ class IntegrationService(
         }
 
         val rawApiKey = input.apiKey?.trim()?.takeIf { it.isNotEmpty() }
-        val targetApiKey: String
+        val targetApiKey: String?
         val encryptedPayload: EncryptedPayload?
         val database = requireDb()
 
@@ -262,18 +262,22 @@ class IntegrationService(
                     .singleOrNull()
             } ?: throw InvalidInputException("최초 등록 시 Gemini API 키(apiKey)가 필요합니다.")
 
-            targetApiKey = crypto.decryptProviderKey(
-                userId = userId,
-                provider = "gemini",
-                encryptedSecret = existingSecret[IntegrationsTable.encryptedSecret],
-                iv = existingSecret[IntegrationsTable.iv],
-                appId = input.appId
-            )
+            targetApiKey = if (input.verify) {
+                crypto.decryptProviderKey(
+                    userId = userId,
+                    provider = "gemini",
+                    encryptedSecret = existingSecret[IntegrationsTable.encryptedSecret],
+                    iv = existingSecret[IntegrationsTable.iv],
+                    appId = input.appId
+                )
+            } else {
+                null
+            }
             encryptedPayload = null
         }
 
         // 트랜잭션 밖 실시간 핑 검증
-        val checkRes = if (input.verify) {
+        val checkRes = if (input.verify && targetApiKey != null) {
             checkClient.checkGemini(targetApiKey, model)
         } else {
             null

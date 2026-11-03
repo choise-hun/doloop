@@ -917,6 +917,24 @@ class IntegrationApiTest {
         // 복호화된 기존 키로 핑 검증이 이루어졌는지 확인
         assertEquals(1, fakeCheckClient.geminiCalls.size)
         assertEquals(rawGemKey to "gemini-1.5-pro", fakeCheckClient.geminiCalls.first())
+
+        fakeCheckClient.geminiCalls.clear()
+
+        // ③ apiKey 없이 model 변경 + verify = false (복호화 및 핑 호출 생략)
+        val put3 = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("model", "gemini-1.5-flash")
+                put("verify", false)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, put3.status)
+        val json3 = Json.parseToJsonElement(put3.bodyAsText()).jsonObject
+        assertEquals("gemini-1.5-flash", json3["config"]?.jsonObject?.get("model")?.jsonPrimitive?.content)
+        assertEquals(false, json3["verified"]?.jsonPrimitive?.boolean)
+        assertTrue(json3["displayName"] is JsonNull)
+        assertEquals(0, fakeCheckClient.geminiCalls.size, "verify=false 시 핑 호출이 없어야 합니다")
     }
 }
 
