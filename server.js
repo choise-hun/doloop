@@ -10,6 +10,10 @@ const CT = require('./public/lib/theory.js');
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
+// ULP_UI=spa면 HTML 진입 경로와 /assets/*를 React 빌드(dist/)에서 서빙한다 (RZ-3, Ktor와 같은 규칙)
+const DIST_DIR = path.join(__dirname, 'dist');
+const SPA_PAGES = new Set(['/index.html', '/chords.html', '/practice.html', '/log.html', '/notes.html', '/note.html', '/settings.html', '/privacy.html']);
+const SPA_MODE = process.env.ULP_UI === 'spa' && fs.existsSync(path.join(DIST_DIR, 'index.html'));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -231,8 +235,11 @@ function sendJson(res, status, obj) { send(res, status, JSON.stringify(obj), MIM
 function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname);
   if (rel === '/' || rel === '') rel = '/index.html';
-  const file = path.normalize(path.join(PUBLIC_DIR, rel));
-  if (!file.startsWith(PUBLIC_DIR + path.sep)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
+  let root = PUBLIC_DIR;
+  if (SPA_MODE && SPA_PAGES.has(rel)) { root = DIST_DIR; rel = '/index.html'; }
+  else if (SPA_MODE && rel.startsWith('/assets/')) root = DIST_DIR;
+  const file = path.normalize(path.join(root, rel));
+  if (!file.startsWith(root + path.sep)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'Not found', 'text/plain; charset=utf-8');
     const type = MIME[path.extname(file)] || 'application/octet-stream';
@@ -259,7 +266,10 @@ const server = http.createServer((req, res) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, HOST, () => console.log('기타 코드 연습실: http://localhost:' + PORT));
+  server.listen(PORT, HOST, () => {
+    console.log('기타 코드 연습실: http://localhost:' + PORT);
+    console.log('UI mode:', SPA_MODE ? 'spa (dist/)' : 'legacy (public/)');
+  });
   const stop = () => server.close(() => process.exit(0));
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);

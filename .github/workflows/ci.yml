@@ -54,10 +54,14 @@ jobs:
       - run: npm test
 
   e2e-security:
-    name: E2E XSS & CSP (Playwright)
+    name: E2E XSS & CSP (Playwright, ${{ matrix.ui }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ui: [legacy, spa]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -65,8 +69,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - if: matrix.ui == 'spa'
+        run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          ULP_UI: ${{ matrix.ui }}
 
   # Kotlin 서버(K0-1 이후). gradlew가 생기면 CI 수정 없이 ./gradlew test가 돌기 시작합니다
   kotlin:
@@ -111,11 +119,25 @@ jobs:
           done
           docker logs app
           exit 1
-      - name: Index page responds
-        run: curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/
+      - name: SPA entry served (React)
+        run: |
+          curl -fsS http://127.0.0.1:3000/ | grep -q 'id="root"'
+          ASSET=$(curl -fsS http://127.0.0.1:3000/practice.html | grep -oE '/assets/index-[^"]+\.js' | head -1)
+          test -n "$ASSET"
+          curl -fsS -o /dev/null "http://127.0.0.1:3000${ASSET}"
+      - name: Rollback switch (ULP_UI=legacy)
+        run: |
+          docker run -d --name app-legacy -e ULP_UI=legacy -p 3001:3000 guitar-chord-lab:ci
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:3001/api/health >/dev/null 2>&1 && break; sleep 1; done
+          # 응답을 먼저 받아 curl 실패를 잡는다(`! a | b`는 컨테이너가 안 떠도 통과한다)
+          BODY=$(curl -fsS http://127.0.0.1:3001/)
+          if grep -q 'id="root"' <<<"$BODY"; then echo "legacy 모드인데 React가 서빙됨"; exit 1; fi
+          grep -q 'src="home.js"' <<<"$BODY"
       - name: Cleanup
         if: always()
-        run: docker rm -f app || true
+        run: |
+          docker rm -f app || true
+          docker rm -f app-legacy || true
 
   # ruleset 필수 체크는 이 작업 하나만 건다. 테스트를 건너뛴 문서 PR은 통과, 하나라도 실패·취소면 실패
   ci-ok:

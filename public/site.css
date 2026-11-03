@@ -321,3 +321,6 @@ textarea.inp { border-radius: 0; padding: 14px 18px; min-height: 88px; resize: v
 .reassure-badge { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .onboarding-steps { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .onboarding-steps ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); }
+
+/* 설정 Gemini 가이드 버튼: 문구가 길어 좁은 화면에서 줄바꿈 (RZ-3) */
+#btnOpenGeminiModal { white-space: normal; max-width: 100%; text-align: center; padding-top: 10px; padding-bottom: 10px; }

@@ -204,3 +204,11 @@
   color: var(--bg);
   font-weight: 700;
 }
+
+.geminiGuideBtn {
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

@@ -312,4 +312,44 @@ class ChordEngineTest {
         assertEquals("frame-ancestors 'none'", headRes.headers["Content-Security-Policy"])
         assertTrue(headRes.bodyAsBytes().isEmpty())
     }
+
+    private fun spaPublicDir(withSpa: Boolean): java.io.File {
+        val dir = kotlin.io.path.createTempDirectory("ulp-public").toFile()
+        java.io.File(dir, "index.html").writeText("LEGACY-INDEX")
+        java.io.File(dir, "practice.html").writeText("LEGACY-PRACTICE")
+        java.io.File(dir, "lib").mkdirs()
+        java.io.File(dir, "lib/theory.js").writeText("// theory")
+        if (withSpa) java.io.File(dir, "spa.html").writeText("<div id=\"root\"></div>")
+        return dir
+    }
+
+    @Test
+    fun `Z4 spa_html이 있으면 HTML 진입 경로에 spa_html을 서빙한다`() = testApplication {
+        application { module(publicDir = spaPublicDir(true), dbConfig = null, authConfig = null, uiMode = "") }
+        for (path in listOf("/", "/index.html", "/practice.html", "/notes.html", "/note.html?id=x")) {
+            val res = client.get(path)
+            assertEquals(HttpStatusCode.OK, res.status, path)
+            assertTrue(res.bodyAsText().contains("id=\"root\""), path)
+            assertEquals("frame-ancestors 'none'", res.headers["Content-Security-Policy"], path)
+            assertEquals("no-cache", res.headers["Cache-Control"], path)
+        }
+        val head = client.head("/practice.html")
+        assertEquals(listOf("<div id=\"root\"></div>".length.toString()), head.headers.getAll(HttpHeaders.ContentLength))
+        assertEquals("// theory", client.get("/lib/theory.js").bodyAsText())
+        assertEquals(HttpStatusCode.NotFound, client.get("/unknown.html").status)
+    }
+
+    @Test
+    fun `Z5 ULP_UI=legacy면 spa_html이 있어도 레거시 HTML을 서빙한다`() = testApplication {
+        application { module(publicDir = spaPublicDir(true), dbConfig = null, authConfig = null, uiMode = "legacy") }
+        assertEquals("LEGACY-INDEX", client.get("/").bodyAsText())
+        assertEquals("LEGACY-PRACTICE", client.get("/practice.html").bodyAsText())
+    }
+
+    @Test
+    fun `Z6 spa_html이 없으면 레거시 HTML을 서빙한다`() = testApplication {
+        application { module(publicDir = spaPublicDir(false), dbConfig = null, authConfig = null, uiMode = "") }
+        assertEquals("LEGACY-INDEX", client.get("/").bodyAsText())
+        assertEquals(HttpStatusCode.NotFound, client.get("/notes.html").status)
+    }
 }

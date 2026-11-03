@@ -1,9 +1,13 @@
 // frontend/src/pages/PrivacyPage.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import styles from './SettingsPage.module.css';
 
 export function PrivacyPage(): React.ReactElement {
+  useEffect(() => {
+    document.title = '개인정보처리방침 · ULeveLP';
+  }, []);
+
   return (
     <AppShell variant="narrow" activeNav="privacy">
       <div className={styles.headerBlock}>

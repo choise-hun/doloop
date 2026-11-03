@@ -10,6 +10,10 @@ import { getTheme, raw, safeUrl, setTheme } from '../lib/security';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage(): React.ReactElement {
+  useEffect(() => {
+    document.title = '설정 · ULeveLP';
+  }, []);
+
   const authState = useAuth();
   const signedIn = Boolean(authState.user);
   const activeUid = authState.user?.id ?? null;
@@ -977,7 +981,7 @@ export function SettingsPage(): React.ReactElement {
           <div className={styles.row}>
             <button
               type="button"
-              className="ghostBtn"
+              className={`ghostBtn ${styles.geminiGuideBtn}`}
               id="btnOpenGeminiModal"
               onClick={() => setGeminiModalOpen(true)}
             >

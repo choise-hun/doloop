@@ -41,7 +41,8 @@ jobs:
       CRON_SA_EMAIL: ${{ vars.CRON_SA_EMAIL }}
       SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://vefrfhafmiiivpgjhqiu.supabase.co' }}
       PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://choise-hun.github.io/ULevelP/' }}
-      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io,http://localhost:3000' }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io' }}
+      ULP_UI: ${{ vars.ULP_UI || 'spa' }}
     steps:
       - name: Checkout repository at verified commit
         uses: actions/checkout@v5
