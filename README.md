@@ -1,131 +1,108 @@
 # ULeveLP
 
-코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에 모은 웹 앱입니다. GitHub Pages(`https://choise-hun.github.io/ULevelP/`)로 배포되고, 로컬에서는 Node.js 기본 모듈만 쓰는 작은 서버가 화면과 계산 API를 함께 제공합니다. 외부 npm 패키지는 없습니다.
+코드 연습, 유튜브 구간 연습, 녹음·연습 기록, 학습 영상 노트를 한곳에 모은 웹 서비스입니다. 구글 로그인으로 쓰고, 연습 기록은 노션으로 내보냅니다.
 
-| 페이지 | 하는 일 |
+**서비스:** https://ulevelp-d5ympfsmfq-du.a.run.app
+
+- 화면: React + TypeScript(Vite 빌드)
+- 서버: Kotlin Ktor, Google Cloud Run 컨테이너 1개가 화면과 API를 같이 서빙합니다
+- 인증·DB·녹음: Supabase(Google OAuth, PostgreSQL, Storage), 녹음은 Google Drive 연결 시 사용자 드라이브에 저장
+- 외부 연동: 노션(연습 곡·기록·학습 노트 push), Gemini(학습 노트 분석, 사용자 본인 키)
+
+> GitHub Pages(`choise-hun.github.io/ULevelP`)의 옛 화면은 폐지 예정입니다. 위 서비스 주소를 쓰세요.
+
+| 화면 | 하는 일 |
 | --- | --- |
-| `index.html` | 첫 화면. 유튜브 링크를 붙여넣고 **바로 연습** 또는 **노트 만들기**, 코드 연습 탭과 노션의 연습 곡 바로가기 |
-| `chords.html` | 코드 연습실 (아래 탭 6개) |
-| `practice.html` | 유튜브 구간 연습 플레이어. 노션 링크가 이 주소를 쓰므로 이름을 바꾸지 마세요 |
-| `notes.html` | 학습 영상 노트. Gemini 분석을 요청하고 진행 상태 확인 |
-| `settings.html` | 노션 중계 서버, GitHub 토큰, 노션 바로가기, 화면 모드 |
+| `/` (`index.html`) | 홈. 유튜브 링크 붙여넣기, 주간 스트릭, 최근 연습 곡, BETTER(연습) · VAULT(학습) 대시보드 |
+| `/chords.html` | 코드 연습실 (아래 탭 7개) |
+| `/practice.html` | 유튜브 구간 연습 플레이어 + 녹음. 노션 "이어서 연습" 링크가 이 주소를 쓰므로 이름을 바꾸지 마세요 |
+| `/log.html` | 기록: 12주 달력, 곡 보관함, 곡 상세(녹음 A/B 비교) |
+| `/notes.html`, `/note.html` | 학습 영상 노트 목록·상세 (Gemini 분석) |
+| `/settings.html` | 계정, 노션·Gemini·Google Drive 연결, 화면 모드 |
+| `/privacy.html` | 개인정보처리방침 |
 
-디자인 규칙(색, 곡률)은 `public/styles.css`의 토큰에 모여 있습니다(규칙 요약은 [docs/02-requirements.md](docs/02-requirements.md) NFR-UX-1).
+설계 문서(기획·요구사항·API·DB)는 [docs/](docs/README.md), 진행 기록과 다음 할 일은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md)에 있습니다. 디자인 규칙(색·곡률 토큰)은 `frontend/src/styles/tokens.css`.
 
-구글 로그인 기반 다중 사용자 웹 서비스(**Kotlin Ktor + Google Cloud Run**)로 전환하는 다음 단계의 프로젝트 기획·요구사항 정의·API 명세·DB 설계는 [docs/](docs/README.md)에, 단계별 진행 기록은 [개발산출물/진행_코틀린서버.md](개발산출물/진행_코틀린서버.md)에 있습니다.
+## 로컬 실행
 
-## 실행
-
-### Docker (권장)
-
-```bash
-docker compose up -d --build
-```
-
-브라우저에서 http://localhost:3000 을 엽니다. 끄려면 `docker compose down`.
-
-compose 없이 쓸 때:
+필요: Node 22, JDK 21 (Docker만 쓸 때는 Docker만).
 
 ```bash
-docker build -t guitar-chord-lab .
-docker run -d -p 3000:3000 --name guitar-chord-lab guitar-chord-lab
+npm ci
+npm test                 # 프런트 단위·정적 보안 테스트
+./gradlew test           # Kotlin 서버 테스트
+npm run test:e2e         # Playwright (XSS·CSP·레이아웃)
 ```
 
-포트를 바꾸려면 `-p 8080:3000`처럼 앞쪽 숫자만 바꾸면 됩니다.
-
-### Node로 바로 (Node 20 이상)
+### 화면만 확인 (DB 없이)
 
 ```bash
-npm start        # http://localhost:3000
-npm run dev      # 파일 저장 시 자동 재시작
-npm test         # 엔진·API 테스트
+npm run build
+ULP_UI=spa node server.js     # http://localhost:3000 — React 빌드 + 코드 계산 API
+node server.js                # 같은 주소, 옛 화면(public/*.html)
 ```
+
+`server.js`는 화면·계산 API만 있는 테스트용 서버입니다. 로그인·곡·녹음·노션 API는 Ktor 서버에만 있습니다. `npm run dev:client`(vite dev)는 CSP와 CommonJS 변환 문제로 화면 확인에 쓰지 않습니다.
+
+### 전체 서버 (Docker)
+
+```bash
+cp .env.example .env          # Supabase·DB 값 채우기
+docker build -t ulevelp .
+docker run --env-file .env -p 3000:3000 ulevelp
+```
+
+`ULP_UI=legacy`를 주면 React 대신 옛 화면을 서빙합니다(운영 롤백 스위치).
+
+## 배포
+
+main에 머지되면 CI(`ci.yml`)가 테스트·Docker 스모크를 돌립니다. Cloud Run 배포는 `scripts/deploy-cloudrun.sh`(서비스·분석 Job·노션 push 크론 스케줄러)가 하고, `deploy-cloudrun.yml`은 저장소 Variables가 설정돼야 동작합니다(현재는 로컬에서 실행). 명령은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md) §4.
+
+롤백: `gcloud run services update ulevelp --region asia-northeast3 --update-env-vars ULP_UI=legacy`
 
 ## 코드 연습실 (`chords.html`)
 
 | 탭 | 하는 일 |
 | --- | --- |
-| 1 · 스케일 연습 | 지판 전체에 스케일 표시(음이름/도수, 확대·위치 슬라이더, 기타 6·7현/베이스 4·5현, 왼손잡이 반전). 단순 스케일 또는 5도권(4도권) 12키 순환 재생, 키마다 바뀐 음 표시, 근음만 보기 암기 연습 |
-| 2 · 코드톤 지도 | 한 줄에 코드톤 두 개씩(2-note-per-string) 6번줄→1번줄 아르페지오. maj7 → 7 → m7 → m7(b5) → dim7 변환 시 움직인 음 표시, 메트로놈 재생 |
-| 3 · 보이싱 매트릭스 | 드롭(Close, 2, 3, 4, 2&4, 2&3) × 전위 × 줄 세트 × 9개 성질. 같은 자리에서 maj7 → dim7 순환, 줄별 프렛 이동 표시, 자동 순환 재생 |
-| 4 · 탑노트 5도권 | 탑노트를 고정하고 근음을 5도씩 내리며 텐션 역할 변화 연습. 베이스+탑노트 재생, 폼 힌트, 그 탑노트로 가능한 모든 도미넌트 |
-| 5 · 코드 재해석 | 지판에 찍은 음 배열을 여러 코드로 재해석, 같은 모양으로 2-5-1 치기, 퀴즈 |
-| 6 · 2-5-1 탐색 | 프렛 창(+펜타토닉) 안에서 가이드톤 이동이 짧은 ii-V-I 보이싱 탐색 |
-
-### 연습 플레이어 (`practice.html`)
-
-유튜브 탭 영상 연습용 화면입니다. 아이패드 터치 기준으로 만들었습니다.
-
-- 속도 0.25 / 0.5 / 0.75 / 1.0 큰 버튼 한 번 탭
-- A·B 지정(±0.2초 미세 조정), 무한 반복, 반복 전 여유 0~2초, 진행 바에 구간 표시
-- 노션 '악기 연습'의 연습 곡 목록에서 바로 열기, 위치·구간·속도 자동 저장, 하루 연습 기록 누적
-- 주소에 상태가 담김: `practice.html?v=영상ID&t=시작초&a=A초&b=B초&r=속도` (노션의 '이어서 연습' 링크가 이 형식)
-- 녹음: 멈추면 그날 노션 연습 기록 페이지에 오디오 블록과 `녹음` 파일 속성으로 올라감
-- 키보드: Space 재생, 1~4 속도, `[` `]` A·B, L 반복, R 구간 처음, M 녹음, ←/→ 5초
-- 홈 화면에 추가하면 앱처럼 열리고, 재생 중에는 화면이 꺼지지 않음
-
-노션 저장은 `apps-script/`의 중계 서버(Google Apps Script 웹 앱)가 있어야 합니다. 설정 방법은 [apps-script/README.md](apps-script/README.md). 중계 서버가 없어도 플레이어는 동작하고, 상태는 그 기기와 주소에 남습니다.
-
-### 학습 영상 노트 (`notes.html`)
-
-유튜브 링크와 태그(화성, 사운드 디자인, DAW/MIDI, 리듬, 편곡, 믹싱)를 넣으면 GitHub Actions에서 Gemini가 영상을 분석해 노션 **학습 영상 노트**에 페이지를 만듭니다.
-
-```
-notes.html ──(GitHub API)──▶ analyze.yml ──▶ scripts/analyze.py (Gemini) ──▶ 노션 페이지 생성
-```
-
-처음 한 번 설정:
-
-1. 저장소 **Settings → Secrets and variables → Actions → Secrets**에 `GEMINI_API_KEY`(https://aistudio.google.com/apikey), `NOTION_TOKEN`(노션 통합 시크릿) 등록. 그 통합이 노션 `유튜브 정리` 페이지에도 **연결**돼 있어야 합니다
-2. (선택) 같은 화면 **Variables**에 `GEMINI_MODEL`(기본 `gemini-flash-latest`), `NOTION_NOTES_DB`(다른 데이터베이스를 쓸 때) 등록
-3. https://github.com/settings/personal-access-tokens/new 에서 이 저장소만, **Actions: Read and write** 권한으로 토큰을 만들어 SETTING에 입력
-
-분석 항목에는 `말함`(강사가 설명) / `화면`(영상에 보임) / `추정`(소리로 짐작) 근거가 붙습니다. `추정`은 직접 확인하세요. 공개·일부 공개 영상만 분석할 수 있습니다.
-
-화면 모드(라이트/다크)는 SETTING이나 코드 연습실 오른쪽 위 버튼으로 바꿉니다(고르기 전엔 시스템 설정을 따름).
+| 1 · 스케일 연습 | 지판 전체 스케일(음이름/도수), 기타 6·7현·베이스 4·5·6현, 왼손잡이 반전, 5도권(4도권) 12키 순환, CAGED 5블럭 시퀀스 재생 |
+| 2 · 코드톤 지도 | 줄당 코드톤 2개 아르페지오, maj7 → 7 → m7 → m7(b5) → dim7 변환 시 움직인 음 표시 |
+| 3 · 보이싱 매트릭스 | 드롭(Close, 2, 3, 4, 2&4, 2&3) × 전위 × 줄 세트 × 9개 성질 |
+| 4 · 탑노트 5도권 | 탑노트를 고정하고 근음을 5도씩 내리며 텐션 역할 변화 연습 |
+| 5 · 코드 재해석 | 지판에 찍은 음 배열을 여러 코드로 재해석, 퀴즈 |
+| 6 · 2-5-1 탐색 | 프렛 창(+펜타토닉) 안에서 가이드톤 이동이 짧은 ii-V-I 보이싱 |
+| 7 · 더블 스탑 연습 | 3도·6도·4도 더블 스탑, 두 음 동시 재생 |
 
 소리는 브라우저(Web Audio)에서 합성하므로 첫 재생 버튼을 누른 뒤부터 납니다.
 
 ## 폴더
 
 ```
-server.js              정적 파일 + API 서버
-public/
-  index.html           첫 화면
-  chords.html          코드 연습실 화면
-  styles.css           색 토큰과 코드 연습실 스타일
-  site.css / site.js   공통 메뉴, 첫 화면·노트·설정 스타일, 저장·노션·GitHub 호출
-  app.js               코드 연습실 동작, 오디오, 재생 타이머
-  practice.html/.css/.js  유튜브 연습 플레이어
-  notes.html           학습 영상 노트
-  settings.html        설정
-  lib/voicing.js       보이싱 생성, 2-5-1 탐색, 탑노트 고정 도미넌트
-  lib/theory.js        드롭 매트릭스, 2-note-per-string, 재해석, 5도권, 스케일
-test/engine.test.js    node:test 테스트
-apps-script/Code.gs    노션 중계 서버 (Google Apps Script)
-scripts/analyze.py     학습 노트 분석 (GitHub Actions에서 실행, requirements.txt)
-.github/workflows/     ci.yml (테스트·Pages 배포), analyze.yml (학습 노트)
+frontend/src/          React 화면 (pages/, components/, lib/, styles/tokens.css)
+public/                옛 화면(롤백용) + 공용 파일 (config.js, lib/theory.js·voicing.js)
+src/main/kotlin/ulevelp/  Ktor 서버 (routes/, service/, auth/, db/, notion/, note/, storage/)
+server.js              테스트·화면 확인용 Node 서버
+test/                  node:test 단위 테스트, test/e2e/ Playwright
+scripts/deploy-cloudrun.sh  Cloud Run 배포
+docs/                  설계 문서
+개발산출물/             단계별 명세·결과·진행 파일
 ```
 
-`public/lib/*.js`는 브라우저와 서버가 같은 파일을 씁니다. 계산 규칙을 바꾸면 화면과 API에 함께 반영됩니다.
+`public/lib/*.js`(음악 계산)는 브라우저와 Node 서버가 같은 파일을 쓰고, Kotlin 서버는 `chord/ChordTheory.kt`에 같은 규칙을 옮겨 둡니다. 계산 규칙을 바꾸면 둘 다 고칩니다.
 
 ## API
 
-모든 응답은 JSON입니다. 음이름은 `C`, `F#`, `Bb` 또는 0~11 숫자로 받습니다. 줄 번호는 1번줄(가는 줄)~6번줄입니다.
+서비스 API(`/api/v1/*`: 곡, 연습 세션, 녹음, 노션, 학습 노트, 연동 키)는 [docs/03-api-spec.md](docs/03-api-spec.md)에 있습니다. 로그인 없이 쓰는 코드 계산 API:
 
 | 경로 | 예시 | 내용 |
 | --- | --- | --- |
 | `/api/health` | | 상태 확인 |
-| `/api/voicings` | `?root=G&quality=13&lo=3&hi=8` | 코드 하나의 보이싱 목록 (quality: maj7, m7, 7, 9, 13, 7b9, 7#9, 7#11, 7b13, 7sus4, m7b5, 6, m6 등) |
+| `/api/voicings` | `?root=G&quality=13&lo=3&hi=8` | 코드 하나의 보이싱 목록 |
 | `/api/two-five-one` | `?key=C&lo=5&hi=8&pent=A&outside=2` | 프렛 창 안의 2-5-1 |
 | `/api/top-note` | `?string=1&fret=8` | 탑노트 고정 도미넌트 전체 |
-| `/api/circle` | `?root=F&top=2` | 5도권 진행 (top: 근음 기준 탑노트 반음 수, 2 = 9th) |
-| `/api/matrix` | `?root=C&drop=d2&inv=0&span=4` | 줄 세트별 9개 성질 폼 (drop: close, d2, d3, d4, d24, d23) |
-| `/api/scale` | `?root=A&type=pentMin&tuning=g6&lo=5&hi=8`, `?root=C&type=major&circle=5` | 스케일 구성음과 지판 위치 (type: major, minor, pentMaj, pentMin, blues, majBlues, dorian, phrygian, lydian, mixolydian, locrian, harmMinor, melMinor, wholeTone / tuning: g6, g7, b4, b5). circle=5 또는 4 면 12키 순환과 키마다 바뀐 음 |
+| `/api/circle` | `?root=F&top=2` | 5도권 진행 |
+| `/api/matrix` | `?root=C&drop=d2&inv=0&span=4` | 줄 세트별 9개 성질 폼 |
+| `/api/scale` | `?root=A&type=pentMin&tuning=g6&lo=5&hi=8` | 스케일 구성음과 지판 위치 (tuning: g6, g7, b4, b5, b6) |
 | `/api/interpret` | `?frets=x,x,4,2,2,4` | 음 배열 재해석 (6번줄부터) |
+| `/api/double-stops` | `?root=C&type=major&interval=3rd&pair=1-2` | 더블 스탑 쌍 (interval: 3rd, 6th, 4th) |
 
-## 조정할 만한 곳
-
-- 보이싱 점수(어떤 폼을 위로 올릴지): `public/lib/voicing.js`의 `finalize()` 안 점수 계산
-- 손 폭 기본값, 프렛 범위: 각 탭의 입력값, `theory.js`의 `placeOn()` 기본 옵션
-- 코드 재해석에서 허용하는 텐션: `theory.js`의 `FAM`
+예: https://ulevelp-d5ympfsmfq-du.a.run.app/api/scale?root=C&type=major&tuning=g6
