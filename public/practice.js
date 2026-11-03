@@ -96,16 +96,22 @@
   function renderBar() {
     const d = st.duration || 0;
     const t = player && st.ready ? safeTime() : 0;
+    const fillPerm = d > 0 ? Math.max(0, Math.min(1000, Math.round((t / d) * 1000))) : 0;
     $('tNow').textContent = fmt(t);
     $('tDur').textContent = fmt(d);
-    $('barFill').style.width = d ? (t / d * 100) + '%' : '0';
-    if (!seeking) $('seek').value = d ? String(Math.round(t / d * 1000)) : '0';
+    $('barFill').setAttribute('width', String(fillPerm));
+    if (!seeking) $('seek').value = String(fillPerm);
     const loop = $('barLoop');
-    if (d && st.a != null && st.b != null) {
-      loop.style.display = 'block';
-      loop.style.left = (st.a / d * 100) + '%';
-      loop.style.width = ((st.b - st.a) / d * 100) + '%';
-    } else loop.style.display = 'none';
+    if (d > 0 && st.a != null && st.b != null && st.b > st.a) {
+      const lx = Math.max(0, Math.min(1000, Math.round((st.a / d) * 1000)));
+      const lw = Math.max(0, Math.min(1000 - lx, Math.round(((st.b - st.a) / d) * 1000)));
+      loop.hidden = false;
+      loop.setAttribute('x', String(lx));
+      loop.setAttribute('width', String(lw));
+    } else {
+      loop.hidden = true;
+      loop.setAttribute('width', '0');
+    }
   }
 
   // ---------- 유튜브 플레이어 ----------
@@ -247,9 +253,10 @@
   const seekEl = $('seek');
   seekEl.addEventListener('input', () => {
     seeking = true;
-    const t = (Number(seekEl.value) / 1000) * (st.duration || 0);
+    const perm = Math.max(0, Math.min(1000, Number(seekEl.value) || 0));
+    const t = (perm / 1000) * (st.duration || 0);
     $('tNow').textContent = fmt(t);
-    $('barFill').style.width = (Number(seekEl.value) / 10) + '%';
+    $('barFill').setAttribute('width', String(perm));
   });
   seekEl.addEventListener('change', () => {
     const t = (Number(seekEl.value) / 1000) * (st.duration || 0);
@@ -361,6 +368,11 @@
 
   function renderRec() {
     const on = !!rec.mr, t = rec.take;
+    const me = window.ULAuth && typeof window.ULAuth.getMe === 'function' ? window.ULAuth.getMe() : null;
+    const isDrive = !!(me && me.storageProvider === 'drive');
+    const isSignedIn = loggedIn();
+    if ($('recDriveBanner')) $('recDriveBanner').hidden = !isSignedIn || isDrive;
+    if ($('recDriveBadge')) $('recDriveBadge').hidden = !isSignedIn || !isDrive;
     const btn = $('recBtn');
     btn.textContent = on ? '■ ' + fmt(recSec()) : '● 녹음';
     btn.setAttribute('aria-pressed', String(on));
@@ -371,6 +383,39 @@
     $('recPlay').hidden = !t || on;
     $('recMsg').textContent = recMsg;
     $('recMsg').classList.toggle('err', recErr);
+  }
+
+  function openTakeLimitModal() {
+    if ($('takeLimitModal')) $('takeLimitModal').hidden = false;
+  }
+  function closeTakeLimitModal() {
+    if ($('takeLimitModal')) $('takeLimitModal').hidden = true;
+  }
+
+  async function connectDriveFromPlayer() {
+    if (!loggedIn()) {
+      setRec('먼저 Google 계정으로 로그인해 주세요.', true);
+      return;
+    }
+    if (!window.ULDrive || typeof window.ULDrive.enableDriveStorage !== 'function') {
+      setRec('Google Drive 모듈을 불러오지 못했어요.', true);
+      return;
+    }
+    setRec('Google Drive 저장소를 연결하는 중…');
+    try {
+      await window.ULDrive.enableDriveStorage();
+      if (window.ULAuth && typeof window.ULAuth.fetchMe === 'function') {
+        await window.ULAuth.fetchMe();
+      }
+      closeTakeLimitModal();
+      setRec('✓ Google Drive 저장소가 연결되었어요. 이제 곡 수 제한 없이 녹음이 저장됩니다.');
+      renderRec();
+      if (rec.take && !rec.take.done) {
+        await uploadTake();
+      }
+    } catch (e) {
+      setRec((e && e.message) || 'Google Drive 저장소 연결에 실패했어요.', true);
+    }
   }
 
   async function startRec() {
@@ -417,7 +462,8 @@
     a.download = (t.date + ' ' + t.time.replace(':', '') + ' ' + ((t.song && t.song.title) || '녹음')).replace(/[\\/:*?"<>|]+/g, ' ') + '.' + (REC_EXT[t.mime] || 'webm');
   }
 
-  async function uploadTake() {
+  async function uploadTake(opts) {
+    opts = opts || {};
     const t = rec.take;
     if (!t || t.done || rec.uploading) return;
     if (!loggedIn()) { setRec('로그인하면 녹음을 계정에 올릴 수 있어요. 파일로 저장해 둘 수 있어요', true); return; }
@@ -427,7 +473,7 @@
       // 녹음하는 동안 다른 곡으로 넘어갔으면 녹음 시작 때의 곡으로 올림
       if (!t.song && st.videoId === t.videoId) t.song = await ensureSong();
       if (!t.song) throw new Error('곡 정보가 없어요. 곡 추가 후 다시 올려 주세요');
-      t.serverTake = await D.takes.upload({
+      const uploadMeta = {
         songId: t.song.id,
         date: t.date,
         recordedAt: t.recordedAt,
@@ -436,11 +482,25 @@
         rate: t.rate,
         durationSec: t.seconds,
         mime: t.mime,
-      }, t.blob);
+      };
+      if (opts.replaceOldSongTakes === true) {
+        uploadMeta.replaceOldSongTakes = true;
+      }
+      t.serverTake = await D.takes.upload(uploadMeta, t.blob);
       t.done = true;
-      setRec('계정에 저장됨 ' + t.time + ' · ' + fmt(t.seconds));
+      closeTakeLimitModal();
+      setRec(
+        opts.replaceOldSongTakes === true
+          ? '이전 곡 서버 녹음을 교체하고 계정에 저장됨 ' + t.time + ' · ' + fmt(t.seconds)
+          : '계정에 저장됨 ' + t.time + ' · ' + fmt(t.seconds)
+      );
     } catch (e) {
-      if (e && e.status === 404) {
+      if (e && e.status === 409 && e.code === 'SINGLE_SONG_TAKE_LIMIT') {
+        openTakeLimitModal();
+        setRec((e && e.message) || 'Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다.', true);
+      } else if (e && e.status === 409 && e.code === 'RECENT_SONG_ONLY') {
+        setRec((e && e.message) || 'Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다.', true);
+      } else if (e && e.status === 404) {
         t.song = null;
         if (st.videoId === t.videoId) st.song = null;
         setRec('계정에서 지워진 곡이에요. 다시 올리기를 누르면 새로 만들어요', true);
@@ -567,13 +627,20 @@
   $('fwdBtn').addEventListener('click', () => skip(5));
   $('saveBtn').addEventListener('click', () => save('manual'));
   $('recBtn').addEventListener('click', toggleRec);
-  $('recRetry').addEventListener('click', uploadTake);
+  $('recRetry').addEventListener('click', () => uploadTake());
+  if ($('btnRecDriveConnect')) $('btnRecDriveConnect').addEventListener('click', connectDriveFromPlayer);
+  if ($('btnTakeLimitConnectDrive')) $('btnTakeLimitConnectDrive').addEventListener('click', connectDriveFromPlayer);
+  if ($('btnTakeLimitReplaceOld')) $('btnTakeLimitReplaceOld').addEventListener('click', () => uploadTake({ replaceOldSongTakes: true }));
+  if ($('btnTakeLimitClose')) $('btnTakeLimitClose').addEventListener('click', () => {
+    closeTakeLimitModal();
+    setRec("업로드 보류됨 · '다시 올리기'를 누르거나 '파일 저장'으로 기기에 보관하세요", false);
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    if (e.key === 'Escape') { closeLib(); return; }
+    if (e.key === 'Escape') { closeLib(); closeTakeLimitModal(); return; }
     const map = {
       Space: togglePlay, Digit1: () => setRate(0.25), Digit2: () => setRate(0.5), Digit3: () => setRate(0.75), Digit4: () => setRate(1),
       BracketLeft: () => setPoint('a'), BracketRight: () => setPoint('b'), KeyL: toggleLoop, KeyR: jumpToLoopStart,
@@ -662,5 +729,5 @@
     }
   });
 
-  window.__pp = { st, rec, save, openSong }; // 디버그용
+  window.__pp = { st, rec, save, openSong, uploadTake, connectDriveFromPlayer }; // 디버그용
 })();
