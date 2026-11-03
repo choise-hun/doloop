@@ -187,6 +187,15 @@ export interface LocalMigrationResult {
   message: string;
 }
 
+export interface LocalSongRecord {
+  videoId: string;
+  pos: number | null;
+  a: number | null;
+  b: number | null;
+  rate: number | null;
+  date: string | null;
+}
+
 const EXT: Record<string, string> = {
   'audio/mp4': 'm4a',
   'audio/webm': 'weba',
@@ -375,15 +384,8 @@ async function uploadTake(meta: TakeUploadMeta, blob: Blob): Promise<TakeDto | n
   return r ? r.take : null;
 }
 
-function readLocal(prefix: string) {
-  const out: Array<{
-    videoId: string;
-    pos: number | null;
-    a: number | null;
-    b: number | null;
-    rate: number | null;
-    date: string | null;
-  }> = [];
+function readLocal(prefix: string): LocalSongRecord[] {
+  const out: LocalSongRecord[] = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
@@ -409,6 +411,17 @@ function readLocal(prefix: string) {
     return [];
   }
   return out;
+}
+
+export function listLocalSongs(): LocalSongRecord[] {
+  const items = readLocal('ulp:v:');
+  items.sort((x, y) => {
+    if (x.date && y.date) return y.date.localeCompare(x.date);
+    if (x.date) return -1;
+    if (y.date) return 1;
+    return 0;
+  });
+  return items;
 }
 
 async function listSessions(params?: { from?: string; to?: string; today?: string }): Promise<SessionListResponse> {
@@ -930,6 +943,8 @@ export const apiClient = {
     remove: removeNote,
   },
   runLocalMigration,
+  listLocalSongs,
+  local: { listSongs: listLocalSongs },
 };
 
 if (typeof window !== 'undefined' && !window.ULData) {

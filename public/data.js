@@ -204,6 +204,17 @@ window.ULData = (function () {
     return out;
   }
 
+  function listLocalSongs() {
+    const items = readLocal('ulp:v:');
+    items.sort((x, y) => {
+      if (x.date && y.date) return y.date.localeCompare(x.date);
+      if (x.date) return -1;
+      if (y.date) return 1;
+      return 0;
+    });
+    return items;
+  }
+
   async function listSessions(params) {
     requireLogin();
     params = params || {};
@@ -701,5 +712,7 @@ window.ULData = (function () {
       remove: removeNote,
     },
     runLocalMigration,
+    listLocalSongs,
+    local: { listSongs: listLocalSongs },
   };
 })();
