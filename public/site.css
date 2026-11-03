@@ -310,3 +310,14 @@ textarea.inp { border-radius: 0; padding: 14px 18px; min-height: 88px; resize: v
 .practice-list { display: flex; flex-direction: column; gap: 8px; }
 .page .check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .page .check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ink); }
+
+
+/* ---------- Gemini 1분 온보딩 모달 (R1-2) ---------- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(29, 29, 31, 0.62); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+.modal-backdrop[hidden] { display: none !important; }
+.onboarding-modal { width: min(640px, 100%); max-height: 90vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--radius-card); padding: 24px; display: flex; flex-direction: column; gap: 14px; color: var(--ink); }
+.onboarding-modal h2 { font-family: var(--font-display); font-weight: 900; font-size: 20px; margin: 0; color: var(--ink); }
+.reassure-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.reassure-badge { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.onboarding-steps { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.onboarding-steps ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); }

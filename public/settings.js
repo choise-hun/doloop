@@ -632,6 +632,115 @@
     });
   }
 
+  // ---------- Gemini 1분 온보딩 모달 (R1-2) ----------
+  const GEMINI_KEY_RE = /^AIza[0-9A-Za-z\-_]{35}$/;
+
+  function checkModalKeyFormat() {
+    const inp = $('gemModalKeyInput');
+    const hint = $('gemModalFormatHint');
+    const saveBtn = $('btnModalSaveGemini');
+    if (!inp || !hint || !saveBtn) return '';
+    const trimmed = inp.value.trim();
+    if (!trimmed) {
+      hint.textContent = 'AIza로 시작하는 39자리 API 키를 붙여넣어 주세요.';
+      hint.className = 'hint';
+      saveBtn.disabled = true;
+      return '';
+    }
+    if (GEMINI_KEY_RE.test(trimmed)) {
+      hint.textContent = '✓ 형식이 올바릅니다 (39자)';
+      hint.className = 'msg ok';
+      saveBtn.disabled = false;
+      return trimmed;
+    }
+    hint.textContent = 'AIza로 시작하는 39자리 키 전체를 복사해 주세요 (현재 ' + trimmed.length + '자)';
+    hint.className = 'msg err';
+    saveBtn.disabled = true;
+    return '';
+  }
+
+  function openGeminiModal() {
+    const modal = $('geminiOnboardingModal');
+    if (!modal) return;
+    if ($('gemModalKeyInput')) $('gemModalKeyInput').value = '';
+    if ($('gemModalResultMsg')) {
+      $('gemModalResultMsg').textContent = '';
+      $('gemModalResultMsg').className = 'msg';
+    }
+    checkModalKeyFormat();
+    modal.hidden = false;
+  }
+
+  function closeGeminiModal() {
+    const modal = $('geminiOnboardingModal');
+    if (modal) modal.hidden = true;
+  }
+
+  if ($('btnOpenGeminiModal')) {
+    $('btnOpenGeminiModal').addEventListener('click', openGeminiModal);
+  }
+  if ($('btnCloseGeminiModal')) {
+    $('btnCloseGeminiModal').addEventListener('click', closeGeminiModal);
+  }
+  if ($('gemModalKeyInput')) {
+    $('gemModalKeyInput').addEventListener('input', checkModalKeyFormat);
+  }
+  if ($('btnModalSaveGemini')) {
+    $('btnModalSaveGemini').addEventListener('click', async () => {
+      const validKey = checkModalKeyFormat();
+      if (!validKey) return;
+      const user = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+      if (!user) {
+        if ($('gemModalResultMsg')) {
+          $('gemModalResultMsg').textContent = '로그인 후 키를 저장할 수 있어요.';
+          $('gemModalResultMsg').className = 'msg err';
+        }
+        return;
+      }
+      const reqUid = activeUid || user.id;
+      const btn = $('btnModalSaveGemini');
+      btn.disabled = true;
+      if ($('gemModalResultMsg')) {
+        $('gemModalResultMsg').textContent = 'Gemini API 키 유효성을 실시간으로 확인하는 중…';
+        $('gemModalResultMsg').className = 'msg';
+      }
+      keysReqSeq++;
+      try {
+        const model = ($('gemModel') && $('gemModel').value.trim()) || 'gemini-flash-latest';
+        const dto = await window.ULData.integrations.saveGemini({
+          apiKey: validKey,
+          model,
+          verify: true,
+        });
+        if (!activeUid || reqUid !== activeUid) return;
+        if (dto) {
+          if ($('geminiKeyStatus')) {
+            $('geminiKeyStatus').textContent = '설정됨 (끝 4자리 ' + (dto.hint || '') + ' · ' + (dto.updatedAt || '').slice(0, 10) + ')';
+            $('geminiKeyStatus').className = 'badge ok';
+          }
+          if (dto.config && dto.config.model && $('gemModel')) {
+            $('gemModel').value = dto.config.model;
+          }
+          if ($('gemModalResultMsg')) {
+            const modelLabel = dto.displayName ? ' · ' + dto.displayName : '';
+            $('gemModalResultMsg').textContent = '✓ 연결 완료! 무료 Gemini 모델이 정상 작동합니다 (끝 4자리 ' + (dto.hint || '') + modelLabel + ')';
+            $('gemModalResultMsg').className = 'msg ok';
+          }
+          if ($('gemModalKeyInput')) $('gemModalKeyInput').value = '';
+          say('gemKeyMsg', '✓ Gemini 키를 저장했어요.', 'ok');
+        }
+      } catch (e) {
+        if (!activeUid || reqUid !== activeUid) return;
+        if ($('gemModalResultMsg')) {
+          $('gemModalResultMsg').textContent = e.message || 'Gemini API 키 검증 및 저장에 실패했어요.';
+          $('gemModalResultMsg').className = 'msg err';
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ---------- 실시간 노션 동기화 (K4-3) ----------
   if ($('btnSyncEnable')) {
     $('btnSyncEnable').addEventListener('click', async () => {
