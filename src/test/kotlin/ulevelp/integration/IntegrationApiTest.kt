@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import ulevelp.api.ApiException
 import ulevelp.db.*
+import ulevelp.service.GeminiCheckResponse
 import ulevelp.service.HttpIntegrationCheckClient
 import ulevelp.support.*
 import java.io.OutputStream
@@ -779,6 +780,143 @@ class IntegrationApiTest {
         } finally {
             server?.stop(0)
         }
+    }
+
+    @Test
+    fun `K13 Gemini 키 저장 시 즉시 핑 검증 통과(verified = true)`() = testApp { client ->
+        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
+        fakeCheckClient.geminiHandler = { apiKey, model ->
+            GeminiCheckResponse(
+                ok = true,
+                provider = "gemini",
+                model = model,
+                displayName = "Gemini 1.5 Flash"
+            )
+        }
+
+        val putResp = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("apiKey", rawGemKey)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, putResp.status)
+        val json = Json.parseToJsonElement(putResp.bodyAsText()).jsonObject
+        assertEquals("gemini", json["provider"]?.jsonPrimitive?.content)
+        assertEquals("X9zQ", json["hint"]?.jsonPrimitive?.content)
+        assertEquals(true, json["verified"]?.jsonPrimitive?.boolean)
+        assertEquals("Gemini 1.5 Flash", json["displayName"]?.jsonPrimitive?.content)
+        assertEquals(1, fakeCheckClient.geminiCalls.size)
+        assertEquals(rawGemKey to "gemini-flash-latest", fakeCheckClient.geminiCalls.first())
+    }
+
+    @Test
+    fun `K14 무효한 Gemini 키 저장 시 400 PROVIDER_KEY_INVALID 거부 및 DB 미저장`() = testApp { client ->
+        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
+        fakeCheckClient.geminiHandler = { _, _ ->
+            throw ApiException(
+                HttpStatusCode.BadRequest,
+                "PROVIDER_KEY_INVALID",
+                "Gemini API 키가 유효하지 않거나 권한이 없습니다.",
+                source = "gemini"
+            )
+        }
+
+        val putResp = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("apiKey", rawGemKey)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.BadRequest, putResp.status)
+        val err = assertStandardError(putResp.bodyAsText(), 400, "PROVIDER_KEY_INVALID", expectedSource = "gemini")
+        assertEquals("Gemini API 키가 유효하지 않거나 권한이 없습니다.", err["message"]?.jsonPrimitive?.content)
+
+        // DB에 저장되지 않았는지 확인
+        val listResp = client.get("/api/v1/integrations") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, listResp.status)
+        val listJson = Json.parseToJsonElement(listResp.bodyAsText()).jsonObject
+        val arr = listJson["integrations"]?.jsonArray
+        assertNotNull(arr)
+        assertEquals(0, arr.size)
+
+        transaction(db) {
+            val count = IntegrationsTable.selectAll().where {
+                (IntegrationsTable.userId eq userA) and (IntegrationsTable.provider eq "gemini")
+            }.count()
+            assertEquals(0L, count)
+        }
+    }
+
+    @Test
+    fun `K15 verify = false 옵션 시 핑 검증 건너뛰기`() = testApp { client ->
+        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
+        fakeCheckClient.geminiCalls.clear()
+
+        val putResp = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("apiKey", rawGemKey)
+                put("verify", false)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, putResp.status)
+        val json = Json.parseToJsonElement(putResp.bodyAsText()).jsonObject
+        assertEquals("gemini", json["provider"]?.jsonPrimitive?.content)
+        assertEquals("X9zQ", json["hint"]?.jsonPrimitive?.content)
+        assertEquals(false, json["verified"]?.jsonPrimitive?.boolean)
+        assertTrue(json["displayName"] is JsonNull)
+        assertEquals(0, fakeCheckClient.geminiCalls.size)
+    }
+
+    @Test
+    fun `K16 기존 키 유지 모델만 변경 시 핑 검증`() = testApp { client ->
+        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
+        fakeCheckClient.geminiHandler = { apiKey, model ->
+            GeminiCheckResponse(
+                ok = true,
+                provider = "gemini",
+                model = model,
+                displayName = if (model == "gemini-1.5-pro") "Gemini 1.5 Pro" else "Gemini 1.5 Flash"
+            )
+        }
+
+        // ① 최초 키 등록
+        val put1 = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("apiKey", rawGemKey)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, put1.status)
+
+        fakeCheckClient.geminiCalls.clear()
+
+        // ② apiKey 없이 model만 변경하여 PUT
+        val put2 = client.put("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("model", "gemini-1.5-pro")
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, put2.status)
+        val json2 = Json.parseToJsonElement(put2.bodyAsText()).jsonObject
+        assertEquals("gemini", json2["provider"]?.jsonPrimitive?.content)
+        assertEquals("X9zQ", json2["hint"]?.jsonPrimitive?.content)
+        assertEquals("gemini-1.5-pro", json2["config"]?.jsonObject?.get("model")?.jsonPrimitive?.content)
+        assertEquals(true, json2["verified"]?.jsonPrimitive?.boolean)
+        assertEquals("Gemini 1.5 Pro", json2["displayName"]?.jsonPrimitive?.content)
+
+        // 복호화된 기존 키로 핑 검증이 이루어졌는지 확인
+        assertEquals(1, fakeCheckClient.geminiCalls.size)
+        assertEquals(rawGemKey to "gemini-1.5-pro", fakeCheckClient.geminiCalls.first())
     }
 }
 

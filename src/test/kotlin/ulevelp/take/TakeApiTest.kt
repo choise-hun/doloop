@@ -1432,4 +1432,183 @@ class TakeApiTest {
             assertEquals("supabase", row[TakesTable.storage])
         }
     }
+
+    @Test
+    fun `T29 최근 연습 곡1의 다중 테이크 허용`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
+
+        // 곡 1에 녹음 1 업로드
+        val up1 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(100))
+        assertEquals(HttpStatusCode.Created, up1.status)
+
+        // 곡 1에 연속으로 녹음 2 업로드
+        val up2 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(200))
+        assertEquals(HttpStatusCode.Created, up2.status)
+
+        transaction(db) {
+            val takes = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
+            assertEquals(2, takes.size)
+        }
+    }
+
+    @Test
+    fun `T30 다른 곡에 녹음 존재 시 기본 409 SINGLE_SONG_TAKE_LIMIT 거부`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
+        val up1 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(100))
+        assertEquals(HttpStatusCode.Created, up1.status)
+        val up2 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(200))
+        assertEquals(HttpStatusCode.Created, up2.status)
+
+        val songId2 = createTestSong(client, tokenA, videoId = "song2222222")
+
+        // 곡 2에 replaceOldSongTakes=false(기본)로 녹음 업로드 시도
+        val upFail = client.uploadTake(tokenA, defaultMetadata(songId2), ByteArray(300))
+        assertEquals(HttpStatusCode.Conflict, upFail.status)
+        val err = Json.parseToJsonElement(upFail.bodyAsText()).jsonObject
+        assertEquals("SINGLE_SONG_TAKE_LIMIT", err["code"]?.jsonPrimitive?.content)
+        assertEquals(
+            "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요.",
+            err["message"]?.jsonPrimitive?.content
+        )
+
+        // FakeStorageClient에 곡 2 파일 업로드 안 됨, 곡 1 녹음 2개 보존
+        assertEquals(2, fake.objects.size)
+        transaction(db) {
+            val takes1 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
+            val takes2 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId2) }.toList()
+            assertEquals(2, takes1.size)
+            assertEquals(0, takes2.size)
+        }
+    }
+
+    @Test
+    fun `T31 replaceOldSongTakes=true 시 이전 곡 supabase 녹음 자동 삭제 및 교체`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
+        client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(100))
+        client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(200))
+
+        val songId2 = createTestSong(client, tokenA, videoId = "song2222222")
+
+        // replaceOldSongTakes = true 로 곡 2에 5000바이트 녹음 업로드
+        val metaWithReplace = buildJsonObject {
+            defaultMetadata(songId2).forEach { (k, v) -> put(k, v) }
+            put("replaceOldSongTakes", true)
+        }
+        val upSuccess = client.uploadTake(tokenA, metaWithReplace, ByteArray(5000))
+        assertEquals(HttpStatusCode.Created, upSuccess.status)
+
+        // 곡 1의 supabase 녹음 2개는 DB 및 FakeStorageClient에서 삭제됨
+        assertEquals(1, fake.objects.size)
+        transaction(db) {
+            val takes1 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
+            val takes2 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId2) }.toList()
+            assertEquals(0, takes1.size)
+            assertEquals(1, takes2.size)
+            assertEquals(5000L, takes2.single()[TakesTable.sizeBytes])
+        }
+
+        // GET /api/v1/me 의 takeUsedBytes == 5000
+        val meRes = client.get("/api/v1/me") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, meRes.status)
+        val meJson = Json.parseToJsonElement(meRes.bodyAsText()).jsonObject
+        assertEquals(5000L, meJson["takeUsedBytes"]?.jsonPrimitive?.long)
+    }
+
+    @Test
+    fun `T32 교체 시 기존 Google Drive(storage='drive') 녹음은 보존`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
+
+        // 곡 1에 drive 녹음 1개 등록
+        val driveRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("songId", songId1)
+                put("date", today.toString())
+                put("recordedAt", DateTimeFormatter.ISO_INSTANT.format(today.atTime(12, 0).toInstant(ZoneOffset.UTC)))
+                put("durationSec", 30)
+                put("mime", "audio/mp4")
+                put("sizeBytes", 1000)
+                put("storage", "drive")
+                put("storageKey", "drv_file_12345")
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.Created, driveRes.status)
+
+        // 곡 1에 supabase 녹음 1개 업로드
+        val up1 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(2000))
+        assertEquals(HttpStatusCode.Created, up1.status)
+
+        val songId2 = createTestSong(client, tokenA, videoId = "song2222222")
+
+        // 곡 2에 replaceOldSongTakes=true로 supabase 녹음 업로드
+        val metaWithReplace = buildJsonObject {
+            defaultMetadata(songId2).forEach { (k, v) -> put(k, v) }
+            put("replaceOldSongTakes", true)
+        }
+        val upSuccess = client.uploadTake(tokenA, metaWithReplace, ByteArray(3000))
+        assertEquals(HttpStatusCode.Created, upSuccess.status)
+
+        transaction(db) {
+            // 곡 1의 drive 녹음은 보존됨
+            val song1DriveTakes = TakesTable.selectAll().where {
+                (TakesTable.songId eq UUID.fromString(songId1)) and (TakesTable.storage eq "drive")
+            }.toList()
+            assertEquals(1, song1DriveTakes.size)
+            assertEquals("drv_file_12345", song1DriveTakes.single()[TakesTable.storageKey])
+
+            // 곡 1의 supabase 녹음은 삭제됨
+            val song1SupabaseTakes = TakesTable.selectAll().where {
+                (TakesTable.songId eq UUID.fromString(songId1)) and (TakesTable.storage eq "supabase")
+            }.toList()
+            assertEquals(0, song1SupabaseTakes.size)
+
+            // 곡 2의 supabase 녹음 정상 저장
+            val song2Takes = TakesTable.selectAll().where {
+                (TakesTable.songId eq UUID.fromString(songId2)) and (TakesTable.storage eq "supabase")
+            }.toList()
+            assertEquals(1, song2Takes.size)
+            assertEquals(3000L, song2Takes.single()[TakesTable.sizeBytes])
+        }
+    }
+
+    @Test
+    fun `T33 최근 연습 곡이 아닌 과거 곡에 녹음 업로드 시 409 RECENT_SONG_ONLY 거부`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
+        val songId2 = createTestSong(client, tokenA, videoId = "song2222222")
+
+        // 곡 1: lastDate = yesterday, 곡 2: lastDate = today
+        val yesterday = today.minusDays(1)
+        transaction(db) {
+            SongsTable.update({ SongsTable.id eq UUID.fromString(songId1) }) {
+                it[lastDate] = yesterday
+            }
+            SongsTable.update({ SongsTable.id eq UUID.fromString(songId2) }) {
+                it[lastDate] = today
+            }
+        }
+
+        // 곡 1에 date = yesterday 로 녹음 업로드 요청 시도
+        val pastMeta = defaultMetadata(songId1, date = yesterday)
+        val res = client.uploadTake(tokenA, pastMeta, ByteArray(100))
+        assertEquals(HttpStatusCode.Conflict, res.status)
+        val err = Json.parseToJsonElement(res.bodyAsText()).jsonObject
+        assertEquals("RECENT_SONG_ONLY", err["code"]?.jsonPrimitive?.content)
+        assertEquals(
+            "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다.",
+            err["message"]?.jsonPrimitive?.content
+        )
+    }
 }

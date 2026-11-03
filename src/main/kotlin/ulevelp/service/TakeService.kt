@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
@@ -25,6 +27,7 @@ import ulevelp.storage.StorageException
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -59,7 +62,8 @@ data class TakeUploadInput(
     val rate: BigDecimal?,
     val durationSec: Int,
     val mime: String,
-    val bytes: ByteArray
+    val bytes: ByteArray,
+    val replaceOldSongTakes: Boolean = false
 )
 
 data class DriveTakeRegisterInput(
@@ -83,7 +87,8 @@ data class TakeDownloadData(
 
 class TakeService(
     private val db: Database?,
-    private val storageClient: StorageClient?
+    private val storageClient: StorageClient?,
+    private val storageTrashService: StorageTrashService? = null
 ) {
     private val log = LoggerFactory.getLogger(TakeService::class.java)
 
@@ -191,7 +196,7 @@ class TakeService(
             )
         val database = requireDb()
 
-        // 1. 트랜잭션 A (읽기만): 곡 존재 확인 및 쿼터 사전 검사
+        // 1. 트랜잭션 A (읽기만): 곡 존재 확인, 최근 연습 곡 검증, 타 곡 녹음 제한 검증 및 쿼터 사전 검사
         DatabaseFactory.dbQuery(database) {
             val songExists = SongsTable
                 .select(SongsTable.id)
@@ -201,19 +206,62 @@ class TakeService(
                 throw NotFoundException("곡을 찾을 수 없습니다.")
             }
 
+            // 최근 연습 곡 검증: 다른 곡의 lastDate가 input.date보다 크면 차단
+            val hasNewerOtherSong = SongsTable
+                .select(SongsTable.id)
+                .where {
+                    (SongsTable.userId eq userId) and
+                    (SongsTable.id neq input.songId) and
+                    (SongsTable.lastDate greater input.date)
+                }
+                .limit(1)
+                .any()
+            if (hasNewerOtherSong) {
+                throw ApiException(
+                    status = HttpStatusCode.Conflict,
+                    code = "RECENT_SONG_ONLY",
+                    message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다."
+                )
+            }
+
+            // 타 곡 기존 supabase 녹음 확인
+            val otherSongTakes = TakesTable
+                .select(TakesTable.sizeBytes)
+                .where {
+                    (TakesTable.userId eq userId) and
+                    (TakesTable.storage eq "supabase") and
+                    (TakesTable.songId neq input.songId)
+                }
+                .toList()
+
+            if (otherSongTakes.isNotEmpty() && !input.replaceOldSongTakes) {
+                throw ApiException(
+                    status = HttpStatusCode.Conflict,
+                    code = "SINGLE_SONG_TAKE_LIMIT",
+                    message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요."
+                )
+            }
+
             val quota = ProfilesTable
                 .select(ProfilesTable.takeQuotaBytes)
                 .where { ProfilesTable.id eq userId }
                 .single()[ProfilesTable.takeQuotaBytes]
 
             val sumExpr = TakesTable.sizeBytes.sum()
-            val used = TakesTable
+            val totalUsed = TakesTable
                 .select(sumExpr)
                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
                 .singleOrNull()
                 ?.get(sumExpr) ?: 0L
 
-            if (used + input.bytes.size > quota) {
+            val otherTakesBytes = otherSongTakes.sumOf { it[TakesTable.sizeBytes] }
+            val effectiveUsed = if (input.replaceOldSongTakes) {
+                totalUsed - otherTakesBytes
+            } else {
+                totalUsed
+            }
+
+            if (effectiveUsed + input.bytes.size > quota) {
                 val quotaMb = quota / 1_048_576
                 throw ApiException(
                     HttpStatusCode.PayloadTooLarge,
@@ -240,19 +288,52 @@ class TakeService(
             )
         }
 
-        // 3. 트랜잭션 B: DB 기록
-        return try {
+        // 3. 트랜잭션 B: DB 기록 및 이전 곡 녹음 원자적 교체
+        val (takeDto, trashIdsToPurge) = try {
             DatabaseFactory.dbQuery(database) {
                 // 1) 곡 소유 재확인
-                val songExists = SongsTable
-                    .select(SongsTable.id)
+                val songRow = SongsTable
+                    .select(SongsTable.id, SongsTable.lastDate)
                     .where { (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }
-                    .singleOrNull() != null
-                if (!songExists) {
-                    throw NotFoundException("곡을 찾을 수 없습니다.")
+                    .singleOrNull() ?: throw NotFoundException("곡을 찾을 수 없습니다.")
+
+                // 2) 최근 연습 곡 재검증
+                val hasNewerOtherSong = SongsTable
+                    .select(SongsTable.id)
+                    .where {
+                        (SongsTable.userId eq userId) and
+                        (SongsTable.id neq input.songId) and
+                        (SongsTable.lastDate greater input.date)
+                    }
+                    .limit(1)
+                    .any()
+                if (hasNewerOtherSong) {
+                    throw ApiException(
+                        status = HttpStatusCode.Conflict,
+                        code = "RECENT_SONG_ONLY",
+                        message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다."
+                    )
                 }
 
-                // 2) profiles FOR UPDATE 및 쿼터 재검사
+                // 3) 타 곡 supabase 녹음 재확인
+                val otherSongTakes = TakesTable
+                    .select(TakesTable.id, TakesTable.storageKey, TakesTable.sizeBytes)
+                    .where {
+                        (TakesTable.userId eq userId) and
+                        (TakesTable.storage eq "supabase") and
+                        (TakesTable.songId neq input.songId)
+                    }
+                    .toList()
+
+                if (otherSongTakes.isNotEmpty() && !input.replaceOldSongTakes) {
+                    throw ApiException(
+                        status = HttpStatusCode.Conflict,
+                        code = "SINGLE_SONG_TAKE_LIMIT",
+                        message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요."
+                    )
+                }
+
+                // 4) profiles FOR UPDATE 및 쿼터 재검사
                 val quota = ProfilesTable
                     .select(ProfilesTable.takeQuotaBytes)
                     .where { ProfilesTable.id eq userId }
@@ -260,13 +341,20 @@ class TakeService(
                     .single()[ProfilesTable.takeQuotaBytes]
 
                 val sumExpr = TakesTable.sizeBytes.sum()
-                val used = TakesTable
+                val totalUsed = TakesTable
                     .select(sumExpr)
                     .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
                     .singleOrNull()
                     ?.get(sumExpr) ?: 0L
 
-                if (used + input.bytes.size > quota) {
+                val otherTakesBytes = otherSongTakes.sumOf { it[TakesTable.sizeBytes] }
+                val effectiveUsed = if (input.replaceOldSongTakes) {
+                    totalUsed - otherTakesBytes
+                } else {
+                    totalUsed
+                }
+
+                if (effectiveUsed + input.bytes.size > quota) {
                     val quotaMb = quota / 1_048_576
                     throw ApiException(
                         HttpStatusCode.PayloadTooLarge,
@@ -275,11 +363,39 @@ class TakeService(
                     )
                 }
 
-                // 3) ensureSession
+                // 5) 타 곡 supabase 녹음 교체 (replaceOldSongTakes == true)
+                val trashIds = mutableListOf<Long>()
+                if (input.replaceOldSongTakes && otherSongTakes.isNotEmpty()) {
+                    for (oldTake in otherSongTakes) {
+                        val oldTakeId = oldTake[TakesTable.id]
+                        val oldStorageKey = oldTake[TakesTable.storageKey]
+                        val trashId = StorageTrashTable.insert {
+                            it[storageKey] = oldStorageKey
+                        } get StorageTrashTable.id
+                        trashIds.add(trashId)
+                        OutboxRepository.enqueueIfSyncEnabled(userId, "take", oldTakeId, "delete")
+                    }
+                    TakesTable.deleteWhere {
+                        (TakesTable.userId eq userId) and
+                        (TakesTable.storage eq "supabase") and
+                        (TakesTable.songId neq input.songId)
+                    }
+                }
+
+                // 6) SongsTable.lastDate 및 updatedAt 갱신
+                val currentLastDate = songRow[SongsTable.lastDate]
+                if (currentLastDate == null || currentLastDate < input.date) {
+                    SongsTable.update({ (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }) {
+                        it[lastDate] = input.date
+                        it[updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                    }
+                }
+
+                // 7) ensureSession
                 val sessionResult = ensureSession(userId, input.songId, input.date, input.rate, input.a, input.b)
                 val sessionId = sessionResult.sessionId
 
-                // 4) TakesTable.insert
+                // 8) TakesTable.insert
                 TakesTable.insert {
                     it[id] = takeId
                     it[TakesTable.userId] = userId
@@ -299,14 +415,14 @@ class TakeService(
                     it[memo] = ""
                 }
 
-                // 5) Outbox 적재
+                // 9) Outbox 적재
                 if (sessionResult.created) {
                     OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "upsert")
                 }
                 OutboxRepository.enqueueIfSyncEnabled(userId, "take", takeId, "upsert")
 
-                // 6) TakeDto 반환
-                TakeDto(
+                // 10) TakeDto 생성
+                val dto = TakeDto(
                     id = takeId.toString(),
                     sessionId = sessionId.toString(),
                     recordedAt = DateTimeFormatter.ISO_INSTANT.format(input.recordedAt.toInstant()),
@@ -320,12 +436,20 @@ class TakeService(
                     storageKey = key,
                     memo = ""
                 )
+                Pair(dto, trashIds)
             }
         } catch (originalEx: Throwable) {
             // 4. 트랜잭션 B 실패/취소 시 보상 트랜잭션: NonCancellable 안에서 스토리지 파일 삭제/trash 등록
             cleanupUploadedFile(client, database, key)
             throw originalEx
         }
+
+        // 4. 트랜잭션 B 커밋 직후 (트랜잭션 밖): storageTrashService.purge
+        if (trashIdsToPurge.isNotEmpty()) {
+            (storageTrashService ?: StorageTrashService(database, client)).purge(trashIdsToPurge)
+        }
+
+        return takeDto
     }
 
     suspend fun signedUrl(userId: UUID, takeId: UUID): SignedUrlResponse {

@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import ulevelp.api.NotFoundException
+import ulevelp.api.optBoolean
 import ulevelp.api.optString
 import ulevelp.api.receiveJsonObject
 import ulevelp.auth.SupabaseAuthPlugin
@@ -67,13 +68,15 @@ fun Route.registerIntegrationRoutes(
             val appId = body.optString("appId", 64) ?: "ulevelp"
             val apiKey = body.optString("apiKey", 256)
             val model = body.optString("model", 64) ?: IntegrationService.DEFAULT_GEMINI_MODEL
+            val verify = body.optBoolean("verify", true)
 
             val dto = integrationService.saveGemini(
                 userId = user.id,
                 input = SaveGeminiKeyInput(
                     appId = appId,
                     apiKey = apiKey,
-                    model = model
+                    model = model,
+                    verify = verify
                 )
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
