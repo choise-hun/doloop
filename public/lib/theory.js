@@ -268,10 +268,11 @@ const CT = (function () {
   ];
   const SCALE_BY = Object.fromEntries(SCALES.map((s) => [s.id, s]));
   const TUNINGS = [
-    { id: 'g6', name: '기타 (6현)', open: [40, 45, 50, 55, 59, 64], frets: 22 },
-    { id: 'g7', name: '기타 (7현)', open: [35, 40, 45, 50, 55, 59, 64], frets: 22 },
-    { id: 'b4', name: '베이스 (4현)', open: [28, 33, 38, 43], frets: 20 },
-    { id: 'b5', name: '베이스 (5현)', open: [23, 28, 33, 38, 43], frets: 20 },
+    { id: 'g6', name: '기타 (6현)', kind: 'guitar', open: [40, 45, 50, 55, 59, 64], frets: 22 },
+    { id: 'g7', name: '기타 (7현)', kind: 'guitar', open: [35, 40, 45, 50, 55, 59, 64], frets: 22 },
+    { id: 'b4', name: '베이스 (4현)', kind: 'bass', open: [28, 33, 38, 43], frets: 20 },
+    { id: 'b5', name: '베이스 (5현)', kind: 'bass', open: [23, 28, 33, 38, 43], frets: 20 },
+    { id: 'b6', name: '베이스 (6현)', kind: 'bass', open: [23, 28, 33, 38, 43, 48], frets: 20 },
   ];
   const TUNING_BY = Object.fromEntries(TUNINGS.map((t) => [t.id, t]));
   const CIRCLE5 = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]; // C G D A E B Gb Db Ab Eb Bb F (5도 위로)
@@ -325,11 +326,204 @@ const CT = (function () {
     });
   }
 
+  // ---------- CAGED 5블럭 스케일 ----------
+  const CAGED_FORMS = [
+    { blockId: 1, shape: 'A', label: '#1 Block · (A) Shape', offset: -1, span: 4 },
+    { blockId: 2, shape: 'G', label: '#2 Block · (G) Shape', offset: 1, span: 4 },
+    { blockId: 3, shape: 'E', label: '#3 Block · (E) Shape', offset: 4, span: 3 },
+    { blockId: 4, shape: 'D', label: '#4 Block · (D) Shape', offset: 6, span: 4 },
+    { blockId: 5, shape: 'C', label: '#5 Block · (C) Shape', offset: 9, span: 3 },
+  ];
+
+  function scaleBlocks(rootPc, scaleId, open, maxFret) {
+    open = open || OPEN;
+    maxFret = maxFret != null ? maxFret : 22;
+    const info = scaleInfo(rootPc, scaleId);
+    const byPc = Object.fromEntries(info.notes.map((n) => [n.pc, n]));
+
+    let fA = pc(rootPc - 9);
+    if (fA < 2) fA += 12;
+
+    return CAGED_FORMS.map((form) => {
+      let lo = fA + form.offset;
+      let hi = lo + form.span;
+      if (hi > maxFret && lo - 12 >= 0) {
+        lo -= 12;
+        hi -= 12;
+      } else if (lo < 0) {
+        lo += 12;
+        hi += 12;
+      }
+
+      const center = (lo + hi) / 2;
+      const candidates = [];
+      open.forEach((o, s) => {
+        for (let f = lo; f <= hi; f++) {
+          if (f < 0 || f > maxFret) continue;
+          const p = o + f;
+          const n = byPc[pc(p)];
+          if (n) {
+            candidates.push({
+              s, f, pitch: p, deg: n.deg, name: n.name, isRoot: n.iv === 0,
+              dist: Math.abs(f - center),
+            });
+          }
+        }
+      });
+
+      const byPitch = new Map();
+      candidates.forEach((c) => {
+        if (!byPitch.has(c.pitch)) byPitch.set(c.pitch, []);
+        byPitch.get(c.pitch).push(c);
+      });
+
+      const pitches = Array.from(byPitch.keys()).sort((a, b) => a - b);
+      const stringCount = new Array(open.length).fill(0);
+      const selectedNotes = [];
+
+      for (const p of pitches) {
+        const cands = byPitch.get(p);
+        if (cands.length === 1) {
+          selectedNotes.push(cands[0]);
+          stringCount[cands[0].s]++;
+        } else {
+          cands.sort((a, b) => {
+            if (stringCount[a.s] !== stringCount[b.s]) return stringCount[a.s] - stringCount[b.s];
+            return a.dist - b.dist;
+          });
+          selectedNotes.push(cands[0]);
+          stringCount[cands[0].s]++;
+        }
+      }
+
+      selectedNotes.sort((a, b) => a.pitch - b.pitch);
+      let foundLowestRoot = false;
+      const finalNotes = selectedNotes.map((n) => {
+        const isLowest = n.isRoot && !foundLowestRoot;
+        if (isLowest) foundLowestRoot = true;
+        return {
+          s: n.s, f: n.f, pitch: n.pitch, deg: n.deg, name: n.name,
+          isRoot: n.isRoot, isLowestRoot: isLowest,
+        };
+      });
+
+      return {
+        blockId: form.blockId,
+        shape: form.shape,
+        label: form.label,
+        lo,
+        hi,
+        notes: finalNotes,
+      };
+    });
+  }
+
+  function scaleBlockSeq(blockNotes) {
+    const B = blockNotes;
+    const m = B.length;
+    if (m < 2) return B.slice();
+    let r = B.findIndex((n) => n.isRoot);
+    if (r < 0) r = 0;
+    const seg1 = B.slice(r, m);
+    const seg2 = B.slice(0, m - 1).reverse();
+    const seg3 = r > 0 ? B.slice(1, r + 1) : [];
+    return seg1.concat(seg2, seg3);
+  }
+
+  // ---------- 더블 스탑 화음 (Double Stops) ----------
+  const DOUBLE_STOP_INTERVALS = [
+    { id: '3rd', name: '3도 (3rds)', degreeStep: 2, desc: '인접 줄 중심의 가장 대중적인 화음 (R&B·팝)' },
+    { id: '6th', name: '6도 (6ths)', degreeStep: 5, desc: '한 줄 건너뛰거나 인접 줄로 연주하는 따뜻한 화음 (네오소울·재즈)' },
+    { id: '4th', name: '4도 (4ths)', degreeStep: 3, desc: '같은 프렛 바레 위주의 모던하고 단단한 화음 (모던재즈·펑크)' },
+  ];
+  const DOUBLE_STOP_INTERVAL_BY = Object.fromEntries(DOUBLE_STOP_INTERVALS.map((d) => [d.id, d]));
+
+  function doubleStops(opts) {
+    opts = opts || {};
+    const rootPc = opts.rootPc != null ? opts.rootPc : 0;
+    const scaleId = opts.scaleId || 'major';
+    const interval = opts.interval || '3rd';
+    const open = opts.open || OPEN;
+    const lo = opts.lo != null ? opts.lo : 0;
+    const hi = opts.hi != null ? opts.hi : 17;
+
+    const ivDef = DOUBLE_STOP_INTERVAL_BY[interval];
+    if (!ivDef) throw new Error('unknown interval ' + interval);
+    const degreeStep = ivDef.degreeStep;
+
+    let pair = opts.pair;
+    if (!pair || pair.length < 2) {
+      if (interval === '6th') {
+        pair = [Math.max(0, open.length - 3), open.length - 1];
+      } else {
+        pair = [Math.max(0, open.length - 2), open.length - 1];
+      }
+    }
+    const sLow = Math.min(pair[0], pair[1]);
+    const sHigh = Math.max(pair[0], pair[1]);
+
+    const info = scaleInfo(rootPc, scaleId);
+    const k = info.notes.length;
+    const pcToIndex = new Map();
+    info.notes.forEach((n, idx) => pcToIndex.set(n.pc, idx));
+
+    const lowNotes = [];
+    for (let f = lo; f <= hi; f++) {
+      const pitch = open[sLow] + f;
+      const p = pc(pitch);
+      if (pcToIndex.has(p)) {
+        const idx = pcToIndex.get(p);
+        const n = info.notes[idx];
+        lowNotes.push({ s: sLow, f, pitch, deg: n.deg, name: n.name, isRoot: n.iv === 0, idx });
+      }
+    }
+
+    const highNotes = [];
+    for (let f = lo; f <= hi; f++) {
+      const pitch = open[sHigh] + f;
+      const p = pc(pitch);
+      if (pcToIndex.has(p)) {
+        const idx = pcToIndex.get(p);
+        const n = info.notes[idx];
+        highNotes.push({ s: sHigh, f, pitch, deg: n.deg, name: n.name, isRoot: n.iv === 0, idx });
+      }
+    }
+
+    const results = [];
+    for (const nLow of lowNotes) {
+      const targetIdx = (nLow.idx + degreeStep) % k;
+      for (const nHigh of highNotes) {
+        if (nHigh.idx !== targetIdx) continue;
+        if (Math.abs(nHigh.f - nLow.f) > 3) continue;
+        if (nHigh.pitch <= nLow.pitch) continue;
+
+        const semitones = nHigh.pitch - nLow.pitch;
+        if (interval === '3rd' && (semitones < 3 || semitones > 4)) continue;
+        if (interval === '4th' && (semitones < 5 || semitones > 6)) continue;
+        if (interval === '6th' && (semitones < 8 || semitones > 9)) continue;
+
+        results.push({
+          notes: [
+            { s: nLow.s, f: nLow.f, pitch: nLow.pitch, deg: nLow.deg, name: nLow.name, isRoot: nLow.isRoot },
+            { s: nHigh.s, f: nHigh.f, pitch: nHigh.pitch, deg: nHigh.deg, name: nHigh.name, isRoot: nHigh.isRoot },
+          ],
+          span: Math.abs(nHigh.f - nLow.f),
+          label: nLow.name + '+' + nHigh.name,
+          isRootPair: nLow.isRoot || nHigh.isRoot,
+        });
+      }
+    }
+
+    results.sort((a, b) => a.notes[0].pitch - b.notes[0].pitch);
+    return results.map((r, i) => Object.assign({ step: i + 1 }, r));
+  }
+
   return {
     OPEN, NAMES, pc, strName, Q4, QBY, SLOT_NAME, SLOT_CLS, DROPS, INV_NAME, STRING_SETS, setLabelHi, isAdjacent,
     dropStructure, placeOn, atR0, countPlayable, playableSets, mutation, ARP_Q, arpeggio2nps, arpeggioAs,
     FAM, interpret, transposeShape, TOP_DEG, TOP_Q, circleSteps, topFret, spanOf,
     SCALES, SCALE_BY, TUNINGS, TUNING_BY, CIRCLE5, scaleInfo, scaleOnBoard, scaleCircle,
+    CAGED_FORMS, scaleBlocks, scaleBlockSeq, DOUBLE_STOP_INTERVALS, DOUBLE_STOP_INTERVAL_BY, doubleStops,
   };
 })();
 if (typeof module !== 'undefined') module.exports = CT;
