@@ -27,7 +27,8 @@ set -euo pipefail
 #   CLOUD_RUN_JOB        : Cloud Run Job 이름 (기본: analyze)
 #   SUPABASE_URL         : Supabase 프로젝트 URL (기본: https://vefrfhafmiiivpgjhqiu.supabase.co)
 #   PUBLIC_APP_URL       : 공개 앱 기본 URL (기본: https://choise-hun.github.io/ULevelP/)
-#   ALLOWED_ORIGINS      : CORS 허용 오리진 (기본: https://choise-hun.github.io,http://localhost:3000)
+#   ALLOWED_ORIGINS      : CORS 허용 오리진 (기본: https://choise-hun.github.io)
+#   ULP_UI               : 화면 모드 spa|legacy (기본: spa). legacy면 React 대신 옛 public/*.html 서빙
 #   CRON_AUDIENCE        : OIDC 대상 (기본: 서비스 URL과 1:1 일치)
 # ==============================================================================
 
@@ -58,7 +59,8 @@ CLOUD_RUN_SERVICE="${CLOUD_RUN_SERVICE:-ulevelp}"
 CLOUD_RUN_JOB="${CLOUD_RUN_JOB:-analyze}"
 SUPABASE_URL="${SUPABASE_URL:-https://vefrfhafmiiivpgjhqiu.supabase.co}"
 PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://choise-hun.github.io/ULevelP/}"
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://choise-hun.github.io,http://localhost:3000}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://choise-hun.github.io}"
+ULP_UI="${ULP_UI:-spa}"
 
 echo "=============================================================================="
 echo "Google Cloud Run 배포 시작"
@@ -112,7 +114,7 @@ gcloud run deploy "${CLOUD_RUN_SERVICE}" \
   --max-instances=1 \
   --cpu-boost \
   --timeout=300s \
-  --set-env-vars="^|^SUPABASE_URL=${SUPABASE_URL}|PUBLIC_APP_URL=${PUBLIC_APP_URL}|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|CRON_AUDIENCE=${TARGET_CRON_AUDIENCE}|CRON_SA_EMAIL=${CRON_SA_EMAIL}|CLOUD_RUN_ANALYZE_JOB_URI=${ANALYZE_JOB_URI}" \
+  --set-env-vars="^|^SUPABASE_URL=${SUPABASE_URL}|PUBLIC_APP_URL=${PUBLIC_APP_URL}|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|CRON_AUDIENCE=${TARGET_CRON_AUDIENCE}|CRON_SA_EMAIL=${CRON_SA_EMAIL}|CLOUD_RUN_ANALYZE_JOB_URI=${ANALYZE_JOB_URI}|ULP_UI=${ULP_UI}" \
   --set-secrets="DATABASE_URL=DATABASE_URL:latest,SUPABASE_SECRET_KEY=SUPABASE_SECRET_KEY:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest"
 
 SERVICE_URL=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" --region="${GCP_REGION}" --project="${GCP_PROJECT_ID}" --format='value(status.url)')
