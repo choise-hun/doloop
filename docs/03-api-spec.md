@@ -97,7 +97,7 @@
 ## 3. 연습 곡 API (`Songs`)
 
 > 프런트엔드 `public/data.js`의 `ULData.songs.*` 메서드와 1:1 대응하며, 반환되는 곡 객체 구조는 기존 `Code.gs`의 `readSong` 형식과 완벽히 호환됩니다.
-> **곡 객체(`SongDto`)는 모든 곡 응답에서 3.1의 14개 필드 그대로입니다**(`{ "song": { ... } }`의 `...`도 같음). `totalSeconds`는 그 곡 세션 `seconds` 합(초). `resumeUrl`은 `PUBLIC_APP_URL`(기본 `https://choise-hun.github.io/ULevelP/`) + `practice.html?v=&t=&a=&b=&r=`로, `public/practice.js`의 `resumeUrl()`과 같은 규칙(`t`는 `pos ?? a`의 정수 내림, 0이면 생략 / `a`·`b`는 있을 때만 / `r`은 1이 아닐 때만)으로 계산합니다(FR-SONG-6). 구현 상세는 `개발산출물/명세/K1-1_구현명세.md`.
+> **곡 객체(`SongDto`)는 모든 곡 응답에서 3.1의 14개 필드 그대로입니다**(`{ "song": { ... } }`의 `...`도 같음). `totalSeconds`는 그 곡 세션 `seconds` 합(초). `resumeUrl`은 `PUBLIC_APP_URL`(배포 기본값·운영 값 `https://ulevelp-d5ympfsmfq-du.a.run.app/`) + `practice.html?v=&t=&a=&b=&r=`로, `public/practice.js`의 `resumeUrl()`과 같은 규칙(`t`는 `pos ?? a`의 정수 내림, 0이면 생략 / `a`·`b`는 있을 때만 / `r`은 1이 아닐 때만)으로 계산합니다(FR-SONG-6). 구현 상세는 `개발산출물/명세/K1-1_구현명세.md`.
 
 ### 3.1 내 연습 곡 목록 조회
 - **`GET /api/v1/songs`**
@@ -121,7 +121,7 @@
       "lastDate": "2026-10-30",
       "memo": "39초 구간 보이싱 손가락 번호 주의",
       "totalSeconds": 3420,
-      "resumeUrl": "https://choise-hun.github.io/ULevelP/practice.html?v=dQw4w9WgXcQ&t=42&a=38&b=55.2&r=0.75"
+      "resumeUrl": "https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=dQw4w9WgXcQ&t=42&a=38&b=55.2&r=0.75"
     }
   ]
 }
