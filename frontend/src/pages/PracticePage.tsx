@@ -1194,7 +1194,7 @@ export function PracticePage(): React.ReactElement {
   };
 
   return (
-    <AppShell variant="player" activeNav="practice">
+    <AppShell variant="player" activeNav="play">
       <div className={`pp-wrap ${styles.playerWrap}`}>
         <header className={`pp-head ${styles.ppHead}`}>
           <div className={`pp-title ${styles.ppTitle}`}>

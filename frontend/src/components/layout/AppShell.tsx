@@ -4,7 +4,17 @@ import { useAuth, auth } from '../../lib/auth';
 import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
-export type ActiveNavKey = 'home' | 'chords' | 'practice' | 'log' | 'notes' | 'settings' | 'privacy';
+export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'chords' | 'notes' | 'settings' | 'privacy';
+
+// 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
+const MAIN_NAV: Array<{ key: ActiveNavKey; label: string; href: string | null }> = [
+  { key: 'learn', label: 'LEARN', href: 'chords.html' },
+  { key: 'play', label: 'PLAY', href: 'practice.html' },
+  { key: 'trails', label: 'TRAILS', href: 'log.html' },
+  // TODO(stub): 코드 진행 모음 페이지가 생기면 href 연결 (코드진행_기능_기획_메모.md)
+  { key: 'chords', label: 'CHORDS', href: null },
+  { key: 'notes', label: 'NOTES', href: 'notes.html' },
+];
 
 export interface AppShellProps {
   variant?: AppShellVariant;
@@ -63,35 +73,37 @@ export function AppShell({
   return (
     <div className={shellClass} data-shell-variant={variant}>
       <nav className={`site-nav ${styles.siteNav}`} aria-label="사이트">
-        <a
-          href="./"
-          className={styles.brandLink}
-          aria-current={activeNav === 'home' ? 'page' : undefined}
-        >
-          ⌂ HOME
-        </a>
+        <span className={styles.navMain}>
+          <a
+            href="./"
+            className={styles.brandLink}
+            aria-current={activeNav === 'home' ? 'page' : undefined}
+          >
+            ⌂ HOME
+          </a>
+          {MAIN_NAV.map((item) =>
+            item.href ? (
+              <a
+                key={item.key}
+                href={item.href}
+                className={styles.navItem}
+                aria-current={activeNav === item.key ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            ) : (
+              <span
+                key={item.key}
+                className={`${styles.navItem} ${styles.navItemDisabled}`}
+                aria-disabled="true"
+                title="준비 중"
+              >
+                {item.label}
+              </span>
+            )
+          )}
+        </span>
         <span className={`links ${styles.navLinks}`}>
-          <a
-            href="chords.html"
-            className={styles.navItem}
-            aria-current={activeNav === 'chords' ? 'page' : undefined}
-          >
-            CHORDS
-          </a>
-          <a
-            href="log.html"
-            className={styles.navItem}
-            aria-current={activeNav === 'log' ? 'page' : undefined}
-          >
-            LOG
-          </a>
-          <a
-            href="notes.html"
-            className={styles.navItem}
-            aria-current={activeNav === 'notes' ? 'page' : undefined}
-          >
-            NOTES
-          </a>
           <a
             href="settings.html"
             className={styles.navItem}
