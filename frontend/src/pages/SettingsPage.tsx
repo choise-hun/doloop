@@ -9,6 +9,21 @@ import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme } from '../lib/security';
 import styles from './SettingsPage.module.css';
 
+// 노션 DB 링크를 그대로 붙여넣어도 DB ID만 꺼낸다. ID는 마지막 경로 끝에 있고 ?v= 뒤는 보기 ID라 보지 않는다.
+// URL이 아니거나 ID를 못 찾으면 입력 그대로(서버가 32자리 형식을 검증)
+function notionDbIdFromInput(raw: string): string {
+  const s = raw.trim();
+  let pathname: string;
+  try {
+    pathname = new URL(s).pathname;
+  } catch {
+    return s;
+  }
+  const seg = pathname.split('/').filter(Boolean).pop() || '';
+  const m = seg.match(/([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+  return m ? m[1] : s;
+}
+
 export function SettingsPage(): React.ReactElement {
   useEffect(() => {
     document.title = '설정 · ULeveLP';
@@ -653,7 +668,19 @@ export function SettingsPage(): React.ReactElement {
               {notionStatusText}
             </span>
           </div>
-          <p className="hint">노션 내부 통합 토큰과 데이터베이스 ID 3개를 등록해요.</p>
+          <ol className="hint" id="ntnGuide">
+            <li>
+              <SafeLink href={templateHref} external>공식 노션 템플릿</SafeLink>을 열고 오른쪽 위 <b>복제</b>를 눌러 내 노션에 가져와요.
+            </li>
+            <li>
+              <SafeLink href="https://www.notion.so/my-integrations" external>notion.so/my-integrations</SafeLink>에서 새 통합을 만들고 토큰(ntn_…)을 복사해 아래에 붙여넣어요.
+            </li>
+            <li>복제한 페이지 오른쪽 위 <b>···</b> → <b>연결</b> → 방금 만든 통합을 추가해요.</li>
+            <li>
+              페이지 안 DB(<b>연습 곡</b>·<b>연습 기록</b>·<b>학습 영상 노트</b>) 제목을 눌러 전체 페이지로 연 뒤, 주소창 링크를 복사해 아래 칸에 각각 붙여넣어요. 링크 그대로 넣어도 돼요.
+            </li>
+            <li><b>노션 키 저장</b> → <b>연결 확인</b>을 눌러요.</li>
+          </ol>
           <label className={styles.field}>
             <span className={styles.lab}>노션 통합 토큰 (ntn_...)</span>
             <input
@@ -672,7 +699,7 @@ export function SettingsPage(): React.ReactElement {
               className="inpField"
               id="ntnSongsDb"
               type="text"
-              placeholder="32자리 DB ID"
+              placeholder="DB 링크 또는 32자리 ID"
               autoComplete="off"
               value={ntnSongsDb}
               onChange={(e) => setNtnSongsDb(e.target.value)}
@@ -684,7 +711,7 @@ export function SettingsPage(): React.ReactElement {
               className="inpField"
               id="ntnSessionsDb"
               type="text"
-              placeholder="32자리 DB ID"
+              placeholder="DB 링크 또는 32자리 ID"
               autoComplete="off"
               value={ntnSessionsDb}
               onChange={(e) => setNtnSessionsDb(e.target.value)}
@@ -696,7 +723,7 @@ export function SettingsPage(): React.ReactElement {
               className="inpField"
               id="ntnNotesDb"
               type="text"
-              placeholder="32자리 DB ID (선택)"
+              placeholder="DB 링크 또는 32자리 ID (선택)"
               autoComplete="off"
               value={ntnNotesDb}
               onChange={(e) => setNtnNotesDb(e.target.value)}
@@ -720,9 +747,9 @@ export function SettingsPage(): React.ReactElement {
                 try {
                   const dto = await apiClient.integrations.saveNotion({
                     token: ntnToken.trim() || null,
-                    songsDb: ntnSongsDb.trim(),
-                    sessionsDb: ntnSessionsDb.trim(),
-                    notesDb: ntnNotesDb.trim() || null,
+                    songsDb: notionDbIdFromInput(ntnSongsDb),
+                    sessionsDb: notionDbIdFromInput(ntnSessionsDb),
+                    notesDb: notionDbIdFromInput(ntnNotesDb) || null,
                   });
                   if (auth.getUser()?.id !== reqUid) return;
                   setNtnToken('');
