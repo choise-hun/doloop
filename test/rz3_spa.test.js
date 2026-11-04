@@ -20,9 +20,9 @@ describe('RZ3-1: Ktor·server.js SPA 진입 경로 목록 일치', () => {
   });
 });
 
-describe('RZ3-2: Vite CJS 변환 대상에 public/lib 포함', () => {
-  test('vite.config.ts commonjsOptions.include에 public/lib가 있다', () => {
-    assert.match(read('vite.config.ts'), /commonjsOptions:\s*\{\s*include:\s*\[[^\]]*public/);
+describe('RZ3-2: 엔진은 frontend/src/lib/engine의 ES 모듈 (CH-E에서 public/lib CJS 변환 제거)', () => {
+  test('vite.config.ts에 public/lib CJS 변환이 없다', () => {
+    assert.ok(!/public(\[\\\\\/\]|\/)lib/.test(read('vite.config.ts')));
   });
 });
 

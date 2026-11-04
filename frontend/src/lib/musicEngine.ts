@@ -1,8 +1,8 @@
 // frontend/src/lib/musicEngine.ts
 // @ts-ignore
-import * as rawCT from '../../../public/lib/theory.js';
+import rawCT from './engine/theory.mjs';
 // @ts-ignore
-import * as rawGE from '../../../public/lib/voicing.js';
+import rawGE from './engine/voicing.mjs';
 
 export type TuningId = 'g6' | 'g7' | 'b4' | 'b5' | 'b6';
 
@@ -96,8 +96,8 @@ export interface AudioEngine {
   click(when?: number, accent?: boolean): void;
 }
 
-const CT_MOD: any = (rawCT as any).default || rawCT;
-const GE_MOD: any = (rawGE as any).default || rawGE;
+const CT_MOD: any = rawCT;
+const GE_MOD: any = rawGE;
 
 export const CT = {
   OPEN: CT_MOD.OPEN as number[],

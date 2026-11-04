@@ -7,8 +7,6 @@ RUN npm ci
 
 COPY tsconfig.json vite.config.ts ./
 COPY frontend ./frontend
-# musicEngine.ts가 public/lib/theory.js·voicing.js를 직접 import한다
-COPY public/lib ./public/lib
 RUN npm run build
 
 # Stage 2: Kotlin (Ktor) 백엔드 빌드
