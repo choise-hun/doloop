@@ -1,4 +1,4 @@
-# CH-1b 결과 — 설계 (V3 스키마 · API · 진행 전용 프롬프트 · 코드 파서 규칙 · 노션 매핑)
+# CH-1b 결과 — 설계 (V3 스키마 · API · 진행 전용 프롬프트 · 코드 파서 규칙)
 
 - 날짜: 2026-11-04 (win)
 - 입력: `결과/CH-0_범위확정.md`, `결과/CH-1a_프레임.md`, 기존 코드(`V1__init.sql`·`V2__categories.sql`, `GeminiSchemas.kt`, `NoteService.kt`·`NoteRoutes.kt`, `CategoryRoutes.kt`, `NotionPushWorker.kt`, `IntegrationService.kt`, `public/lib/voicing.js`·`theory.js`, `frontend/src/lib/progressions.ts`·`musicEngine.ts`, `package.json`·`tsconfig.json`·`vite.config.ts`·`Dockerfile`·CI)
@@ -14,7 +14,6 @@
 | 1 | "수집에 넣기" 플래그 위치 | **`notes.collect_progressions BOOLEAN`** 칼럼(진행 행 존재 여부로 추정하지 않음 — 화성 진행이 0개인 노트도 켠 상태를 기억해야 함) | §2-2 |
 | 1 | 곡·아티스트 정규화 키(2차 대비) | 1차는 `title`·`artist`를 **따로 저장만** 한다. 2차에 생성 칼럼(`GENERATED ALWAYS AS (lower(btrim(…)))`)을 마이그레이션으로 추가하면 기존 행도 자동 계산되므로 지금 칼럼을 만들 필요 없음 | §2-3 |
 | 1 | Mood·Genre·Tag | `TEXT[]` 세 칼럼(자유 입력, 개수·길이 제한). 별도 테이블 안 만듦 | §2 |
-| 1 | `entity` CHECK | `notion_links`·`sync_outbox` CHECK에 `'progression'` 추가(V3) | §2 |
 | 2 | 진행 CRUD | `GET/POST /api/v1/progressions`, `PATCH/DELETE /api/v1/progressions/{id}` | §3 |
 | 2 | 코드 진행 영상 분석 | **새 경로 `POST /api/v1/progressions/analyze`**(기존 `analysis_jobs` 재사용, `kind='progression'` 칼럼 추가). 상태 조회는 기존 `/notes/jobs/{id}` | §3-5 |
 | 2 | 노트 수집 토글 | `PUT /api/v1/notes/{noteId}/collect` `{ "collect": true }` | §3-6 |
@@ -44,7 +43,7 @@ CREATE TABLE progressions (
   album            TEXT NOT NULL DEFAULT '' CHECK (char_length(album) <= 200),
   channel          TEXT NOT NULL DEFAULT '' CHECK (char_length(channel) <= 200),
   release_date     DATE,
-  key              TEXT CHECK (key ~ '^[A-G](#|b)? (Major|min)$'),                 -- 노션 Scale 형식: "F Major" / "A min". 모르면 NULL
+  key              TEXT CHECK (key ~ '^[A-G](#|b)? (Major|min)$'),                 -- 키 24개 표기(KEYS): "F Major" / "A min". 모르면 NULL
   instrument       TEXT CHECK (instrument IN ('건반', '기타')),                     -- AI 행: 영상 악기. 직접 행은 NULL
   chords           JSONB NOT NULL CHECK (jsonb_typeof(chords) = 'array' AND jsonb_array_length(chords) BETWEEN 1 AND 64),
   moods            TEXT[] NOT NULL DEFAULT '{}' CHECK (cardinality(moods) <= 10),
@@ -74,11 +73,6 @@ ALTER TABLE notes ADD COLUMN collect_progressions BOOLEAN NOT NULL DEFAULT false
 -- analysis_jobs: 작업 종류 (기존 행은 note)
 ALTER TABLE analysis_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'note' CHECK (kind IN ('note', 'progression'));
 
--- 노션 push 대상에 progression 추가 (V1 인라인 CHECK 기본 이름. CH-3에서 로컬 DB로 이름 확인)
-ALTER TABLE notion_links DROP CONSTRAINT notion_links_entity_check;
-ALTER TABLE notion_links ADD CONSTRAINT notion_links_entity_check CHECK (entity IN ('song', 'session', 'take', 'note', 'progression'));
-ALTER TABLE sync_outbox DROP CONSTRAINT sync_outbox_entity_check;
-ALTER TABLE sync_outbox ADD CONSTRAINT sync_outbox_entity_check CHECK (entity IN ('song', 'session', 'take', 'note', 'progression'));
 ```
 
 ### 2-1. `chords` 원소 모양 (기존 `HarmonyChordDto` 이름을 따름)
@@ -96,7 +90,7 @@ ALTER TABLE sync_outbox ADD CONSTRAINT sync_outbox_entity_check CHECK (entity IN
 
 - 서버 검증: 배열 1~64개, 각 원소가 객체, `symbol` 필수·길이, 나머지 길이·enum. **모르는 키는 버린다**(저장하지 않음)
 - 행 수 제한: 사용자당 **3000행**(넘으면 400 `INVALID_INPUT` "코드 진행은 최대 3000개까지 저장할 수 있습니다.")
-- Mood·Genre·Tag 원소: 1~30자, 앞뒤 공백 제거, 중복 제거, 쉼표 금지(노션 multi_select 제약)
+- Mood·Genre·Tag 원소: 1~30자, 앞뒤 공백 제거, 중복 제거, 쉼표 금지
 
 ### 2-2. 노트 ↔ 진행
 
@@ -162,9 +156,7 @@ ALTER TABLE sync_outbox ADD CONSTRAINT sync_outbox_entity_check CHECK (entity IN
 - **`DELETE /api/v1/progressions/{id}`** → 200 `{ "ok": true }`. 404 규칙 같음
   - 노트에서 온 행을 지워도 노트 토글은 켠 채로 둔다(다시 켜면 빠진 순번만 다시 생김 — 토글 끄고 켜기)
 
-### 3-4. 노션 push(CH-7에서 붙임)
-
-- POST·PATCH·DELETE·토글·분석 완료 때 `OutboxRepository.enqueueIfSyncEnabled(userId, "progression", id, op)` — **CH-7에서 넣는다**(워커가 `progression`을 처리하기 전에 쌓이지 않게)
+### 3-4. 노션 push — **2026-11-05 폐기** — 노션 연동 중단(`계획/앱_명세.md` §5)
 
 ### 3-5. 코드 진행 영상 분석
 
@@ -181,9 +173,7 @@ ALTER TABLE sync_outbox ADD CONSTRAINT sync_outbox_entity_check CHECK (entity IN
   - `collect`가 boolean이 아니면 400, 남의 노트·없는 노트 404
 - 노트 응답(`NoteSummaryDto`·`NoteDetailDto`)에 **`collectProgressions: boolean` 필드 추가**(승인 항목)
 
-### 3-7. 노션 설정
-
-- `PUT /api/v1/integrations/notion` 본문·응답 `config`에 **`progressionsDb`(선택, `notesDb`와 같은 형식·정규화)** 추가. 비우면 진행 push는 건너뜀(`notesDb`와 같은 동작) — CH-7
+### 3-7. 노션 설정 — **2026-11-05 폐기** — 노션 연동 중단(`계획/앱_명세.md` §5)
 
 ## 4. 진행 전용 프롬프트·스키마 (CH-4)
 
@@ -269,21 +259,21 @@ frontend/src/lib/chords/
 - 텐션 괄호 `( … )` 안은 `,`·공백 구분 여러 개 허용. 정규 퀄리티 이름은 기본 퀄리티 + 텐션을 정해진 순서(`b9 9 #9 11 #11 b13 13`)로 붙여 만든다(`7b9b13`). 엔진은 이름이 아니라 **`degrees`로 보이싱**하므로(§6-2) 조합마다 표에 넣을 필요가 없다
 - 못 읽는 예(잘못된 입력 테스트): `H7`, `Cxyz`, `C/`, 빈 문자열, `N.C.`(코드 없음 표시 — 붙여넣기에서는 건너뛰는 토큰)
 
-### 5-3. 로마숫자 (`toRoman`) — 노션 템플릿 규칙
+### 5-3. 로마숫자 (`toRoman`)
 
 - 도수 = (근음 − 키 으뜸음) mod 12 → `0 I, 1 bII, 2 II, 3 bIII, 4 III, 5 IV, 6 #IV|bV, 7 V, 8 bVI, 9 VI, 10 bVII, 11 VII`. 6은 마이너·dim 계열이면 `#IV`(`#ivm7b5`), 그 외 `bV`(`bV7`)
 - 마이너 키도 **으뜸음 기준 같은 표**(A min에서 `Am7 → im7`, `FM7 → bVIM7`, `E7 → V7`) — 템플릿 `1st Chord` 옵션(`bVIM7`)과 맞음
 - 대소문자: 3도가 b3인 퀄리티(`m`·`m7`·`m7b5`·`dim`·`dim7`·`mmaj7` …)는 소문자, 나머지 대문자
 - 접미사: `maj`→없음, `m`→없음(소문자로 표시), `maj7`→`M7`, `maj9`→`M9`, `m7`→`m7`, `m7b5`→`m7b5`, `dim`→`dim`, `aug`→`aug`, `7`→`7`, 텐션은 괄호(`V7(b9)`), `add9`→`add9`, sus는 그대로. 예: `FM9 Dm9 Gm7 C7` @F Major → `IM9 - vim9 - iim7 - V7`
 - 슬래시: `/` + 베이스 도수(대문자, 예 `I/III`, `V7/VII`)
-- 진행 문자열 = 코드 roman을 ` - `로 이음(노션 `Chords Progression`), `1st Chord` = 첫 코드 roman
+- 진행 문자열 = 코드 roman을 ` - `로 이음, `1st Chord` = 첫 코드 roman
 - **서버 정규화(AI 값용, Kotlin 작은 함수 2개)**: ① 키: `F major`/`F Major`/`F`/`Fmaj` → `F Major`, `Am`/`A minor`/`A min`/`a minor` → `A min`, 그 외 NULL ② roman: `maj7→M7`, `maj9→M9`, `Δ→M7`, `ø7`·`ø→m7b5`, `°7→dim7`, `°→dim`, 공백 제거. `V7/ii` 같은 세컨더리 표기는 그대로 둔다(화면 수정에서 "다시 계산" 버튼으로 프론트 계산값으로 바꿀 수 있음)
 
 ### 5-4. 키 추정 (`guessKeys`)
 
 - 24개 키(12 × Major/min)마다 점수: 코드 구성음 중 그 키 스케일(메이저 / 자연단음계 + 화성단음계 7음) 안에 있는 비율 합 + 첫 코드가 I·i면 +2, 마지막 코드가 I·i면 +1.5, `V7→I`(마이너는 `V7→i`) 이동마다 +1
 - 상위 3개를 `[{ key: "F Major", score }]`로 반환. 화면은 1등을 기본 선택, 드롭다운에 3개 + 전체 24개
-- 철자: 키 으뜸음 철자는 템플릿 Scale 옵션을 따른다(`Db Major`·`C# min`·`F# Major`·`G# min`·`Ab Major`·`Eb min` 등 — 노션 템플릿 24개 목록을 상수로 둔다)
+- 철자: 키 으뜸음 철자는 키 24개 목록(`KEYS`)을 따른다(`Db Major`·`C# min`·`F# Major`·`G# min`·`Ab Major`·`Eb min` 등)
 - 테스트 기준(CH-2): `C - Am - F - G` → C Major, `Am - Dm - E7 - Am` → A min, `FM7 - E7 - Am7 - Gm7 C7` → 1등 A min 또는 F Major(둘 다 후보 3개 안), 코드 1개(`C`) → 후보는 나오되 점수 차가 작음
 
 ### 5-5. 붙여넣기 파서
@@ -313,29 +303,9 @@ frontend/src/lib/chords/
 - `trans`(이웃 보이싱 이동 비용)를 `voicing.mjs`에서 export하고, 진행 경로 DP는 `frontend/src/lib/engine/progressionPath.mjs`에 둔다(`bestPaths(chords, opts) → 상위 3개`)
 - 서버 `VoicingEngine.kt`는 1차에 바꾸지 않는다(CH-1a §5-1 그대로)
 
-## 7. 노션 `코드 진행` DB 매핑 (CH-7)
+## 7. 노션 `코드 진행` DB 매핑 — **2026-11-05 폐기** — 노션 연동 중단(`계획/앱_명세.md` §5)
 
-| 노션 속성 | 타입 | 값 |
-| --- | --- | --- |
-| 이름 | title | `part`가 있으면 `"{title} · {part}"`, 없으면 `title` |
-| 구분 | select | `reference`→`레퍼런스`, `analysis`→`코드 분석` |
-| 출처 | select | `ai`→`AI`, `manual`→`직접` |
-| 수집 경로 | select | `video`→`코드 진행 영상`, `note`→`학습 영상 노트`, `manual`→`직접 입력` |
-| 근거 | select | `evidence`(NULL이면 비움) |
-| 코드 심볼 | rich_text | `symbol`을 ` - `로 이음 |
-| Chords Progression | rich_text | `roman`을 ` - `로 이음(빈 roman은 `?`) |
-| 1st Chord | select | 첫 코드 `roman`(비면 비움). 새 값은 노션이 옵션 추가 |
-| Scale | multi_select | `[key]`(NULL이면 빈 배열) |
-| Mood / Genre / Tag | multi_select | 배열 그대로 |
-| Artist / Album / 채널 / 메모 | rich_text | 같은 이름 칼럼 |
-| Release | date | `release_date` |
-| URL | url | `url`(비면 NULL) |
-| 시작(초) / 끝(초) | number | `start_sec` / `end_sec` |
-| 수집일 | created_time | 노션 자동(보내지 않음) |
-
-- 설정 화면에 "코드 진행 표 ID"(선택) 입력란, 비우면 진행 push 건너뜀. 실시간 연동 켜기(full) 때 진행 행도 upsert로 쌓는다(`NotionSyncService`)
-- 워커 우선순위: `upsert progression` = 노트 다음(5), `delete progression` = 마지막
-- 화면·템플릿 문구: "노션에서 고친 값은 앱에 반영되지 않습니다. 수정은 ULevelP CHORDS에서 하세요." — 노션 템플릿 페이지 문구 수정은 CH-7에서 사용자 확인 뒤
+- 진행은 노션 대상이 아니다. V3의 `notion_links`·`sync_outbox` CHECK 변경도 뺐다(운영 DB 적용 전)
 
 ## 8. 화면 쪽 데이터 결정 (CH-1a 보완)
 
@@ -358,7 +328,7 @@ frontend/src/lib/chords/
 | CH-5 | ★`frontend/src/pages/ProgressionsPage.tsx`·`.module.css`, ★`frontend/src/components/progressions/*`(목록 행·진행 넣기 3탭·읽는 법 안내), `frontend/src/App.tsx`, `frontend/src/components/layout/AppShell.tsx`, `frontend/src/lib/apiClient.ts`, `frontend/src/pages/NoteDetailPage.tsx`(토글), `src/main/kotlin/ulevelp/Main.kt`·`server.js`(SPA 목록), ★`test/ch5_progressions.test.js`, ★`test/e2e/progressions.spec.js` |
 | CH-5b | `frontend/src/pages/ChordsPage.tsx`(`#prog?` 파싱·8번째 탭), ★`frontend/src/components/chords/ProgressionPlayTab.tsx`, `frontend/src/lib/progressions.ts`(`CHORD_MODES`), `frontend/src/lib/musicEngine.ts`, ★`test/e2e/progression-play.spec.js`, `test/r2_chords.test.js`(탭 목록 기대값) |
 | CH-6 | ★`frontend/src/lib/chords/stats.mts`, `frontend/src/pages/HomePage.tsx`, `frontend/src/lib/progressions.ts`, `test/r1_home.test.js`, ★`test/ch6_stats.test.js` |
-| CH-7 | `service/IntegrationService.kt`·`routes/IntegrationRoutes.kt`(`progressionsDb`), `notion/NotionPushWorker.kt`(`pushProgressionUpsert`·우선순위·삭제), `notion/NotionSyncService.kt`(full), `service/ProgressionService.kt`·`NoteService.kt`(outbox 적재), `frontend/src/pages/SettingsPage.tsx`, `frontend/src/lib/apiClient.ts`, `src/test/kotlin/ulevelp/notion/NotionPushApiTest.kt`·`support/FakeNotionClient.kt`, `docs/03-api-spec.md`·`docs/04-db-design.md`(§4.4 매핑) |
+| CH-7 | (노션 push 폐기 — 진행 파일 §2의 새 CH-7·7b·7c 행이 파일 목록) |
 
 - 파일 경로·이름은 위 목록으로 확정(바꾸면 먼저 묻는다). `components/progressions/*` 안의 파일 나누기는 자유 항목
 - 범위 밖 제안(1차 안 함): 내보내기 ZIP에 `코드 진행.csv`, 서버 `VoicingEngine.kt` 퀄리티 동기화
@@ -367,8 +337,8 @@ frontend/src/lib/chords/
 
 | # | 질문 | 추천(= 승인) | 대안 |
 | --- | --- | --- | --- |
-| Q1 | §2 V3 스키마(새 `progressions`, `notes.collect_progressions`, `analysis_jobs.kind`, entity CHECK 변경) | 이대로 | — |
-| Q2 | §3 API 경로·응답(새 `/progressions` 5개, `/notes/{id}/collect`, `AnalysisJobDto.kind`·노트 DTO `collectProgressions`·노션 `progressionsDb` 필드 추가) | 이대로 | 분석 요청을 `/notes/analyze`에 `mode` 필드로 확장 |
+| Q1 | §2 V3 스키마(새 `progressions`, `notes.collect_progressions`, `analysis_jobs.kind`. entity CHECK 변경은 2026-11-05 폐기) | 이대로 | — |
+| Q2 | §3 API 경로·응답(새 `/progressions` 5개, `/notes/{id}/collect`, `AnalysisJobDto.kind`·노트 DTO `collectProgressions` 필드 추가. 노션 `progressionsDb`는 2026-11-05 폐기) | 이대로 | 분석 요청을 `/notes/analyze`에 `mode` 필드로 확장 |
 | Q3 | 로마숫자 계산 위치 | **프론트 TS만**, AI 값은 서버가 가볍게 정규화 | Kotlin에도 같은 파서를 두고 서버가 항상 계산(공용 테스트 픽스처, CH-2 일이 약 2배) |
 | Q4 | 노트를 지우면 그 노트에서 온 진행 | **남긴다**(`SET NULL`) | 같이 지운다(`CASCADE`) |
 | Q5 | AI 행에서 코드·키를 고치면 | **출처 `직접`으로 바꿈**(근거 비움) | AI 유지 + "수정됨" 표시 칼럼 추가 |

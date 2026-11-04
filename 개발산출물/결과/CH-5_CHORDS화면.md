@@ -34,7 +34,6 @@
 
 - **CH-5b(연습실)**: 진행 → 연습실 링크 = `model.mts`의 `playHref(p)` → `chords.html#prog?c=<심볼 ,구분>&k=<키>&t=<제목>&from=<진행 id>`(URLSearchParams 인코딩: `,`→`%2C`, 공백→`+`). 시드 행은 `from=ref-seed-1` 같은 시드 id. **돌아오기**: `progressions.html#p-<id>`(UUID)로 열면 그 행을 펼치고 가운데로 스크롤(`?id=<id>`도 됨). 범위가 맞아야 보이므로 돌아오기 링크에 `?scope=all`을 붙이는 것을 권함(`progressions.html?scope=all#p-<id>`)
 - **CH-6(취향·홈)**: 페이지 `#progTaste` aside에 붙임. 목록은 페이지 `items`(로그인) / `SEEDS`(비로그인) 그대로 쓰면 됨. 시드 변환 `seedToDto`
-- **CH-7(노션)**: 화면 문구 "노션 수정은 반영 안 됨"은 아직 없음 — CH-7에서 행 상세나 설정에 추가
 - apiClient: `apiClient.progressions.{list(scope?), create, update, remove, analyze}`, `apiClient.notes.setCollect(noteId, collect)`, 타입 `ProgressionDto`·`ProgressionChordDto`·`ProgressionInput`·`ProgressionScope`·`NoteCollectResult`, `AnalysisJobDto.kind`, `NoteSummaryDto.collectProgressions`
 
 ## 4. 정한 것 (설계에 없음)
@@ -48,7 +47,7 @@
 | 노트 화면 작업 목록 | **그대로**(진행 작업도 태그 `화성` 작업으로 보이고 "노트 보기"로 이어짐) | 결과가 일반 노트라 문제없음, §9 목록 밖 파일을 안 건드림 |
 | 영상 요청 후 범위 | 레퍼런스 범위였으면 분석으로 바꿈 | 결과 행이 분석이라 바로 보이게 |
 | 저장 후 범위 | 저장한 구분과 다른 범위면 그 구분으로 바꿈 | 저장한 행이 안 보이는 혼란 방지 |
-| 시드 키 | `A Minor`→`A min`, `F Dominant`→키 없음(roman 빈칸) | 노션 Scale 24개 표기만 roman 계산 |
+| 시드 키 | `A Minor`→`A min`, `F Dominant`→키 없음(roman 빈칸) | 키 24개(`KEYS`) 표기만 roman 계산 |
 
 ## 5. 실행 결과 (로컬, mac)
 
@@ -72,4 +71,4 @@ ULP_UI=legacy npx playwright test      16 passed, 47 skipped
 ## 6. 남은 것·제안
 
 - 실제 Gemini 키로 영상 1개 → 화면에 행이 생기는지는 CH-8 통합 때(CH-4 §5와 같이)
-- 제안(범위 밖): 목록 검색·정렬(곡명·키), 행 상세 "노션 수정은 반영 안 됨" 문구는 CH-7
+- 제안(범위 밖): 목록 검색·정렬(곡명·키)

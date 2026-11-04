@@ -1,7 +1,7 @@
 # CH-2 결과 — 코드 심볼 파서 · 로마숫자 · 키 추정 · 붙여넣기 파서
 
 - 날짜: 2026-11-04 (win, Node 26.8.1)
-- 입력: `결과/CH-1b_설계.md` §5·§9, 노션 템플릿 `코드 진행` DB 스키마(Scale 24개·1st Chord 옵션 철자 확인)
+- 입력: `결과/CH-1b_설계.md` §5·§9, 키 24개·로마숫자 옵션 철자 확인
 - 상태: **완료** — 로컬 + Draft PR #63 CI 전부 통과(Test Node 22·24, Kotlin, E2E spa·legacy, Docker)
 
 ## 1. 바꾼 파일 (§9 목록 그대로)
@@ -49,7 +49,7 @@ BASE_QUALITIES    // 34개 (아래)
 ### `roman.mts`
 
 ```ts
-KEYS                       // 'C Major','C min','Db Major','C# min', … 'B min' (노션 Scale 옵션 순서·철자)
+KEYS                       // 'C Major','C min','Db Major','C# min', … 'B min' (키 24개 순서·철자)
 parseKey('F Major') → { tonic: 5, minor: false } | null   // 형식은 정확히 "<음> Major" / "<음> min"
 keyName(1, false) → 'Db Major'
 toRoman(chord | text, key) → 'V7(b9)' | ''               // 못 읽는 코드·키면 ''

@@ -9,7 +9,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| ★`src/main/resources/db/migration/V3__progressions.sql` | 설계 §2 그대로. V1 인라인 CHECK 이름 `notion_links_entity_check`·`sync_outbox_entity_check` 확인됨(마이그레이션 성공) |
+| ★`src/main/resources/db/migration/V3__progressions.sql` | 설계 §2 그대로(노션 CHECK 변경 4줄은 2026-11-05 CH-7에서 뺌) |
 | `src/main/kotlin/ulevelp/db/Tables.kt` | `ProgressionsTable`(15번), `NotesTable.collectProgressions`, `AnalysisJobsTable.kind`, `ALL_TABLES` 15개 |
 | ★`src/main/kotlin/ulevelp/note/ProgressionExtract.kt` | AI 노트 → 행: `normalizeKey`·`normalizeRoman`·`parseTimestamp`·`evidenceOf`·`fromAnalysis` |
 | ★`src/main/kotlin/ulevelp/service/ProgressionService.kt` | DTO 4개, `parseInput`·`parseChords`(검증), `list`·`create`·`update`·`delete`, 트랜잭션 헬퍼 `insertFromNote`·`listByNote`·`rowToDto`, `youtubeVideoId` |
@@ -44,16 +44,16 @@ insertFromNote(userId, noteId, route = "video", rows)   // kind=analysis, origin
 - CH-4 할 일: `executeJob`의 트랜잭션 2에서 `kind='progression'`이면 노트 `collect_progressions=true`로 넣고 `insertFromNote(..., "video", rows)`. `AnalysisJobDto.kind` 응답 필드 추가(설계 §3-5), `requestAnalyze`에 kind 인자. `fromAnalysis`는 `song`·`artist`·`start`·`end`가 있으면 이미 읽는다(설계 §4-1 확장 스키마 필드 이름 그대로)
 - `AnalysisJobsTable.kind` 칼럼(기본 `note`)은 이미 있음
 
-### 노션 (CH-7)
+### 노션 — 2026-11-05 폐기 — 노션 연동 중단(`계획/앱_명세.md` §5)
 
-- outbox 적재 자리: `ProgressionService.create/update/delete`, `NoteService.setCollect`(켤 때 새 행 upsert, 끌 때 지운 행 delete). 지금은 **적재 안 함**(설계대로). 끌 때 지운 행 id를 알아야 하므로 CH-7에서 `deleteWhere` 전에 id 목록을 읽어야 한다
+- outbox 적재 안 함(넣지 않는다)
 
 ## 3. 설계에 없어 정한 것
 
 | 항목 | 결정 | 이유 |
 | --- | --- | --- |
 | 경로 UUID 형식 오류 | **404**(기존 `parsePathUuid` 동작) | 설계 §3 "parsePathUuid(400)"는 문구 착오 — 기존 분류·노트 API와 같게 |
-| AI 키 철자 | 노션 템플릿 Scale 철자로 맞춤(`C# Major`→`Db Major`, `Abm`→`G# min`) | 설계 §5-4 "철자는 템플릿을 따른다" + 노션 multi_select 옵션 중복 방지. 직접 입력 `key`는 정규식만 검사(프론트 드롭다운이 `KEYS`) |
+| AI 키 철자 | 앱 키 24개(`KEYS`) 철자로 맞춤(`C# Major`→`Db Major`, `Abm`→`G# min`) | 설계 §5-4 "철자는 `KEYS`를 따른다" + 같은 키가 두 철자로 갈리지 않게. 직접 입력 `key`는 정규식만 검사(프론트 드롭다운이 `KEYS`) |
 | 직접 행 코드 `source` | 저장 안 함(POST·직접 행 PATCH·AI→직접 전환 때 제거). `timestamp`는 형식만 검사하고 유지 | `source`는 AI 근거라 직접 행엔 의미 없음. 타임스탬프는 영상 위치라 고친 행에도 쓸모 있음 |
 | AI 행 "코드가 바뀜" 판정 | 코드 배열을 `source` 빼고 비교(roman·timestamp 포함). 안 바뀌면 기존 `source`를 순서대로 다시 붙임 | 화면이 `source` 없이 같은 코드를 다시 보내도 AI가 유지되게 |
 | `key: ""` | `null`과 같음(비움) | 화면 "모름" 선택 |

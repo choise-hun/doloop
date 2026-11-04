@@ -8,7 +8,7 @@
 
 | 영역 | 내용 |
 | --- | --- |
-| 통계 `stats.mts` | `tasteStats(list)` → `{ total, chordTotal, chords, romans, moves, patterns, moods, genres, keys }`(각 `Counted { label, count }[]`, 많은 순 → 같으면 처음 나온 순). 브라우저에서 매번 계산(노션 표 없음) |
+| 통계 `stats.mts` | `tasteStats(list)` → `{ total, chordTotal, chords, romans, moves, patterns, moods, genres, keys }`(각 `Counted { label, count }[]`, 많은 순 → 같으면 처음 나온 순). 브라우저에서 매번 계산 |
 | 랜덤 | `pickRandom(list, currentId, rand)` — 지금 것과 다른 진행 하나, 1개면 그것, 비면 null |
 | CHORDS `#progTaste` | `TastePanel`(지금 범위 목록 — 검색은 반영 안 함): 요약 줄, **랜덤으로 꺼내보기 → 꺼낸 진행 카드 + 연주하기(`playHref`) + 다시 꺼내기**, 자주 나오는 진행 Top 5, 코드 이동 Top 5, 코드 빈도 Top 8, 키 분포 Top 5, Mood·Genre(있을 때만) |
 | 홈 위젯 | "취향 코드 진행 꺼내보기" 아래 **범위 토글**(`#progScope` 레퍼런스·분석·합산). 왼쪽 `#progRefBox` = 꺼낸 진행(코드 줄·연주하기 둘 다 `playHref`, `# 랜덤으로 보여주기`), 오른쪽 `#progArchBox` = **취향 요약**(진행 수, 자주 나오는 진행 1위 — 없으면 코드 이동 1위, 많이 쓴 키, "취향 통계 보기" → `progressions.html[?scope=]#progTaste`). 헤더 링크는 "코드 진행 모음 →" |
@@ -58,7 +58,6 @@ ULP_UI=legacy CI=1 npx playwright test         16 passed, 56 skipped
 
 ## 5. 다음 step이 쓸 값
 
-- **CH-7(노션)**: 통계는 노션에 안 올림(CH-0). 바뀐 것 없음
 - **CH-8(통합)**: 홈·CHORDS e2e id — 홈 `#progScope [data-scope] #progRefBox #progRefChords #progRefPlay #btnRandRef #progArchChords #progArchTitle #progTasteLink`, CHORDS `#tasteSummary #tastePick #tasteRand #tastePlay #tastePickTitle #tastePickChords #tastePatterns #tasteMoves #tasteChords #tasteKeys #tasteMoods #tasteGenres`
 
 ## 6. 제안(범위 밖)

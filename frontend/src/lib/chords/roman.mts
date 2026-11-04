@@ -1,10 +1,10 @@
-// CH-2: 로마숫자 — 노션 템플릿 표기(IM9 - vim9 - iim7 - V7)
+// CH-2: 로마숫자 — 표기(IM9 - vim9 - iim7 - V7)
 // 규칙: 개발산출물/결과/CH-1b_설계.md §5-3
 
 import { parseChord, pitchClass, splitQuality } from './symbol.mts';
 import type { ParsedChord } from './symbol.mts';
 
-// 노션 템플릿 Scale 옵션 24개(철자·순서 그대로)
+// 키 24개(철자·순서 고정)
 export const KEYS = [
   'C Major', 'C min', 'Db Major', 'C# min', 'D Major', 'D min', 'Eb Major', 'Eb min',
   'E Major', 'E min', 'F Major', 'F min', 'F# Major', 'F# min', 'G Major', 'G min',
