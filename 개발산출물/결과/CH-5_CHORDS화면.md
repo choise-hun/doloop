@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-04 (mac)
 - 입력: `결과/CH-1a_프레임.md` §2, `결과/CH-1b_설계.md` §3·§8·§9, `결과/CH-3_진행API.md` §2·§3, `결과/CH-4_진행영상분석.md` §2
-- 상태: **완료** — build·npm test 349·e2e spa 63 / legacy 16(+47 skip)·로컬 서버 확인. PR #63 CI는 진행 파일 §2 CH-5 행에 기록
+- 상태: **완료** — build·npm test 349·e2e spa 63 / legacy 16(+47 skip)·로컬 서버 확인. PR #63 CI 전부 통과(Node 22·24·Kotlin·E2E spa·legacy·Docker, run 41839703127, head `401321f`)
 
 ## 1. 만든 것
 
