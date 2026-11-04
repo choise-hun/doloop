@@ -671,7 +671,7 @@ export function LogPage(): React.ReactElement {
     : '#';
 
   return (
-    <AppShell variant="narrow" activeNav="log">
+    <AppShell variant="narrow" activeNav="trails">
       <div className={`log-page ${styles.logContainer}`}>
         <header id="logHeader" className={styles.headerBlock} hidden={!isGuest && Boolean(detailSongId)}>
           <h1 className={`page-title ${styles.pageTitle}`}>Log</h1>

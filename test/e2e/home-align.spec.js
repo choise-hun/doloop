@@ -1,5 +1,6 @@
 // 홈 화면 정렬 검사 (H-1): 4개 폭 × 3개 상태에서 카드 넘침·처짐·말줄임·높이 맞춤·버튼 줄·파란색 0건
 // 설계: 개발산출물/진행_홈정렬.md §3. React 화면 전용(legacy 모드는 skip)
+// H5는 G-1에서 BETTER 세부 섹션 버튼 + VAULT 카드 아랫선 기준으로 바뀜(개발산출물/진행_홈메뉴장르.md)
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
@@ -200,6 +201,7 @@ function collectProblems({ twoCol, emptySongs, blues }) {
       ['#weeklyStreakCard', '#recentSongCard', true],
       ['#progRefBox', '#progArchBox', true],
       ['#betterFrame', '#vaultFrame', true],
+      ['#streakChallengeBar', '#genreRow', false],
     ];
     if (emptySongs) pairs.push(['#modes', '#songs', false]);
     for (const [a, b, top] of pairs) {
@@ -209,12 +211,18 @@ function collectProblems({ twoCol, emptySongs, blues }) {
       if (!near(ra.bottom, rb.bottom, 1)) out.push(`H4 ${a}·${b} 아랫선 차이 ${Math.round(rb.bottom - ra.bottom)}px`);
     }
 
-    // H5 하단 버튼 줄
-    const btns = [...document.querySelectorAll('#betterFrame a.ghostBtn, #vaultFrame a.ghostBtn')].map(R);
-    for (const r of btns) {
+    // H5 BETTER 버튼: 두 버튼 높이·바닥선 같음, 각 세부 섹션 가운데. VAULT 카드 아랫선이 버튼 바닥선과 맞음
+    const btnEls = ['#betterChordsBtn', '#betterPlayerBtn'].map((s) => document.querySelector(s));
+    const btns = btnEls.map(R);
+    for (const [i, r] of btns.entries()) {
       if (!near(r.height, btns[0].height, 0.5)) out.push(`H5 버튼 높이 ${r.height} ≠ ${btns[0].height}`);
       if (!near(r.bottom, btns[0].bottom, 0.5)) out.push(`H5 버튼 바닥선 ${Math.round(r.bottom - btns[0].bottom)}px 차이`);
+      const col = R(btnEls[i].parentElement.parentElement);
+      const off = (r.left + r.right) / 2 - (col.left + col.right) / 2;
+      if (!near(off, 0, 1)) out.push(`H5 ${label(btnEls[i])} 섹션 가운데에서 ${Math.round(off)}px 벗어남`);
     }
+    const vaultBottom = R(document.querySelector('#progRefBox')).bottom;
+    if (!near(vaultBottom, btns[0].bottom, 1)) out.push(`H5 VAULT 카드 아랫선 ${Math.round(vaultBottom - btns[0].bottom)}px 차이`);
   }
 
   // H6 파란색 0건

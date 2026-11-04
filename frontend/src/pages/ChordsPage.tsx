@@ -940,7 +940,7 @@ export function ChordsPage(): React.ReactElement {
   }
 
   return (
-    <AppShell variant="default" activeNav="chords" showThemeToggle>
+    <AppShell variant="default" activeNav="learn" showThemeToggle>
       <div className={styles.pane}>
       <header className={styles.pageHeader}>
         <div className={styles.headRow}>
