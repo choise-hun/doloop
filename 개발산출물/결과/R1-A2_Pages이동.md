@@ -70,12 +70,18 @@ Notion 검색(`choise-hun.github.io ULevelP`, `github.io/ULevelP practice.html`)
   - `<embed source="https://choise-hun.github.io/guitar-practice/chords.html#scale" />`
   - 콜아웃 링크 4개: `…/guitar-practice/`, `…/chords.html`, `…/practice.html`, `github.com/choise-hun/guitar-practice`
   - `gh api repos/choise-hun/guitar-practice/pages` → `build_type: workflow`, `https://choise-hun.github.io/guitar-practice/` (200, 마지막 push 2026-10-28). ULevelP Pages와 다른 배포
-- → **R1-A2 PR은 이 임베드를 깨지 않는다.** `guitar-practice` 쪽(이동 페이지로 바꿀지, 노션 임베드를 run.app 링크로 바꿀지)은 이 저장소 범위 밖이라 사용자 결정으로 남긴다
+- → **R1-A2 PR은 이 임베드를 깨지 않는다.**
+- **처리 (2026-11-04, 사용자 승인 → Notion 연결로 수정, §6 (c)):** `악기 연습` 페이지에서
+  - 임베드 블록 → 링크 `[▶ 코드 연습실 열기 (스케일)](https://ulevelp-d5ympfsmfq-du.a.run.app/chords.html#scale)`
+  - 콜아웃 링크 4개 → `run.app/`, `run.app/chords.html`, `run.app/practice.html`, `github.com/choise-hun/ULevelP`
+  - 다시 fetch해 반영 확인(편집 시각 2026-11-04T01:27Z, `guitar-practice` 문자열 0개). 새 링크 3개는 `curl` 200 + `id="root"`
+  - `guitar-practice` 저장소 Pages 자체는 그대로(이 저장소 범위 밖)
+- 공식 템플릿 `악기 연습 템플릿`(`4097a337…`, 설정 화면 링크 대상)에도 Pages 주소는 없다(fetch 확인)
 - 그 페이지의 `연습 곡` DB(`collection://3274bad2-…`) 행의 `이어서 연습` 링크는 서버 push가 쓰므로 R1-A1 이후 push된 행부터 run.app(옛 행은 R1-A1 이전 값)
 
 ## 6. 남은 것
 
 - 머지 후 §4 실측
-- `guitar-practice` Pages·노션 `악기 연습` 페이지 처리 결정(§5)
+- (선택) `guitar-practice` 저장소 Pages 정리 — 노션 링크는 §5에서 이미 run.app으로 바꿈
 - PR ② `PUBLIC_APP_URL` 기본값 run.app 전환(`deploy-cloudrun.sh`·`deploy-cloudrun.yml`·`docs/03-api-spec.md`) — 별도 PR
 - `ALLOWED_ORIGINS`에서 `github.io` 제거·레거시 `public/*.js` 정리는 결정 문서 §2 A ③(롤백 기간 뒤, 별도 결정)
