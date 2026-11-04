@@ -564,11 +564,12 @@
 ```
 
 ### 8.2 분석 작업 상태 조회
-- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 9개 필드). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
+- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 10개 필드 — `kind`는 `note`(8.1 노트 분석) | `progression`(8.5 코드 진행 영상 분석). 두 종류가 한 목록에 섞여 나온다). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
 - **Response (`200 OK` - 단건 예시):**
 ```json
 {
   "id": "a1000000-0000-4000-8000-000000000001",
+  "kind": "note",
   "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "tags": ["화성", "리듬"],
   "status": "done",
@@ -671,7 +672,12 @@
   - `kind`를 `reference`로 바꾸려면 `route=manual`이어야 함(아니면 `400` "영상에서 온 진행은 레퍼런스로 바꿀 수 없습니다.")
 - **`DELETE /api/v1/progressions/{id}`** → `200 { "ok": true }`. 노트에서 온 행을 지워도 노트 토글은 켠 채로 둔다.
 - 없는 행·남의 행·비 UUID 경로 `404 NOT_FOUND`, 토큰 없음 `401 UNAUTHORIZED`. 모든 응답 `Cache-Control: no-store`.
-- (CH-4 예정) `POST /api/v1/progressions/analyze` — 코드 진행 영상 분석. `AnalysisJobDto.kind` 추가.
+- **`POST /api/v1/progressions/analyze`** `{ "url": "유튜브 주소(≤500)", "memo": "선택(≤2000)" }` → `202 { "jobId": "uuid", "status": "queued" }` — 코드 진행 영상 분석
+  - 검증·제한은 8.1과 같다(유튜브 URL 아니면 `400`, Gemini 키 없음 `412 NO_KEY`, 동시 1건·UTC 하루 20건 `429 RATE_LIMITED` — **노트 분석과 합산**, 디스패치 실패 `502`). 태그는 서버가 `["화성"]`로 정한다(본문 `tags` 없음)
+  - `analysis_jobs.kind = 'progression'`. 진행 전용 프롬프트(공통 스키마 + 화성 확장판: 진행에 `song`·`artist`·`start`·`end`, `key`는 `F Major`·`A min` 형식, 코드 심볼은 화면 표기 그대로)로 Gemini를 부른다. 일반 노트(8.1)의 프롬프트·스키마는 그대로
+  - 상태 조회는 8.2(`/notes/jobs`·`/notes/jobs/{id}`), `kind = "progression"`
+  - 완료 시 한 트랜잭션: 노트 생성(태그 `화성`, `collectProgressions = true`) + 화성 진행마다 진행 행(`kind=analysis`, `origin=ai`, `route=video`, `noteId` = 그 노트, 코드가 0개인 진행은 행 없음) + 작업 `done`. 화성 진행이 없으면 노트만 생긴다(작업은 `done`, 진행 수는 목록으로 확인)
+  - 행 값: `title` = 진행 `song`(비면 영상 제목), `artist`, `part` = 진행 `name`, `channel` = 영상 채널, `key` 정규화(`C# Major`→`Db Major`, 못 읽으면 `null`), `roman` 정규화(`maj7`→`M7` 등), `startSec`·`endSec` = `start`·`end`(비면 첫 코드 `timestamp`), `evidence` = 코드 `source` 중 가장 약한 것(추정 > 말함 > 화면)
 
 ---
 
