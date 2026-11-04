@@ -132,6 +132,10 @@ export interface Voicing {
   barres?: number[];
   src?: string;
   fix?: 'mute-low';
+  /** 정석 폼에만: 표 폼(정답지)에 3% 미만인 특징 — 규칙 폼(kind rule)에 있으면 "검토 전" 표시 대상 (CH-2c-3) */
+  flags?: Array<'split-barre' | 'semitone' | 'three-strings' | 'top-muted'>;
+  /** 규칙 폼 자동 회피로 1등에 올라간 폼(점수를 1등 바로 위로 맞춤) */
+  avoided?: boolean;
 }
 
 export interface VoicingOptions {
@@ -178,8 +182,9 @@ export interface FormTableForm {
 }
 export interface FormTable {
   source: Record<string, string>;
-  tuning: number[];
-  forms: Record<string, { name: string; forms: FormTableForm[] }>;
+  tuning?: number[];
+  /** none: 사람 검토에서 "정석 폼 없음"(빼기)으로 정한 코드 → standard 후보 0개(화면은 compact로 대체) */
+  forms: Record<string, { name: string; forms: FormTableForm[]; none?: boolean }>;
 }
 
 export interface ShapeOptions {
@@ -311,12 +316,15 @@ export const SHAPES = {
   tableForms: SHAPES_MOD.tableForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
   ruleForms: SHAPES_MOD.ruleForms as (chord: PathChord, opts?: ShapeOptions) => Voicing[],
   standardForms: SHAPES_MOD.standardForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
+  withReview: SHAPES_MOD.withReview as (table: FormTable, review: FormTable | null | undefined) => FormTable,
 };
 
 let formTablePromise: Promise<FormTable> | null = null;
-/** 정석 폼 표(gzip 약 35KB)를 따로 받아 온다 — 진행 연주 탭에서만 부르면 첫 화면 번들에 안 들어간다 */
+/** 정석 폼 표(gzip 약 35KB) + 사람 검토 결과(chordFormReview.json)를 따로 받아 합친다 — 진행 연주 탭에서만 부르면 첫 화면 번들에 안 들어간다 */
 export function loadChordForms(): Promise<FormTable> {
-  formTablePromise ??= import('./engine/chordForms.json').then((m) => (m.default ?? m) as unknown as FormTable);
+  formTablePromise ??= Promise.all([import('./engine/chordForms.json'), import('./engine/chordFormReview.json')]).then(([t, r]) =>
+    SHAPES.withReview((t.default ?? t) as unknown as FormTable, (r.default ?? r) as unknown as FormTable),
+  );
   return formTablePromise;
 }
 

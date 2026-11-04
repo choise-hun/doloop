@@ -21,6 +21,8 @@ function allowedOmit(quality) {
   return /^(m|maj|mmaj)?(11|13)/.test(quality || '') ? ['5', '9'] : ['5'];
 }
 
+const AVOID = 1;
+
 const DEF = { lo: 0, hi: 12, minStrings: 3, maxSpan: 4, maxFingers: 4, maxInnerMute: 1 };
 
 /** 표 id: `${root}:${quality}` (+ `/${bass}`). quality가 없으면 null(표 조회 안 함) */
@@ -132,11 +134,17 @@ function toVoicing(frets, info, chord, o, strict) {
   sc += notes.length * W.string - pos * W.pos - fingers * W.finger - inner * W.inner - span * W.span;
   if (maxF > 4) sc -= opens * W.openHigh;
   const cls = new Set(notes.map((n) => n.cls));
+  // 표 폼(정답지)에 3% 미만으로만 나오는 특징 — 규칙 폼 1등이 이걸 가지면 "애매"(사람 검토 목록, CH-2c-3)
+  const flags = [];
+  if (split) flags.push('split-barre');
+  if (semi) flags.push('semitone');
+  if (notes.length === 3) flags.push('three-strings');
+  if (5 - last >= 2) flags.push('top-muted');
   return {
     root: info.root, q: null, name: chord.raw || NAMES[info.root], score: sc, span, outside: 0, gaps: inner,
     guide: (cls.has('3') ? 1 : 0) + (cls.has('7') ? 1 : 0), top: notes[notes.length - 1].pitch, avgFret,
     notes, frets: frets.slice(), degrees: chord.degrees.slice(), omit,
-    kind: strict ? 'rule' : 'table', fingers, barres,
+    kind: strict ? 'rule' : 'table', fingers, barres, flags,
   };
 }
 
@@ -158,8 +166,9 @@ function tableForms(chord, table, opts) {
     if (f.frets.some((x) => x >= 0 && (x < o.lo || x > o.hi))) continue;
     const v = toVoicing(f.frets, info, chord, o, false);
     if (!v) continue;
-    v.fingers = f.fingers.filter((x) => x > 0).length ? new Set(f.fingers.filter((x) => x > 0)).size : 0;
-    v.barres = f.barres.slice();
+    // 사람 검토 폼(src 'review')은 손가락 번호가 없다 → 규칙 판정(fingering) 값 그대로
+    if (f.fingers && f.fingers.some((x) => x > 0)) v.fingers = new Set(f.fingers.filter((x) => x > 0)).size;
+    v.barres = (f.barres || v.barres).slice();
     v.src = f.src;
     if (f.fix) v.fix = f.fix;
     out.push(v);
@@ -197,13 +206,31 @@ function ruleForms(chord, opts) {
     }
   }
   dfs(0, Infinity, -Infinity, false);
-  return out.sort((a, b) => b.score - a.score);
+  out.sort((a, b) => b.score - a.score);
+  // 자동 회피: 1등이 드문 특징(flags)을 가지면, 1등 점수와 AVOID 이내이면서 flags 없는 첫 후보를 1등으로 올린다
+  // (표 코드 재현율 R2 1등 52.8 → 50.3%, 5등 안 82.9% 그대로 · 표에 없는 코드의 애매 11.9 → 4.1% — 결과/CH-2c-3_정석폼검토.md)
+  if (out.length > 1 && out[0].flags.length) {
+    const i = out.findIndex((v) => v.score >= out[0].score - AVOID && !v.flags.length);
+    // 점수도 1등 바로 위로 맞춘다(chordCandidates·bestPaths가 다시 점수로 정렬해도 순서 유지, 올라간 점수 ≤ AVOID)
+    if (i > 0) { const v = out.splice(i, 1)[0]; v.score = out[0].score + 0.001; v.avoided = true; out.unshift(v); }
+  }
+  return out;
 }
 
-/** 표 조회 우선: 범위 안 표 폼이 있으면 표만, 없으면 규칙 생성 */
+/** 표 조회 우선: 범위 안 표 폼이 있으면 표만, 없으면 규칙 생성. 사람 검토에서 "정석 폼 없음"(none)으로 정한 코드 → [] */
 function standardForms(chord, table, opts) {
+  const id = formId(chord);
+  if (id && table && table.forms && table.forms[id] && table.forms[id].none) return [];
   const t = tableForms(chord, table, opts);
   return t.length ? t : ruleForms(chord, opts);
 }
 
-export { formId, tableForms, ruleForms, standardForms };
+/** 정석 폼 표 + 사람 검토 결과(chordFormReview.json)를 합친 새 표. 같은 id는 표가 우선(검토 목록은 표에 없는 코드만) */
+function withReview(table, review) {
+  if (!table) return table;
+  const forms = Object.assign({}, table.forms);
+  for (const [id, e] of Object.entries((review && review.forms) || {})) if (!forms[id]) forms[id] = e;
+  return Object.assign({}, table, { forms });
+}
+
+export { formId, tableForms, ruleForms, standardForms, withReview };
