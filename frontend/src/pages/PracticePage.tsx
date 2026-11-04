@@ -4,7 +4,8 @@ import { AppShell } from '../components/layout/AppShell';
 import { SafeAudio } from '../components/common/SafeAudio';
 import { SafeLink } from '../components/common/SafeLink';
 import { auth, useAuth } from '../lib/auth';
-import { apiClient, SongDto, TakeDto } from '../lib/apiClient';
+import { apiClient, CategoryDto, SongDto, TakeDto } from '../lib/apiClient';
+import { takeOpenCategory } from '../lib/categories';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
 import styles from './PracticePage.module.css';
@@ -96,6 +97,9 @@ export interface PendingTakeState {
   serverTake?: TakeDto | null;
 }
 
+// 서랍에서 어떤 분류에도 속하지 않은 곡을 모으는 폴더 id
+const UNCATEGORIZED_FOLDER = '__uncategorized';
+
 export function PracticePage(): React.ReactElement {
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
@@ -127,6 +131,15 @@ export function PracticePage(): React.ReactElement {
   const [libOpen, setLibOpen] = useState(false);
   const [songsList, setSongsList] = useState<SongDto[] | null>(null);
   const [songsErr, setSongsErr] = useState('');
+
+  // 곡 분류: 서랍 폴더(null = 전부 펼침)와 현재 곡 분류 팝업
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [openFolders, setOpenFolders] = useState<Set<string> | null>(null);
+  const [catPopOpen, setCatPopOpen] = useState(false);
+  const [catSaving, setCatSaving] = useState(false);
+  const catWrapRef = useRef<HTMLDivElement | null>(null);
+  // 홈 분류 버튼에서 넘어온 분류 id (null = 아직 안 읽음)
+  const pendingCategoryRef = useRef<string | null>(null);
 
   // 녹음 및 Drive 1곡 제한 모달 상태
   const [recording, setRecording] = useState(false);
@@ -919,8 +932,12 @@ export function PracticePage(): React.ReactElement {
     setSongsList(null);
     setSongsErr('');
     try {
-      const list = await apiClient.songs.list();
+      const [list, cats] = await Promise.all([
+        apiClient.songs.list(),
+        apiClient.categories.list().catch(() => [] as CategoryDto[]),
+      ]);
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
+      setCategories(cats);
       setSongsList(Array.isArray(list) ? list : []);
     } catch (e: any) {
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
@@ -936,6 +953,43 @@ export function PracticePage(): React.ReactElement {
 
   const closeDrawer = () => {
     setLibOpen(false);
+  };
+
+  const toggleFolder = (folderId: string, allIds: string[]) => {
+    setOpenFolders((prev) => {
+      const next = new Set(prev ?? allIds);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  // 현재 곡 분류 켜고 끄기. 응답에서 categoryIds만 반영한다(재생 위치 등은 화면 상태가 최신)
+  const toggleSongCategory = async (categoryId: string) => {
+    const cur = stRef.current.song;
+    if (!cur) return;
+    const ids = cur.categoryIds || [];
+    const nextIds = ids.includes(categoryId) ? ids.filter((x) => x !== categoryId) : [...ids, categoryId];
+    // 먼저 화면에 반영하고, 실패하면 되돌린다
+    const apply = (next: string[]) => {
+      if (stRef.current.song && stRef.current.song.id === cur.id) {
+        const merged = { ...stRef.current.song, categoryIds: next };
+        stRef.current.song = merged;
+        setSong(merged);
+      }
+      setSongsList((prev) => (prev ? prev.map((x) => (x.id === cur.id ? { ...x, categoryIds: next } : x)) : prev));
+    };
+    apply(nextIds);
+    setCatSaving(true);
+    try {
+      const updated = await apiClient.songs.update(cur.id, { categoryIds: nextIds });
+      if (updated && Array.isArray(updated.categoryIds)) apply(updated.categoryIds);
+    } catch (e: any) {
+      apply(ids);
+      setSyncMsg({ text: (e && e.message) || '분류를 저장하지 못했어요', err: true });
+    } finally {
+      setCatSaving(false);
+    }
   };
 
   // ---------- 초기화, YouTube API 로드, 인터벌, 키보드 단축키 ----------
@@ -1161,6 +1215,49 @@ export function PracticePage(): React.ReactElement {
     }
   }, [activeUid]);
 
+  useEffect(() => {
+    setCategories([]);
+    setCatPopOpen(false);
+    if (activeUid && apiClient.isLoggedIn()) {
+      apiClient.categories
+        .list()
+        .then((cats) => {
+          if (auth.getUser()?.id === activeUid) setCategories(cats);
+        })
+        .catch(() => {
+          /* 분류 없이도 플레이어는 쓸 수 있다 */
+        });
+    }
+    if (pendingCategoryRef.current === null) pendingCategoryRef.current = takeOpenCategory();
+    const wanted = pendingCategoryRef.current;
+    if (!wanted || !activeUid) return;
+    pendingCategoryRef.current = '';
+    setOpenFolders(new Set([wanted]));
+    openDrawer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUid]);
+
+  // 곡이 바뀌면 분류 팝업은 닫는다
+  useEffect(() => {
+    setCatPopOpen(false);
+  }, [song?.id]);
+
+  useEffect(() => {
+    if (!catPopOpen) return;
+    const handleDown = (e: MouseEvent) => {
+      if (catWrapRef.current && !catWrapRef.current.contains(e.target as Node)) setCatPopOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCatPopOpen(false);
+    };
+    document.addEventListener('mousedown', handleDown);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleDown);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [catPopOpen]);
+
   // 진행 바 SVG 좌표 계산 (0 ~ 1000 천분율)
   const fillPermille = duration > 0 ? Math.max(0, Math.min(1000, Math.round((currentTime / duration) * 1000))) : 0;
   const hasLoopRange = duration > 0 && pointA != null && pointB != null && pointB > pointA;
@@ -1180,6 +1277,51 @@ export function PracticePage(): React.ReactElement {
     ? `${(pointB! - pointA!).toFixed(1)}초${loopOn && loops ? ` · ${loops}회` : ''}`
     : '';
   const saveBtnLabel = apiClient.isLoggedIn() && videoId && !song ? '곡 추가' : '저장';
+
+  // 분류가 하나라도 있으면 서랍을 분류 폴더로 묶는다. 한 곡이 여러 폴더에 나올 수 있고, 남는 곡은 "미분류"
+  const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
+  const songCategoryIds = song?.categoryIds || [];
+  const folders =
+    songsList && sortedCategories.length > 0
+      ? (() => {
+          const known = new Set(sortedCategories.map((c) => c.id));
+          const out = sortedCategories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            songs: songsList.filter((x) => (x.categoryIds || []).includes(c.id)),
+          }));
+          const rest = songsList.filter((x) => !(x.categoryIds || []).some((id) => known.has(id)));
+          if (rest.length > 0) out.push({ id: UNCATEGORIZED_FOLDER, name: '미분류', songs: rest });
+          return out;
+        })()
+      : null;
+  const folderIds = folders ? folders.map((f) => f.id) : [];
+  // 홈에서 고른 분류가 지워졌으면 전부 펼친다
+  const effectiveOpen = openFolders && folderIds.some((id) => openFolders.has(id)) ? openFolders : null;
+
+  const renderSongItem = (s: SongDto) => {
+    const parts: string[] = [];
+    if (s.status) parts.push(s.status);
+    if (s.a != null && s.b != null) parts.push(`${formatPlayerTime(s.a)}–${formatPlayerTime(s.b)}`);
+    if (s.rate) parts.push(`${s.rate}×`);
+    if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
+    return (
+      <li key={s.id}>
+        <button
+          type="button"
+          className={styles.ppSongBtn}
+          aria-current={s.videoId === videoId ? 'true' : undefined}
+          onClick={() => {
+            closeDrawer();
+            void openSongById(s.videoId, { song: s });
+          }}
+        >
+          <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
+          <span className={`m ${styles.ppSongMeta}`}>{parts.join(' · ')}</span>
+        </button>
+      </li>
+    );
+  };
 
   const handleUrlSubmit = (rawVal: string, clearFn: () => void) => (e: React.FormEvent) => {
     e.preventDefault();
@@ -1207,16 +1349,56 @@ export function PracticePage(): React.ReactElement {
               {displaySync}
             </span>
           </div>
-          <button
-            type="button"
-            className="ghostBtn pp-lib-btn"
-            id="libBtn"
-            aria-expanded={libOpen}
-            aria-controls="lib"
-            onClick={() => (libOpen ? closeDrawer() : openDrawer())}
-          >
-            곡 목록
-          </button>
+          <div className={styles.ppHeadActions}>
+            {song && (
+              <div className={styles.ppCatWrap} ref={catWrapRef}>
+                <button
+                  type="button"
+                  className="ghostBtn"
+                  id="songCatBtn"
+                  aria-expanded={catPopOpen}
+                  aria-controls="songCatPop"
+                  onClick={() => setCatPopOpen((v) => !v)}
+                >
+                  {songCategoryIds.length > 0 ? `분류 ${songCategoryIds.length}` : '분류'}
+                </button>
+                {catPopOpen && (
+                  <div className={styles.ppCatPop} id="songCatPop" role="dialog" aria-label="이 곡의 분류">
+                    <p className={styles.ppCatPopTitle}>이 곡의 분류</p>
+                    {sortedCategories.length === 0 ? (
+                      <p className={`note ${styles.ppSongNote}`}>아직 분류가 없어요. 홈의 + 버튼에서 만들 수 있어요.</p>
+                    ) : (
+                      <ul className={styles.ppCatList}>
+                        {sortedCategories.map((c) => (
+                          <li key={c.id} data-category={c.id}>
+                            <label className={styles.ppCatLabel} title={c.name}>
+                              <input
+                                type="checkbox"
+                                checked={songCategoryIds.includes(c.id)}
+                                disabled={catSaving}
+                                onChange={() => void toggleSongCategory(c.id)}
+                              />
+                              <span className={styles.ppCatName}>{c.name}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              className="ghostBtn pp-lib-btn"
+              id="libBtn"
+              aria-expanded={libOpen}
+              aria-controls="lib"
+              onClick={() => (libOpen ? closeDrawer() : openDrawer())}
+            >
+              곡 목록
+            </button>
+          </div>
         </header>
 
         <div className={`pp-main ${styles.ppMain}`}>
@@ -1636,30 +1818,37 @@ export function PracticePage(): React.ReactElement {
             <li className={`note ${styles.ppSongNote}`}>
               아직 곡이 없어요. 링크를 붙여넣어 열고 곡 추가를 누르세요.
             </li>
-          ) : (
-            songsList.map((s) => {
-              const parts: string[] = [];
-              if (s.status) parts.push(s.status);
-              if (s.a != null && s.b != null) parts.push(`${formatPlayerTime(s.a)}–${formatPlayerTime(s.b)}`);
-              if (s.rate) parts.push(`${s.rate}×`);
-              if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
+          ) : folders ? (
+            folders.map((f) => {
+              const isOpen = !effectiveOpen || effectiveOpen.has(f.id);
               return (
-                <li key={s.id}>
+                <li key={f.id} className={styles.ppFolder} data-folder={f.id}>
                   <button
                     type="button"
-                    className={styles.ppSongBtn}
-                    aria-current={s.videoId === videoId ? 'true' : undefined}
-                    onClick={() => {
-                      closeDrawer();
-                      void openSongById(s.videoId, { song: s });
-                    }}
+                    className={styles.ppFolderBtn}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleFolder(f.id, folderIds)}
                   >
-                    <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
-                    <span className={`m ${styles.ppSongMeta}`}>{parts.join(' · ')}</span>
+                    <span className={styles.ppFolderArrow} aria-hidden="true">
+                      {isOpen ? '▾' : '▸'}
+                    </span>
+                    <span className={styles.ppFolderName}>{f.name}</span>
+                    <span className={styles.ppFolderCount}>{f.songs.length}</span>
                   </button>
+                  {isOpen && (
+                    <ul className={`${styles.ppSongs} ${styles.ppFolderSongs}`}>
+                      {f.songs.length === 0 ? (
+                        <li className={`note ${styles.ppSongNote}`}>이 분류에 곡이 없어요</li>
+                      ) : (
+                        f.songs.map(renderSongItem)
+                      )}
+                    </ul>
+                  )}
                 </li>
               );
             })
+          ) : (
+            songsList.map(renderSongItem)
           )}
         </ul>
         <SafeLink className={`pp-settings ${styles.ppSettingsLink}`} href="settings.html#notion">

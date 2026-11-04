@@ -212,18 +212,21 @@ test('C4a-4 삭제는 두 번 눌러야 하고, Esc는 이름 고치기만 취�
   await expect(pop).toHaveCount(0);
 });
 
-test('C4a-5 분류 버튼 → URL 그대로 플레이어, 고른 분류 id는 sessionStorage로 전달', async ({ page }) => {
+// 플레이어는 도착하자마자 sessionStorage 값을 읽고 지운다(G-4b) → 서랍이 열리고 값이 소비됐는지로 본다
+test('C4a-5 분류 버튼 → URL 그대로 플레이어, 서랍이 열리고 넘긴 값은 소비됨', async ({ page }) => {
   const store = fakeCategoryStore();
   await setupLoggedIn(page, (route) => store.handle(route));
   test.skip(!(await openHome(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#categorySettingsBtn').click();
   await addCategory(page, 'Jazz');
   const link = page.locator('#categoryRow a[data-category]').first();
-  const id = await link.getAttribute('data-category');
   await page.keyboard.press('Escape');
   await link.click();
   await page.waitForURL(/\/practice\.html$/);
-  expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBe(id);
+  // 이 목은 곡이 0개라 폴더 없이 빈 안내만 보인다(폴더 펼침은 player-category.spec.js P4b-1)
+  await expect(page.locator('#lib')).toBeVisible();
+  await expect(page.locator('#songs')).toContainText('아직 곡이 없어요');
+  expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
 });
 
 test('C4a-6 분류 목록을 못 불러오면 안내', async ({ page }) => {

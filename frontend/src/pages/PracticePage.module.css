@@ -563,6 +563,125 @@
   font-size: 13px;
 }
 
+/* 서랍 분류 폴더: 머리줄(▸ 이름 · 곡 수) + 펼치면 곡 목록 */
+.ppFolder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ppFolderBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ppFolderArrow {
+  width: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ppFolderName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ppFolderCount {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.ppFolderSongs {
+  padding-left: 12px;
+}
+
+/* 헤더 오른쪽: 이 곡의 분류 + 곡 목록 */
+.ppHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ppCatWrap {
+  position: relative;
+}
+
+.ppCatPop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 22;
+  width: min(240px, 80vw);
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.ppCatPopTitle {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.ppCatList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ppCatList li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ppCatList li:last-child {
+  border-bottom: 0;
+}
+
+.ppCatLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ppCatLabel input {
+  accent-color: var(--ink);
+}
+
+.ppCatName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ppSettingsLink {
   border-top: 1px solid var(--line);
   padding-top: 14px;

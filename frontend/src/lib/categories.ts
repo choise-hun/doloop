@@ -19,7 +19,7 @@ export function setOpenCategory(id: string): void {
   }
 }
 
-// TODO(stub): G-4b에서 PracticePage가 읽고 지운 뒤 해당 분류 폴더만 펼친다
+// PracticePage가 처음 로그인 상태가 되면 한 번 읽고 지운 뒤, 곡 목록 서랍을 그 분류 폴더만 펼쳐 연다
 export function takeOpenCategory(): string {
   try {
     const v = sessionStorage.getItem(OPEN_CATEGORY_KEY) || '';
