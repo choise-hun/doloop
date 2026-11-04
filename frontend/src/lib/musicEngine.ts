@@ -3,6 +3,8 @@
 import rawCT from './engine/theory.mjs';
 // @ts-ignore
 import rawGE from './engine/voicing.mjs';
+// @ts-ignore
+import * as rawPath from './engine/progressionPath.mjs';
 
 export type TuningId = 'g6' | 'g7' | 'b4' | 'b5' | 'b6';
 
@@ -96,8 +98,81 @@ export interface AudioEngine {
   click(when?: number, accent?: boolean): void;
 }
 
+export interface VoicingNote {
+  s: number;
+  f: number;
+  pitch: number;
+  pc: number;
+  deg: string;
+  cls: 'root' | '3' | '5' | '7' | 'ext' | 'bass';
+}
+
+export interface Voicing {
+  root: number;
+  q: string | null;
+  name: string;
+  score: number;
+  span: number;
+  outside: number;
+  gaps: number;
+  guide: number;
+  top: number;
+  avgFret: number;
+  notes: VoicingNote[];
+  frets: number[];
+  /** genVoicingsByDegrees 결과에만: 받은 도수 목록, 6개 이상이라 뺀 도수 (생략 순서 5 → R → 9) */
+  degrees?: string[];
+  omit?: string[];
+}
+
+export interface VoicingOptions {
+  lo?: number;
+  hi?: number;
+  maxSpan?: number;
+  minNotes?: number;
+  maxNotes?: number;
+  maxGap?: number;
+  needGuide?: number;
+  allowedPcs?: number[] | null;
+  outsideMax?: number;
+  top?: { s: number; f: number } | null;
+}
+
+export interface DegreeVoicingOptions extends VoicingOptions {
+  /** 슬래시 베이스 피치클래스 — 맨 아래 음을 이 음으로 */
+  bass?: number;
+  /** 결과 voicing.name (기본: 근음 이름) */
+  name?: string;
+  /** 꼭 들어갈 도수 (기본: 확장음 + b5·#5) */
+  must?: string[];
+}
+
+/** CH-2 parseChord 결과(ChordOk)와 같은 모양 */
+export interface PathChord {
+  root: number;
+  degrees: string[];
+  bass?: number;
+  raw?: string;
+}
+
+export interface PathOptions extends VoicingOptions {
+  /** 코드마다 점수 상위 몇 개를 후보로 (기본 30) */
+  topK?: number;
+  /** 돌려줄 경로 수 (기본 3) */
+  paths?: number;
+  /** 마지막 → 첫 코드 이동도 비용에 넣기 (반복 재생) */
+  loop?: boolean;
+}
+
+export interface VoicingPath {
+  total: number;
+  cost: number;
+  voicings: Voicing[];
+}
+
 const CT_MOD: any = rawCT;
 const GE_MOD: any = rawGE;
+const PATH_MOD: any = rawPath;
 
 export const CT = {
   OPEN: CT_MOD.OPEN as number[],
@@ -174,10 +249,17 @@ export const GE = {
   chordName: GE_MOD.chordName as (root: number, q: string) => string,
   pentPcs: GE_MOD.pentPcs as (root: number, type: 'min' | 'maj') => number[],
   genVoicings: GE_MOD.genVoicings,
-  trans: GE_MOD.trans,
+  genVoicingsByDegrees: GE_MOD.genVoicingsByDegrees as (root: number, degrees: string[], opts?: DegreeVoicingOptions) => Voicing[],
+  trans: GE_MOD.trans as (a: Voicing, b: Voicing) => number,
   search251: GE_MOD.search251,
   topNoteDominants: GE_MOD.topNoteDominants,
   fretStr: GE_MOD.fretStr as (v: { frets: number[] }) => string,
+};
+
+/** 진행 보이싱 경로 (engine/progressionPath.mjs) */
+export const PATH = {
+  chordCandidates: PATH_MOD.chordCandidates as (chord: PathChord, opts?: PathOptions) => { voicings: Voicing[]; bassDropped: boolean },
+  bestPaths: PATH_MOD.bestPaths as (chords: PathChord[], opts?: PathOptions) => VoicingPath[],
 };
 
 export function midiToFreq(midi: number): number {

@@ -19,10 +19,10 @@ const ROOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 // 같은 입력을 옛·새 함수에 넣어 결과 비교
 const same = (oldFn, newFn, args) => assert.deepStrictEqual(newFn(...args), oldFn(...args), JSON.stringify(args));
 
+// voicing.mjs는 CH-2b에서 고쳤다(genVoicingsByDegrees·DEG 추가·trans export) — 줄 비교는 theory만, voicing은 CH-E-2·4가 지킨다
 describe('CH-E-1: 파일 내용 불변 (export 줄만 다름)', () => {
   for (const [oldRel, newRel, name] of [
     ['public/lib/theory.js', 'frontend/src/lib/engine/theory.mjs', 'CT'],
-    ['public/lib/voicing.js', 'frontend/src/lib/engine/voicing.mjs', 'GE'],
   ]) {
     test(`${newRel}`, () => {
       const lines = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r/g, '').trimEnd().split('\n');
@@ -41,9 +41,14 @@ describe('CH-E-2: export 목록과 상수', () => {
     assert.deepStrictEqual(Object.keys(NEW_CT), Object.keys(OLD_CT));
     for (const [k, v] of Object.entries(OLD_CT)) if (typeof v !== 'function') assert.deepStrictEqual(NEW_CT[k], v, k);
   });
-  test('voicing export 키·상수 값이 같다', () => {
-    assert.deepStrictEqual(Object.keys(NEW_GE), Object.keys(OLD_GE));
-    for (const [k, v] of Object.entries(OLD_GE)) if (typeof v !== 'function') assert.deepStrictEqual(NEW_GE[k], v, k);
+  test('voicing: 옛 export 키 ⊂ 새 키, 옛 상수 항목은 값이 같다(DEG는 도수 추가만)', () => {
+    const newKeys = Object.keys(NEW_GE);
+    for (const k of Object.keys(OLD_GE)) assert.ok(newKeys.includes(k), k);
+    for (const [k, v] of Object.entries(OLD_GE)) {
+      if (typeof v === 'function') continue;
+      if (k === 'DEG') for (const [d, x] of Object.entries(v)) assert.deepStrictEqual(NEW_GE.DEG[d], x, d);
+      else assert.deepStrictEqual(NEW_GE[k], v, k);
+    }
   });
 });
 

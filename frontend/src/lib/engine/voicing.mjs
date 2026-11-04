@@ -10,7 +10,10 @@ const GE = (function () {
     R: [0, 'root'], b9: [1, 'ext'], 9: [2, 'ext'], '#9': [3, 'ext'], b3: [3, '3'], 3: [4, '3'],
     11: [5, 'ext'], '#11': [6, 'ext'], b5: [6, '5'], 5: [7, '5'], b13: [8, 'ext'], 13: [9, 'ext'],
     6: [9, '7'], b7: [10, '7'], 7: [11, '7'], 4: [5, '3'],
+    2: [2, '3'], '#5': [8, '5'], bb7: [9, '7'],
   };
+  // 슬래시 베이스가 코드톤이 아닐 때 붙이는 도수 이름 (근음에서 반음 수)
+  const BASS_DEG = ['R', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
   const CH = {
     maj7: ['R', '3', '5', '7'], maj9: ['R', '3', '5', '7', '9'], 6: ['R', '3', '5', '6'],
     maj7s11: ['R', '3', '5', '7', '#11'],
@@ -31,10 +34,55 @@ const GE = (function () {
   const DEF = { lo: 1, hi: 12, maxSpan: 3, minNotes: 3, maxNotes: 4, maxGap: 1, needGuide: 2, allowedPcs: null, outsideMax: 99, top: null };
 
   function genVoicings(root, q, opts) {
-    const o = Object.assign({}, DEF, opts || {});
     const tones = chordTones(q);
+    return build(root, tones, q, chordName(root, q), tones.filter((t) => t.cls === 'ext').map((t) => t.deg), opts);
+  }
+
+  // 도수가 6개 이상이면 이 순서로 뺀다 (9는 다른 확장음이 남아 있을 때만). 슬래시 베이스 음은 빼지 않는다
+  const OMIT_ORDER = ['5', 'R', '9'];
+  function reduceDegrees(root, degrees, bass) {
+    let kept = degrees.slice();
+    const omit = [];
+    for (const d of OMIT_ORDER) {
+      if (kept.length < 6) break;
+      if (!kept.includes(d)) continue;
+      if (bass != null && pc(root + DEG[d][0]) === pc(bass)) continue;
+      if (d === '9' && !kept.some((x) => x !== '9' && DEG[x][1] === 'ext')) continue;
+      kept = kept.filter((x) => x !== d);
+      omit.push(d);
+    }
+    return { kept, omit };
+  }
+
+  // 도수 목록(CH-2 parseChord의 degrees)으로 보이싱. o.bass(피치클래스)면 맨 아래 음을 그 음으로, o.name은 결과 이름
+  // 꼭 들어갈 음(o.must 기본) = 확장음 + 변화된 5도(b5·#5) — 그래야 C7#5가 C7과 구별된다
+  function genVoicingsByDegrees(root, degrees, opts) {
+    const o = opts || {};
+    if (!Array.isArray(degrees) || !degrees.length || degrees.some((d) => !DEG[d])) return [];
+    // 같은 음 도수(m7#9의 b3·#9, 7b5#11의 b5·#11)는 앞쪽(코드톤) 하나만
+    const seen = new Set();
+    const uniq = degrees.filter((d) => !seen.has(DEG[d][0]) && seen.add(DEG[d][0]));
+    const { kept, omit } = reduceDegrees(root, uniq, o.bass);
+    const tones = kept.map((d) => ({ deg: d, iv: DEG[d][0], cls: DEG[d][1] }));
+    const must = o.must || kept.filter((d) => DEG[d][1] === 'ext' || d === 'b5' || d === '#5');
+    const out = build(root, tones, null, o.name || NAMES[pc(root)], must, o);
+    for (const v of out) { v.degrees = degrees.slice(); v.omit = omit; }
+    return out;
+  }
+
+  function build(root, tones, q, name, must, opts) {
+    const o = Object.assign({}, DEF, opts || {});
     const byPc = {};
     tones.forEach((t) => { byPc[pc(root + t.iv)] = t; });
+    const bassPc = o.bass == null ? null : pc(o.bass);
+    if (bassPc != null && !byPc[bassPc]) byPc[bassPc] = { deg: BASS_DEG[pc(bassPc - root)], iv: pc(bassPc - root), cls: 'bass' };
+    // 3도·7도 자리가 없는 코드(3화음·sus·add9·도미넌트 11)는 있는 만큼만 가이드톤을 요구
+    const guideAvail = (tones.some((t) => t.cls === '3') ? 1 : 0) + (tones.some((t) => t.cls === '7') ? 1 : 0);
+    const needGuide = guideAvail < 2 ? Math.min(o.needGuide, guideAvail) : o.needGuide;
+    // 슬래시 베이스가 가이드톤·must가 아니면 한 자리를 따로 차지한다
+    const bassTone = bassPc == null ? null : byPc[bassPc];
+    const bassSlot = bassTone && bassTone.cls !== '3' && bassTone.cls !== '7' && !must.includes(bassTone.deg) ? 1 : 0;
+    const needMust = must.length ? Math.max(1, Math.min(must.length, o.maxNotes - needGuide - bassSlot)) : 0;
     const allowed = o.allowedPcs ? new Set(o.allowedPcs) : null;
     const opt = [];
     for (let s = 0; s < 6; s++) {
@@ -51,19 +99,19 @@ const GE = (function () {
     function finalize() {
       if (notes.length < o.minNotes) return;
       if (o.top && notes[notes.length - 1].s !== o.top.s) return;
+      if (bassPc != null && notes[0].pc !== bassPc) return;
       const cls = new Set(notes.map((n) => n.tone.cls));
       const guide = (cls.has('3') ? 1 : 0) + (cls.has('7') ? 1 : 0);
-      if (guide < o.needGuide) return;
+      if (guide < needGuide) return;
       // 9, 13, b9 같은 확장음 코드는 그 확장음이 실제로 들어 있어야 해당 코드로 인정
-      const defTone = tones[tones.length - 1];
-      if (defTone.cls === 'ext' && !notes.some((n) => n.tone.deg === defTone.deg)) return;
+      if (notes.filter((n) => must.includes(n.tone.deg)).length < needMust) return;
       const outside = allowed ? notes.filter((n) => !allowed.has(n.pc)).length : 0;
       if (outside > o.outsideMax) return;
       const fr = notes.filter((n) => n.f > 0).map((n) => n.f);
       const span = fr.length ? Math.max(...fr) - Math.min(...fr) : 0;
       let sc = 0;
       for (const n of notes) {
-        sc += { root: 1, 3: 3, 7: 3, 5: 0.7, ext: 1.2 }[n.tone.cls];
+        sc += { root: 1, 3: 3, 7: 3, 5: 0.7, ext: 1.2, bass: 1 }[n.tone.cls];
       }
       sc += notes.length * 0.5 - outside * 1.5 - span * 0.35;
       let gaps = 0;
@@ -75,7 +123,7 @@ const GE = (function () {
       const top = notes[notes.length - 1].pitch;
       sc -= 0.12 * Math.abs(top - 70);
       out.push({
-        root, q, name: chordName(root, q), score: sc, span, outside, gaps,
+        root, q, name, score: sc, span, outside, gaps,
         guide, top, avgFret: fr.length ? fr.reduce((a, b) => a + b, 0) / fr.length : 0,
         notes: notes.map((n) => ({ s: n.s, f: n.f, pitch: n.pitch, pc: n.pc, deg: n.tone.deg, cls: n.tone.cls })),
         frets: [0, 1, 2, 3, 4, 5].map((s) => { const n = notes.find((x) => x.s === s); return n ? n.f : -1; }),
@@ -91,6 +139,7 @@ const GE = (function () {
         if (notes.length > 0) { if (skipped > 1) continue; ng = gaps + skipped; if (ng > o.maxGap) continue; }
         const pitch = OPEN[s] + f; const p = pc(pitch);
         if (used.has(p)) continue;
+        if (bassPc != null && (notes.length === 0) !== (p === bassPc)) continue;
         const fr = notes.filter((n) => n.f > 0).map((n) => n.f).concat(f > 0 ? [f] : []);
         if (fr.length && Math.max(...fr) - Math.min(...fr) > o.maxSpan) continue;
         notes.push({ s, f, pitch, pc: p, tone: byPc[p] }); used.add(p);
@@ -189,6 +238,6 @@ const GE = (function () {
 
   // 지판 텍스트
   const fretStr = (v) => v.frets.map((x) => (x < 0 ? 'x' : x)).join(' ');
-  return { OPEN, STR_LABEL, NAMES, DEG, CH, DOMS, pc, pentPcs, genVoicings, search251, topNoteDominants, chordName, fretStr };
+  return { OPEN, STR_LABEL, NAMES, DEG, CH, DOMS, pc, pentPcs, genVoicings, genVoicingsByDegrees, trans, search251, topNoteDominants, chordName, fretStr };
 })();
 export default GE;
