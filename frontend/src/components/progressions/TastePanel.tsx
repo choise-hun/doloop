@@ -11,9 +11,13 @@ import styles from './Progressions.module.css';
 export interface TastePanelProps {
   list: ProgressionDto[]; // 범위로 거른 목록(검색은 반영하지 않음)
   scopeLabel: string;
+  filter?: string; // 지금 목록을 거르고 있는 통계 줄(자주 나오는 진행·코드 이동)
+  onFilter?: (label: string) => void; // 줄을 누르면 그 묶음이 든 진행만 목록에(같은 줄을 다시 누르면 해제 — 페이지가 정함)
 }
 
-function CountList({ id, title, items, empty }: { id: string; title: string; items: Counted[]; empty: string }): React.ReactElement {
+type CountListProps = { id: string; title: string; items: Counted[]; empty: string; active?: string; onPick?: (label: string) => void };
+
+function CountList({ id, title, items, empty, active, onPick }: CountListProps): React.ReactElement {
   return (
     <section className={styles.tasteBlock} id={id}>
       <h3>{title}</h3>
@@ -23,8 +27,23 @@ function CountList({ id, title, items, empty }: { id: string; title: string; ite
         <ol className={styles.tasteList}>
           {items.map((it) => (
             <li key={it.label}>
-              <span className={styles.tasteLabel}>{it.label}</span>
-              <span className={styles.tasteCount}>{it.count}</span>
+              {onPick ? (
+                <button
+                  type="button"
+                  className={styles.tastePickBtn}
+                  aria-pressed={active === it.label}
+                  title="이 묶음이 들어 있는 진행만 목록에 보기"
+                  onClick={() => onPick(it.label)}
+                >
+                  <span className={styles.tasteLabel}>{it.label}</span>
+                  <span className={styles.tasteCount}>{it.count}</span>
+                </button>
+              ) : (
+                <>
+                  <span className={styles.tasteLabel}>{it.label}</span>
+                  <span className={styles.tasteCount}>{it.count}</span>
+                </>
+              )}
             </li>
           ))}
         </ol>
@@ -33,7 +52,7 @@ function CountList({ id, title, items, empty }: { id: string; title: string; ite
   );
 }
 
-export function TastePanel({ list, scopeLabel }: TastePanelProps): React.ReactElement {
+export function TastePanel({ list, scopeLabel, filter, onFilter }: TastePanelProps): React.ReactElement {
   const stats = useMemo(() => tasteStats(list), [list]);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const picked = list.find((p) => p.id === pickedId) || null;
@@ -83,8 +102,8 @@ export function TastePanel({ list, scopeLabel }: TastePanelProps): React.ReactEl
         )}
       </section>
 
-      <CountList id="tastePatterns" title="자주 나오는 진행" items={top(stats.patterns)} empty="2곡 이상에 함께 나온 3~4코드 묶음이 아직 없어요." />
-      <CountList id="tasteMoves" title="코드 이동" items={top(stats.moves)} empty="이동이 없어요." />
+      <CountList id="tastePatterns" title="자주 나오는 진행" items={top(stats.patterns)} empty="2곡 이상에 함께 나온 3~4코드 묶음이 아직 없어요." active={filter} onPick={onFilter} />
+      <CountList id="tasteMoves" title="코드 이동" items={top(stats.moves)} empty="이동이 없어요." active={filter} onPick={onFilter} />
       <CountList id="tasteChords" title="코드 빈도" items={top(stats.chords, 8)} empty="코드가 없어요." />
       <CountList id="tasteKeys" title="키 분포" items={top(stats.keys)} empty="키가 적힌 진행이 없어요." />
       {stats.moods.length > 0 && <CountList id="tasteMoods" title="Mood" items={top(stats.moods)} empty="" />}

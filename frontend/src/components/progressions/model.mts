@@ -145,7 +145,7 @@ export function formFromDto(p: ProgressionDto): ProgressionForm {
   };
 }
 
-// "nostalgia, RnB ,  RnB" → ["nostalgia","RnB"] (앞뒤 공백 제거·중복 제거, 쉼표는 구분자 — 노션 multi_select 제약)
+// "nostalgia, RnB ,  RnB" → ["nostalgia","RnB"] (앞뒤 공백 제거·중복 제거, 쉼표는 구분자)
 export function splitList(text: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -254,12 +254,14 @@ export function romanLine(p: { chords: ProgressionChordDto[] }): string {
 }
 
 // 연습실 "진행 연주" 탭 링크 (CH-1a §3-1 확정): chords.html#prog?c=<심볼,>&k=<키>&t=<제목>&from=<id>
-export function playHref(p: { id?: string; title?: string; key?: string | null; chords: ProgressionChordDto[] }): string {
+// n=<노트 id>: 노트(영상 분석)에서 온 진행이면 연습실에서 원본 노트(건반 보이싱 등)로 바로 간다
+export function playHref(p: { id?: string; title?: string; key?: string | null; chords: ProgressionChordDto[]; noteId?: string | null }): string {
   const qs = new URLSearchParams();
   qs.set('c', (p.chords || []).map((c) => c.symbol).join(','));
   if (p.key) qs.set('k', p.key);
   if (p.title) qs.set('t', p.title);
   if (p.id) qs.set('from', p.id);
+  if (p.noteId && UUID_RE.test(p.noteId)) qs.set('n', p.noteId);
   return 'chords.html#prog?' + qs.toString();
 }
 
@@ -283,7 +285,7 @@ export function formatSec(sec: number | null): string {
 
 export type SeedItem = { id: string; category: 'REFERENCE' | 'ARCHIVE'; chordsText: string; title: string; keyLabel: string };
 
-// 시드 키 표기("A Minor")를 노션 Scale 표기("A min")로. 모르는 표기("F Dominant")는 null
+// 시드 키 표기("A Minor")를 KEYS 표기("A min")로. 모르는 표기("F Dominant")는 null
 export function seedKey(label: string): string | null {
   const m = /^([A-G][#b]?) (Major|Minor|min)$/.exec(String(label ?? '').trim());
   if (!m) return null;
@@ -347,7 +349,7 @@ const titleCmp = (a: Listed, b: Listed): number => {
   return ta.localeCompare(tb, 'ko', { sensitivity: 'base', numeric: true });
 };
 
-// recent = 받은 순서 그대로(서버·시드 순서). key = 노션 Scale 24개 순서(C Major, C min, Db Major …), 키 없는 행은 뒤, 같은 키는 곡명 순
+// recent = 받은 순서 그대로(서버·시드 순서). key = KEYS 24개 순서(C Major, C min, Db Major …), 키 없는 행은 뒤, 같은 키는 곡명 순
 export function sortProgressions<T extends Listed>(list: T[], by: SortBy): T[] {
   const out = list.slice();
   if (by === 'title') return out.sort(titleCmp);
@@ -363,14 +365,16 @@ export function sortProgressions<T extends Listed>(list: T[], by: SortBy): T[] {
 
 // ── 연습실 진행 연주 탭 (CH-5b) ─────────────────────────
 
-export type ProgHash = { chords: string[]; key: string; title: string; from: string };
+export type ProgHash = { chords: string[]; key: string; title: string; from: string; note: string };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // "#prog" 또는 "#prog?…" (연습실이 진행 연주 탭을 여는 해시)
 export function isProgHash(hash: string): boolean {
   return /^#?prog(?:\?|$)/.test(String(hash ?? ''));
 }
 
-// playHref의 역함수. 키는 노션 Scale 24개 표기만, 진행 id는 영숫자·_-(UUID·시드 id), 코드는 64개·제목은 300자까지
+// playHref의 역함수. 키는 KEYS 24개 표기만, 노트 id(n)는 UUID만, 진행 id는 영숫자·_-(UUID·시드 id), 코드는 64개·제목은 300자까지
 export function parseProgHash(hash: string): ProgHash | null {
   const h = String(hash ?? '');
   if (!isProgHash(h)) return null;
@@ -383,11 +387,13 @@ export function parseProgHash(hash: string): ProgHash | null {
     .slice(0, MAX_CHORDS);
   const k = (qs.get('k') || '').trim();
   const from = (qs.get('from') || '').trim();
+  const note = (qs.get('n') || '').trim();
   return {
     chords,
     key: KEYS.includes(k) ? k : '',
     title: (qs.get('t') || '').trim().slice(0, 300),
     from: /^[A-Za-z0-9_-]{1,64}$/.test(from) ? from : '',
+    note: UUID_RE.test(note) ? note : '',
   };
 }
 
@@ -402,7 +408,7 @@ const SHARP_KEYS = ['G Major', 'D Major', 'A Major', 'E Major', 'B Major', 'E mi
 
 const mod12 = (n: number): number => ((n % 12) + 12) % 12;
 
-// 키를 반음 n개 옮긴다(노션 Scale 표기). 키가 없거나 못 읽으면 ''
+// 키를 반음 n개 옮긴다(KEYS 표기). 키가 없거나 못 읽으면 ''
 export function transposeKey(key: string, semis: number): string {
   const k = parseKey(key);
   return k ? keyName(k.tonic + semis, k.minor) : '';

@@ -11,6 +11,8 @@ import { PastePanel } from '../components/progressions/PastePanel';
 import { VideoAnalyzeForm } from '../components/progressions/VideoAnalyzeForm';
 import { ReadingGuide } from '../components/progressions/ReadingGuide';
 import { TastePanel } from '../components/progressions/TastePanel';
+import { hasSequence } from '../lib/chords/stats.mts';
+import pStyles from '../components/progressions/Progressions.module.css';
 import { emptyForm, filterScope, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, useAuth } from '../lib/auth';
@@ -70,6 +72,7 @@ export function ProgressionsPage(): React.ReactElement {
   const [keyOverride, setKeyOverride] = useState<boolean | null>(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
+  const [tasteFilter, setTasteFilter] = useState(''); // 취향 통계 줄(묶음·이동)로 목록 거르기
 
   const listSeqRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -149,14 +152,21 @@ export function ProgressionsPage(): React.ReactElement {
 
   const source = loggedIn ? items : SEEDS;
   const inScope = useMemo(() => filterScope(source, scope), [source, scope]);
-  const shown = useMemo(() => sortProgressions(searchProgressions(inScope, query), sortBy), [inScope, query, sortBy]);
+  const tasteMatched = useMemo(() => (tasteFilter ? inScope.filter((p) => hasSequence(p, tasteFilter)) : inScope), [inScope, tasteFilter]);
+  const shown = useMemo(() => sortProgressions(searchProgressions(tasteMatched, query), sortBy), [tasteMatched, query, sortBy]);
   const counts = useMemo(
     () => ({ reference: filterScope(source, 'reference').length, analysis: filterScope(source, 'analysis').length, all: source.length }),
     [source]
   );
 
+  const pickTaste = (label: string) => {
+    setTasteFilter((cur) => (cur === label ? '' : label));
+    window.requestAnimationFrame(() => document.getElementById('progTools')?.scrollIntoView({ block: 'nearest' }));
+  };
+
   const pickScope = (s: ProgressionScope) => {
     setScope(s);
+    setTasteFilter('');
     const url = new URL(window.location.href);
     if (s === 'reference') url.searchParams.delete('scope');
     else url.searchParams.set('scope', s);
@@ -360,16 +370,26 @@ export function ProgressionsPage(): React.ReactElement {
                   ))}
                 </select>
               </label>
-              {query && (
+              {(query || tasteFilter) && (
                 <span className={styles.count} id="progSearchCount">
                   {inScope.length}개 중 {shown.length}개
                 </span>
               )}
             </div>
           )}
+          {tasteFilter && inScope.length > 0 && (
+            <div className={pStyles.tasteFilter} id="progTasteFilter" role="status">
+              <span>
+                <b>{tasteFilter}</b>{tasteFilter.includes('→') ? ' 이동' : ' 묶음'}이 들어 있는 진행만 보는 중
+              </span>
+              <button type="button" className="ghostBtn" id="progTasteFilterClear" onClick={() => setTasteFilter('')}>
+                해제
+              </button>
+            </div>
+          )}
           {!loadMsg && inScope.length > 0 && shown.length === 0 && (
             <p className="empty" id="progNoMatch">
-              "{query}"에 맞는 진행이 없어요.
+              {query ? `"${query}"에 맞는 진행이 없어요.` : '맞는 진행이 없어요.'}
             </p>
           )}
           {!loadMsg && inScope.length === 0 && (
@@ -404,7 +424,7 @@ export function ProgressionsPage(): React.ReactElement {
 
         <aside className={styles.tasteCol} aria-label="취향 코드 진행" id="progTaste">
           <h2>취향 코드 진행</h2>
-          <TastePanel list={inScope} scopeLabel={SCOPES.find(([s]) => s === scope)?.[1] || ''} />
+          <TastePanel list={inScope} scopeLabel={SCOPES.find(([s]) => s === scope)?.[1] || ''} filter={tasteFilter} onFilter={pickTaste} />
         </aside>
       </div>
 

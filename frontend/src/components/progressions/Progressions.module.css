@@ -474,3 +474,39 @@
 .tasteCount::before {
   content: '× ';
 }
+
+/* 통계 줄 → 목록 거르기 */
+.tastePickBtn {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.tastePickBtn[aria-pressed='true'] {
+  font-weight: 700;
+  text-decoration-color: var(--ink);
+}
+.tasteFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.tasteFilter b {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.tasteFilter :global(.ghostBtn) {
+  min-height: 32px;
+  font-size: 14px;
+  padding: 0 14px;
+}

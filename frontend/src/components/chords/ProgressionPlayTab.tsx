@@ -66,7 +66,7 @@ const SEMIS = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
 const Q4_IDS = new Set(CT.Q4.map((q) => q.id));
 
 export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onOpenTone }: ProgressionPlayTabProps): React.ReactElement {
-  const prog = useMemo(() => parseProgHash(hash) || { chords: [], key: '', title: '', from: '' }, [hash]);
+  const prog = useMemo(() => parseProgHash(hash) || { chords: [], key: '', title: '', from: '', note: '' }, [hash]);
 
   const [table, setTable] = useState<FormTable | null>(null);
   const [tableErr, setTableErr] = useState('');
@@ -443,8 +443,18 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
               )}
             </>
           )}
-          <p className={styles.note}>
-            연습실은 기타 지판 기준이에요. 건반 영상에서 온 진행의 원본 건반 보이싱은 코드 진행 모음의 그 행에서 노트로 이어져요.
+          <p className={styles.note} id="pp-note-hint">
+            연습실은 기타 지판 기준이에요.{' '}
+            {prog.note ? (
+              <>
+                영상에서 온 진행이라 원본 노트에 영상 속 보이싱(건반 영상이면 건반 보이싱)이 있어요.{' '}
+                <SafeLink id="pp-note-link" href={`note.html?id=${encodeURIComponent(prog.note)}`}>
+                  원본 노트에서 보이싱 보기 →
+                </SafeLink>
+              </>
+            ) : (
+              '건반 영상에서 온 진행의 원본 건반 보이싱은 코드 진행 모음의 그 행에서 노트로 이어져요.'
+            )}
           </p>
         </div>
       )}

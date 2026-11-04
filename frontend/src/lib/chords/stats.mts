@@ -1,4 +1,4 @@
-// CH-6: 취향 코드 진행 통계 + 랜덤 꺼내보기 (순수 함수, 브라우저에서 매번 계산 — 노션에 표를 두지 않는다)
+// CH-6: 취향 코드 진행 통계 + 랜덤 꺼내보기 (순수 함수, 브라우저에서 매번 계산)
 // 범위: 개발산출물/결과/CH-0_범위확정.md §1(코드별 빈도, 코드 사이 이동, 자주 나오는 진행, Mood·Genre 횟수, 키 분포),
 //       결과/CH-1b_설계.md §8(목록 GET /progressions 한 번 → 범위·통계·랜덤은 브라우저에서)
 
@@ -120,4 +120,21 @@ export function pickRandom<T extends { id: string }>(list: ReadonlyArray<T>, cur
 // 상위 n개
 export function top(list: ReadonlyArray<Counted>, n = 5): Counted[] {
   return list.slice(0, Math.max(0, n));
+}
+
+// 통계 줄(자주 나오는 진행 "I - V - vi" / 코드 이동 "I → V")이 이 진행 안에 이어서 들어 있는지 — CHORDS 목록 거르기용
+export function sequenceOf(label: string): string[] {
+  const t = clean(label);
+  if (!t) return [];
+  return (t.includes(MOVE_ARROW.trim()) ? t.split(MOVE_ARROW.trim()) : t.split(' - ')).map(clean).filter(Boolean);
+}
+
+export function hasSequence(p: TasteInput, label: string): boolean {
+  const want = sequenceOf(label);
+  if (!p || !Array.isArray(p.chords) || want.length === 0) return false;
+  const labels = p.chords.filter((c) => c && clean(c.symbol)).map(chordLabel);
+  for (let i = 0; i + want.length <= labels.length; i++) {
+    if (want.every((w, j) => labels[i + j] === w)) return true;
+  }
+  return false;
 }
