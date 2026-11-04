@@ -84,6 +84,8 @@ export function getTheme(): 'light' | 'dark' | '' {
   return v === 'light' || v === 'dark' ? v : '';
 }
 
+export const THEME_EVENT = 'ulp:themechange';
+
 export function setTheme(theme: 'light' | 'dark' | ''): void {
   raw.set('ulp:theme', theme);
   if (typeof document !== 'undefined' && document.documentElement) {
@@ -93,6 +95,8 @@ export function setTheme(theme: 'light' | 'dark' | ''): void {
       delete document.documentElement.dataset.theme;
     }
   }
+  // 한 화면에 테마 컨트롤이 둘(하단 공통 + 설정 화면 섹션)일 때 눌림 표시를 맞춘다
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(THEME_EVENT));
 }
 
 export function videoIdFrom(text: unknown): string | null {

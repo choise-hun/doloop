@@ -557,7 +557,7 @@ test('R1-S10: 노션 DB 링크를 붙여넣어도 DB ID만 저장하고, 템플�
   assert.match(src, /songsDb: notionDbIdFromInput\(ntnSongsDb\)/);
   assert.match(src, /sessionsDb: notionDbIdFromInput\(ntnSessionsDb\)/);
   assert.match(src, /notesDb: notionDbIdFromInput\(ntnNotesDb\) \|\| null/);
-  const guide = src.match(/<ol className="hint" id="ntnGuide">[\s\S]*?<\/ol>/);
+  const guide = src.match(/<ol className=[^>]* id="ntnGuide">[\s\S]*?<\/ol>/);
   assert.ok(guide, '노션 연결 안내 목록');
   assert.match(guide[0], /href=\{templateHref\}/, '안내 1단계가 공식 템플릿 링크');
   assert.equal((guide[0].match(/<li>/g) || []).length, 5);

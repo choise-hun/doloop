@@ -6,7 +6,7 @@ import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardi
 import { auth, useAuth } from '../lib/auth';
 import { apiClient, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
 import { drive } from '../lib/drive';
-import { getTheme, raw, safeUrl, setTheme } from '../lib/security';
+import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
 import styles from './SettingsPage.module.css';
 
 // 노션 DB 링크를 그대로 붙여넣어도 DB ID만 꺼낸다. ID는 마지막 경로 끝에 있고 ?v= 뒤는 보기 ID라 보지 않는다.
@@ -87,6 +87,11 @@ export function SettingsPage(): React.ReactElement {
   const [nlNotes, setNlNotes] = useState(() => raw.get('ulp:notion-notes'));
   const [nlMsg, setNlMsg] = useState('');
   const [themeVal, setThemeVal] = useState<'light' | 'dark' | ''>(() => getTheme());
+  useEffect(() => {
+    const sync = () => setThemeVal(getTheme());
+    window.addEventListener(THEME_EVENT, sync);
+    return () => window.removeEventListener(THEME_EVENT, sync);
+  }, []);
 
   const keysReqSeqRef = useRef(0);
   const syncReqSeqRef = useRef(0);
@@ -253,7 +258,7 @@ export function SettingsPage(): React.ReactElement {
           </SafeLink>
         </div>
 
-        <div id="accUser" hidden={!signedIn}>
+        <div className={styles.stack} id="accUser" hidden={!signedIn}>
           <p>
             로그인 계정: <b id="accEmail">{email}</b>{' '}
             <span id="accName" className="hint">
@@ -388,7 +393,7 @@ export function SettingsPage(): React.ReactElement {
 
           <details>
             <summary>계정 삭제 (모든 연습 기록·녹음·연동 키 영구 삭제)</summary>
-            <div className={styles.field}>
+            <div className={`${styles.stackTight} ${styles.detailsBody}`}>
               <p className="hint">
                 계정을 삭제하면 서비스에 저장된 모든 곡, 연습 기록, 녹음 오디오 파일, 외부 API 키가 즉시 삭제되며 복구할 수 없어요.
               </p>
@@ -514,7 +519,7 @@ export function SettingsPage(): React.ReactElement {
             <span className={styles.lab}>노션 백업 ZIP 파일 (Markdown &amp; CSV 내보내기 파일)</span>
             <input
               ref={fileInputRef}
-              className="inpField"
+              className={styles.fileInput}
               type="file"
               id="inpImportZip"
               accept=".zip,application/zip"
@@ -668,7 +673,7 @@ export function SettingsPage(): React.ReactElement {
               {notionStatusText}
             </span>
           </div>
-          <ol className="hint" id="ntnGuide">
+          <ol className={`hint ${styles.guide}`} id="ntnGuide">
             <li>
               <SafeLink href={templateHref} external>공식 노션 템플릿</SafeLink>을 열고 오른쪽 위 <b>복제</b>를 눌러 내 노션에 가져와요.
             </li>
@@ -849,7 +854,7 @@ export function SettingsPage(): React.ReactElement {
             {ntnKeyMsg.text}
           </p>
 
-          <div id="notionSyncPanel">
+          <div className={styles.stackTight} id="notionSyncPanel">
             <p className="hint" id="syncStatusText">
               {formatSyncText()}
             </p>
