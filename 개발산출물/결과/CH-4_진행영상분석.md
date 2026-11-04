@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-04 (mac)
 - 입력: `결과/CH-1b_설계.md` §3-5·§4·§9, `결과/CH-3_진행API.md` §2
-- 상태: **완료** — `./gradlew test` 219개 통과(216 + 새 3), 로컬 DB curl(401·412·400) 확인, PR #63 CI는 진행 파일 §2 CH-4 행에 기록
+- 상태: **완료** — `./gradlew test` 219개 통과(216 + 새 3), 로컬 DB curl(401·412·400) 확인, **Draft PR #63 CI 전부 통과**(Test Node 22·24, Kotlin JDK 21, E2E spa·legacy, Docker build & smoke — run 41833656984, 커밋 `c5d4330`)
 - 원격 DB: **건드리지 않음**(로컬 postgres 컨테이너 `ulp-ch4-pg`에 V3 적용 → 확인 뒤 삭제)
 - 실제 영상 확인: **못 함** — 로컬에서 키를 저장할 때 서버가 Google에 키를 확인한다(`PROVIDER_KEY_INVALID`). 진짜 Gemini 키가 있어야 한다. 202 → 실행 → 노트 + 진행 행 경로는 테스트 n17·n18(가짜 Gemini)이 확인. 실제 영상은 CH-5 화면이 생긴 뒤 또는 CH-8 통합 때 본다(§5)
 
