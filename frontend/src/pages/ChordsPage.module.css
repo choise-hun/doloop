@@ -558,3 +558,27 @@
   }
 }
 
+
+/* CH-5b: 8 · 진행 연주 */
+.ppInput {
+  flex: 1 1 220px;
+  width: auto;
+}
+.ppBoxes {
+  justify-content: flex-start;
+}
+.ppSeed {
+  text-decoration: none;
+}
+.ppBoxes figcaption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+}
+.ppBoxes figcaption span,
+.ppBoxes figcaption small {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}

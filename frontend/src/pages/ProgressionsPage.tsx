@@ -10,8 +10,8 @@ import { ProgressionRow } from '../components/progressions/ProgressionRow';
 import { PastePanel } from '../components/progressions/PastePanel';
 import { VideoAnalyzeForm } from '../components/progressions/VideoAnalyzeForm';
 import { ReadingGuide } from '../components/progressions/ReadingGuide';
-import { emptyForm, filterScope, playHref, seedToDto } from '../components/progressions/model.mts';
-import type { ProgressionForm } from '../components/progressions/model.mts';
+import { emptyForm, filterScope, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
+import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
 import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '../lib/progressions';
@@ -38,9 +38,9 @@ function initialScope(): ProgressionScope {
   return q === 'analysis' || q === 'all' || q === 'reference' ? q : 'reference';
 }
 
-// 연습실에서 돌아올 때(#p-<id>) 또는 ?id= 로 그 행을 펼친다
+// 연습실에서 돌아올 때(#p-<id>) 또는 ?id= 로 그 행을 펼친다. id는 UUID 또는 시드 id(ref-seed-1)
 function initialFocusId(): string {
-  const h = /^#p-([0-9a-f-]{36})$/i.exec(window.location.hash);
+  const h = /^#p-([A-Za-z0-9_-]{1,64})$/.exec(window.location.hash);
   if (h) return h[1];
   return new URLSearchParams(window.location.search).get('id') || '';
 }
@@ -67,6 +67,8 @@ export function ProgressionsPage(): React.ReactElement {
   const [jobs, setJobs] = useState<AnalysisJobDto[]>([]);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [keyOverride, setKeyOverride] = useState<boolean | null>(null);
+  const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortBy>('recent');
 
   const listSeqRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +147,8 @@ export function ProgressionsPage(): React.ReactElement {
   }, [activeUid, loadList, refreshJobs]);
 
   const source = loggedIn ? items : SEEDS;
-  const shown = useMemo(() => filterScope(source, scope), [source, scope]);
+  const inScope = useMemo(() => filterScope(source, scope), [source, scope]);
+  const shown = useMemo(() => sortProgressions(searchProgressions(inScope, query), sortBy), [inScope, query, sortBy]);
   const counts = useMemo(
     () => ({ reference: filterScope(source, 'reference').length, analysis: filterScope(source, 'analysis').length, all: source.length }),
     [source]
@@ -334,7 +337,41 @@ export function ProgressionsPage(): React.ReactElement {
               {loadMsg}
             </p>
           )}
-          {!loadMsg && shown.length === 0 && (
+          {inScope.length > 0 && (
+            <div className={styles.listTools} id="progTools">
+              <input
+                type="search"
+                id="progSearch"
+                className={styles.search}
+                placeholder="곡명·아티스트·키 검색"
+                aria-label="진행 검색"
+                value={query}
+                maxLength={100}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <label className={styles.sortLabel}>
+                정렬
+                <select id="progSort" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+                  {(Object.keys(SORT_LABEL) as SortBy[]).map((k) => (
+                    <option key={k} value={k}>
+                      {SORT_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {query && (
+                <span className={styles.count} id="progSearchCount">
+                  {inScope.length}개 중 {shown.length}개
+                </span>
+              )}
+            </div>
+          )}
+          {!loadMsg && inScope.length > 0 && shown.length === 0 && (
+            <p className="empty" id="progNoMatch">
+              "{query}"에 맞는 진행이 없어요.
+            </p>
+          )}
+          {!loadMsg && inScope.length === 0 && (
             <div className={styles.empty} id="progEmpty">
               {scope === 'analysis' ? (
                 <p>

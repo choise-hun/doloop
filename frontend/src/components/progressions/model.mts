@@ -3,7 +3,7 @@
 
 import { duplicatePitches, parseChord } from '../../lib/chords/symbol.mts';
 import type { ChordFailReason } from '../../lib/chords/symbol.mts';
-import { KEYS, romanize } from '../../lib/chords/roman.mts';
+import { KEYS, keyName, parseKey, romanize } from '../../lib/chords/roman.mts';
 import { guessKeys } from '../../lib/chords/keyGuess.mts';
 import type { KeyGuess } from '../../lib/chords/keyGuess.mts';
 import type { ProgressionChordDto, ProgressionDto, ProgressionInput, ProgressionScope } from '../../lib/apiClient';
@@ -322,4 +322,105 @@ export function seedToDto(s: SeedItem): ProgressionDto {
     createdAt: '',
     updatedAt: '',
   };
+}
+
+// ── 목록 검색·정렬 (CH-5b) ─────────────────────────────
+
+export type SortBy = 'recent' | 'title' | 'key';
+export const SORT_LABEL: Record<SortBy, string> = { recent: '최근 추가', title: '곡명', key: '키' };
+
+type Listed = { title?: string; artist?: string; channel?: string; key?: string | null };
+
+// 곡명·아티스트(채널)·키에 검색어가 들어 있는 행. 공백만 다르면 같게 본다("fmajor" ~ "F Major")
+export function searchProgressions<T extends Listed>(list: T[], query: string): T[] {
+  const q = String(query ?? '').toLowerCase().replace(/\s+/g, '');
+  if (!q) return list.slice();
+  return list.filter((p) =>
+    [p.title, p.artist, p.channel, p.key].some((v) => String(v ?? '').toLowerCase().replace(/\s+/g, '').includes(q))
+  );
+}
+
+const titleCmp = (a: Listed, b: Listed): number => {
+  const ta = (a.title || '').trim();
+  const tb = (b.title || '').trim();
+  if (!ta || !tb) return ta ? -1 : tb ? 1 : 0; // 제목 없는 행은 뒤로
+  return ta.localeCompare(tb, 'ko', { sensitivity: 'base', numeric: true });
+};
+
+// recent = 받은 순서 그대로(서버·시드 순서). key = 노션 Scale 24개 순서(C Major, C min, Db Major …), 키 없는 행은 뒤, 같은 키는 곡명 순
+export function sortProgressions<T extends Listed>(list: T[], by: SortBy): T[] {
+  const out = list.slice();
+  if (by === 'title') return out.sort(titleCmp);
+  if (by === 'key') {
+    const rank = (p: Listed): number => {
+      const i = p.key ? KEYS.indexOf(p.key) : -1;
+      return i < 0 ? KEYS.length : i;
+    };
+    return out.sort((a, b) => rank(a) - rank(b) || titleCmp(a, b));
+  }
+  return out;
+}
+
+// ── 연습실 진행 연주 탭 (CH-5b) ─────────────────────────
+
+export type ProgHash = { chords: string[]; key: string; title: string; from: string };
+
+// "#prog" 또는 "#prog?…" (연습실이 진행 연주 탭을 여는 해시)
+export function isProgHash(hash: string): boolean {
+  return /^#?prog(?:\?|$)/.test(String(hash ?? ''));
+}
+
+// playHref의 역함수. 키는 노션 Scale 24개 표기만, 진행 id는 영숫자·_-(UUID·시드 id), 코드는 64개·제목은 300자까지
+export function parseProgHash(hash: string): ProgHash | null {
+  const h = String(hash ?? '');
+  if (!isProgHash(h)) return null;
+  const qi = h.indexOf('?');
+  const qs = new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : '');
+  const chords = (qs.get('c') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, MAX_CHORDS);
+  const k = (qs.get('k') || '').trim();
+  const from = (qs.get('from') || '').trim();
+  return {
+    chords,
+    key: KEYS.includes(k) ? k : '',
+    title: (qs.get('t') || '').trim().slice(0, 300),
+    from: /^[A-Za-z0-9_-]{1,64}$/.test(from) ? from : '',
+  };
+}
+
+// 진행 연주 탭 → 코드 진행 모음의 그 행 (CH-5 §3: 범위가 맞아야 보이므로 scope=all)
+export function backHref(from: string): string {
+  return from && /^[A-Za-z0-9_-]{1,64}$/.test(from) ? `progressions.html?scope=all#p-${from}` : 'progressions.html';
+}
+
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+const SHARP_KEYS = ['G Major', 'D Major', 'A Major', 'E Major', 'B Major', 'E min', 'B min'];
+
+const mod12 = (n: number): number => ((n % 12) + 12) % 12;
+
+// 키를 반음 n개 옮긴다(노션 Scale 표기). 키가 없거나 못 읽으면 ''
+export function transposeKey(key: string, semis: number): string {
+  const k = parseKey(key);
+  return k ? keyName(k.tonic + semis, k.minor) : '';
+}
+
+// 코드 심볼을 반음 n개 옮긴다. 근음·슬래시 베이스만 바꾸고 나머지 표기는 그대로(못 읽는 코드는 그대로).
+// 철자: 옮긴 키가 # 키면 #, 그 밖(키 없음 포함)은 b
+export function transposeSymbol(symbol: string, semis: number, targetKey = ''): string {
+  const c = parseChord(symbol);
+  if (!c.ok || !mod12(semis)) return symbol;
+  const names = targetKey.includes('#') || SHARP_KEYS.includes(targetKey) ? SHARP_NAMES : FLAT_NAMES;
+  const s = String(symbol).trim();
+  const rm = /^[A-G](?:[#b♯♭])?/.exec(s);
+  if (!rm) return symbol;
+  let rest = s.slice(rm[0].length);
+  if (c.bass !== undefined) {
+    const slash = rest.lastIndexOf('/');
+    rest = rest.slice(0, slash) + '/' + names[mod12(c.bass + semis)];
+  }
+  return names[mod12(c.root + semis)] + rest;
 }
