@@ -47,7 +47,9 @@ class DatabaseMigrationAndIntegrityTest {
             "notion_sync",
             "notion_links",
             "sync_outbox",
-            "storage_trash"
+            "storage_trash",
+            "categories",
+            "song_categories"
         )
 
         @JvmStatic
@@ -84,10 +86,10 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init migration applies cleanly and creates all 12 tables`() {
-        assertEquals("1", targetSchemaVersion, "Flyway target schema version should be 1")
-        assertTrue(migrationsExecutedCount >= 1, "At least V1__init.sql migration must have executed")
-        assertEquals(12, ALL_TABLES.size, "Exposed ALL_TABLES should contain 12 tables")
+    fun `Flyway V1__init and V2__categories migrations apply cleanly and create all 14 tables`() {
+        assertEquals("2", targetSchemaVersion, "Flyway target schema version should be 2")
+        assertTrue(migrationsExecutedCount >= 2, "V1__init.sql and V2__categories.sql migrations must have executed")
+        assertEquals(14, ALL_TABLES.size, "Exposed ALL_TABLES should contain 14 tables")
 
         val actualTables = mutableListOf<String>()
         dataSource.connection.use { conn ->
@@ -110,7 +112,7 @@ class DatabaseMigrationAndIntegrityTest {
         }
 
         println("[Flyway] Created tables (${actualTables.size}): ${actualTables.joinToString(", ")}")
-        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 12 domain tables must exist in PostgreSQL")
+        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 14 domain tables must exist in PostgreSQL")
 
         // Verify Exposed table definitions query cleanly against migrated schema
         transaction(db) {
@@ -344,5 +346,67 @@ class DatabaseMigrationAndIntegrityTest {
             assertEquals(1L, StorageTrashTable.selectAll().count())
         }
     }
-}
 
+    @Test
+    fun `categories block duplicate names and song_categories block cross-user links`() {
+        val userA = UUID.randomUUID()
+        val userB = UUID.randomUUID()
+        val songA = UUID.randomUUID()
+        val categoryA = UUID.randomUUID()
+        val categoryB = UUID.randomUUID()
+
+        transaction(db) {
+            UsersTable.insert { it[id] = userA; it[email] = "catA@example.com" }
+            UsersTable.insert { it[id] = userB; it[email] = "catB@example.com" }
+            SongsTable.insert {
+                it[id] = songA
+                it[userId] = userA
+                it[title] = "User A Song"
+                it[videoId] = "dQw4w9WgXcQ"
+            }
+            CategoriesTable.insert { it[id] = categoryA; it[userId] = userA; it[name] = "Jazz" }
+            CategoriesTable.insert { it[id] = categoryB; it[userId] = userB; it[name] = "Jazz" }
+            // 정상: 내 곡 + 내 분류
+            SongCategoriesTable.insert {
+                it[userId] = userA
+                it[songId] = songA
+                it[categoryId] = categoryA
+            }
+        }
+
+        // 같은 사용자 안에서 대소문자만 다른 이름은 고유 인덱스 위반 (23505)
+        val dupNameEx = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                CategoriesTable.insert { it[userId] = userA; it[name] = "JAZZ" }
+            }
+        }
+        assertEquals("23505", dupNameEx.sqlState)
+
+        // 공백뿐인 이름은 CHECK 위반 (23514)
+        val blankNameEx = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                CategoriesTable.insert { it[userId] = userA; it[name] = "   " }
+            }
+        }
+        assertEquals("23514", blankNameEx.sqlState)
+
+        // 내 곡에 남의 분류 연결은 복합 FK (user_id, category_id) 위반 (23503)
+        val crossUserEx = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                SongCategoriesTable.insert {
+                    it[userId] = userA
+                    it[songId] = songA
+                    it[categoryId] = categoryB
+                }
+            }
+        }
+        assertEquals("23503", crossUserEx.sqlState)
+
+        // 분류 삭제 시 연결만 CASCADE로 지워지고 곡은 남는다
+        transaction(db) {
+            CategoriesTable.deleteWhere { id eq categoryA }
+            assertEquals(0L, SongCategoriesTable.selectAll().count())
+            assertEquals(1L, SongsTable.selectAll().where { SongsTable.id eq songA }.count())
+        }
+    }
+}

@@ -15,8 +15,10 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import ulevelp.api.ApiException
+import ulevelp.api.InvalidInputException
 import ulevelp.api.NotFoundException
 import ulevelp.db.*
+import ulevelp.service.CategoryService.Companion.categoryIdsBySong
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
@@ -39,6 +41,7 @@ data class SongDto(
     val rate: Double,
     val lastDate: String?,
     val memo: String,
+    val categoryIds: List<String>,
     val totalSeconds: Long,
     val resumeUrl: String
 )
@@ -92,7 +95,9 @@ data class CreateSongResult(
 data class UpdateSongInput(
     val statusCode: String?,
     val memo: String?,
-    val title: String?
+    val title: String?,
+    // null이면 그대로, 값이 있으면 통째로 교체(빈 목록 = 전부 해제)
+    val categoryIds: List<UUID>? = null
 )
 
 data class LocalSongItem(
@@ -140,7 +145,8 @@ class SongService(
             .singleOrNull()
             ?.get(sumExpr)?.toLong() ?: 0L
 
-        return rowToDto(row, totalSec)
+        val categoryIds = categoryIdsBySong(userId, listOf(actualSongId))[actualSongId].orEmpty()
+        return rowToDto(row, totalSec, categoryIds)
     }
 
     suspend fun list(userId: UUID, statusCode: String?): List<SongDto> {
@@ -159,6 +165,8 @@ class SongService(
                 .groupBy(SessionsTable.songId)
                 .associate { it[SessionsTable.songId] to (it[sumExpr]?.toLong() ?: 0L) }
 
+            val categoryIdsMap = categoryIdsBySong(userId)
+
             val statusOrder = mapOf("practicing" to 0, "paused" to 1, "done" to 2)
 
             songRows.sortedWith(
@@ -168,7 +176,7 @@ class SongService(
             ).map { row ->
                 val songId = row[SongsTable.id]
                 val totalSec = totalSecondsMap[songId] ?: 0L
-                rowToDto(row, totalSec)
+                rowToDto(row, totalSec, categoryIdsMap[songId].orEmpty())
             }
         }
     }
@@ -193,7 +201,7 @@ class SongService(
                 .toList()
 
             val totalSec = sessionRows.sumOf { it[SessionsTable.seconds].toLong() }
-            val songDto = rowToDto(songRow, totalSec)
+            val songDto = rowToDto(songRow, totalSec, categoryIdsBySong(userId, listOf(songId))[songId].orEmpty())
 
             val sessions = sessionRows.map { row ->
                 val sec = row[SessionsTable.seconds]
@@ -264,7 +272,7 @@ class SongService(
             if (insertedCount == 1) {
                 OutboxRepository.enqueueIfSyncEnabled(userId, "song", newId, "upsert")
                 val row = SongsTable.selectAll().where { SongsTable.id eq newId }.single()
-                CreateSongResult(song = rowToDto(row, 0L), created = true)
+                CreateSongResult(song = rowToDto(row, 0L, emptyList()), created = true)
             } else {
                 val song = loadSongDto(userId = userId, videoId = input.videoId)
                     ?: error("Failed to load existing song after insertIgnore collision")
@@ -276,16 +284,30 @@ class SongService(
     suspend fun update(userId: UUID, songId: UUID, input: UpdateSongInput): SongDto {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
-            val updatedCount = SongsTable.update({ (SongsTable.id eq songId) and (SongsTable.userId eq userId) }) {
-                if (input.statusCode != null) it[status] = input.statusCode
-                if (input.memo != null) it[memo] = input.memo
-                if (input.title != null) it[title] = input.title
+            val songFieldsChanged = input.statusCode != null || input.memo != null || input.title != null
+            val found = if (songFieldsChanged) {
+                SongsTable.update({ (SongsTable.id eq songId) and (SongsTable.userId eq userId) }) {
+                    if (input.statusCode != null) it[status] = input.statusCode
+                    if (input.memo != null) it[memo] = input.memo
+                    if (input.title != null) it[title] = input.title
+                } > 0
+            } else {
+                SongsTable.selectAll()
+                    .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                    .count() > 0L
             }
-            if (updatedCount == 0) {
+            if (!found) {
                 throw NotFoundException("곡을 찾을 수 없습니다.")
             }
 
-            OutboxRepository.enqueueIfSyncEnabled(userId, "song", songId, "upsert")
+            if (input.categoryIds != null) {
+                replaceCategories(userId, songId, input.categoryIds)
+            }
+
+            // 분류는 노션으로 보내지 않으므로 분류만 바뀐 경우엔 적재하지 않는다
+            if (songFieldsChanged) {
+                OutboxRepository.enqueueIfSyncEnabled(userId, "song", songId, "upsert")
+            }
 
             loadSongDto(userId = userId, songId = songId)
                 ?: throw NotFoundException("곡을 찾을 수 없습니다.")
@@ -428,7 +450,24 @@ class SongService(
         }
     }
 
-    private fun rowToDto(row: ResultRow, totalSeconds: Long): SongDto {
+    private fun Transaction.replaceCategories(userId: UUID, songId: UUID, categoryIds: List<UUID>) {
+        if (categoryIds.isNotEmpty()) {
+            val ownCount = CategoriesTable.selectAll()
+                .where { (CategoriesTable.userId eq userId) and (CategoriesTable.id inList categoryIds) }
+                .count()
+            if (ownCount != categoryIds.size.toLong()) {
+                throw InvalidInputException("categoryIds에 내 분류가 아닌 id가 있습니다.")
+            }
+        }
+        SongCategoriesTable.deleteWhere { (SongCategoriesTable.userId eq userId) and (SongCategoriesTable.songId eq songId) }
+        SongCategoriesTable.batchInsert(categoryIds) { categoryId ->
+            this[SongCategoriesTable.userId] = userId
+            this[SongCategoriesTable.songId] = songId
+            this[SongCategoriesTable.categoryId] = categoryId
+        }
+    }
+
+    private fun rowToDto(row: ResultRow, totalSeconds: Long, categoryIds: List<String>): SongDto {
         val statusCode = row[SongsTable.status]
         val statusLabel = STATUS_LABELS[statusCode] ?: statusCode
         val pos = row[SongsTable.pos]
@@ -450,6 +489,7 @@ class SongService(
             rate = rate.toDouble(),
             lastDate = row[SongsTable.lastDate]?.toString(),
             memo = row[SongsTable.memo],
+            categoryIds = categoryIds,
             totalSeconds = totalSeconds,
             resumeUrl = resumeUrl(publicAppUrl, videoId, pos, a, b, rate)
         )

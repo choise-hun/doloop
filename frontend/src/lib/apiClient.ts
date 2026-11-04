@@ -14,8 +14,17 @@ export interface SongDto {
   rate: number;
   lastDate: string | null;
   memo: string;
+  categoryIds: string[];
   totalSeconds: number;
   resumeUrl: string;
+}
+
+export interface CategoryDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+  onHome: boolean;
+  songCount: number;
 }
 
 export interface TakeDto {
@@ -265,7 +274,7 @@ async function getSong(songId: string): Promise<SongDetailResponse> {
 
 async function updateSong(
   songId: string,
-  patch: { status?: string; memo?: string; title?: string }
+  patch: { status?: string; memo?: string; title?: string; categoryIds?: string[] }
 ): Promise<SongDto | null> {
   requireLogin();
   const body: Record<string, unknown> = {};
@@ -273,6 +282,7 @@ async function updateSong(
     if (patch.status !== undefined) body.status = patch.status;
     if (patch.memo !== undefined) body.memo = patch.memo;
     if (patch.title !== undefined) body.title = patch.title;
+    if (patch.categoryIds !== undefined) body.categoryIds = patch.categoryIds;
   }
   const path = '/api/v1/songs/' + encodeURIComponent(songId);
   const r = await getAuthRef().apiFetch(path, {
@@ -280,6 +290,58 @@ async function updateSong(
     body: JSON.stringify(body),
   });
   return r ? r.song : null;
+}
+
+// 곡 분류 (docs/03-api-spec.md 3.7). 응답이 비거나 모양이 다르면 빈 목록
+function categoryList(r: any): CategoryDto[] {
+  return r && Array.isArray(r.categories) ? r.categories : [];
+}
+
+async function listCategories(): Promise<CategoryDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/categories');
+  return categoryList(r);
+}
+
+async function createCategory(name: string): Promise<CategoryDto | null> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+  return r ? r.category : null;
+}
+
+async function updateCategory(
+  categoryId: string,
+  patch: { name?: string; onHome?: boolean }
+): Promise<CategoryDto | null> {
+  requireLogin();
+  const body: Record<string, unknown> = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.onHome !== undefined) body.onHome = patch.onHome;
+  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(categoryId), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return r ? r.category : null;
+}
+
+async function reorderCategories(ids: string[]): Promise<CategoryDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/categories/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids }),
+  });
+  return categoryList(r);
+}
+
+async function removeCategory(categoryId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(categoryId), {
+    method: 'DELETE',
+  });
+  return { ok: true };
 }
 
 async function removeSong(songId: string): Promise<{ ok: boolean }> {
@@ -900,6 +962,13 @@ export const apiClient = {
     get: getSong,
     update: updateSong,
     remove: removeSong,
+  },
+  categories: {
+    list: listCategories,
+    create: createCategory,
+    update: updateCategory,
+    reorder: reorderCategories,
+    remove: removeCategory,
   },
   sessions: {
     list: listSessions,

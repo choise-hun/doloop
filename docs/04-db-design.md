@@ -24,10 +24,13 @@ erDiagram
     users ||--o| notion_sync : "1:1"
     users ||--o{ notion_links : "1:N"
     users ||--o{ sync_outbox : "1:N"
+    users ||--o{ categories : "1:N"
 
     songs ||--o{ sessions : "1:N"
     songs ||--o{ takes : "1:N"
     sessions ||--o{ takes : "1:N"
+    songs ||--o{ song_categories : "N:M"
+    categories ||--o{ song_categories : "N:M"
     notes ||--o{ analysis_jobs : "1:N (note_id)"
 
     users {
@@ -322,6 +325,35 @@ CREATE TABLE storage_trash (
   last_error   TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+```
+
+### 2.1 사용자 정의 곡 분류 (`V2__categories.sql`)
+홈 분류 바로가기·플레이어 분류 폴더용. 곡 하나에 분류 여러 개(N:M), 기본 분류 없이 시작, 홈 표시 여부·순서도 이 테이블에 둔다. **노션으로 보내지 않으며 outbox를 쓰지 않는다.** 한도(사용자당 50개, 곡당 10개, 이름 20자)는 서버(`CategoryService`)가 검사한다. 설계 근거 `개발산출물/결과/G-3c_분류설계.md`.
+```sql
+-- categories: 사용자 정의 곡 분류 (홈 바로가기·플레이어 분류 폴더)
+CREATE TABLE categories (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 20),
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  on_home     BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, id)             -- song_categories 복합 FK 대상 (다른 사용자 분류 참조 차단)
+);
+CREATE UNIQUE INDEX categories_user_name_uq ON categories (user_id, lower(name));
+CREATE TRIGGER categories_updated BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- song_categories: 곡 ↔ 분류 (N:M). 복합 FK로 다른 사용자의 곡·분류 연결 차단
+CREATE TABLE song_categories (
+  user_id     UUID NOT NULL,
+  song_id     UUID NOT NULL,
+  category_id UUID NOT NULL,
+  PRIMARY KEY (song_id, category_id),
+  FOREIGN KEY (user_id, song_id) REFERENCES songs (user_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id, category_id) REFERENCES categories (user_id, id) ON DELETE CASCADE
+);
+CREATE INDEX song_categories_category_idx ON song_categories (category_id);
 ```
 
 ---
