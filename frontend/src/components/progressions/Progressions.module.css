@@ -423,3 +423,54 @@
   margin: 0;
   color: var(--muted);
 }
+
+/* CH-6: 취향 코드 진행 (CHORDS 오른쪽) */
+.tasteMeta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.tastePick {
+  border: 1px solid var(--line);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.tasteBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tasteBlock h3 {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.tasteBlock :global(.hint) {
+  margin: 0;
+}
+.tasteList {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+.tasteList li {
+  overflow-wrap: anywhere;
+}
+.tasteLabel {
+  font-family: var(--font-mono);
+}
+.tasteCount {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.tasteCount::before {
+  content: '× ';
+}

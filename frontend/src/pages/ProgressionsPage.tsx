@@ -10,6 +10,7 @@ import { ProgressionRow } from '../components/progressions/ProgressionRow';
 import { PastePanel } from '../components/progressions/PastePanel';
 import { VideoAnalyzeForm } from '../components/progressions/VideoAnalyzeForm';
 import { ReadingGuide } from '../components/progressions/ReadingGuide';
+import { TastePanel } from '../components/progressions/TastePanel';
 import { emptyForm, filterScope, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, useAuth } from '../lib/auth';
@@ -403,8 +404,7 @@ export function ProgressionsPage(): React.ReactElement {
 
         <aside className={styles.tasteCol} aria-label="취향 코드 진행" id="progTaste">
           <h2>취향 코드 진행</h2>
-          {/* TODO(stub): CH-6 — 자주 나오는 진행 Top 5, 코드 빈도·이동, Mood·Genre·키 분포, 랜덤 꺼내보기 (stats.mts) */}
-          <p className="hint">모은 진행이 쌓이면 자주 쓰는 진행·코드 이동·키 분포와 랜덤 꺼내보기가 여기에 생겨요. (준비 중)</p>
+          <TastePanel list={inScope} scopeLabel={SCOPES.find(([s]) => s === scope)?.[1] || ''} />
         </aside>
       </div>
 

@@ -1,6 +1,5 @@
 // frontend/src/lib/progressions.ts
-import { json, raw, videoIdFrom } from './security';
-import type { NoteDetailDto, NoteSummaryDto } from './apiClient';
+import { raw, videoIdFrom } from './security';
 
 export type ProgressionCategory = 'REFERENCE' | 'ARCHIVE';
 
@@ -307,68 +306,6 @@ export function buildPracticeResumeHref(song: {
     params.set('r', String(song.rate));
   }
   return 'practice.html?' + params.toString();
-}
-
-/** 현재 인덱스와 다른 다음 인덱스를 결정론적/난수로 반환한다 */
-export function pickNextIndex(currentIndex: number, length: number, randFn: () => number = Math.random): number {
-  if (length <= 1) return 0;
-  const rawPick = Math.floor(randFn() * (length - 1));
-  const clamped = Math.max(0, Math.min(length - 2, rawPick));
-  return clamped >= currentIndex ? clamped + 1 : clamped;
-}
-
-/** 노트 상세/요약 목록 및 로컬 캐시에서 REFERENCE / ARCHIVE 진행 목록을 구성한다 */
-export function extractProgressionsFromNotes(
-  notes: ReadonlyArray<NoteSummaryDto | NoteDetailDto>
-): { reference: ProgressionItem[]; archive: ProgressionItem[] } {
-  const customRef: ProgressionItem[] = [];
-  const customArch: ProgressionItem[] = [];
-
-  const stored = json.get<ProgressionItem[]>('ulp:progressions', []);
-  if (Array.isArray(stored)) {
-    for (const item of stored) {
-      if (!item || typeof item.chordsText !== 'string' || !item.chordsText.trim()) continue;
-      if (item.category === 'REFERENCE') customRef.push(item);
-      else if (item.category === 'ARCHIVE') customArch.push(item);
-    }
-  }
-
-  for (const n of notes || []) {
-    if (!n || !n.id) continue;
-    const maybeDetail = n as NoteDetailDto;
-    const progs =
-      maybeDetail.analysis &&
-      maybeDetail.analysis.harmony &&
-      Array.isArray(maybeDetail.analysis.harmony.progressions)
-        ? maybeDetail.analysis.harmony.progressions
-        : [];
-
-    if (progs.length > 0) {
-      progs.forEach((p: any, idx: number) => {
-        const chords = Array.isArray(p?.chords)
-          ? p.chords.map((c: any) => String(c?.symbol || '').trim()).filter(Boolean)
-          : [];
-        if (chords.length >= 2) {
-          const item: ProgressionItem = {
-            id: `note-${n.id}-${idx}`,
-            category: Array.isArray(n.tags) && n.tags.includes('편곡') ? 'REFERENCE' : 'ARCHIVE',
-            chordsText: chords.join(' - '),
-            title: String(p.name || n.title || '화성 노트 진행'),
-            keyLabel: String(p.key || '분석 노트'),
-            sourceType: 'AI',
-            href: 'note.html?id=' + encodeURIComponent(n.id),
-          };
-          if (item.category === 'REFERENCE') customRef.push(item);
-          else customArch.push(item);
-        }
-      });
-    }
-  }
-
-  return {
-    reference: customRef.length > 0 ? [...customRef, ...DEFAULT_REFERENCE_PROGRESSIONS] : [...DEFAULT_REFERENCE_PROGRESSIONS],
-    archive: customArch.length > 0 ? [...customArch, ...DEFAULT_ARCHIVE_PROGRESSIONS] : [...DEFAULT_ARCHIVE_PROGRESSIONS],
-  };
 }
 
 export function getLastChordTab(): string {
