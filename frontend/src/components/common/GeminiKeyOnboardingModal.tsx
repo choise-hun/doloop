@@ -5,7 +5,7 @@ import { SafeLink } from './SafeLink';
 import styles from './GeminiKeyOnboardingModal.module.css';
 
 export const GEMINI_STUDIO_URL = 'https://aistudio.google.com/app/apikey';
-export const GEMINI_KEY_REGEX = /^AIza[0-9A-Za-z\-_]{35}$/;
+export const GEMINI_KEY_REGEX = /^(AIza[0-9A-Za-z\-_]{35}|AQ\.[0-9A-Za-z\-_]{30,120})$/;
 
 export interface GeminiKeyValidationResult {
   valid: boolean;
@@ -14,7 +14,7 @@ export interface GeminiKeyValidationResult {
   hint: string;
 }
 
-/** Gemini API 키 문자열을 trim()하고 39자리 형식(^AIza[0-9A-Za-z-_]{35}$)을 실시간 검사한다 */
+/** Gemini API 키 문자열을 trim()하고 형식(AIza+35자 또는 AQ.+30~120자)을 실시간 검사한다 */
 export function validateGeminiKeyFormat(rawInput: string | null | undefined): GeminiKeyValidationResult {
   const trimmed = String(rawInput ?? '').trim();
   if (!trimmed) {
@@ -22,7 +22,7 @@ export function validateGeminiKeyFormat(rawInput: string | null | undefined): Ge
       valid: false,
       trimmed: '',
       status: 'idle',
-      hint: 'AIza로 시작하는 39자리 API 키를 붙여넣어 주세요.',
+      hint: 'AIza 또는 AQ.로 시작하는 API 키를 붙여넣어 주세요.',
     };
   }
   if (GEMINI_KEY_REGEX.test(trimmed)) {
@@ -30,14 +30,14 @@ export function validateGeminiKeyFormat(rawInput: string | null | undefined): Ge
       valid: true,
       trimmed,
       status: 'ok',
-      hint: '✓ 형식이 올바릅니다 (39자)',
+      hint: `✓ 형식이 올바릅니다 (${trimmed.length}자)`,
     };
   }
   return {
     valid: false,
     trimmed,
     status: 'err',
-    hint: `AIza로 시작하는 39자리 키 전체를 복사해 주세요 (현재 ${trimmed.length}자)`,
+    hint: `AIza 또는 AQ.로 시작하는 키 전체를 복사해 주세요 (현재 ${trimmed.length}자)`,
   };
 }
 

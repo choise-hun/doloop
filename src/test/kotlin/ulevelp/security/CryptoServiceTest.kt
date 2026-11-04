@@ -150,6 +150,8 @@ class CryptoServiceTest {
         // Valid Gemini API keys (AIza + 35 chars = 39 chars)
         assertTrue(CryptoService.isValidGeminiKey("AIzaSyA1234567890abcdefghijklmnopqrstuv"))
         assertTrue(CryptoService.isValidGeminiKey("AIzaSy_1234567890-abcdefghijklmnopqrstu"))
+        // 신형 AQ. 키 (AQ. + 50자 = 53자)
+        assertTrue(CryptoService.isValidGeminiKey("AQ." + "Ab1_-".repeat(10)))
 
         // Invalid Gemini API keys
         val invalidGeminiKeys = listOf(
@@ -157,7 +159,11 @@ class CryptoServiceTest {
             "AIzaSyTooShort12345",
             "AIzaSyTooLong1234567890abcdefghijklmnopqrstuvwx",
             "sk-1234567890abcdefghijklmnopqrstuvwx123456",
-            "AIzaSyA1234567890abcdefghijklmnopqrst!@"
+            "AIzaSyA1234567890abcdefghijklmnopqrst!@",
+            "AQ.short123",
+            "AQ." + "a".repeat(121),
+            "AQ." + "Ab1_-".repeat(9) + "!",
+            "AQx" + "Ab1_-".repeat(10)
         )
         for (badKey in invalidGeminiKeys) {
             assertFalse(CryptoService.isValidGeminiKey(badKey), "Should reject Gemini key: $badKey")
