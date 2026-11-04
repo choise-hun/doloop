@@ -581,8 +581,8 @@
 ```
 
 ### 8.3 학습 노트 목록·상세 조회 및 수정·삭제
-- **`GET /api/v1/notes`**: 내 학습 노트 요약 목록 조회 (`?tag=` 선택 필터: `화성`, `사운드 디자인`, `DAW/MIDI`, `리듬`, `편곡`, `믹싱`, `TAB` 7종 지원). **Response (`200 OK`):** `{ "notes": [ NoteSummaryDto, ... ] }` (`NoteSummaryDto`는 `NoteDetailDto`에서 `analysis`와 `diagramsSvg`를 뺀 14개 필드).
-- **`GET /api/v1/notes/{noteId}`**: 노트 상세 조회(`FR-NOTE-3`). `analysis` JSON 원본과 함께 `harmony.progressions` 인덱스별 렌더링된 SVG 문자열 배열(`diagramsSvg`)을 포함한 `NoteDetailDto`(16개 필드)를 `{ "note": { ... } }`로 반환합니다.
+- **`GET /api/v1/notes`**: 내 학습 노트 요약 목록 조회 (`?tag=` 선택 필터: `화성`, `사운드 디자인`, `DAW/MIDI`, `리듬`, `편곡`, `믹싱`, `TAB` 7종 지원). **Response (`200 OK`):** `{ "notes": [ NoteSummaryDto, ... ] }` (`NoteSummaryDto`는 `NoteDetailDto`에서 `analysis`와 `diagramsSvg`를 뺀 15개 필드).
+- **`GET /api/v1/notes/{noteId}`**: 노트 상세 조회(`FR-NOTE-3`). `analysis` JSON 원본과 함께 `harmony.progressions` 인덱스별 렌더링된 SVG 문자열 배열(`diagramsSvg`)을 포함한 `NoteDetailDto`(17개 필드 — V3에서 `collectProgressions` 추가)를 `{ "note": { ... } }`로 반환합니다.
 ```json
 {
   "note": {
@@ -598,6 +598,7 @@
     "keywords": ["Secondary Dominant", "Guide Tone", "Comping"],
     "difficulty": "중급",
     "model": "gemini-2.5-pro",
+    "collectProgressions": false,
     "analysis": {
       "title": "세컨더리 도미넌트 보이싱 실전",
       "channel": "Jazz Guitar Lab",
@@ -634,7 +635,43 @@
 }
 ```
 - **`PATCH /api/v1/notes/{noteId}`**: `{ "memo": "...", "tags": ["화성", "TAB"], "title": "..." }`(셋 중 하나 이상 필수) 수정 및 노션 연동 시 `sync_outbox` `note` `upsert` 적재. **Response (`200 OK`):** `{ "note": { ... } }`.
-- **`DELETE /api/v1/notes/{noteId}`**: 노트 삭제 및 노션 연동 시 노션 페이지 아카이브(`sync_outbox` `note` `delete`). **Response (`200 OK`):** `{ "ok": true }`.
+- **`DELETE /api/v1/notes/{noteId}`**: 노트 삭제 및 노션 연동 시 노션 페이지 아카이브(`sync_outbox` `note` `delete`). **Response (`200 OK`):** `{ "ok": true }`. 그 노트에서 수집한 코드 진행은 남고 `noteId`만 `null`이 된다(8.5절).
+
+### 8.4 노트 "코드 진행 수집에 넣기" 토글
+- **`PUT /api/v1/notes/{noteId}/collect`** `{ "collect": true | false }` → `200 { "noteId": "...", "collect": true, "progressions": [ProgressionDto, ...] }` (켜면 그 노트에서 온 행 전체(노트 안 순번 순), 끄면 `[]`).
+- 켜면 `analysis.harmony.progressions[]`마다 진행 행을 만든다(`kind=analysis`, `origin=ai`, `route=note`). 이미 있는 순번은 건너뛰므로 다시 켜도 중복이 없고, 지운 순번만 다시 생긴다. 코드가 하나도 없는 진행은 행을 만들지 않는다(화성 진행이 없는 노트는 0행, 토글 값은 저장).
+- 끄면 그 노트에서 온 행을 **모두** 지운다(사람이 고친 행 포함).
+- AI 값 정규화: 키 `C major`/`Am` → `C Major`/`A min`(노션 Scale 철자, 못 읽으면 `null`), roman `maj7→M7`·`ø→m7b5`·`°7→dim7`·공백 제거, 코드 `source`·`timestamp` 외 필드(`lh`·`frets` 등)는 저장하지 않음. 대표 근거 `evidence` = 코드 `source` 중 가장 약한 값(`추정` > `말함` > `화면`, `source` 없는 코드는 `추정`).
+- `collect`가 boolean이 아니면 `400 INVALID_INPUT`, 남의 노트·없는 노트·비 UUID는 `404 NOT_FOUND`.
+
+### 8.5 코드 진행 모음 (`Progressions`, CHORDS)
+- **설명:** 한 행 = 진행 하나. 레퍼런스(직접 입력) / 분석(영상·노트에서 수집 또는 직접). 테이블은 [04 2.2절](04-db-design.md). 노션 push는 아직 없음(CH-7).
+- **진행 객체(`ProgressionDto`, 25개 필드):**
+```json
+{
+  "id": "uuid", "kind": "reference", "origin": "manual", "route": "manual", "evidence": null,
+  "title": "Just the Two of Us", "part": "", "artist": "Grover Washington Jr.", "album": "", "channel": "",
+  "releaseDate": null, "key": "F Major", "instrument": null,
+  "chords": [{ "symbol": "FM7", "roman": "IM7" }],
+  "moods": ["nostalgia"], "genres": ["RnB"], "tags": [],
+  "url": "https://youtu.be/...", "videoId": "dQw4w9WgXcQ", "startSec": null, "endSec": null,
+  "memo": "", "noteId": null, "createdAt": "ISO", "updatedAt": "ISO"
+}
+```
+  - `kind` `reference`|`analysis`, `origin` `ai`|`manual`, `route` `video`|`note`|`manual`, `evidence` `화면`|`말함`|`추정`|`null`, `instrument` `건반`|`기타`|`null`
+  - `chords[]` 원소: `symbol`(입력 표기 그대로) · `roman` · AI 행만 `source` · `timestamp`
+- **`GET /api/v1/progressions?scope=reference|analysis|all`** → `200 { "progressions": [...] }`. `scope` 생략 = `all`, 다른 값은 `400`. 정렬 `createdAt` 내림차순.
+- **`POST /api/v1/progressions`** → `201 { "progression": ProgressionDto }`
+  - 필수: `kind`, `title`(1~300자), `chords`(1~64개). 선택: `part`(≤100) `artist`·`album`·`channel`(≤200) `releaseDate`(`YYYY-MM-DD`, 1900~2100년) `key`(`^[A-G](#|b)? (Major|min)$`, 빈 문자열·`null`은 없음) `moods`·`genres`·`tags`(각 ≤10개, 원소 1~30자·쉼표 금지·중복 제거) `url`(`http(s)://`, ≤500) `startSec`·`endSec`(0~86400, `start < end`) `memo`(≤2000)
+  - `chords[]` 검증: 객체, `symbol` 1~24자(앞뒤 공백 제거), `roman` ≤24자, `source` 화면·말함·추정, `timestamp` `mm:ss`|`h:mm:ss`. 모르는 키는 버린다. 직접 행의 `source`는 저장하지 않는다
+  - 서버가 정함: `origin=manual`, `route=manual`, `evidence`·`instrument`·`noteId` = `null`. `url`이 유튜브(youtube.com·youtu.be)면 `videoId` 추출
+  - 사용자당 3000행을 넘으면 `400 INVALID_INPUT` "코드 진행은 최대 3000개까지 저장할 수 있습니다."
+- **`PATCH /api/v1/progressions/{id}`** → `200 { "progression": ProgressionDto }`. 보낸 필드만 바꾼다(문자열 칸 `null` = 빈 문자열, 목록 `null` = `[]`, `key`·`releaseDate`·`startSec`·`endSec` `null` = 비움, `kind`·`title`·`chords` `null`은 400). 아는 필드가 하나도 없으면 400. `startSec`·`endSec`는 기존 값과 합쳐 검사.
+  - AI 행에서 `chords`(source 제외 비교) 또는 `key`가 **실제로 바뀌면** `origin=manual`, `evidence=null`, 코드 `source` 제거. `route`·`noteId`는 그대로. 바뀌지 않으면 AI와 코드 `source` 유지
+  - `kind`를 `reference`로 바꾸려면 `route=manual`이어야 함(아니면 `400` "영상에서 온 진행은 레퍼런스로 바꿀 수 없습니다.")
+- **`DELETE /api/v1/progressions/{id}`** → `200 { "ok": true }`. 노트에서 온 행을 지워도 노트 토글은 켠 채로 둔다.
+- 없는 행·남의 행·비 UUID 경로 `404 NOT_FOUND`, 토큰 없음 `401 UNAUTHORIZED`. 모든 응답 `Cache-Control: no-store`.
+- (CH-4 예정) `POST /api/v1/progressions/analyze` — 코드 진행 영상 분석. `AnalysisJobDto.kind` 추가.
 
 ---
 
