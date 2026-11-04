@@ -351,7 +351,7 @@ export function HomePage(): React.ReactElement {
             <div className={styles.recentBody} id="recentSongEmpty">
               <div className={styles.recentPlaceholder}>NO SONG</div>
               <div className={styles.recentInfo}>
-                <p className={styles.recentSegment}>
+                <p className={styles.emptyText}>
                   아직 연습 중인 곡이 없어요. 위 입력창에 유튜브 링크를 붙여넣어 시작하세요.
                 </p>
               </div>
@@ -397,14 +397,14 @@ export function HomePage(): React.ReactElement {
                   노션 연결 →
                 </SafeLink>
               </div>
-              <ul className={`frame-list ${styles.frameList}`} id="songs">
+              <ul
+                className={`frame-list ${styles.frameList}${activeUid && songs.length > 0 ? '' : ` ${styles.songsEmpty}`}`}
+                id="songs"
+              >
                 {!activeUid ? (
                   <li className={`note ${styles.noteItem}`}>
-                    <SafeLink href="settings.html#account">로그인하면 내 연습 곡이 여기 보여요</SafeLink>
-                    {' · '}
-                    <SafeLink href="settings.html#keys">
-                      SETTING에서 노션을 연결하면 연습 곡이 여기 보여요
-                    </SafeLink>
+                    로그인하면 내 연습 곡이 여기 보여요.
+                    <SafeLink href="settings.html#account">로그인하러 가기 →</SafeLink>
                   </li>
                 ) : songsLoading ? (
                   <li className={`note ${styles.noteItem}`}>불러오는 중…</li>
@@ -412,10 +412,7 @@ export function HomePage(): React.ReactElement {
                   <li className={`note ${styles.noteItem}`}>{songsError}</li>
                 ) : songs.length === 0 ? (
                   <li className={`note ${styles.noteItem}`}>
-                    아직 곡이 없어요. 위에 링크를 붙여넣어 시작하세요 ·{' '}
-                    <SafeLink href="settings.html#keys">
-                      SETTING에서 노션을 연결하면 연습 곡이 여기 보여요
-                    </SafeLink>
+                    아직 곡이 없어요. 위에 유튜브 링크를 붙여넣어 시작하세요.
                   </li>
                 ) : (
                   songs.slice(0, 5).map((s) => {
@@ -526,7 +523,8 @@ export function HomePage(): React.ReactElement {
                   {currentRef.chordsText}
                 </SafeLink>
                 <p className={styles.progSub} id="progRefTitle">
-                  {currentRef.title} · 출처: {currentRef.sourceType}
+                  {currentRef.title}
+                  <span className={styles.progSource}>출처: {currentRef.sourceType}</span>
                 </p>
                 <button
                   type="button"
@@ -553,7 +551,8 @@ export function HomePage(): React.ReactElement {
                   {currentArch.chordsText}
                 </SafeLink>
                 <p className={styles.progSub} id="progArchTitle">
-                  {currentArch.title} · 출처: {currentArch.sourceType}
+                  {currentArch.title}
+                  <span className={styles.progSource}>출처: {currentArch.sourceType}</span>
                 </p>
                 <button
                   type="button"
