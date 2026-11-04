@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './AppShell.module.css';
 import { useAuth, auth } from '../../lib/auth';
-import { getTheme, setTheme } from '../../lib/security';
+import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'chords' | 'practice' | 'log' | 'notes' | 'settings' | 'privacy';
@@ -16,11 +16,16 @@ export interface AppShellProps {
 export function AppShell({
   variant = 'default',
   activeNav = 'home',
-  showThemeToggle = false,
+  showThemeToggle = true,
   children,
 }: AppShellProps): React.ReactElement {
   const authState = useAuth();
   const [theme, setThemeState] = useState<'light' | 'dark' | ''>(() => getTheme());
+  useEffect(() => {
+    const sync = () => setThemeState(getTheme());
+    window.addEventListener(THEME_EVENT, sync);
+    return () => window.removeEventListener(THEME_EVENT, sync);
+  }, []);
 
   const signedInUser = authState.user;
   const navLabel = signedInUser ? auth.computeInitial(signedInUser, authState.me) : 'LOGIN';
@@ -94,28 +99,6 @@ export function AppShell({
           >
             SETTING
           </a>
-          {showThemeToggle && (
-            <span className={styles.themeGroup} role="group" aria-label="화면 모드">
-              <button
-                type="button"
-                id="theme-light"
-                className={styles.themeBtn}
-                aria-pressed={theme === 'light'}
-                onClick={() => handleThemePick('light')}
-              >
-                라이트
-              </button>
-              <button
-                type="button"
-                id="theme-dark"
-                className={styles.themeBtn}
-                aria-pressed={theme === 'dark'}
-                onClick={() => handleThemePick('dark')}
-              >
-                다크
-              </button>
-            </span>
-          )}
           <a
             href="settings.html#account"
             id="navAuth"
@@ -132,6 +115,30 @@ export function AppShell({
         </span>
       </nav>
       <main className={mainClass}>{children}</main>
+      {showThemeToggle && (
+        <footer className={styles.siteFoot}>
+          <span className={styles.themeGroup} role="group" aria-label="화면 모드">
+            <button
+              type="button"
+              id="theme-light"
+              className={styles.themeBtn}
+              aria-pressed={theme === 'light'}
+              onClick={() => handleThemePick('light')}
+            >
+              라이트
+            </button>
+            <button
+              type="button"
+              id="theme-dark"
+              className={styles.themeBtn}
+              aria-pressed={theme === 'dark'}
+              onClick={() => handleThemePick('dark')}
+            >
+              다크
+            </button>
+          </span>
+        </footer>
+      )}
     </div>
   );
 }
