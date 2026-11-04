@@ -70,12 +70,30 @@ Notion 검색(`choise-hun.github.io ULevelP`, `github.io/ULevelP practice.html`)
   - `<embed source="https://choise-hun.github.io/guitar-practice/chords.html#scale" />`
   - 콜아웃 링크 4개: `…/guitar-practice/`, `…/chords.html`, `…/practice.html`, `github.com/choise-hun/guitar-practice`
   - `gh api repos/choise-hun/guitar-practice/pages` → `build_type: workflow`, `https://choise-hun.github.io/guitar-practice/` (200, 마지막 push 2026-10-28). ULevelP Pages와 다른 배포
-- → **R1-A2 PR은 이 임베드를 깨지 않는다.** `guitar-practice` 쪽(이동 페이지로 바꿀지, 노션 임베드를 run.app 링크로 바꿀지)은 이 저장소 범위 밖이라 사용자 결정으로 남긴다
+- → **R1-A2 PR은 이 임베드를 깨지 않는다.**
+- **처리 (2026-11-04, 사용자 승인 → Notion 연결로 수정, §6 (c)):** `악기 연습` 페이지에서
+  - 임베드 블록 → 링크 `[▶ 코드 연습실 열기 (스케일)](https://ulevelp-d5ympfsmfq-du.a.run.app/chords.html#scale)`
+  - 콜아웃 링크 4개 → `run.app/`, `run.app/chords.html`, `run.app/practice.html`, `github.com/choise-hun/ULevelP`
+  - 다시 fetch해 반영 확인(편집 시각 2026-11-04T01:27Z, `guitar-practice` 문자열 0개). 새 링크 3개는 `curl` 200 + `id="root"`
+  - `guitar-practice` 저장소 Pages 자체는 그대로(이 저장소 범위 밖)
+- 공식 템플릿 `악기 연습 템플릿`(`4097a337…`, 설정 화면 링크 대상)에도 Pages 주소는 없다(fetch 확인)
 - 그 페이지의 `연습 곡` DB(`collection://3274bad2-…`) 행의 `이어서 연습` 링크는 서버 push가 쓰므로 R1-A1 이후 push된 행부터 run.app(옛 행은 R1-A1 이전 값)
+
+## 5-1. 설정 화면 노션 연결 안내 (사용자 요청 추가, 2026-11-04)
+
+- **템플릿 링크:** `public/config.js:14` `notionTemplateUrl` = `https://app.notion.com/p/4097a337e26f8167aa10eb435edb676e?source=copy_link`. 사용자가 지정한 값과 같아 그대로 둔다(2026-10-30 `215d753`에서 들어옴). 테스트가 이 값을 고정
+- **연동 방식(조사):** 서버는 템플릿을 복제하거나 DB를 찾지 않는다. 사용자가 설정에 넣은 토큰 + DB ID 3개(`songsDb`·`sessionsDb`·`notesDb`)만 쓴다(`NotionSyncService.kt:194-197`). 서버는 32자리 16진수(대시 허용)만 받는다(`IntegrationService.kt:111-115`)
+- **바뀐 것 (`frontend/src/pages/SettingsPage.tsx`, API·서버 변경 없음):**
+  - 노션 연동 카드 첫 줄을 템플릿 기준 5단계 안내(`#ntnGuide`)로 교체: ① 공식 템플릿 복제 ② my-integrations 토큰 ③ 페이지 `···`→연결 ④ DB 3개를 전체 페이지로 열어 링크 복사·붙여넣기 ⑤ 저장→연결 확인
+  - `notionDbIdFromInput`: DB **링크를 그대로 붙여넣어도** 마지막 경로 끝의 ID만 꺼내 보낸다(`?v=` 보기 ID는 무시). URL이 아니거나 ID가 없으면 입력 그대로 → 서버 400
+  - placeholder "32자리 DB ID" → "DB 링크 또는 32자리 ID"
+  - 레거시 `public/settings.js`·`settings.html`은 롤백용이라 고치지 않음
+- **확인:** `test/r1_settings_notes.test.js` R1-S10(링크 4형식·직접 ID·잘못된 입력 2건·저장 호출·안내 5단계·템플릿 URL), `tsc --noEmit` 0, `npm run build`, `npm test` 140/140. `ULP_UI=spa node server.js` + Playwright: 1280·390px 모두 `#ntnGuide li` 5, 링크 2개 `_blank noopener noreferrer`, scrollWidth = 뷰포트, CSP 위반 0
+- **공식 템플릿 페이지의 SETTING 안내(노션):** DB 링크 단계가 없어 앱 안내와 맞추려 했으나 자동 수정 권한이 거부되어 **미반영** — 사용자가 직접 수정하거나 권한 허용 후 다시 진행
 
 ## 6. 남은 것
 
 - 머지 후 §4 실측
-- `guitar-practice` Pages·노션 `악기 연습` 페이지 처리 결정(§5)
+- (선택) `guitar-practice` 저장소 Pages 정리 — 노션 링크는 §5에서 이미 run.app으로 바꿈
 - PR ② `PUBLIC_APP_URL` 기본값 run.app 전환(`deploy-cloudrun.sh`·`deploy-cloudrun.yml`·`docs/03-api-spec.md`) — 별도 PR
 - `ALLOWED_ORIGINS`에서 `github.io` 제거·레거시 `public/*.js` 정리는 결정 문서 §2 A ③(롤백 기간 뒤, 별도 결정)

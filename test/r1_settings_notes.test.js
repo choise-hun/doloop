@@ -525,3 +525,41 @@ test('R1-S9 (PR #39 리뷰 반영): NotesPage 및 public/notes.js 태그 필터 
     timers.clear();
   }
 });
+
+// SettingsPage.tsx의 notionDbIdFromInput 추출
+function loadNotionDbIdFromInput() {
+  const src = readText('frontend/src/pages/SettingsPage.tsx');
+  const m = src.match(/function notionDbIdFromInput\(raw: string\): string \{[\s\S]*?\n\}/);
+  assert.ok(m, 'notionDbIdFromInput 정의가 존재해야 함');
+  const jsCode = m[0]
+    .replace('function notionDbIdFromInput(raw: string): string', 'function notionDbIdFromInput(raw)')
+    .replace('let pathname: string;', 'let pathname;')
+    .concat('\nmodule.exports = notionDbIdFromInput;');
+  const mod = { exports: {} };
+  vm.runInNewContext(jsCode, { module: mod, URL });
+  return mod.exports;
+}
+
+test('R1-S10: 노션 DB 링크를 붙여넣어도 DB ID만 저장하고, 템플릿 기준 연결 안내가 있다', () => {
+  const f = loadNotionDbIdFromInput();
+  const id = '8f539d9f76f84014af586a19f965d862';
+  const view = '0123456789abcdef0123456789abcdef';
+  assert.equal(f(`https://www.notion.so/${id}?v=${view}`), id, '?v= 보기 ID가 아니라 경로의 DB ID');
+  assert.equal(f(`https://www.notion.so/myspace/Cafe-${id}?v=${view}&pvs=4`), id, '워크스페이스·제목 slug 포함');
+  assert.equal(f(`https://app.notion.com/p/${id}?pvs=204`), id);
+  assert.equal(f('https://www.notion.so/8f539d9f-76f8-4014-af58-6a19f965d862'), '8f539d9f-76f8-4014-af58-6a19f965d862');
+  assert.equal(f(`  ${id}  `), id, 'ID 직접 입력은 공백만 제거');
+  // 잘못된 입력: ID가 없는 링크는 그대로 넘겨 서버 400(32자리 형식 오류)으로
+  assert.equal(f('https://www.notion.so/no-id-here'), 'https://www.notion.so/no-id-here');
+  assert.equal(f(''), '');
+
+  const src = readText('frontend/src/pages/SettingsPage.tsx');
+  assert.match(src, /songsDb: notionDbIdFromInput\(ntnSongsDb\)/);
+  assert.match(src, /sessionsDb: notionDbIdFromInput\(ntnSessionsDb\)/);
+  assert.match(src, /notesDb: notionDbIdFromInput\(ntnNotesDb\) \|\| null/);
+  const guide = src.match(/<ol className="hint" id="ntnGuide">[\s\S]*?<\/ol>/);
+  assert.ok(guide, '노션 연결 안내 목록');
+  assert.match(guide[0], /href=\{templateHref\}/, '안내 1단계가 공식 템플릿 링크');
+  assert.equal((guide[0].match(/<li>/g) || []).length, 5);
+  assert.match(readText('public/config.js'), /notionTemplateUrl: 'https:\/\/app\.notion\.com\/p\/4097a337e26f8167aa10eb435edb676e\?source=copy_link'/);
+});
