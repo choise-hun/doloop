@@ -448,6 +448,53 @@ test('P12 홈 로그인: 서버 진행으로 카드, 자주 나오는 진행 요
   expect(store.calls.some((c) => /^\/api\/v1\/notes\/[^/]+$/.test(c.path) && c.method === 'GET')).toBe(false);
 });
 
+test('P13 취향 통계 줄 누르면 그 묶음·이동이 든 진행만 목록에, 다시 누르거나 해제하면 전체', async ({ page }) => {
+  const store = fakeStore(TASTE_ROWS);
+  await setupLoggedIn(page, store);
+  test.skip(!(await open(page, '/progressions.html?scope=all')), 'legacy 모드: React 화면 아님');
+  await expect(rows(page)).toHaveCount(3);
+  const taste = page.locator('#progTaste');
+  const pat = taste.locator('#tastePatterns button', { hasText: 'I - V - vi - IV' });
+  await pat.click();
+  await expect(pat).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows(page)).toHaveCount(2);
+  await expect(page.locator('#progTasteFilter')).toContainText('I - V - vi - IV 묶음이 들어 있는 진행만');
+  await expect(page.locator('#progSearchCount')).toHaveText('3개 중 2개');
+  await pat.click(); // 같은 줄 다시 → 해제
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.locator('#progTasteFilter')).toHaveCount(0);
+  // 코드 이동: AI 행(IM9 → vim9)만
+  await taste.locator('#tasteMoves button', { hasText: 'IM9 → vim9' }).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(page.locator('#progTasteFilter')).toContainText('이동이 들어 있는 진행만');
+  // 검색과 같이: 없는 곡 → 맞는 진행 없음
+  await page.locator('#progSearch').fill('팝');
+  await expect(page.locator('#progNoMatch')).toHaveText('"팝"에 맞는 진행이 없어요.');
+  await page.locator('#progTasteFilterClear').click();
+  await expect(rows(page)).toHaveCount(2);
+  // 범위를 바꾸면 필터 해제
+  await taste.locator('#tasteMoves button').first().click();
+  await page.locator('#progScope [data-scope="reference"]').click();
+  await expect(page.locator('#progTasteFilter')).toHaveCount(0);
+});
+
+test('P14 노트에서 온 진행 → 연습실 링크에 n=<노트 id>, 진행 연주 탭에 원본 노트 링크', async ({ page }) => {
+  const store = fakeStore([AI_ROW]);
+  await setupLoggedIn(page, store);
+  test.skip(!(await open(page, '/progressions.html?scope=analysis')), 'legacy 모드: React 화면 아님');
+  await rows(page).first().locator('button[aria-expanded]').click();
+  const play = rows(page).first().locator('[data-act="play"]');
+  await expect(play).toHaveAttribute('href', new RegExp(`&n=${NOTE_ID}$`));
+  await play.click();
+  await page.waitForURL(/chords\.html#prog\?/);
+  await expect(page.locator('#pp-note-link')).toHaveAttribute('href', `note.html?id=${NOTE_ID}`);
+  // 노트 없는 진행(시드)은 링크 없이 안내만
+  await page.goto('about:blank');
+  await page.goto('/chords.html#prog?c=C%2CG&from=ref-seed-1', { waitUntil: 'load' });
+  await expect(page.locator('#pp-note-hint')).toContainText('기타 지판 기준');
+  await expect(page.locator('#pp-note-link')).toHaveCount(0);
+});
+
 for (const width of [1280, 1150, 768, 390]) {
   test(`P8 ${width}px 배치: 가로 스크롤 없음 + 스크린샷`, async ({ page }, testInfo) => {
     const store = fakeStore([AI_ROW, row({ id: '00000000-0000-4000-8000-0000000000d1', title: 'Just the Two of Us', artist: 'Grover Washington Jr.', key: 'A min', chords: ['FM7', 'E7', 'Am7', 'Gm7', 'C7'].map((s, i) => ({ symbol: s, roman: ['bVIM7', 'V7', 'im7', 'bviim7', 'bIII7'][i] })), moods: ['nostalgia'], genres: ['RnB'] })]);

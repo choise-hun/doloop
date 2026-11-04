@@ -25,7 +25,7 @@ describe('CH-5b-1 #prog? 해시', () => {
     const href = M.playHref(p);
     assert.ok(href.startsWith('chords.html#prog?'));
     const back = M.parseProgHash(href.slice('chords.html'.length));
-    assert.deepEqual(back, { chords: ['FM7', 'E7', 'G7/B'], key: 'F Major', title: 'Just the Two of Us, 후렴', from: p.id });
+    assert.deepEqual(back, { chords: ['FM7', 'E7', 'G7/B'], key: 'F Major', title: 'Just the Two of Us, 후렴', from: p.id, note: '' });
   });
 
   test('시드 id(ref-seed-2)도 from으로 받는다', () => {
@@ -38,7 +38,7 @@ describe('CH-5b-1 #prog? 해시', () => {
   });
 
   test('#prog만 오면 빈 진행', () => {
-    assert.deepEqual(M.parseProgHash('#prog'), { chords: [], key: '', title: '', from: '' });
+    assert.deepEqual(M.parseProgHash('#prog'), { chords: [], key: '', title: '', from: '', note: '' });
   });
 
   test('잘못된 입력: 모르는 키·위험한 from·빈 코드 조각은 버린다, 코드 64개·제목 300자까지', () => {
