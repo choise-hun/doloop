@@ -56,7 +56,7 @@ docker run --env-file .env -p 3000:3000 ulevelp
 
 ## 배포
 
-main에 머지되면 CI(`ci.yml`)가 테스트·Docker 스모크를 돌립니다. Cloud Run 배포는 `scripts/deploy-cloudrun.sh`(서비스·분석 Job·노션 push 크론 스케줄러)가 하고, `deploy-cloudrun.yml`은 저장소 Variables가 설정돼야 동작합니다(현재는 로컬에서 실행). 명령은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md) §4.
+main에 머지되면 CI(`ci.yml`)가 테스트·Docker 스모크를 돌립니다. Cloud Run 배포는 `scripts/deploy-cloudrun.sh`(서비스·분석 Job·노션 push 크론 스케줄러)가 하고, `deploy-cloudrun.yml`은 저장소 Variables가 설정돼야 동작합니다(현재는 로컬에서 실행). 명령은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md) §6.
 
 롤백: `gcloud run services update ulevelp --region asia-northeast3 --update-env-vars ULP_UI=legacy`
 
