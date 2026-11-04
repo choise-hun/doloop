@@ -26,7 +26,7 @@ set -euo pipefail
 #   CLOUD_RUN_SERVICE    : Cloud Run 서비스 이름 (기본: ulevelp)
 #   CLOUD_RUN_JOB        : Cloud Run Job 이름 (기본: analyze)
 #   SUPABASE_URL         : Supabase 프로젝트 URL (기본: https://vefrfhafmiiivpgjhqiu.supabase.co)
-#   PUBLIC_APP_URL       : 공개 앱 기본 URL (기본: https://choise-hun.github.io/ULevelP/)
+#   PUBLIC_APP_URL       : 공개 앱 기본 URL (기본: https://ulevelp-d5ympfsmfq-du.a.run.app/ — Pages는 R1-A2에서 이동 페이지로 바뀜)
 #   ALLOWED_ORIGINS      : CORS 허용 오리진 (기본: https://choise-hun.github.io)
 #   ULP_UI               : 화면 모드 spa|legacy (기본: spa). legacy면 React 대신 옛 public/*.html 서빙
 #   CRON_AUDIENCE        : OIDC 대상 (기본: 서비스 URL과 1:1 일치)
@@ -58,7 +58,7 @@ GCP_REGION="${GCP_REGION:-asia-northeast3}"
 CLOUD_RUN_SERVICE="${CLOUD_RUN_SERVICE:-ulevelp}"
 CLOUD_RUN_JOB="${CLOUD_RUN_JOB:-analyze}"
 SUPABASE_URL="${SUPABASE_URL:-https://vefrfhafmiiivpgjhqiu.supabase.co}"
-PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://choise-hun.github.io/ULevelP/}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://ulevelp-d5ympfsmfq-du.a.run.app/}"
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://choise-hun.github.io}"
 ULP_UI="${ULP_UI:-spa}"
 

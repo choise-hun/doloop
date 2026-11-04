@@ -40,7 +40,7 @@ jobs:
       RUNTIME_SA_EMAIL: ${{ vars.RUNTIME_SA_EMAIL }}
       CRON_SA_EMAIL: ${{ vars.CRON_SA_EMAIL }}
       SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://vefrfhafmiiivpgjhqiu.supabase.co' }}
-      PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://choise-hun.github.io/ULevelP/' }}
+      PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://ulevelp-d5ympfsmfq-du.a.run.app/' }}
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io' }}
       ULP_UI: ${{ vars.ULP_UI || 'spa' }}
     steps:
