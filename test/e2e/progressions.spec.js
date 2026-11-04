@@ -378,6 +378,76 @@ test('P7 노트 상세 "코드 진행 수집에 넣기": 켜면 N개 + CHORDS �
   expect(store.items).toHaveLength(0);
 });
 
+// CH-6 취향 코드 진행: 같은 진행 I-V-vi-IV가 두 곡에 → 자주 나오는 진행, 랜덤 꺼내보기 → 연주하기
+const POP = (id, title, key, syms) =>
+  row({ id, title, artist: 'A', key, moods: ['밝음'], genres: ['팝'], chords: syms.map((s, i) => ({ symbol: s, roman: ['I', 'V', 'vi', 'IV'][i] })) });
+const TASTE_ROWS = [
+  POP('00000000-0000-4000-8000-0000000000e1', '팝 1', 'C Major', ['C', 'G', 'Am', 'F']),
+  POP('00000000-0000-4000-8000-0000000000e2', '팝 2', 'G Major', ['G', 'D', 'Em', 'C']),
+  AI_ROW,
+];
+
+test('P9 비로그인 취향: 시드 통계 + 랜덤 꺼내보기 → 연주하기, 범위 따라 바뀜', async ({ page }) => {
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  const taste = page.locator('#progTaste');
+  await expect(taste.locator('#tasteSummary')).toHaveText('레퍼런스 · 진행 5개 · 코드 20개');
+  await expect(taste.locator('#tasteChords li').first()).toBeVisible();
+  await expect(taste.locator('#tasteKeys li').first()).toBeVisible();
+  await taste.locator('#tasteRand').click();
+  const first = await taste.locator('#tastePickTitle').textContent();
+  await expect(taste.locator('#tastePlay')).toHaveAttribute('href', /^chords\.html#prog\?c=.+&from=ref-seed-\d/);
+  await taste.locator('#tasteRand').click();
+  await expect(taste.locator('#tastePickTitle')).not.toHaveText(first);
+  await page.locator('#progScope [data-scope="all"]').click();
+  await expect(taste.locator('#tasteSummary')).toContainText('합산 · 진행 10개');
+});
+
+test('P10 로그인 취향: 두 곡의 I - V - vi - IV가 자주 나오는 진행, 코드 이동·Mood·Genre', async ({ page }) => {
+  const store = fakeStore(TASTE_ROWS);
+  await setupLoggedIn(page, store);
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  const taste = page.locator('#progTaste');
+  await expect(taste.locator('#tasteSummary')).toHaveText('레퍼런스 · 진행 2개 · 코드 8개');
+  await expect(taste.locator('#tastePatterns li').first()).toContainText('I - V - vi - IV');
+  await expect(taste.locator('#tastePatterns li').first()).toContainText('2');
+  await expect(taste.locator('#tasteMoves li').first()).toContainText('I → V');
+  await expect(taste.locator('#tasteMoods')).toContainText('밝음');
+  await expect(taste.locator('#tasteGenres')).toContainText('팝');
+  // 분석 범위는 AI 행 하나 → 자주 나오는 진행 없음 안내
+  await page.locator('#progScope [data-scope="analysis"]').click();
+  await expect(taste.locator('#tasteSummary')).toContainText('분석 · 진행 1개');
+  await expect(taste.locator('#tastePatterns')).toContainText('아직 없어요');
+});
+
+test('P11 홈 비로그인: 취향 카드 범위 토글 + 연주하기 + 취향 통계 링크', async ({ page }) => {
+  test.skip(!(await open(page, '/')), 'legacy 모드: React 화면 아님');
+  const box = page.locator('#progRefBox');
+  await expect(box.locator('#progRefPlay')).toHaveAttribute('href', /^chords\.html#prog\?c=.+&from=ref-seed-1$/);
+  await expect(box.locator('#progRefChords')).toHaveAttribute('href', /^chords\.html#prog\?/);
+  await expect(page.locator('#progRefTitle')).toContainText('출처: 기본');
+  const before = await box.locator('#progRefChords').textContent();
+  await box.locator('#btnRandRef').click();
+  await expect(box.locator('#progRefChords')).not.toHaveText(before);
+  await page.locator('#progScope [data-scope="analysis"]').click();
+  await expect(box.locator('#progRefPlay')).toHaveAttribute('href', /from=arch-seed-1$/);
+  await expect(page.locator('#progArchKey')).toHaveText('진행 5개');
+  await expect(page.locator('#progTasteLink')).toHaveAttribute('href', 'progressions.html?scope=analysis#progTaste');
+});
+
+test('P12 홈 로그인: 서버 진행으로 카드, 자주 나오는 진행 요약, 범위에 없으면 안내', async ({ page }) => {
+  const store = fakeStore(TASTE_ROWS.slice(0, 2));
+  await setupLoggedIn(page, store);
+  test.skip(!(await open(page, '/')), 'legacy 모드: React 화면 아님');
+  await expect(page.locator('#progRefChords')).toHaveText('C - G - Am - F');
+  await expect(page.locator('#progRefTitle')).toContainText('출처: 직접');
+  await expect(page.locator('#progArchChords')).toHaveText('I - V - vi - IV');
+  await expect(page.locator('#progArchTitle')).toContainText('자주 나오는 진행 · 2번');
+  await page.locator('#progScope [data-scope="analysis"]').click();
+  await expect(page.locator('#progRefTitle')).toContainText('분석 범위에 모은 진행이 없어요');
+  await expect(page.locator('#btnRandRef')).toHaveAttribute('href', 'progressions.html');
+  expect(store.calls.some((c) => /^\/api\/v1\/notes\/[^/]+$/.test(c.path) && c.method === 'GET')).toBe(false);
+});
+
 for (const width of [1280, 1150, 768, 390]) {
   test(`P8 ${width}px 배치: 가로 스크롤 없음 + 스크린샷`, async ({ page }, testInfo) => {
     const store = fakeStore([AI_ROW, row({ id: '00000000-0000-4000-8000-0000000000d1', title: 'Just the Two of Us', artist: 'Grover Washington Jr.', key: 'A min', chords: ['FM7', 'E7', 'Am7', 'Gm7', 'C7'].map((s, i) => ({ symbol: s, roman: ['bVIM7', 'V7', 'im7', 'bviim7', 'bIII7'][i] })), moods: ['nostalgia'], genres: ['RnB'] })]);

@@ -132,38 +132,15 @@ test('R1-H2: formatSec, formatRecentSongSegment, buildPracticeResumeHref 포맷 
   assert.equal(href, 'practice.html?v=jNQXAC9IVRw&t=15&a=10&b=25&r=0.75');
 });
 
-test('R1-H3: pickNextIndex 비중복 보장 및 extractProgressionsFromNotes 노트 진행 병합', () => {
-  const P = loadProgressionsModule();
-  for (let cur = 0; cur < 5; cur++) {
-    for (const r of [0, 0.25, 0.5, 0.75, 0.99]) {
-      const next = P.pickNextIndex(cur, 5, () => r);
-      assert.notEqual(next, cur);
-      assert.ok(next >= 0 && next < 5);
-    }
-  }
-
-  const extracted = P.extractProgressionsFromNotes([
-    {
-      id: 'n-100',
-      title: '네오소울 화성 강의',
-      tags: ['화성'],
-      analysis: {
-        harmony: {
-          progressions: [
-            {
-              name: '강의 핵심 진행',
-              key: 'Eb Major',
-              chords: [{ symbol: 'Fm9' }, { symbol: 'Bb13' }, { symbol: 'EbM9' }],
-            },
-          ],
-        },
-      },
-    },
-  ]);
-  assert.equal(extracted.archive[0].chordsText, 'Fm9 - Bb13 - EbM9');
-  assert.equal(extracted.archive[0].sourceType, 'AI');
-  assert.equal(extracted.archive[0].href, 'note.html?id=n-100');
-  assert.ok(extracted.reference.length >= 5);
+test('R1-H3: 홈 취향 코드 진행은 서버 진행 목록을 쓴다 — 노트 화성 읽기·편곡 태그 규칙 없음(CH-6)', () => {
+  const progSrc = readText('frontend/src/lib/progressions.ts');
+  assert.ok(!progSrc.includes('extractProgressionsFromNotes'), 'progressions.ts에 노트 진행 추출이 남아 있음');
+  assert.ok(!progSrc.includes("'편곡'"), '편곡 태그 규칙이 남아 있음');
+  const homeTsx = readText('frontend/src/pages/HomePage.tsx');
+  assert.ok(homeTsx.includes('apiClient.progressions'), '홈이 진행 API를 읽어야 함');
+  assert.ok(homeTsx.includes('tasteStats') && homeTsx.includes('pickRandom'), '홈이 stats.mts를 써야 함');
+  assert.ok(homeTsx.includes('playHref('), '홈 카드에 연주하기 링크(playHref)가 있어야 함');
+  assert.ok(!homeTsx.includes('apiClient.notes.get('), '홈이 노트 상세를 읽지 않아야 함');
 });
 
 test('R1-H4: public/data.js 및 apiClient.ts의 listLocalSongs 최신순 정렬 검증', () => {
@@ -231,11 +208,15 @@ test('R1-H6: HomePage.tsx, App.tsx, public/index.html 핵심 위젯 ID 및 7개 
     'progRefBox',
     'progArchBox',
     'btnRandRef',
-    'btnRandArch',
   ]) {
     assert.ok(homeTsx.includes(`id="${id}"`), `HomePage.tsx 누락 ID: ${id}`);
     assert.ok(pubIndex.includes(`id="${id}"`), `public/index.html 누락 ID: ${id}`);
   }
+  // CH-6: React 홈 오른쪽 카드는 취향 요약(랜덤 버튼 대신 통계 링크), 왼쪽 카드에 연주하기·범위 토글. 옛 화면(public)은 그대로
+  for (const id of ['progScope', 'progRefPlay', 'progTasteLink']) {
+    assert.ok(homeTsx.includes(`id="${id}"`), `HomePage.tsx 누락 ID: ${id}`);
+  }
+  assert.ok(pubIndex.includes('id="btnRandArch"'), 'public/index.html 누락 ID: btnRandArch');
 });
 
 test('R1-H7 & R1-H8: public/home.js 비로그인/로그인 위젯 바인딩·랜덤 진행·계정 전환 레이스 방어 검증', async () => {
