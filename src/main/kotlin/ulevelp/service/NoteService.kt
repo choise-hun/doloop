@@ -26,6 +26,10 @@ import ulevelp.note.GeminiSchemas
 import ulevelp.note.GuitarSvgRenderer
 import ulevelp.note.HarmonyChordDto
 import ulevelp.note.KeyboardSvgRenderer
+import ulevelp.note.ProgressionExtract
+import ulevelp.db.ProgressionsTable
+import ulevelp.service.ProgressionService.Companion.insertFromNote
+import ulevelp.service.ProgressionService.Companion.listByNote
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -72,6 +76,7 @@ data class NoteSummaryDto(
     val keywords: List<String>,
     val difficulty: String? = null,
     val model: String,
+    val collectProgressions: Boolean,
     val createdAt: String,
     val updatedAt: String
 )
@@ -97,6 +102,7 @@ data class NoteDetailDto(
     val analysis: JsonObject,
     val diagramsSvg: List<String>,
     val model: String,
+    val collectProgressions: Boolean,
     val createdAt: String,
     val updatedAt: String
 )
@@ -521,6 +527,41 @@ class NoteService(
         }
     }
 
+    /**
+     * "코드 진행 수집에 넣기" 토글 (설계 §2-2·§3-6). 켜면 노트의 화성 진행마다 행 생성(이미 있는 순번은 건너뜀),
+     * 끄면 그 노트에서 온 행을 모두 지운다(사람이 고친 행 포함). 토글 값은 진행이 0개여도 저장한다
+     */
+    suspend fun setCollect(userId: UUID, noteId: UUID, collect: Boolean): NoteCollectResponse {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val row = NotesTable.selectAll()
+                .where { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
+                .forUpdate(ForUpdateOption.ForUpdate)
+                .singleOrNull() ?: throw NotFoundException("학습 노트를 찾을 수 없습니다.")
+
+            if (row[NotesTable.collectProgressions] != collect) {
+                NotesTable.update({ (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }) {
+                    it[collectProgressions] = collect
+                }
+            }
+
+            if (collect) {
+                val analysis = row[NotesTable.analysis] as? JsonObject ?: JsonObject(emptyMap())
+                val rows = ProgressionExtract.fromAnalysis(
+                    analysis = analysis,
+                    noteTitle = row[NotesTable.title],
+                    channel = row[NotesTable.channel],
+                    videoId = row[NotesTable.videoId]
+                )
+                insertFromNote(userId, noteId, "note", rows)
+                NoteCollectResponse(noteId.toString(), true, listByNote(userId, noteId))
+            } else {
+                ProgressionsTable.deleteWhere { (ProgressionsTable.userId eq userId) and (ProgressionsTable.noteId eq noteId) }
+                NoteCollectResponse(noteId.toString(), false, emptyList())
+            }
+        }
+    }
+
     private fun rowToJobDto(row: ResultRow): AnalysisJobDto = AnalysisJobDto(
         id = row[AnalysisJobsTable.id].toString(),
         url = row[AnalysisJobsTable.url],
@@ -546,6 +587,7 @@ class NoteService(
         keywords = row[NotesTable.keywords],
         difficulty = row[NotesTable.difficulty],
         model = row[NotesTable.model],
+        collectProgressions = row[NotesTable.collectProgressions],
         createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
         updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
     )
@@ -568,6 +610,7 @@ class NoteService(
             analysis = analysisObj,
             diagramsSvg = diagramsArray,
             model = row[NotesTable.model],
+            collectProgressions = row[NotesTable.collectProgressions],
             createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
             updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
         )

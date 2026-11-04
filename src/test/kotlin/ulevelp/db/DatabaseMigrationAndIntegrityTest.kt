@@ -49,7 +49,8 @@ class DatabaseMigrationAndIntegrityTest {
             "sync_outbox",
             "storage_trash",
             "categories",
-            "song_categories"
+            "song_categories",
+            "progressions"
         )
 
         @JvmStatic
@@ -86,10 +87,10 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init and V2__categories migrations apply cleanly and create all 14 tables`() {
-        assertEquals("2", targetSchemaVersion, "Flyway target schema version should be 2")
-        assertTrue(migrationsExecutedCount >= 2, "V1__init.sql and V2__categories.sql migrations must have executed")
-        assertEquals(14, ALL_TABLES.size, "Exposed ALL_TABLES should contain 14 tables")
+    fun `Flyway V1__init to V3__progressions migrations apply cleanly and create all 15 tables`() {
+        assertEquals("3", targetSchemaVersion, "Flyway target schema version should be 3")
+        assertTrue(migrationsExecutedCount >= 3, "V1__init.sql, V2__categories.sql and V3__progressions.sql migrations must have executed")
+        assertEquals(15, ALL_TABLES.size, "Exposed ALL_TABLES should contain 15 tables")
 
         val actualTables = mutableListOf<String>()
         dataSource.connection.use { conn ->
@@ -112,7 +113,7 @@ class DatabaseMigrationAndIntegrityTest {
         }
 
         println("[Flyway] Created tables (${actualTables.size}): ${actualTables.joinToString(", ")}")
-        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 14 domain tables must exist in PostgreSQL")
+        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 15 domain tables must exist in PostgreSQL")
 
         // Verify Exposed table definitions query cleanly against migrated schema
         transaction(db) {
@@ -407,6 +408,107 @@ class DatabaseMigrationAndIntegrityTest {
             CategoriesTable.deleteWhere { id eq categoryA }
             assertEquals(0L, SongCategoriesTable.selectAll().count())
             assertEquals(1L, SongsTable.selectAll().where { SongsTable.id eq songA }.count())
+        }
+    }
+
+    @Test
+    fun `progressions checks, note SET NULL, unique note index and progression entity in outbox`() {
+        val userId = UUID.randomUUID()
+        val noteId = UUID.randomUUID()
+        val chords = kotlinx.serialization.json.Json.parseToJsonElement("""[{"symbol":"C"}]""")
+
+        transaction(db) {
+            UsersTable.insert { it[id] = userId; it[email] = "prog@example.com" }
+            NotesTable.insert {
+                it[id] = noteId
+                it[NotesTable.userId] = userId
+                it[videoId] = "dQw4w9WgXcQ"
+                it[title] = "노트"
+                it[tags] = listOf("화성")
+                it[analysis] = buildJsonObject {}
+            }
+            ProgressionsTable.insert {
+                it[ProgressionsTable.userId] = userId
+                it[kind] = "analysis"
+                it[origin] = "ai"
+                it[route] = "note"
+                it[evidence] = "화면"
+                it[title] = "노트 진행"
+                it[ProgressionsTable.chords] = chords
+                it[ProgressionsTable.noteId] = noteId
+                it[noteProgIndex] = 0
+            }
+            // 새 칼럼 기본값
+            assertEquals(false, NotesTable.selectAll().where { NotesTable.id eq noteId }.single()[NotesTable.collectProgressions])
+        }
+
+        fun insertBad(block: org.jetbrains.exposed.sql.statements.InsertStatement<Number>.() -> Unit): String =
+            assertFailsWith<ExposedSQLException> {
+                transaction(db) {
+                    ProgressionsTable.insert {
+                        it[ProgressionsTable.userId] = userId
+                        it[kind] = "reference"
+                        it[origin] = "manual"
+                        it[route] = "manual"
+                        it[title] = "t"
+                        it[ProgressionsTable.chords] = chords
+                        it.block()
+                    }
+                }
+            }.sqlState
+
+        // 레퍼런스는 직접 입력만, 근거는 AI 행만, 키 형식, 빈 코드 배열, 구간 역전 → CHECK (23514)
+        assertEquals("23514", insertBad { this[ProgressionsTable.route] = "note" })
+        assertEquals("23514", insertBad { this[ProgressionsTable.evidence] = "화면" })
+        assertEquals("23514", insertBad { this[ProgressionsTable.key] = "F major" })
+        assertEquals("23514", insertBad { this[ProgressionsTable.chords] = kotlinx.serialization.json.JsonArray(emptyList()) })
+        assertEquals("23514", insertBad { this[ProgressionsTable.startSec] = 30; this[ProgressionsTable.endSec] = 10 })
+        assertEquals("23514", insertBad { this[ProgressionsTable.title] = "  " })
+        // 같은 노트 같은 순번 두 번 → 23505
+        assertEquals("23505", insertBad {
+            this[ProgressionsTable.kind] = "analysis"
+            this[ProgressionsTable.route] = "note"
+            this[ProgressionsTable.noteId] = noteId
+            this[ProgressionsTable.noteProgIndex] = 0
+        })
+
+        transaction(db) {
+            // 노션 대상에 progression 허용
+            SyncOutboxTable.insert {
+                it[SyncOutboxTable.userId] = userId
+                it[entity] = "progression"
+                it[entityId] = UUID.randomUUID()
+                it[op] = "upsert"
+            }
+            // analysis_jobs.kind 기본 note
+            AnalysisJobsTable.insert {
+                it[AnalysisJobsTable.userId] = userId
+                it[url] = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                it[tags] = listOf("화성")
+            }
+            assertEquals("note", AnalysisJobsTable.selectAll().single()[AnalysisJobsTable.kind])
+
+            // 노트 삭제 → 진행은 남고 note_id만 NULL
+            NotesTable.deleteWhere { id eq noteId }
+            val row = ProgressionsTable.selectAll().single()
+            assertEquals(null, row[ProgressionsTable.noteId])
+        }
+        val badEntity = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                SyncOutboxTable.insert {
+                    it[SyncOutboxTable.userId] = userId
+                    it[entity] = "chord"
+                    it[entityId] = UUID.randomUUID()
+                    it[op] = "upsert"
+                }
+            }
+        }
+        assertEquals("23514", badEntity.sqlState)
+
+        // 사용자 삭제 → CASCADE
+        transaction(db) {
+            UsersTable.deleteWhere { id eq userId }
+            assertEquals(0L, ProgressionsTable.selectAll().count())
         }
     }
 }
