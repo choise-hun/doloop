@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-05 (mac)
 - 입력: `진행_코드진행모음.md` §2·§3, 결과 파일 CH-0~CH-7c(특히 `CH-4_진행영상분석.md` §5, `CH-7_노션폐기.md`)
-- 상태: **완료(실제 영상 1개 확인만 미확인 — §3)** — 로컬 전체 테스트·e2e 통과, PR #63 Draft 해제, CI 결과는 §2
+- 상태: **완료(실제 영상 1개 확인만 미확인 — §3)** — 로컬 전체 테스트·e2e 통과, PR #63 Draft 해제, CI 통과(§2-1)
 - 코드 변경 없음(문서만)
 
 ## 1. 로컬 실행 결과 (mac, head `a873c67`, origin/main `c269ad2` 이미 반영 — 충돌 없음 `MERGEABLE`)
@@ -21,7 +21,7 @@ ULP_UI=legacy npx playwright test   16 passed, 58 skipped (43.6s)
 
 ### 2-1. CI
 
-- (아래 진행 파일 CH-8 행과 같음)
+- PR #63 CI 전부 통과 — Node 22·24·Kotlin·E2E spa·legacy·Docker, run 41859435516, head `ce226ec`
 
 ## 3. 실제 영상 1개 분석 — 미확인
 
