@@ -201,7 +201,7 @@ function collectProblems({ twoCol, emptySongs, blues }) {
       ['#weeklyStreakCard', '#recentSongCard', true],
       ['#progRefBox', '#progArchBox', true],
       ['#betterFrame', '#vaultFrame', true],
-      ['#streakChallengeBar', '#genreRow', false],
+      ['#streakChallengeBar', '#categoryRow', false],
     ];
     if (emptySongs) pairs.push(['#modes', '#songs', false]);
     for (const [a, b, top] of pairs) {

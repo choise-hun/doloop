@@ -4,7 +4,7 @@ import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
 import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
 import { useAuth } from '../lib/auth';
-import { apiClient, LocalSongRecord, NoteDetailDto, NoteSummaryDto, SongDto } from '../lib/apiClient';
+import { apiClient, CategoryDto, LocalSongRecord, NoteDetailDto, NoteSummaryDto, SongDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import {
   buildPracticeResumeHref,
@@ -19,17 +19,54 @@ import {
   pickNextIndex,
   ProgressionItem,
 } from '../lib/progressions';
-import { genreLabel, HomeGenreSlot, loadHomeGenres, saveHomeGenres, setOpenGenre } from '../lib/genres';
+import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categories';
 import styles from './HomePage.module.css';
 
-// 최근 곡 위젯 아래 장르 바로가기 `ㅁ ㅁ ㅁ +`. +는 표시 장르·순서 설정 팝업
-function GenreShortcuts(): React.ReactElement {
-  const [slots, setSlots] = useState<HomeGenreSlot[]>(() => loadHomeGenres());
+// 최근 곡 위젯 아래 분류 바로가기 `ㅁ ㅁ ㅁ +`. +는 분류 추가·이름·삭제·홈 표시·순서 팝업 (서버 저장)
+function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement {
+  const [list, setList] = useState<CategoryDto[]>([]);
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [err, setErr] = useState('');
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const uidRef = useRef(uid);
+  uidRef.current = uid;
+
+  const reload = async (myUid: string) => {
+    try {
+      const next = await apiClient.categories.list();
+      if (uidRef.current !== myUid) return;
+      setList(next);
+      setLoadState('ok');
+    } catch {
+      if (uidRef.current !== myUid) return;
+      setLoadState('error');
+    }
+  };
 
   useEffect(() => {
-    if (!open) return;
+    setList([]);
+    setOpen(false);
+    setErr('');
+    if (!uid || !apiClient.isLoggedIn()) {
+      setLoadState('idle');
+      return;
+    }
+    setLoadState('loading');
+    void reload(uid);
+  }, [uid]);
+
+  useEffect(() => {
+    if (!open) {
+      setEditId(null);
+      setConfirmId(null);
+      setErr('');
+      return;
+    }
     const handleDown = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
@@ -44,78 +81,221 @@ function GenreShortcuts(): React.ReactElement {
     };
   }, [open]);
 
-  const update = (next: HomeGenreSlot[]) => {
-    setSlots(next);
-    saveHomeGenres(next);
-  };
-  const toggle = (id: string) => update(slots.map((s) => (s.id === id ? { ...s, on: !s.on } : s)));
-  const move = (idx: number, dir: -1 | 1) => {
-    const to = idx + dir;
-    if (to < 0 || to >= slots.length) return;
-    const next = [...slots];
-    [next[idx], next[to]] = [next[to], next[idx]];
-    update(next);
+  const sorted = [...list].sort((a, b) => a.sortOrder - b.sortOrder);
+  const shown = homeCategories(list);
+
+  // 실패하면 문구를 보이고 서버 목록으로 되돌린다
+  const run = async (job: () => Promise<void>) => {
+    setErr('');
+    try {
+      await job();
+    } catch (e: any) {
+      setErr((e && e.message) || '저장하지 못했어요');
+      if (uidRef.current) void reload(uidRef.current);
+    }
   };
 
-  const shown = slots.filter((s) => s.on);
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name) {
+      setErr('이름을 입력하세요');
+      return;
+    }
+    void run(async () => {
+      const created = await apiClient.categories.create(name);
+      if (created) setList((prev) => [...prev, created]);
+      setNewName('');
+    });
+  };
+
+  const patchOne = (id: string, patch: { name?: string; onHome?: boolean }) => {
+    setList((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    void run(async () => {
+      const updated = await apiClient.categories.update(id, patch);
+      if (updated) setList((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editId) return;
+    const id = editId;
+    const name = editName.trim();
+    setEditId(null);
+    const cur = list.find((c) => c.id === id);
+    if (!name || !cur || cur.name === name) return;
+    patchOne(id, { name });
+  };
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const to = idx + dir;
+    if (to < 0 || to >= sorted.length) return;
+    const next = [...sorted];
+    [next[idx], next[to]] = [next[to], next[idx]];
+    setList(next.map((c, i) => ({ ...c, sortOrder: i })));
+    void run(async () => {
+      setList(await apiClient.categories.reorder(next.map((c) => c.id)));
+    });
+  };
+
+  const remove = (id: string) => {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      return;
+    }
+    setConfirmId(null);
+    setList((prev) => prev.filter((c) => c.id !== id));
+    void run(async () => {
+      await apiClient.categories.remove(id);
+    });
+  };
+
+  if (!uid) {
+    return (
+      <div className={styles.genreWrap}>
+        <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기">
+          <p className={`${styles.genreCell} ${styles.genreHint} ${styles.genreHintFull}`} id="categoryHint">
+            로그인하면 곡을 분류할 수 있어요
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.genreWrap} ref={wrapRef}>
-      <div className={styles.genreRow} id="genreRow" aria-label="장르 바로가기">
-        {shown.map((s) => (
+      <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기">
+        {shown.map((c) => (
           <SafeLink
-            key={s.id}
+            key={c.id}
             href="practice.html"
             className={styles.genreCell}
-            data-genre={s.id}
-            onClick={() => setOpenGenre(s.id)}
+            data-category={c.id}
+            title={c.name}
+            onClick={() => setOpenCategory(c.id)}
           >
-            {genreLabel(s.id)}
+            <span className={styles.genreName}>{c.name}</span>
           </SafeLink>
         ))}
+        {loadState !== 'loading' && shown.length === 0 && (
+          <p className={`${styles.genreCell} ${styles.genreHint}`} id="categoryHint">
+            {loadState === 'error'
+              ? '분류를 불러오지 못했어요'
+              : list.length === 0
+                ? '+를 눌러 분류를 만들어 보세요'
+                : '홈에 보일 분류를 켜 주세요'}
+          </p>
+        )}
         <button
           type="button"
           className={`${styles.genreCell} ${styles.genreAdd}`}
-          id="genreSettingsBtn"
-          aria-label="홈 장르 버튼 설정"
+          id="categorySettingsBtn"
+          aria-label="분류 관리"
           aria-expanded={open}
-          aria-controls="genreSettings"
+          aria-controls="categorySettings"
           onClick={() => setOpen((v) => !v)}
         >
           +
         </button>
       </div>
       {open && (
-        <div className={styles.genrePop} id="genreSettings" role="dialog" aria-label="홈 장르 버튼 설정">
-          <p className={styles.genrePopTitle}>홈에 보일 장르 · 순서</p>
-          <ul className={styles.genrePopList}>
-            {slots.map((s, idx) => (
-              <li key={s.id} data-genre={s.id}>
-                <label className={styles.genrePopLabel}>
-                  <input type="checkbox" checked={s.on} onChange={() => toggle(s.id)} />
-                  {genreLabel(s.id)}
-                </label>
-                <button
-                  type="button"
-                  className={styles.genreMove}
-                  aria-label={`${genreLabel(s.id)} 위로`}
-                  disabled={idx === 0}
-                  onClick={() => move(idx, -1)}
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  className={styles.genreMove}
-                  aria-label={`${genreLabel(s.id)} 아래로`}
-                  disabled={idx === slots.length - 1}
-                  onClick={() => move(idx, 1)}
-                >
-                  ▼
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div className={styles.genrePop} id="categorySettings" role="dialog" aria-label="분류 관리">
+          <p className={styles.genrePopTitle}>분류 · 홈에 보일 것 · 순서</p>
+          <form className={styles.genrePopAdd} onSubmit={add}>
+            <input
+              type="text"
+              id="categoryNewName"
+              className={styles.genrePopInput}
+              value={newName}
+              maxLength={CATEGORY_NAME_MAX}
+              placeholder="새 분류 이름"
+              aria-label="새 분류 이름"
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <button type="submit" className={styles.genrePopBtn} id="categoryAddBtn">
+              추가
+            </button>
+          </form>
+          {err && (
+            <p className={styles.genrePopErr} role="alert" id="categoryError">
+              {err}
+            </p>
+          )}
+          {sorted.length === 0 ? (
+            <p className={styles.genrePopEmpty}>아직 분류가 없어요</p>
+          ) : (
+            <ul className={styles.genrePopList}>
+              {sorted.map((c, idx) => (
+                <li key={c.id} data-category={c.id}>
+                  {editId === c.id ? (
+                    <input
+                      type="text"
+                      className={styles.genrePopInput}
+                      value={editName}
+                      maxLength={CATEGORY_NAME_MAX}
+                      aria-label="분류 이름"
+                      autoFocus
+                      onChange={(e) => setEditName(e.target.value)}
+                      onBlur={saveEdit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          saveEdit();
+                        } else if (e.key === 'Escape') {
+                          // 팝업은 닫지 않고 이름 고치기만 취소
+                          e.nativeEvent.stopImmediatePropagation();
+                          e.stopPropagation();
+                          setEditId(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <label className={styles.genrePopLabel} title={c.name}>
+                      <input type="checkbox" checked={c.onHome} onChange={() => patchOne(c.id, { onHome: !c.onHome })} />
+                      <span className={styles.genreName}>{c.name}</span>
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.genreMove}
+                    aria-label={`${c.name} 이름 바꾸기`}
+                    onClick={() => {
+                      setEditId(c.id);
+                      setEditName(c.name);
+                    }}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.genreMove}
+                    aria-label={`${c.name} 위로`}
+                    disabled={idx === 0}
+                    onClick={() => move(idx, -1)}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.genreMove}
+                    aria-label={`${c.name} 아래로`}
+                    disabled={idx === sorted.length - 1}
+                    onClick={() => move(idx, 1)}
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.genreMove} ${confirmId === c.id ? styles.genreConfirm : ''}`}
+                    aria-label={confirmId === c.id ? `${c.name} 삭제 확인` : `${c.name} 삭제`}
+                    onClick={() => remove(c.id)}
+                  >
+                    {confirmId === c.id ? '삭제' : '×'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
@@ -458,7 +638,7 @@ export function HomePage(): React.ReactElement {
               </div>
             </div>
           )}
-          <GenreShortcuts />
+          <CategoryShortcuts uid={activeUid} />
         </div>
       </section>
 
