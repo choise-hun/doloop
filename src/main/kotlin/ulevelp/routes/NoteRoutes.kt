@@ -155,6 +155,19 @@ fun Route.registerNoteRoutes(
             call.respond(HttpStatusCode.OK, NoteDetailResponse(updated))
         }
 
+        put("/{noteId}/collect") {
+            val user = call.requireAuthUser()
+            val noteId = parsePathUuid(call.parameters["noteId"])
+            val body = call.receiveJsonObject()
+            val elem = body["collect"]
+            if (elem !is JsonPrimitive || elem.isString || elem.booleanOrNull == null) {
+                throw InvalidInputException("collect는 true 또는 false여야 합니다.")
+            }
+            val response = noteService.setCollect(user.id, noteId, elem.boolean)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, response)
+        }
+
         delete("/{noteId}") {
             val user = call.requireAuthUser()
             val noteId = parsePathUuid(call.parameters["noteId"])

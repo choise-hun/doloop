@@ -134,6 +134,7 @@ object NotesTable : Table("notes") {
     val analysis = jsonb<JsonElement>("analysis", Json)
     val diagramsSvg = jsonb<JsonElement>("diagrams_svg", Json).default(JsonArray(emptyList()))
     val model = text("model").default("")
+    val collectProgressions = bool("collect_progressions").default(false)
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
@@ -152,6 +153,7 @@ object AnalysisJobsTable : Table("analysis_jobs") {
     val status = text("status").default("queued")
     val error = text("error").nullable()
     val noteId = uuid("note_id").references(NotesTable.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val kind = text("kind").default("note")
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val startedAt = timestampWithTimeZone("started_at").nullable()
     val finishedAt = timestampWithTimeZone("finished_at").nullable()
@@ -271,6 +273,41 @@ object SongCategoriesTable : Table("song_categories") {
     override val primaryKey = PrimaryKey(songId, categoryId)
 }
 
+/**
+ * 15. progressions (코드 진행 모음 CHORDS - V3. 한 행 = 진행 하나)
+ */
+object ProgressionsTable : Table("progressions") {
+    val id = uuid("id").autoGenerate()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val kind = text("kind")
+    val origin = text("origin")
+    val route = text("route")
+    val evidence = text("evidence").nullable()
+    val title = text("title")
+    val part = text("part").default("")
+    val artist = text("artist").default("")
+    val album = text("album").default("")
+    val channel = text("channel").default("")
+    val releaseDate = date("release_date").nullable()
+    val key = text("key").nullable()
+    val instrument = text("instrument").nullable()
+    val chords = jsonb<JsonElement>("chords", Json)
+    val moods = array<String>("moods", TextColumnType()).default(emptyList())
+    val genres = array<String>("genres", TextColumnType()).default(emptyList())
+    val tags = array<String>("tags", TextColumnType()).default(emptyList())
+    val url = text("url").default("")
+    val videoId = text("video_id").nullable()
+    val startSec = integer("start_sec").nullable()
+    val endSec = integer("end_sec").nullable()
+    val memo = text("memo").default("")
+    val noteId = uuid("note_id").references(NotesTable.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val noteProgIndex = short("note_prog_index").nullable()
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 val ALL_TABLES: List<Table> = listOf(
     UsersTable,
     ProfilesTable,
@@ -285,6 +322,7 @@ val ALL_TABLES: List<Table> = listOf(
     SyncOutboxTable,
     StorageTrashTable,
     CategoriesTable,
-    SongCategoriesTable
+    SongCategoriesTable,
+    ProgressionsTable
 )
 

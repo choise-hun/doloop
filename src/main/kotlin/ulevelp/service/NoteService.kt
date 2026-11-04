@@ -26,6 +26,10 @@ import ulevelp.note.GeminiSchemas
 import ulevelp.note.GuitarSvgRenderer
 import ulevelp.note.HarmonyChordDto
 import ulevelp.note.KeyboardSvgRenderer
+import ulevelp.note.ProgressionExtract
+import ulevelp.db.ProgressionsTable
+import ulevelp.service.ProgressionService.Companion.insertFromNote
+import ulevelp.service.ProgressionService.Companion.listByNote
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -43,6 +47,8 @@ data class AnalyzeJobCreateResponse(
 @Serializable
 data class AnalysisJobDto(
     val id: String,
+    /** `note`(학습 노트 분석) | `progression`(코드 진행 영상 분석, CH-4) */
+    val kind: String = NoteService.JOB_KIND_NOTE,
     val url: String,
     val tags: List<String>,
     val status: String,
@@ -72,6 +78,7 @@ data class NoteSummaryDto(
     val keywords: List<String>,
     val difficulty: String? = null,
     val model: String,
+    val collectProgressions: Boolean,
     val createdAt: String,
     val updatedAt: String
 )
@@ -97,6 +104,7 @@ data class NoteDetailDto(
     val analysis: JsonObject,
     val diagramsSvg: List<String>,
     val model: String,
+    val collectProgressions: Boolean,
     val createdAt: String,
     val updatedAt: String
 )
@@ -122,6 +130,9 @@ class NoteService(
         const val MAX_CONCURRENT_JOBS_PER_USER = 1
         const val RECENT_JOBS_LIMIT = 20
         const val JOB_EXECUTION_TIMEOUT_MS = 54L * 60L * 1000L // 54분
+        const val JOB_KIND_NOTE = "note"
+        const val JOB_KIND_PROGRESSION = "progression"
+        val JOB_KINDS = setOf(JOB_KIND_NOTE, JOB_KIND_PROGRESSION)
     }
 
     private fun requireDb(): Database =
@@ -142,8 +153,10 @@ class NoteService(
         rawUrl: String,
         rawTags: List<String>,
         memo: String,
-        dispatcher: AnalyzeJobDispatcher
+        dispatcher: AnalyzeJobDispatcher,
+        kind: String = JOB_KIND_NOTE
     ): AnalyzeJobCreateResponse {
+        require(kind in JOB_KINDS) { "unknown job kind: $kind" }
         val database = requireDb()
 
         val videoId = ExportImportService.extractVideoId(rawUrl)
@@ -220,6 +233,7 @@ class NoteService(
                 it[url] = normalizedUrl
                 it[tags] = orderedTags
                 it[AnalysisJobsTable.memo] = memo
+                it[AnalysisJobsTable.kind] = kind
                 it[status] = "queued"
                 it[createdAt] = nowUtc
             }
@@ -277,6 +291,7 @@ class NoteService(
         val url = jobRow[AnalysisJobsTable.url]
         val tags = jobRow[AnalysisJobsTable.tags]
         val memo = jobRow[AnalysisJobsTable.memo]
+        val isProgression = jobRow[AnalysisJobsTable.kind] == JOB_KIND_PROGRESSION
 
         // 2. 트랜잭션 밖에서 외부 호출 (최대 jobTimeoutMs)
         try {
@@ -289,7 +304,11 @@ class NoteService(
                 val title = meta?.title?.takeIf { it.isNotBlank() }?.take(300) ?: url
                 val channel = meta?.author?.take(200) ?: ""
 
-                val (schema, prompt) = GeminiSchemas.buildPrompt(tags, memo)
+                val (schema, prompt) = if (isProgression) {
+                    GeminiSchemas.buildProgressionPrompt(memo)
+                } else {
+                    GeminiSchemas.buildPrompt(tags, memo)
+                }
                 val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema)
                 val analysis = result.analysis
 
@@ -352,8 +371,20 @@ class NoteService(
                         it[NotesTable.analysis] = analysis
                         it[NotesTable.diagramsSvg] = JsonArray(diagramsSvg.map { svg -> JsonPrimitive(svg) })
                         it[NotesTable.model] = gemini.model
+                        it[NotesTable.collectProgressions] = isProgression
                         it[createdAt] = nowUtc
                         it[updatedAt] = nowUtc
+                    }
+
+                    // 코드 진행 영상: 같은 트랜잭션에서 화성 진행마다 진행 행 (설계 §2-2·§3-5). 0개면 노트만
+                    if (isProgression) {
+                        val rows = ProgressionExtract.fromAnalysis(
+                            analysis = analysis,
+                            noteTitle = title,
+                            channel = channel,
+                            videoId = videoId
+                        )
+                        insertFromNote(userId, noteId, "video", rows)
                     }
 
                     AnalysisJobsTable.update({ AnalysisJobsTable.id eq jobId }) {
@@ -521,8 +552,44 @@ class NoteService(
         }
     }
 
+    /**
+     * "코드 진행 수집에 넣기" 토글 (설계 §2-2·§3-6). 켜면 노트의 화성 진행마다 행 생성(이미 있는 순번은 건너뜀),
+     * 끄면 그 노트에서 온 행을 모두 지운다(사람이 고친 행 포함). 토글 값은 진행이 0개여도 저장한다
+     */
+    suspend fun setCollect(userId: UUID, noteId: UUID, collect: Boolean): NoteCollectResponse {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val row = NotesTable.selectAll()
+                .where { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
+                .forUpdate(ForUpdateOption.ForUpdate)
+                .singleOrNull() ?: throw NotFoundException("학습 노트를 찾을 수 없습니다.")
+
+            if (row[NotesTable.collectProgressions] != collect) {
+                NotesTable.update({ (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }) {
+                    it[collectProgressions] = collect
+                }
+            }
+
+            if (collect) {
+                val analysis = row[NotesTable.analysis] as? JsonObject ?: JsonObject(emptyMap())
+                val rows = ProgressionExtract.fromAnalysis(
+                    analysis = analysis,
+                    noteTitle = row[NotesTable.title],
+                    channel = row[NotesTable.channel],
+                    videoId = row[NotesTable.videoId]
+                )
+                insertFromNote(userId, noteId, "note", rows)
+                NoteCollectResponse(noteId.toString(), true, listByNote(userId, noteId))
+            } else {
+                ProgressionsTable.deleteWhere { (ProgressionsTable.userId eq userId) and (ProgressionsTable.noteId eq noteId) }
+                NoteCollectResponse(noteId.toString(), false, emptyList())
+            }
+        }
+    }
+
     private fun rowToJobDto(row: ResultRow): AnalysisJobDto = AnalysisJobDto(
         id = row[AnalysisJobsTable.id].toString(),
+        kind = row[AnalysisJobsTable.kind],
         url = row[AnalysisJobsTable.url],
         tags = row[AnalysisJobsTable.tags],
         status = row[AnalysisJobsTable.status],
@@ -546,6 +613,7 @@ class NoteService(
         keywords = row[NotesTable.keywords],
         difficulty = row[NotesTable.difficulty],
         model = row[NotesTable.model],
+        collectProgressions = row[NotesTable.collectProgressions],
         createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
         updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
     )
@@ -568,6 +636,7 @@ class NoteService(
             analysis = analysisObj,
             diagramsSvg = diagramsArray,
             model = row[NotesTable.model],
+            collectProgressions = row[NotesTable.collectProgressions],
             createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
             updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
         )

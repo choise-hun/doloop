@@ -682,14 +682,6 @@
   white-space: nowrap;
 }
 
-.ppSettingsLink {
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-  margin-top: auto;
-  color: var(--link);
-  font-size: 14px;
-}
-
 /* Drive 미연결 1곡 제한 교체 선택 모달 (#takeLimitModal) */
 .modalBackdrop {
   position: fixed;

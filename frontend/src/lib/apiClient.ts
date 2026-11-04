@@ -157,6 +157,7 @@ export interface NotionSyncStatusDto {
 
 export interface AnalysisJobDto {
   id: string;
+  kind?: 'note' | 'progression' | string;
   url: string;
   tags: string[];
   status: 'queued' | 'running' | 'done' | 'failed' | string;
@@ -180,6 +181,7 @@ export interface NoteSummaryDto {
   keywords: string[];
   difficulty?: string | null;
   model: string;
+  collectProgressions?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -187,6 +189,70 @@ export interface NoteSummaryDto {
 export interface NoteDetailDto extends NoteSummaryDto {
   analysis: Record<string, any>;
   diagramsSvg: string[];
+}
+
+// 코드 진행 모음 (docs/03-api-spec.md 8.5, 결과/CH-1b_설계.md §3)
+export interface ProgressionChordDto {
+  symbol: string;
+  roman: string;
+  source?: '화면' | '말함' | '추정' | string;
+  timestamp?: string;
+}
+
+export interface ProgressionDto {
+  id: string;
+  kind: 'reference' | 'analysis';
+  origin: 'ai' | 'manual';
+  route: 'video' | 'note' | 'manual';
+  evidence: '화면' | '말함' | '추정' | null;
+  title: string;
+  part: string;
+  artist: string;
+  album: string;
+  channel: string;
+  releaseDate: string | null;
+  key: string | null;
+  instrument: '건반' | '기타' | null;
+  chords: ProgressionChordDto[];
+  moods: string[];
+  genres: string[];
+  tags: string[];
+  url: string;
+  videoId: string | null;
+  startSec: number | null;
+  endSec: number | null;
+  memo: string;
+  noteId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProgressionScope = 'reference' | 'analysis' | 'all';
+
+// POST 본문(kind·title·chords 필수) / PATCH 본문(보낸 필드만)
+export interface ProgressionInput {
+  kind?: 'reference' | 'analysis';
+  title?: string;
+  chords?: ProgressionChordDto[];
+  part?: string;
+  artist?: string;
+  album?: string;
+  channel?: string;
+  releaseDate?: string | null;
+  key?: string | null;
+  moods?: string[];
+  genres?: string[];
+  tags?: string[];
+  url?: string;
+  startSec?: number | null;
+  endSec?: number | null;
+  memo?: string;
+}
+
+export interface NoteCollectResult {
+  noteId: string;
+  collect: boolean;
+  progressions: ProgressionDto[];
 }
 
 export interface LocalMigrationResult {
@@ -867,6 +933,72 @@ async function removeNote(noteId: string): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+async function setNoteCollect(noteId: string, collect: boolean): Promise<NoteCollectResult> {
+  requireLogin();
+  const path = '/api/v1/notes/' + encodeURIComponent(noteId) + '/collect';
+  const r = await getAuthRef().apiFetch(path, {
+    method: 'PUT',
+    body: JSON.stringify({ collect }),
+  });
+  return {
+    noteId: r && r.noteId ? r.noteId : noteId,
+    collect: Boolean(r && r.collect),
+    progressions: r && Array.isArray(r.progressions) ? r.progressions : [],
+  };
+}
+
+async function listProgressions(scope?: ProgressionScope): Promise<ProgressionDto[]> {
+  requireLogin();
+  let path = '/api/v1/progressions';
+  if (scope) path += '?scope=' + encodeURIComponent(scope);
+  const r = await getAuthRef().apiFetch(path);
+  return r && Array.isArray(r.progressions) ? r.progressions : [];
+}
+
+async function createProgression(input: ProgressionInput): Promise<ProgressionDto | null> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/progressions', {
+    method: 'POST',
+    body: JSON.stringify(input || {}),
+  });
+  return r && r.progression ? r.progression : null;
+}
+
+async function updateProgression(progressionId: string, patch: ProgressionInput): Promise<ProgressionDto | null> {
+  requireLogin();
+  const path = '/api/v1/progressions/' + encodeURIComponent(progressionId);
+  const r = await getAuthRef().apiFetch(path, {
+    method: 'PATCH',
+    body: JSON.stringify(patch || {}),
+  });
+  return r && r.progression ? r.progression : null;
+}
+
+async function removeProgression(progressionId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  const path = '/api/v1/progressions/' + encodeURIComponent(progressionId);
+  await getAuthRef().apiFetch(path, {
+    method: 'DELETE',
+  });
+  return { ok: true };
+}
+
+async function analyzeProgression(input: { url: string; memo?: string }): Promise<{ jobId: string; status: string }> {
+  requireLogin();
+  try {
+    const r = await getAuthRef().apiFetch('/api/v1/progressions/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ url: input?.url, memo: input?.memo }),
+    });
+    return { jobId: r.jobId, status: r.status };
+  } catch (err: any) {
+    if (err && (err.code === 'NO_KEY' || err.status === 412)) {
+      clearCachedGeminiKey();
+    }
+    throw err;
+  }
+}
+
 async function updateMe(patch: ProfilePatchInput): Promise<MeProfile> {
   requireLogin();
   const A = getAuthRef();
@@ -1010,6 +1142,14 @@ export const apiClient = {
     get: getNote,
     update: updateNote,
     remove: removeNote,
+    setCollect: setNoteCollect,
+  },
+  progressions: {
+    list: listProgressions,
+    create: createProgression,
+    update: updateProgression,
+    remove: removeProgression,
+    analyze: analyzeProgression,
   },
   runLocalMigration,
   listLocalSongs,

@@ -412,16 +412,74 @@ object GeminiSchemas {
 
     fun buildPrompt(tags: List<String>, memo: String): Pair<JsonObject, String> {
         val (schema, guides) = build(tags)
+        return Pair(schema, fillTemplate(tags, guides, memo))
+    }
+
+    private fun fillTemplate(tags: List<String>, guides: String, memo: String): String {
         val memoText = if (memo.isNotBlank()) {
             "\n사용자 메모(특히 신경 써서 볼 부분): ${memo.trim()}"
         } else {
             ""
         }
-        val prompt = PROMPT_TEMPLATE
+        return PROMPT_TEMPLATE
             .replace("{tags}", tags.joinToString(", "))
             .replace("{guides}", guides)
             .replace("{memo}", memoText)
-        return Pair(schema, prompt)
+    }
+
+    /** 코드 진행 영상 분석의 분류 태그 (결과 노트 태그도 이것) */
+    val PROGRESSION_TAGS: List<String> = listOf("화성")
+
+    const val PROGRESSION_GUIDE: String =
+        "- [코드 진행] 이 영상은 코드 진행을 배우거나 연주하는 영상입니다. 영상에 나오는 코드 진행을 진행 단위로 빠짐없이 모읍니다.\n" +
+            "  · 코드 심볼은 화면(자막·악보·코드 다이어그램·피아노롤 라벨)에 적힌 표기를 글자 그대로 씁니다. maj7/M7/Δ, m7b5/ø 같은 표기를 바꾸지 않습니다.\n" +
+            "  · 화면에 심볼이 없을 때만 표준 표기(예: Cmaj7, Am7, G7(b9)/B)로 적고 source는 \"말함\"(강사가 말함) 또는 \"추정\"(소리로 짐작)입니다.\n" +
+            "  · 같은 진행이 반복되면 한 번만 적고, 코드가 바뀌는 진행(변형·전조)은 따로 적습니다.\n" +
+            "  · key는 \"F Major\", \"A min\"처럼 적습니다(조를 말하거나 화면에 보이면 그대로, 아니면 진행으로 추정).\n" +
+            "  · roman은 key 기준으로 대문자 메이저·소문자 마이너, 메이저7은 M7, 도미넌트7은 7, 변화음은 도수 앞 b/#(bVIIM7), 텐션은 뒤(Iadd9, V7(b9))로 적습니다. 세컨더리 도미넌트도 V/x 대신 근음 도수로 적습니다(VI7).\n" +
+            "  · 특정 곡의 진행이면 song·artist를 적습니다.\n" +
+            "  · start/end는 그 진행이 처음 나오는 구간입니다."
+
+    private fun strSchema(description: String): JsonObject = buildJsonObject {
+        put("type", "string")
+        put("description", description)
+    }
+
+    /**
+     * 화성 스키마 확장판 (`개발산출물/결과/CH-1b_설계.md` §4-1): 진행 객체에 song·artist·start·end를 더하고
+     * key 설명을 형식 지시로 바꾼다. 기존 화성 스키마(`sectionSchemas`)는 그대로 두고 복사본만 고친다
+     */
+    private fun progressionHarmonySchema(): JsonObject {
+        val harmony = sectionSchemas.getValue("화성").second
+        val progressions = harmony.getValue("properties").jsonObject.getValue("progressions").jsonObject
+        val item = progressions.getValue("items").jsonObject
+        val oldProps = item.getValue("properties").jsonObject
+        val newProps = linkedMapOf(
+            "name" to strSchema("진행 이름·구간 (예: 인트로 진행, 후렴, 2-5-1 변형)"),
+            "song" to strSchema("영상이 특정 곡을 다루면 곡 제목, 아니면 빈 문자열"),
+            "artist" to strSchema("곡 아티스트, 모르면 빈 문자열"),
+            "key" to strSchema("\"<음> Major\" 또는 \"<음> min\" 형식 (예: F Major, A min). 모르면 빈 문자열"),
+            "instrument" to oldProps.getValue("instrument").jsonObject,
+            "start" to strSchema("이 진행이 처음 나오는 구간 시작, mm:ss 또는 h:mm:ss. 모르면 빈 문자열"),
+            "end" to strSchema("이 진행이 처음 나오는 구간 끝, mm:ss 또는 h:mm:ss. 모르면 빈 문자열"),
+            "chords" to oldProps.getValue("chords").jsonObject
+        )
+        val newItem = obj(newProps)
+        val newProgressions = JsonObject(progressions + ("items" to newItem))
+        val newHarmonyProps = JsonObject(harmony.getValue("properties").jsonObject + ("progressions" to newProgressions))
+        return JsonObject(harmony + ("properties" to newHarmonyProps))
+    }
+
+    /**
+     * 코드 진행 영상 분석 프롬프트 (CH-4, 설계 §4). 공통 스키마 + 화성 확장판, 태그별 지시는
+     * [코드 진행] 지시 뒤에 기존 [화성] 지시를 그대로 붙인다. 일반 노트(`buildPrompt`)는 바뀌지 않는다
+     */
+    fun buildProgressionPrompt(memo: String): Pair<JsonObject, String> {
+        val props = LinkedHashMap<String, JsonObject>()
+        props.putAll(commonSchemas)
+        props["harmony"] = progressionHarmonySchema()
+        val guides = PROGRESSION_GUIDE + "\n- [화성] " + sectionSchemas.getValue("화성").third
+        return Pair(obj(props), fillTemplate(PROGRESSION_TAGS, guides, memo))
     }
 }
 

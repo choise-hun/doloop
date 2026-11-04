@@ -29,9 +29,11 @@ import {
   q4Tones,
   ScaleWheelSvg,
 } from '../components/chords/ChordDiagrams';
+import { ProgressionPlayTab } from '../components/chords/ProgressionPlayTab';
+import { isProgHash } from '../components/progressions/model.mts';
 import styles from './ChordsPage.module.css';
 
-export type ChordTabId = 'scale' | 'tone' | 'matrix' | 'circle' | 'reint' | 'tf' | 'ds';
+export type ChordTabId = 'scale' | 'tone' | 'matrix' | 'circle' | 'reint' | 'tf' | 'ds' | 'prog';
 
 export const CHORD_TABS: ReadonlyArray<{ id: ChordTabId; label: string }> = [
   { id: 'scale', label: '1 · 스케일 연습' },
@@ -41,7 +43,15 @@ export const CHORD_TABS: ReadonlyArray<{ id: ChordTabId; label: string }> = [
   { id: 'reint', label: '5 · 코드 재해석' },
   { id: 'tf', label: '6 · 2-5-1 탐색' },
   { id: 'ds', label: '7 · 더블 스탑 연습' },
+  { id: 'prog', label: '8 · 진행 연주' },
 ];
+
+// "#matrix" → 'matrix', "#prog?c=…" → 'prog' (CH-5b), 그 밖은 null
+function tabFromHash(hash: string): ChordTabId | null {
+  if (isProgHash(hash)) return 'prog';
+  const h = hash.replace(/^#/, '');
+  return CHORD_TABS.some((t) => t.id === h) ? (h as ChordTabId) : null;
+}
 
 export const CAGED_BLOCK_CHIPS: ReadonlyArray<{ v: number; label: string }> = [
   { v: 1, label: '#1 (A) Shape' },
@@ -110,8 +120,8 @@ export function ChordsPage(): React.ReactElement {
   // 초기 탭 결정
   const [activeTab, setActiveTab] = useState<ChordTabId>(() => {
     if (typeof window !== 'undefined') {
-      const h = window.location.hash.replace(/^#/, '');
-      if (CHORD_TABS.some((t) => t.id === h)) return h as ChordTabId;
+      const fromHash = tabFromHash(window.location.hash);
+      if (fromHash) return fromHash;
       try {
         const s = localStorage.getItem('ulp:tab');
         if (s && CHORD_TABS.some((t) => t.id === s)) return s as ChordTabId;
@@ -121,6 +131,11 @@ export function ChordsPage(): React.ReactElement {
     }
     return 'scale';
   });
+
+  // 진행 연주 탭이 받은 해시("#prog?c=…") — 다른 탭에 갔다 돌아와도 같은 진행을 연다
+  const [progHash, setProgHash] = useState<string>(() =>
+    typeof window !== 'undefined' && isProgHash(window.location.hash) ? window.location.hash : ''
+  );
 
   // 전역 타이머 관리 레프
   const timersRef = useRef<number[]>([]);
@@ -149,16 +164,17 @@ export function ChordsPage(): React.ReactElement {
       /* ignore */
     }
     if (typeof window !== 'undefined') {
-      window.location.hash = `#${tabId}`;
+      window.location.hash = tabId === 'prog' && progHash ? progHash : `#${tabId}`;
     }
   }
 
   useEffect(() => {
     function handleHashChange() {
-      const h = window.location.hash.replace(/^#/, '');
-      if (CHORD_TABS.some((t) => t.id === h) && h !== activeTab) {
+      const h = tabFromHash(window.location.hash);
+      if (h === 'prog') setProgHash(window.location.hash === '#prog' ? '' : window.location.hash);
+      if (h && h !== activeTab) {
         stopAllTransports();
-        setActiveTab(h as ChordTabId);
+        setActiveTab(h);
         try {
           localStorage.setItem('ulp:tab', h);
         } catch {
@@ -950,7 +966,7 @@ export function ChordsPage(): React.ReactElement {
           </a>
         </div>
         <p className={styles.subText}>
-          스케일 연습(CAGED 5블럭) · 코드톤 지도 · 보이싱 매트릭스 · 탑노트 5도권 · 코드 재해석 · 2-5-1 탐색 · 7 · 더블 스탑 연습
+          스케일 연습(CAGED 5블럭) · 코드톤 지도 · 보이싱 매트릭스 · 탑노트 5도권 · 코드 재해석 · 2-5-1 탐색 · 7 · 더블 스탑 연습 · 진행 연주
         </p>
       </header>
 
@@ -2618,6 +2634,27 @@ export function ChordsPage(): React.ReactElement {
             })}
           </div>
         </div>
+      </section>
+
+      {/* 8. 진행 연주 패널 (CH-5b) */}
+      <section id="pane-prog" role="tabpanel" className={styles.pane} hidden={activeTab !== 'prog'}>
+        <ProgressionPlayTab
+          active={activeTab === 'prog'}
+          hash={progHash}
+          onNavigate={(h) => {
+            window.location.hash = h;
+          }}
+          onOpenMatrix={(root, q) => {
+            setMxRoot(root);
+            setMxQ(q);
+            handleTabChange('matrix');
+          }}
+          onOpenTone={(root, q) => {
+            setToneRoot(root);
+            setToneQ(q);
+            handleTabChange('tone');
+          }}
+        />
       </section>
     </div>
     </AppShell>

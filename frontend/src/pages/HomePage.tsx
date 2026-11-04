@@ -1,10 +1,10 @@
 // frontend/src/pages/HomePage.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
 import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
 import { useAuth } from '../lib/auth';
-import { apiClient, CategoryDto, LocalSongRecord, NoteDetailDto, NoteSummaryDto, SongDto } from '../lib/apiClient';
+import { apiClient, CategoryDto, LocalSongRecord, NoteSummaryDto, ProgressionDto, ProgressionScope, SongDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import {
   buildPracticeResumeHref,
@@ -12,15 +12,22 @@ import {
   computeWeeklyStreak,
   DEFAULT_ARCHIVE_PROGRESSIONS,
   DEFAULT_REFERENCE_PROGRESSIONS,
-  extractProgressionsFromNotes,
   formatRecentSongSegment,
   getLastChordTab,
   getLocalTodayStr,
-  pickNextIndex,
-  ProgressionItem,
 } from '../lib/progressions';
+import { chordLine, filterScope, KIND_LABEL, ORIGIN_LABEL, playHref, seedToDto } from '../components/progressions/model.mts';
+import { pickRandom, tasteStats } from '../lib/chords/stats.mts';
 import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categories';
 import styles from './HomePage.module.css';
+
+// 홈 "취향 코드 진행 꺼내보기"(CH-6): 서버 진행 목록(없으면 기본 시드) + 범위 토글. 노트 화성 읽기·`편곡` 태그 규칙은 없앴다(설계 §8)
+const PROG_SEEDS: ProgressionDto[] = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_ARCHIVE_PROGRESSIONS].map(seedToDto);
+const PROG_SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
+  ['reference', '레퍼런스'],
+  ['analysis', '분석'],
+  ['all', '합산'],
+];
 
 // 최근 곡 위젯 아래 분류 바로가기 `ㅁ ㅁ ㅁ +`. +는 분류 추가·이름·삭제·홈 표시·순서 팝업 (서버 저장)
 function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement {
@@ -346,10 +353,10 @@ export function HomePage(): React.ReactElement {
   const [activeDates, setActiveDates] = useState<string[]>([]);
   const [localSongs, setLocalSongs] = useState<LocalSongRecord[]>(() => apiClient.listLocalSongs());
   const [recentNote, setRecentNote] = useState<NoteSummaryDto | null>(null);
-  const [refList, setRefList] = useState<ProgressionItem[]>(() => [...DEFAULT_REFERENCE_PROGRESSIONS]);
-  const [archList, setArchList] = useState<ProgressionItem[]>(() => [...DEFAULT_ARCHIVE_PROGRESSIONS]);
-  const [refIdx, setRefIdx] = useState<number>(0);
-  const [archIdx, setArchIdx] = useState<number>(0);
+  const [progAll, setProgAll] = useState<ProgressionDto[]>(PROG_SEEDS);
+  const [progSeeded, setProgSeeded] = useState<boolean>(true);
+  const [progScope, setProgScope] = useState<ProgressionScope>('reference');
+  const [progPickId, setProgPickId] = useState<string | null>(null);
 
   const reqSeqRef = useRef(0);
 
@@ -365,11 +372,9 @@ export function HomePage(): React.ReactElement {
       setSongsError('');
       setActiveDates(locals.map((it) => it.date || '').filter(Boolean));
       setRecentNote(null);
-      const extracted = extractProgressionsFromNotes([]);
-      setRefList(extracted.reference);
-      setArchList(extracted.archive);
-      setRefIdx(0);
-      setArchIdx(0);
+      setProgAll(PROG_SEEDS);
+      setProgSeeded(true);
+      setProgPickId(null);
       return;
     }
 
@@ -409,38 +414,34 @@ export function HomePage(): React.ReactElement {
         setActiveDates([]);
       });
 
-    // 최근 학습 노트 조회 및 상세 병렬 조회로 코드 진행 추출 (PR #38 리뷰 반영)
+    // 최근 학습 노트 조회
     apiClient.notes
       .list()
-      .then(async (notes) => {
+      .then((notes) => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
         const safeNotes = Array.isArray(notes) ? notes : [];
         setRecentNote(safeNotes[0] || null);
-
-        // 상위 최대 3개 노트 상세를 병렬 조회하여 analysis(화성 진행) 확보
-        const topNotes = safeNotes.slice(0, 3);
-        const detailNotes: NoteDetailDto[] = [];
-        await Promise.all(
-          topNotes.map(async (n) => {
-            try {
-              const detail = await apiClient.notes.get(n.id);
-              if (detail) detailNotes.push(detail);
-            } catch {
-              /* 개별 노트 상세 조회 실패 격리 */
-            }
-          })
-        );
-
-        if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
-        const extracted = extractProgressionsFromNotes(detailNotes.length > 0 ? detailNotes : safeNotes);
-        setRefList(extracted.reference);
-        setArchList(extracted.archive);
-        setRefIdx(0);
-        setArchIdx(0);
       })
       .catch(() => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
         setRecentNote(null);
+      });
+
+    // 코드 진행 목록 (취향 코드 진행). 하나도 없거나 실패하면 기본 시드
+    apiClient.progressions
+      .list()
+      .then((list) => {
+        if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
+        const mine = Array.isArray(list) ? list : [];
+        setProgAll(mine.length > 0 ? mine : PROG_SEEDS);
+        setProgSeeded(mine.length === 0);
+        setProgPickId(null);
+      })
+      .catch(() => {
+        if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
+        setProgAll(PROG_SEEDS);
+        setProgSeeded(true);
+        setProgPickId(null);
       });
   }, [activeUid]);
 
@@ -480,13 +481,18 @@ export function HomePage(): React.ReactElement {
         }
       : null;
 
-  // 노션 바로가기 링크
+  // 노션 바로가기 링크 — 노션 연동은 동결·은닉(계획/앱_명세.md §5). 설정 고급 메뉴에 주소를 넣은 사용자에게만 보인다
   const nlPracticeUrl = safeUrl(raw.get('ulp:notion-practice'));
   const nlNotesUrl = safeUrl(raw.get('ulp:notion-notes'));
   const mainNotionUrl = nlPracticeUrl || nlNotesUrl;
 
-  const currentRef = refList[refIdx] || DEFAULT_REFERENCE_PROGRESSIONS[0];
-  const currentArch = archList[archIdx] || DEFAULT_ARCHIVE_PROGRESSIONS[0];
+  const progInScope = useMemo(() => filterScope(progAll, progScope), [progAll, progScope]);
+  const progStats = useMemo(() => tasteStats(progInScope), [progInScope]);
+  const progCurrent = progInScope.find((p) => p.id === progPickId) || progInScope[0] || null;
+  const progScopeLabel = PROG_SCOPES.find(([s]) => s === progScope)?.[1] || '';
+  const progTasteTop = progStats.patterns[0] || progStats.moves[0] || null;
+  const progTasteKind = progStats.patterns[0] ? '자주 나오는 진행' : progStats.moves[0] ? '가장 많은 코드 이동' : '';
+  const progTasteHref = 'progressions.html' + (progScope === 'reference' ? '' : '?scope=' + progScope) + '#progTaste';
 
   const handleGoSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -680,8 +686,8 @@ export function HomePage(): React.ReactElement {
             <div className={styles.subCol}>
               <div className={styles.subColHead}>
                 <h3 className={styles.subColTitle}>PLAYER · 내 연습 곡</h3>
-                <SafeLink href="settings.html#keys" className={styles.widgetLink}>
-                  노션 연결 →
+                <SafeLink href="log.html#songs" className={styles.widgetLink}>
+                  곡 보관함 →
                 </SafeLink>
               </div>
               <ul
@@ -786,65 +792,99 @@ export function HomePage(): React.ReactElement {
           <div className={`${styles.vaultSection} ${styles.vaultSectionGrow}`} id="progressionPickerSection">
             <div className={styles.subColHead}>
               <h3 className={styles.subColTitle}>취향 코드 진행 꺼내보기</h3>
-              <SafeLink href="chords.html#reint" className={styles.widgetLink}>
-                보이싱 탐색 →
+              <SafeLink href="progressions.html" className={styles.widgetLink}>
+                코드 진행 모음 →
               </SafeLink>
+            </div>
+            <div className={styles.progScopeRow} id="progScope" role="group" aria-label="진행 범위">
+              {PROG_SCOPES.map(([s, label]) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`${styles.progScopeBtn} ${progScope === s ? styles.progScopeBtnOn : ''}`}
+                  aria-pressed={progScope === s}
+                  data-scope={s}
+                  onClick={() => {
+                    setProgScope(s);
+                    setProgPickId(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className={styles.progGrid}>
               <div className={styles.progCard} id="progRefBox">
                 <div className={styles.progHead}>
-                  <span className={styles.progBadge}>REFERENCE</span>
+                  <span className={styles.progBadge}>{progCurrent ? KIND_LABEL[progCurrent.kind] : progScopeLabel}</span>
                   <span className={styles.progKey} id="progRefKey">
-                    {currentRef.keyLabel}
+                    {progCurrent ? progCurrent.key || '키 없음' : ''}
                   </span>
                 </div>
-                <SafeLink
-                  href={currentRef.href}
-                  className={styles.progChordsLink}
-                  id="progRefChords"
-                >
-                  {currentRef.chordsText}
-                </SafeLink>
-                <p className={styles.progSub} id="progRefTitle">
-                  {currentRef.title}
-                  <span className={styles.progSource}>출처: {currentRef.sourceType}</span>
-                </p>
-                <button
-                  type="button"
-                  className={styles.randBtn}
-                  id="btnRandRef"
-                  onClick={() => setRefIdx((cur) => pickNextIndex(cur, refList.length))}
-                >
-                  # 랜덤으로 보여주기
-                </button>
+                {progCurrent ? (
+                  <>
+                    <SafeLink href={playHref(progCurrent)} className={styles.progChordsLink} id="progRefChords">
+                      {chordLine(progCurrent)}
+                    </SafeLink>
+                    <p className={styles.progSub} id="progRefTitle">
+                      {progCurrent.title || '(제목 없음)'}
+                      <span className={styles.progSource}>
+                        출처: {progSeeded ? '기본' : ORIGIN_LABEL[progCurrent.origin] || progCurrent.origin}
+                      </span>
+                    </p>
+                    <div className={styles.progActs}>
+                      <button
+                        type="button"
+                        className={styles.randBtn}
+                        id="btnRandRef"
+                        disabled={progInScope.length < 2}
+                        onClick={() => {
+                          const next = pickRandom(progInScope, progCurrent.id);
+                          setProgPickId(next ? next.id : null);
+                        }}
+                      >
+                        # 랜덤으로 보여주기
+                      </button>
+                      <SafeLink href={playHref(progCurrent)} className={styles.randBtn} id="progRefPlay">
+                        연주하기
+                      </SafeLink>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className={styles.progSub} id="progRefTitle">
+                      {progScopeLabel} 범위에 모은 진행이 없어요.
+                    </p>
+                    <div className={styles.progActs}>
+                      <SafeLink href="progressions.html" className={styles.randBtn} id="btnRandRef">
+                        진행 넣으러 가기
+                      </SafeLink>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className={styles.progCard} id="progArchBox">
                 <div className={styles.progHead}>
-                  <span className={styles.progBadge}>ARCHIVE</span>
+                  <span className={styles.progBadge}>취향</span>
                   <span className={styles.progKey} id="progArchKey">
-                    {currentArch.keyLabel}
+                    진행 {progStats.total}개
                   </span>
                 </div>
-                <SafeLink
-                  href={currentArch.href}
-                  className={styles.progChordsLink}
-                  id="progArchChords"
-                >
-                  {currentArch.chordsText}
+                <SafeLink href={progTasteHref} className={styles.progChordsLink} id="progArchChords">
+                  {progTasteTop ? progTasteTop.label : '아직 겹치는 진행이 없어요'}
                 </SafeLink>
                 <p className={styles.progSub} id="progArchTitle">
-                  {currentArch.title}
-                  <span className={styles.progSource}>출처: {currentArch.sourceType}</span>
+                  {progTasteTop ? `${progTasteKind} · ${progTasteTop.count}번` : '진행이 쌓이면 자주 쓰는 진행이 보여요'}
+                  <span className={styles.progSource}>
+                    많이 쓴 키: {progStats.keys[0] ? progStats.keys[0].label : '—'}
+                  </span>
                 </p>
-                <button
-                  type="button"
-                  className={styles.randBtn}
-                  id="btnRandArch"
-                  onClick={() => setArchIdx((cur) => pickNextIndex(cur, archList.length))}
-                >
-                  # 랜덤으로 보여주기
-                </button>
+                <div className={styles.progActs}>
+                  <SafeLink href={progTasteHref} className={styles.randBtn} id="progTasteLink">
+                    취향 통계 보기
+                  </SafeLink>
+                </div>
               </div>
             </div>
           </div>
@@ -854,8 +894,9 @@ export function HomePage(): React.ReactElement {
       <SafeLink
         className={`notion-big ${styles.notionBig}`}
         id="notionBig"
-        href={mainNotionUrl || 'settings.html#links'}
+        href={mainNotionUrl || '#'}
         external={Boolean(mainNotionUrl)}
+        hidden={!mainNotionUrl}
       >
         NOTION
       </SafeLink>

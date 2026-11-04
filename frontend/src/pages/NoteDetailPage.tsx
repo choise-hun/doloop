@@ -52,8 +52,65 @@ export function NoteDetailPage(): React.ReactElement {
 
   const detailReqSeqRef = useRef(0);
 
+  // CH-5: "코드 진행 수집에 넣기" 토글 (PUT /notes/{id}/collect). count = 이 노트에서 온 진행 수(null = 모름)
+  const [collectOn, setCollectOn] = useState(false);
+  const [collectCount, setCollectCount] = useState<number | null>(null);
+  const [collectBusy, setCollectBusy] = useState(false);
+  const [collectMsg, setCollectMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
+
+  const loadCollectCount = async (noteId: string, uid: string | null) => {
+    try {
+      const list = await apiClient.progressions.list('analysis');
+      if (auth.getUser()?.id !== uid) return;
+      setCollectCount(list.filter((p) => p.noteId === noteId).length);
+    } catch {
+      setCollectCount(null);
+    }
+  };
+
+  const toggleCollect = async (next: boolean) => {
+    if (!note || collectBusy) return;
+    const myUid = activeUid;
+    if (!next) {
+      let edited = 0;
+      let total = collectCount ?? 0;
+      try {
+        const list = (await apiClient.progressions.list('analysis')).filter((p) => p.noteId === note.id);
+        total = list.length;
+        edited = list.filter((p) => p.origin === 'manual').length;
+      } catch {
+        /* 개수를 몰라도 확인은 묻는다 */
+      }
+      const extra = edited > 0 ? ` 고친 진행 ${edited}개도 같이 빠집니다.` : '';
+      if (total > 0 && !window.confirm(`이 노트에서 모은 진행 ${total}개를 코드 진행 모음에서 뺄까요?${extra}`)) return;
+    }
+    setCollectBusy(true);
+    setCollectMsg({ text: next ? '진행을 모으는 중...' : '빼는 중...', kind: '' });
+    try {
+      const r = await apiClient.notes.setCollect(note.id, next);
+      if (auth.getUser()?.id !== myUid) return;
+      setCollectOn(r.collect);
+      setCollectCount(r.progressions.length);
+      setCollectMsg(
+        r.collect
+          ? r.progressions.length > 0
+            ? { text: `진행 ${r.progressions.length}개를 모았어요.`, kind: 'ok' }
+            : { text: '이 노트에는 화성 진행이 없습니다.', kind: '' }
+          : { text: '코드 진행 모음에서 뺐어요.', kind: 'ok' }
+      );
+    } catch (err: any) {
+      if (auth.getUser()?.id !== myUid) return;
+      setCollectMsg({ text: (err && err.message) || '바꾸지 못했어요.', kind: 'err' });
+    } finally {
+      setCollectBusy(false);
+    }
+  };
+
   const clearState = (msg: string) => {
     setNote(null);
+    setCollectOn(false);
+    setCollectCount(null);
+    setCollectMsg({ text: '', kind: '' });
     setEditTags([]);
     setEditMemo('');
     setEditMsg({ text: '', kind: '' });
@@ -87,6 +144,8 @@ export function NoteDetailPage(): React.ReactElement {
           return;
         }
         setNote(res);
+        setCollectOn(Boolean(res.collectProgressions));
+        if (res.collectProgressions) void loadCollectCount(res.id, myUid);
         setEditTags(Array.isArray(res.tags) ? res.tags : []);
         setEditMemo(res.memo || '');
         setLoadingMsg('');
@@ -170,6 +229,28 @@ export function NoteDetailPage(): React.ReactElement {
               노트 삭제
             </button>
           </div>
+        </div>
+
+        <div className={`card ${styles.card} ${styles.collectBox}`} id="noteCollectBox">
+          <label className={styles.collectLabel}>
+            <input
+              type="checkbox"
+              id="noteCollectToggle"
+              checked={collectOn}
+              disabled={collectBusy}
+              onChange={(e) => void toggleCollect(e.target.checked)}
+            />
+            <span>코드 진행 수집에 넣기</span>
+          </label>
+          <span className="hint">켜면 이 노트의 화성 진행이 CHORDS 코드 진행 모음(분석)에 들어가요.</span>
+          {collectOn && (
+            <SafeLink id="noteCollectLink" href="progressions.html?scope=analysis">
+              CHORDS에서 보기{collectCount !== null ? ` (${collectCount}개)` : ''} →
+            </SafeLink>
+          )}
+          <p className={`msg${collectMsg.kind ? ' ' + collectMsg.kind : ''}`} id="noteCollectMsg" role="status">
+            {collectMsg.text}
+          </p>
         </div>
 
         <div className={`card summary-box ${styles.summaryBox}`} id="noteSummaryBox">

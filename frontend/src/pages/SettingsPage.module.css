@@ -251,3 +251,16 @@
   padding-top: 10px;
   padding-bottom: 10px;
 }
+
+/* 고급 설정(노션 연동 — 동결·은닉, 계획/앱_명세.md §5) */
+.advanced > summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 17px;
+}
+.advBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}

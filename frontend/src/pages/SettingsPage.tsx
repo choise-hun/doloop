@@ -82,6 +82,8 @@ export function SettingsPage(): React.ReactElement {
   const [busyGemKey, setBusyGemKey] = useState(false);
   const [geminiModalOpen, setGeminiModalOpen] = useState(false);
 
+  // 고급 설정(노션) 접힘: 노션 관련 해시로 들어오면 펼친다
+  const [advOpen, setAdvOpen] = useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash));
   // 노션 바로가기 및 화면 테마
   const [nlPractice, setNlPractice] = useState(() => raw.get('ulp:notion-practice'));
   const [nlNotes, setNlNotes] = useState(() => raw.get('ulp:notion-notes'));
@@ -449,20 +451,14 @@ export function SettingsPage(): React.ReactElement {
         </p>
       </section>
 
-      {/* 2. 노션 템플릿 · 데이터 내보내기/가져오기 */}
+      {/* 2. 데이터 백업 */}
       <section className={`set-sec ${styles.setSec}`} id="nx" aria-labelledby="hNx">
-        <h2 id="hNx">노션 템플릿 · 데이터 내보내기/가져오기</h2>
-        <p>공식 템플릿을 본인 노션에 복제한 뒤, 데이터를 ZIP으로 백업하거나 노션 백업 ZIP을 서비스로 가져올 수 있어요.</p>
-        <div className={styles.row}>
-          <SafeLink className="ghostBtn" id="btnNotionTemplate" href={templateHref} external>
-            공식 노션 템플릿 복제하기 ↗
-          </SafeLink>
-        </div>
-
+        <h2 id="hNx">데이터 백업</h2>
+        <p>서비스에 저장된 데이터를 ZIP으로 백업할 수 있어요.</p>
         <div className={styles.panel}>
           <h3>데이터 내보내기</h3>
           <p className="hint">
-            서비스에 저장된 모든 곡, 연습 기록, 학습 영상 노트와 녹음 오디오를 노션 호환 ZIP으로 다운로드해요.
+            서비스에 저장된 모든 곡, 연습 기록, 학습 영상 노트와 녹음 오디오를 ZIP으로 다운로드해요.
           </p>
           <label className={styles.checkRow}>
             <input
@@ -507,149 +503,8 @@ export function SettingsPage(): React.ReactElement {
                 }
               }}
             >
-              노션 호환 ZIP 다운로드
+              백업 ZIP 다운로드
             </button>
-          </div>
-        </div>
-
-        <div className={styles.panel}>
-          <h3>노션 백업 가져오기</h3>
-          <p className="hint">노션에서 내보낸 Markdown &amp; CSV 백업 ZIP 파일을 올려 곡과 연습 기록을 복원해요.</p>
-          <label className={styles.field}>
-            <span className={styles.lab}>노션 백업 ZIP 파일 (Markdown &amp; CSV 내보내기 파일)</span>
-            <input
-              ref={fileInputRef}
-              className={styles.fileInput}
-              type="file"
-              id="inpImportZip"
-              accept=".zip,application/zip"
-              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <div className={styles.row}>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnPreviewZip"
-              disabled={busyNx}
-              onClick={async () => {
-                if (!activeUid) {
-                  setNxMsg({ text: '로그인 후 가져올 수 있어요.', kind: 'err' });
-                  return;
-                }
-                if (!importFile) {
-                  setNxMsg({ text: 'ZIP 파일을 선택해 주세요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyNx(true);
-                setNxMsg({ text: 'ZIP 분석 중…', kind: '' });
-                try {
-                  const r = await apiClient.nx.previewNotionZip(importFile);
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setPreviewToken(r.previewToken);
-                  const errSuffix =
-                    Array.isArray(r.errors) && r.errors.length > 0 ? ` (오류 ${r.errors.length}건)` : '';
-                  setPreviewSummary(
-                    `신규 곡 ${r.newSongs || 0}개 · 갱신 곡 ${r.updatedSongs || 0}개 · 연습 기록 ${
-                      r.sessions || 0
-                    }건 · 녹음 ${r.takes || 0}건${errSuffix}`
-                  );
-                  const rows: Array<{ text: string; isErr?: boolean }> = [];
-                  if (Array.isArray(r.songsSample)) {
-                    r.songsSample.forEach((s: any) => {
-                      const tag = s.isNew ? '[신규] ' : '[갱신] ';
-                      rows.push({
-                        text: `${tag}${s.title || '(제목 없음)'}${s.artist ? ' · ' + s.artist : ''}`,
-                      });
-                    });
-                  }
-                  if (Array.isArray(r.errors)) {
-                    r.errors.forEach((er: any) => {
-                      rows.push({
-                        text: `[오류] ${er.file || '파일'} ${er.row != null ? er.row + '행: ' : ''}${er.reason || ''}`,
-                        isErr: true,
-                      });
-                    });
-                  }
-                  setPreviewItems(rows);
-                  setNxMsg({ text: '', kind: '' });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setPreviewToken(null);
-                  setPreviewItems([]);
-                  setNxMsg({ text: (e && e.message) || '미리보기 중 오류가 발생했어요.', kind: 'err' });
-                } finally {
-                  setBusyNx(false);
-                }
-              }}
-            >
-              가져오기 미리보기
-            </button>
-          </div>
-
-          <div className={styles.previewBox} id="nxPreviewBox" hidden={!previewToken}>
-            <p className={styles.previewSummary} id="nxPreviewSummary">
-              {previewSummary}
-            </p>
-            <ul className={styles.previewList} id="nxPreviewList">
-              {previewItems.map((it, idx) => (
-                <li key={idx} className={it.isErr ? styles.previewItemErr : undefined}>
-                  {it.text}
-                </li>
-              ))}
-            </ul>
-            <div className={styles.row}>
-              <button
-                className="pillBtn"
-                type="button"
-                id="btnConfirmZip"
-                disabled={busyNx}
-                onClick={async () => {
-                  if (!previewToken) {
-                    setNxMsg({ text: '미리보기 내역이 없습니다. 다시 ZIP을 선택해 주세요.', kind: 'err' });
-                    return;
-                  }
-                  const reqUid = activeUid;
-                  setBusyNx(true);
-                  setNxMsg({ text: '가져오기 반영 중…', kind: '' });
-                  try {
-                    const r = await apiClient.nx.confirmNotionZip(previewToken);
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setNxMsg({
-                      text: `✓ 가져오기를 완료했어요 (신규 곡 ${r.createdSongs || 0}개, 갱신 ${
-                        r.updatedSongs || 0
-                      }개, 기록 ${r.upsertedSessions || 0}건, 녹음 ${r.importedTakes || 0}건)`,
-                      kind: 'ok',
-                    });
-                    setPreviewToken(null);
-                    setPreviewItems([]);
-                    setImportFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  } catch (e: any) {
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setNxMsg({ text: (e && e.message) || '가져오기 확정 중 오류가 발생했어요.', kind: 'err' });
-                  } finally {
-                    setBusyNx(false);
-                  }
-                }}
-              >
-                가져오기 확정
-              </button>
-              <button
-                className="ghostBtn"
-                type="button"
-                id="btnCancelZip"
-                disabled={busyNx}
-                onClick={() => {
-                  setPreviewToken(null);
-                  setPreviewItems([]);
-                  setNxMsg({ text: '가져오기를 취소했어요.', kind: '' });
-                }}
-              >
-                취소
-              </button>
-            </div>
           </div>
         </div>
 
@@ -662,342 +517,8 @@ export function SettingsPage(): React.ReactElement {
       <section className={`set-sec ${styles.setSec}`} id="keys" aria-labelledby="hKeys">
         <h2 id="hKeys">외부 연동 키 관리 · BYOK</h2>
         <p>
-          개인 노션과 Google Gemini API 키를 등록하면 연습 기록 실시간 동기화와 학습 노트 분석을 쓸 수 있어요. 키는 서버에 안전하게 암호화(AES-256-GCM)되어 보관돼요.
+          Google Gemini API 키를 등록하면 학습 노트 분석을 쓸 수 있어요. 키는 서버에 안전하게 암호화(AES-256-GCM)되어 보관돼요.
         </p>
-
-        {/* 노션 연동 카드 */}
-        <div className={styles.panel}>
-          <div className={styles.cardHead}>
-            <h3>노션 연동</h3>
-            <span className={`${styles.badge}${notionHasKey ? ' ' + styles.badgeOk : ''}`} id="notionKeyStatus">
-              {notionStatusText}
-            </span>
-          </div>
-          <ol className={`hint ${styles.guide}`} id="ntnGuide">
-            <li>
-              <SafeLink href={templateHref} external>공식 노션 템플릿</SafeLink>을 열고 오른쪽 위 <b>복제</b>를 눌러 내 노션에 가져와요.
-            </li>
-            <li>
-              <SafeLink href="https://www.notion.so/my-integrations" external>notion.so/my-integrations</SafeLink>에서 새 통합을 만들고 토큰(ntn_…)을 복사해 아래에 붙여넣어요.
-            </li>
-            <li>복제한 페이지 오른쪽 위 <b>···</b> → <b>연결</b> → 방금 만든 통합을 추가해요.</li>
-            <li>
-              페이지 안 DB(<b>연습 곡</b>·<b>연습 기록</b>·<b>학습 영상 노트</b>) 제목을 눌러 전체 페이지로 연 뒤, 주소창 링크를 복사해 아래 칸에 각각 붙여넣어요. 링크 그대로 넣어도 돼요.
-            </li>
-            <li><b>노션 키 저장</b> → <b>연결 확인</b>을 눌러요.</li>
-          </ol>
-          <label className={styles.field}>
-            <span className={styles.lab}>노션 통합 토큰 (ntn_...)</span>
-            <input
-              className="inpField"
-              id="ntnToken"
-              type="password"
-              placeholder="ntn_... (수정 시 비워두면 기존 키 유지)"
-              autoComplete="off"
-              value={ntnToken}
-              onChange={(e) => setNtnToken(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.lab}>연습 곡 데이터베이스 ID</span>
-            <input
-              className="inpField"
-              id="ntnSongsDb"
-              type="text"
-              placeholder="DB 링크 또는 32자리 ID"
-              autoComplete="off"
-              value={ntnSongsDb}
-              onChange={(e) => setNtnSongsDb(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.lab}>연습 기록 데이터베이스 ID</span>
-            <input
-              className="inpField"
-              id="ntnSessionsDb"
-              type="text"
-              placeholder="DB 링크 또는 32자리 ID"
-              autoComplete="off"
-              value={ntnSessionsDb}
-              onChange={(e) => setNtnSessionsDb(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.lab}>학습 영상 노트 데이터베이스 ID (선택)</span>
-            <input
-              className="inpField"
-              id="ntnNotesDb"
-              type="text"
-              placeholder="DB 링크 또는 32자리 ID (선택)"
-              autoComplete="off"
-              value={ntnNotesDb}
-              onChange={(e) => setNtnNotesDb(e.target.value)}
-            />
-          </label>
-          <div className={styles.row}>
-            <button
-              className="pillBtn"
-              type="button"
-              id="btnSaveNotionKey"
-              disabled={busyNtnKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setNtnKeyMsg({ text: '로그인 후 키를 저장할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyNtnKey(true);
-                setNtnKeyMsg({ text: '저장 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  const dto = await apiClient.integrations.saveNotion({
-                    token: ntnToken.trim() || null,
-                    songsDb: notionDbIdFromInput(ntnSongsDb),
-                    sessionsDb: notionDbIdFromInput(ntnSessionsDb),
-                    notesDb: notionDbIdFromInput(ntnNotesDb) || null,
-                  });
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNtnToken('');
-                  if (dto) {
-                    setNotionHasKey(true);
-                    setNotionStatusText(`설정됨 (끝 4자리 ${dto.hint || ''} · ${(dto.updatedAt || '').slice(0, 10)})`);
-                    if (dto.config) {
-                      if (dto.config.songsDb) setNtnSongsDb(String(dto.config.songsDb));
-                      if (dto.config.sessionsDb) setNtnSessionsDb(String(dto.config.sessionsDb));
-                      setNtnNotesDb(dto.config.notesDb ? String(dto.config.notesDb) : '');
-                    }
-                  }
-                  setNtnKeyMsg({ text: '✓ 노션 키를 저장했어요.', kind: 'ok' });
-                  void loadSyncStatusForUid(reqUid);
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNtnKeyMsg({ text: (e && e.message) || '노션 키 저장에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyNtnKey(false);
-                }
-              }}
-            >
-              노션 키 저장
-            </button>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnCheckNotionKey"
-              disabled={busyNtnKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setNtnKeyMsg({ text: '로그인 후 연결을 확인할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyNtnKey(true);
-                setNtnKeyMsg({ text: '연결 확인 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  const r = await apiClient.integrations.check('notion');
-                  if (auth.getUser()?.id !== reqUid) return;
-                  const notesPart = r.notesTitle ? ` · ${r.notesTitle}` : '';
-                  setNtnKeyMsg({
-                    text: `✓ 연결 성공 (${r.songsTitle || ''} · ${r.sessionsTitle || ''}${notesPart} · 파일 ${
-                      r.maxUploadMB || 5
-                    }MB까지)`,
-                    kind: 'ok',
-                  });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNtnKeyMsg({ text: (e && e.message) || '노션 연결 확인에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyNtnKey(false);
-                }
-              }}
-            >
-              연결 확인
-            </button>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnDelNotionKey"
-              disabled={busyNtnKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setNtnKeyMsg({ text: '로그인 후 연결을 해제할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyNtnKey(true);
-                setNtnKeyMsg({ text: '연결 해제 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  await apiClient.integrations.remove('notion');
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNotionHasKey(false);
-                  setNotionStatusText('미등록');
-                  setNtnToken('');
-                  setNtnSongsDb('');
-                  setNtnSessionsDb('');
-                  setNtnNotesDb('');
-                  setSyncState({ enabled: false, pending: 0, failed: 0 });
-                  setNtnKeyMsg({ text: '✓ 노션 연동을 해제했어요.', kind: 'ok' });
-                  void loadSyncStatusForUid(reqUid);
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNtnKeyMsg({ text: (e && e.message) || '노션 연동 해제에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyNtnKey(false);
-                }
-              }}
-            >
-              연결 해제
-            </button>
-          </div>
-          <p className={`msg${ntnKeyMsg.kind ? ' ' + ntnKeyMsg.kind : ''}`} id="ntnKeyMsg" role="status">
-            {ntnKeyMsg.text}
-          </p>
-
-          <div className={styles.stackTight} id="notionSyncPanel">
-            <p className="hint" id="syncStatusText">
-              {formatSyncText()}
-            </p>
-            <p className="hint" id="syncErrorText" hidden={!syncState.lastError}>
-              {syncState.lastError ? `오류: ${syncState.lastError}` : ''}
-            </p>
-            <div className={styles.row}>
-              <button
-                className="pillBtn"
-                type="button"
-                id="btnSyncEnable"
-                hidden={syncState.enabled}
-                disabled={busySync}
-                onClick={async () => {
-                  if (!activeUid) {
-                    setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
-                    return;
-                  }
-                  const reqUid = activeUid;
-                  setBusySync(true);
-                  setSyncMsg({ text: '기존 노션 데이터를 이관하고 연동을 켜는 중…', kind: '' });
-                  try {
-                    syncReqSeqRef.current++;
-                    const res = await apiClient.notionSync.enable();
-                    if (auth.getUser()?.id !== reqUid) return;
-                    const quotaPart = res.skippedTakesByQuota
-                      ? `, 용량 초과 건너뜀 ${res.skippedTakesByQuota}개`
-                      : '';
-                    setSyncMsg({
-                      text: `✓ 연동이 켜졌어요 (곡 ${res.importedSongs}개, 세션 ${res.importedSessions}개, 녹음 ${res.importedTakes}개 이관${quotaPart})`,
-                      kind: 'ok',
-                    });
-                    await loadSyncStatusForUid(reqUid);
-                  } catch (e: any) {
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({ text: (e && e.message) || '연동 켜기에 실패했어요.', kind: 'err' });
-                  } finally {
-                    setBusySync(false);
-                  }
-                }}
-              >
-                연동 켜기 (기존 노션 데이터 이관)
-              </button>
-              <button
-                className="ghostBtn"
-                type="button"
-                id="btnSyncDisable"
-                hidden={!syncState.enabled}
-                disabled={busySync}
-                onClick={async () => {
-                  if (!activeUid) {
-                    setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
-                    return;
-                  }
-                  const reqUid = activeUid;
-                  setBusySync(true);
-                  setSyncMsg({ text: '연동을 끄는 중…', kind: '' });
-                  try {
-                    syncReqSeqRef.current++;
-                    await apiClient.notionSync.disable();
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({ text: '✓ 연동을 껐어요.', kind: 'ok' });
-                    await loadSyncStatusForUid(reqUid);
-                  } catch (e: any) {
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({ text: (e && e.message) || '연동 끄기에 실패했어요.', kind: 'err' });
-                  } finally {
-                    setBusySync(false);
-                  }
-                }}
-              >
-                연동 끄기
-              </button>
-              <button
-                className="ghostBtn"
-                type="button"
-                id="btnSyncPull"
-                disabled={busySync}
-                onClick={async () => {
-                  if (!activeUid) {
-                    setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
-                    return;
-                  }
-                  const reqUid = activeUid;
-                  setBusySync(true);
-                  setSyncMsg({ text: '노션에서 변경사항을 가져오는 중…', kind: '' });
-                  try {
-                    syncReqSeqRef.current++;
-                    const res = await apiClient.notionSync.pull();
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({
-                      text: `✓ 노션에서 가져왔어요 (곡 ${res.updatedSongs}개, 세션 ${res.updatedSessions}개 갱신)`,
-                      kind: 'ok',
-                    });
-                    await loadSyncStatusForUid(reqUid);
-                  } catch (e: any) {
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({ text: (e && e.message) || '노션에서 가져오기에 실패했어요.', kind: 'err' });
-                  } finally {
-                    setBusySync(false);
-                  }
-                }}
-              >
-                지금 노션에서 가져오기
-              </button>
-              <button
-                className="ghostBtn"
-                type="button"
-                id="btnSyncPush"
-                disabled={busySync}
-                onClick={async () => {
-                  if (!activeUid) {
-                    setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
-                    return;
-                  }
-                  const reqUid = activeUid;
-                  setBusySync(true);
-                  setSyncMsg({ text: '노션으로 변경사항을 보내는 중…', kind: '' });
-                  try {
-                    syncReqSeqRef.current++;
-                    const res = await apiClient.notionSync.push();
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({
-                      text: `✓ 노션으로 보냈어요 (처리 ${res.processed}건, 실패 ${res.failed}건)`,
-                      kind: 'ok',
-                    });
-                    await loadSyncStatusForUid(reqUid);
-                  } catch (e: any) {
-                    if (auth.getUser()?.id !== reqUid) return;
-                    setSyncMsg({ text: (e && e.message) || '노션으로 보내기에 실패했어요.', kind: 'err' });
-                  } finally {
-                    setBusySync(false);
-                  }
-                }}
-              >
-                지금 노션으로 보내기
-              </button>
-            </div>
-            <p className={`msg${syncMsg.kind ? ' ' + syncMsg.kind : ''}`} id="syncMsg" role="status">
-              {syncMsg.text}
-            </p>
-          </div>
-        </div>
 
         {/* Gemini 연동 카드 */}
         <div className={styles.panel}>
@@ -1151,56 +672,7 @@ export function SettingsPage(): React.ReactElement {
         </div>
       </section>
 
-      {/* 4. 노션 바로가기 */}
-      <section className={`set-sec ${styles.setSec}`} id="links" aria-labelledby="hLinks">
-        <h2 id="hLinks">노션 바로가기</h2>
-        <p>
-          첫 화면의 NOTION과 NOTES 페이지에서 여는 링크예요. 노션에서 페이지 <b>링크 복사</b>로 가져오세요. 비워 두면 숨겨져요.
-        </p>
-        <label className={styles.field}>
-          <span className={styles.lab}>악기 연습 페이지</span>
-          <input
-            className="inpField"
-            id="nlPractice"
-            type="url"
-            placeholder="https://www.notion.so/…"
-            autoComplete="off"
-            value={nlPractice}
-            onChange={(e) => setNlPractice(e.target.value)}
-          />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.lab}>학습 영상 노트 데이터베이스</span>
-          <input
-            className="inpField"
-            id="nlNotes"
-            type="url"
-            placeholder="https://www.notion.so/…"
-            autoComplete="off"
-            value={nlNotes}
-            onChange={(e) => setNlNotes(e.target.value)}
-          />
-        </label>
-        <div className={styles.row}>
-          <button
-            className="ghostBtn"
-            type="button"
-            id="nlSave"
-            onClick={() => {
-              raw.set('ulp:notion-practice', nlPractice.trim());
-              raw.set('ulp:notion-notes', nlNotes.trim());
-              setNlMsg('✓ 저장했어요');
-            }}
-          >
-            저장
-          </button>
-        </div>
-        <p className={`msg${nlMsg ? ' ok' : ''}`} id="nlMsg" role="status">
-          {nlMsg}
-        </p>
-      </section>
-
-      {/* 5. 화면 모드 */}
+      {/* 4. 화면 모드 */}
       <section className={`set-sec ${styles.setSec}`} id="screen" aria-labelledby="hScreen">
         <h2 id="hScreen">화면</h2>
         <div className={`seg-pill ${styles.segPill}`} role="group" aria-label="화면 모드">
@@ -1226,6 +698,554 @@ export function SettingsPage(): React.ReactElement {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* 6. 고급 설정 — 노션 연동(2026-11-05 중단·동결: 새 기능 없음, 계획/앱_명세.md §5). 기본 접힘 */}
+      <section className={`set-sec ${styles.setSec}`} id="advanced" aria-labelledby="hAdvanced">
+        <details
+          className={styles.advanced}
+          id="advNotion"
+          open={advOpen}
+          onToggle={(e) => setAdvOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary id="hAdvanced">고급 설정 › 웹/노션 연동 (선택)</summary>
+          <div className={styles.advBody}>
+            <p className="hint">
+              노션 연동은 더 이상 새 기능이 붙지 않아요(곡·연습 기록·녹음·노트만, 코드 진행은 보내지 않아요). 이미 쓰고 있다면 여기서 관리하세요.
+            </p>
+            <div className={styles.panel}>
+              <h3>노션 템플릿</h3>
+              <div className={styles.row}>
+                <SafeLink className="ghostBtn" id="btnNotionTemplate" href={templateHref} external>
+                  공식 노션 템플릿 복제하기 ↗
+                </SafeLink>
+              </div>
+            </div>
+            {/* 노션 연동 카드 */}
+            <div className={styles.panel} id="notion">
+              <div className={styles.cardHead}>
+                <h3>노션 연동</h3>
+                <span className={`${styles.badge}${notionHasKey ? ' ' + styles.badgeOk : ''}`} id="notionKeyStatus">
+                  {notionStatusText}
+                </span>
+              </div>
+              <ol className={`hint ${styles.guide}`} id="ntnGuide">
+                <li>
+                  <SafeLink href={templateHref} external>공식 노션 템플릿</SafeLink>을 열고 오른쪽 위 <b>복제</b>를 눌러 내 노션에 가져와요.
+                </li>
+                <li>
+                  <SafeLink href="https://www.notion.so/my-integrations" external>notion.so/my-integrations</SafeLink>에서 새 통합을 만들고 토큰(ntn_…)을 복사해 아래에 붙여넣어요.
+                </li>
+                <li>복제한 페이지 오른쪽 위 <b>···</b> → <b>연결</b> → 방금 만든 통합을 추가해요.</li>
+                <li>
+                  페이지 안 DB(<b>연습 곡</b>·<b>연습 기록</b>·<b>학습 영상 노트</b>) 제목을 눌러 전체 페이지로 연 뒤, 주소창 링크를 복사해 아래 칸에 각각 붙여넣어요. 링크 그대로 넣어도 돼요.
+                </li>
+                <li><b>노션 키 저장</b> → <b>연결 확인</b>을 눌러요.</li>
+              </ol>
+              <label className={styles.field}>
+                <span className={styles.lab}>노션 통합 토큰 (ntn_...)</span>
+                <input
+                  className="inpField"
+                  id="ntnToken"
+                  type="password"
+                  placeholder="ntn_... (수정 시 비워두면 기존 키 유지)"
+                  autoComplete="off"
+                  value={ntnToken}
+                  onChange={(e) => setNtnToken(e.target.value)}
+                />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.lab}>연습 곡 데이터베이스 ID</span>
+                <input
+                  className="inpField"
+                  id="ntnSongsDb"
+                  type="text"
+                  placeholder="DB 링크 또는 32자리 ID"
+                  autoComplete="off"
+                  value={ntnSongsDb}
+                  onChange={(e) => setNtnSongsDb(e.target.value)}
+                />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.lab}>연습 기록 데이터베이스 ID</span>
+                <input
+                  className="inpField"
+                  id="ntnSessionsDb"
+                  type="text"
+                  placeholder="DB 링크 또는 32자리 ID"
+                  autoComplete="off"
+                  value={ntnSessionsDb}
+                  onChange={(e) => setNtnSessionsDb(e.target.value)}
+                />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.lab}>학습 영상 노트 데이터베이스 ID (선택)</span>
+                <input
+                  className="inpField"
+                  id="ntnNotesDb"
+                  type="text"
+                  placeholder="DB 링크 또는 32자리 ID (선택)"
+                  autoComplete="off"
+                  value={ntnNotesDb}
+                  onChange={(e) => setNtnNotesDb(e.target.value)}
+                />
+              </label>
+              <div className={styles.row}>
+                <button
+                  className="pillBtn"
+                  type="button"
+                  id="btnSaveNotionKey"
+                  disabled={busyNtnKey}
+                  onClick={async () => {
+                    if (!activeUid) {
+                      setNtnKeyMsg({ text: '로그인 후 키를 저장할 수 있어요.', kind: 'err' });
+                      return;
+                    }
+                    const reqUid = activeUid;
+                    setBusyNtnKey(true);
+                    setNtnKeyMsg({ text: '저장 중…', kind: '' });
+                    keysReqSeqRef.current++;
+                    try {
+                      const dto = await apiClient.integrations.saveNotion({
+                        token: ntnToken.trim() || null,
+                        songsDb: notionDbIdFromInput(ntnSongsDb),
+                        sessionsDb: notionDbIdFromInput(ntnSessionsDb),
+                        notesDb: notionDbIdFromInput(ntnNotesDb) || null,
+                      });
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setNtnToken('');
+                      if (dto) {
+                        setNotionHasKey(true);
+                        setNotionStatusText(`설정됨 (끝 4자리 ${dto.hint || ''} · ${(dto.updatedAt || '').slice(0, 10)})`);
+                        if (dto.config) {
+                          if (dto.config.songsDb) setNtnSongsDb(String(dto.config.songsDb));
+                          if (dto.config.sessionsDb) setNtnSessionsDb(String(dto.config.sessionsDb));
+                          setNtnNotesDb(dto.config.notesDb ? String(dto.config.notesDb) : '');
+                        }
+                      }
+                      setNtnKeyMsg({ text: '✓ 노션 키를 저장했어요.', kind: 'ok' });
+                      void loadSyncStatusForUid(reqUid);
+                    } catch (e: any) {
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setNtnKeyMsg({ text: (e && e.message) || '노션 키 저장에 실패했어요.', kind: 'err' });
+                    } finally {
+                      setBusyNtnKey(false);
+                    }
+                  }}
+                >
+                  노션 키 저장
+                </button>
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  id="btnCheckNotionKey"
+                  disabled={busyNtnKey}
+                  onClick={async () => {
+                    if (!activeUid) {
+                      setNtnKeyMsg({ text: '로그인 후 연결을 확인할 수 있어요.', kind: 'err' });
+                      return;
+                    }
+                    const reqUid = activeUid;
+                    setBusyNtnKey(true);
+                    setNtnKeyMsg({ text: '연결 확인 중…', kind: '' });
+                    keysReqSeqRef.current++;
+                    try {
+                      const r = await apiClient.integrations.check('notion');
+                      if (auth.getUser()?.id !== reqUid) return;
+                      const notesPart = r.notesTitle ? ` · ${r.notesTitle}` : '';
+                      setNtnKeyMsg({
+                        text: `✓ 연결 성공 (${r.songsTitle || ''} · ${r.sessionsTitle || ''}${notesPart} · 파일 ${
+                          r.maxUploadMB || 5
+                        }MB까지)`,
+                        kind: 'ok',
+                      });
+                    } catch (e: any) {
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setNtnKeyMsg({ text: (e && e.message) || '노션 연결 확인에 실패했어요.', kind: 'err' });
+                    } finally {
+                      setBusyNtnKey(false);
+                    }
+                  }}
+                >
+                  연결 확인
+                </button>
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  id="btnDelNotionKey"
+                  disabled={busyNtnKey}
+                  onClick={async () => {
+                    if (!activeUid) {
+                      setNtnKeyMsg({ text: '로그인 후 연결을 해제할 수 있어요.', kind: 'err' });
+                      return;
+                    }
+                    const reqUid = activeUid;
+                    setBusyNtnKey(true);
+                    setNtnKeyMsg({ text: '연결 해제 중…', kind: '' });
+                    keysReqSeqRef.current++;
+                    try {
+                      await apiClient.integrations.remove('notion');
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setNotionHasKey(false);
+                      setNotionStatusText('미등록');
+                      setNtnToken('');
+                      setNtnSongsDb('');
+                      setNtnSessionsDb('');
+                      setNtnNotesDb('');
+                      setSyncState({ enabled: false, pending: 0, failed: 0 });
+                      setNtnKeyMsg({ text: '✓ 노션 연동을 해제했어요.', kind: 'ok' });
+                      void loadSyncStatusForUid(reqUid);
+                    } catch (e: any) {
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setNtnKeyMsg({ text: (e && e.message) || '노션 연동 해제에 실패했어요.', kind: 'err' });
+                    } finally {
+                      setBusyNtnKey(false);
+                    }
+                  }}
+                >
+                  연결 해제
+                </button>
+              </div>
+              <p className={`msg${ntnKeyMsg.kind ? ' ' + ntnKeyMsg.kind : ''}`} id="ntnKeyMsg" role="status">
+                {ntnKeyMsg.text}
+              </p>
+
+              <div className={styles.stackTight} id="notionSyncPanel">
+                <p className="hint" id="syncStatusText">
+                  {formatSyncText()}
+                </p>
+                <p className="hint" id="syncErrorText" hidden={!syncState.lastError}>
+                  {syncState.lastError ? `오류: ${syncState.lastError}` : ''}
+                </p>
+                <div className={styles.row}>
+                  <button
+                    className="pillBtn"
+                    type="button"
+                    id="btnSyncEnable"
+                    hidden={syncState.enabled}
+                    disabled={busySync}
+                    onClick={async () => {
+                      if (!activeUid) {
+                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        return;
+                      }
+                      const reqUid = activeUid;
+                      setBusySync(true);
+                      setSyncMsg({ text: '기존 노션 데이터를 이관하고 연동을 켜는 중…', kind: '' });
+                      try {
+                        syncReqSeqRef.current++;
+                        const res = await apiClient.notionSync.enable();
+                        if (auth.getUser()?.id !== reqUid) return;
+                        const quotaPart = res.skippedTakesByQuota
+                          ? `, 용량 초과 건너뜀 ${res.skippedTakesByQuota}개`
+                          : '';
+                        setSyncMsg({
+                          text: `✓ 연동이 켜졌어요 (곡 ${res.importedSongs}개, 세션 ${res.importedSessions}개, 녹음 ${res.importedTakes}개 이관${quotaPart})`,
+                          kind: 'ok',
+                        });
+                        await loadSyncStatusForUid(reqUid);
+                      } catch (e: any) {
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({ text: (e && e.message) || '연동 켜기에 실패했어요.', kind: 'err' });
+                      } finally {
+                        setBusySync(false);
+                      }
+                    }}
+                  >
+                    연동 켜기 (기존 노션 데이터 이관)
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    type="button"
+                    id="btnSyncDisable"
+                    hidden={!syncState.enabled}
+                    disabled={busySync}
+                    onClick={async () => {
+                      if (!activeUid) {
+                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        return;
+                      }
+                      const reqUid = activeUid;
+                      setBusySync(true);
+                      setSyncMsg({ text: '연동을 끄는 중…', kind: '' });
+                      try {
+                        syncReqSeqRef.current++;
+                        await apiClient.notionSync.disable();
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({ text: '✓ 연동을 껐어요.', kind: 'ok' });
+                        await loadSyncStatusForUid(reqUid);
+                      } catch (e: any) {
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({ text: (e && e.message) || '연동 끄기에 실패했어요.', kind: 'err' });
+                      } finally {
+                        setBusySync(false);
+                      }
+                    }}
+                  >
+                    연동 끄기
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    type="button"
+                    id="btnSyncPull"
+                    disabled={busySync}
+                    onClick={async () => {
+                      if (!activeUid) {
+                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        return;
+                      }
+                      const reqUid = activeUid;
+                      setBusySync(true);
+                      setSyncMsg({ text: '노션에서 변경사항을 가져오는 중…', kind: '' });
+                      try {
+                        syncReqSeqRef.current++;
+                        const res = await apiClient.notionSync.pull();
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({
+                          text: `✓ 노션에서 가져왔어요 (곡 ${res.updatedSongs}개, 세션 ${res.updatedSessions}개 갱신)`,
+                          kind: 'ok',
+                        });
+                        await loadSyncStatusForUid(reqUid);
+                      } catch (e: any) {
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({ text: (e && e.message) || '노션에서 가져오기에 실패했어요.', kind: 'err' });
+                      } finally {
+                        setBusySync(false);
+                      }
+                    }}
+                  >
+                    지금 노션에서 가져오기
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    type="button"
+                    id="btnSyncPush"
+                    disabled={busySync}
+                    onClick={async () => {
+                      if (!activeUid) {
+                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        return;
+                      }
+                      const reqUid = activeUid;
+                      setBusySync(true);
+                      setSyncMsg({ text: '노션으로 변경사항을 보내는 중…', kind: '' });
+                      try {
+                        syncReqSeqRef.current++;
+                        const res = await apiClient.notionSync.push();
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({
+                          text: `✓ 노션으로 보냈어요 (처리 ${res.processed}건, 실패 ${res.failed}건)`,
+                          kind: 'ok',
+                        });
+                        await loadSyncStatusForUid(reqUid);
+                      } catch (e: any) {
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setSyncMsg({ text: (e && e.message) || '노션으로 보내기에 실패했어요.', kind: 'err' });
+                      } finally {
+                        setBusySync(false);
+                      }
+                    }}
+                  >
+                    지금 노션으로 보내기
+                  </button>
+                </div>
+                <p className={`msg${syncMsg.kind ? ' ' + syncMsg.kind : ''}`} id="syncMsg" role="status">
+                  {syncMsg.text}
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.panel}>
+              <h3>노션 백업 가져오기</h3>
+              <p className="hint">노션에서 내보낸 Markdown &amp; CSV 백업 ZIP 파일을 올려 곡과 연습 기록을 복원해요.</p>
+              <label className={styles.field}>
+                <span className={styles.lab}>노션 백업 ZIP 파일 (Markdown &amp; CSV 내보내기 파일)</span>
+                <input
+                  ref={fileInputRef}
+                  className={styles.fileInput}
+                  type="file"
+                  id="inpImportZip"
+                  accept=".zip,application/zip"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                />
+              </label>
+              <div className={styles.row}>
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  id="btnPreviewZip"
+                  disabled={busyNx}
+                  onClick={async () => {
+                    if (!activeUid) {
+                      setNxMsg({ text: '로그인 후 가져올 수 있어요.', kind: 'err' });
+                      return;
+                    }
+                    if (!importFile) {
+                      setNxMsg({ text: 'ZIP 파일을 선택해 주세요.', kind: 'err' });
+                      return;
+                    }
+                    const reqUid = activeUid;
+                    setBusyNx(true);
+                    setNxMsg({ text: 'ZIP 분석 중…', kind: '' });
+                    try {
+                      const r = await apiClient.nx.previewNotionZip(importFile);
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setPreviewToken(r.previewToken);
+                      const errSuffix =
+                        Array.isArray(r.errors) && r.errors.length > 0 ? ` (오류 ${r.errors.length}건)` : '';
+                      setPreviewSummary(
+                        `신규 곡 ${r.newSongs || 0}개 · 갱신 곡 ${r.updatedSongs || 0}개 · 연습 기록 ${
+                          r.sessions || 0
+                        }건 · 녹음 ${r.takes || 0}건${errSuffix}`
+                      );
+                      const rows: Array<{ text: string; isErr?: boolean }> = [];
+                      if (Array.isArray(r.songsSample)) {
+                        r.songsSample.forEach((s: any) => {
+                          const tag = s.isNew ? '[신규] ' : '[갱신] ';
+                          rows.push({
+                            text: `${tag}${s.title || '(제목 없음)'}${s.artist ? ' · ' + s.artist : ''}`,
+                          });
+                        });
+                      }
+                      if (Array.isArray(r.errors)) {
+                        r.errors.forEach((er: any) => {
+                          rows.push({
+                            text: `[오류] ${er.file || '파일'} ${er.row != null ? er.row + '행: ' : ''}${er.reason || ''}`,
+                            isErr: true,
+                          });
+                        });
+                      }
+                      setPreviewItems(rows);
+                      setNxMsg({ text: '', kind: '' });
+                    } catch (e: any) {
+                      if (auth.getUser()?.id !== reqUid) return;
+                      setPreviewToken(null);
+                      setPreviewItems([]);
+                      setNxMsg({ text: (e && e.message) || '미리보기 중 오류가 발생했어요.', kind: 'err' });
+                    } finally {
+                      setBusyNx(false);
+                    }
+                  }}
+                >
+                  가져오기 미리보기
+                </button>
+              </div>
+
+              <div className={styles.previewBox} id="nxPreviewBox" hidden={!previewToken}>
+                <p className={styles.previewSummary} id="nxPreviewSummary">
+                  {previewSummary}
+                </p>
+                <ul className={styles.previewList} id="nxPreviewList">
+                  {previewItems.map((it, idx) => (
+                    <li key={idx} className={it.isErr ? styles.previewItemErr : undefined}>
+                      {it.text}
+                    </li>
+                  ))}
+                </ul>
+                <div className={styles.row}>
+                  <button
+                    className="pillBtn"
+                    type="button"
+                    id="btnConfirmZip"
+                    disabled={busyNx}
+                    onClick={async () => {
+                      if (!previewToken) {
+                        setNxMsg({ text: '미리보기 내역이 없습니다. 다시 ZIP을 선택해 주세요.', kind: 'err' });
+                        return;
+                      }
+                      const reqUid = activeUid;
+                      setBusyNx(true);
+                      setNxMsg({ text: '가져오기 반영 중…', kind: '' });
+                      try {
+                        const r = await apiClient.nx.confirmNotionZip(previewToken);
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setNxMsg({
+                          text: `✓ 가져오기를 완료했어요 (신규 곡 ${r.createdSongs || 0}개, 갱신 ${
+                            r.updatedSongs || 0
+                          }개, 기록 ${r.upsertedSessions || 0}건, 녹음 ${r.importedTakes || 0}건)`,
+                          kind: 'ok',
+                        });
+                        setPreviewToken(null);
+                        setPreviewItems([]);
+                        setImportFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      } catch (e: any) {
+                        if (auth.getUser()?.id !== reqUid) return;
+                        setNxMsg({ text: (e && e.message) || '가져오기 확정 중 오류가 발생했어요.', kind: 'err' });
+                      } finally {
+                        setBusyNx(false);
+                      }
+                    }}
+                  >
+                    가져오기 확정
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    type="button"
+                    id="btnCancelZip"
+                    disabled={busyNx}
+                    onClick={() => {
+                      setPreviewToken(null);
+                      setPreviewItems([]);
+                      setNxMsg({ text: '가져오기를 취소했어요.', kind: '' });
+                    }}
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          <div className={styles.panel} id="links">
+            <h3 id="hLinks">노션 바로가기</h3>
+            <p>
+              첫 화면의 NOTION과 NOTES 페이지에서 여는 링크예요. 노션에서 페이지 <b>링크 복사</b>로 가져오세요. 비워 두면 숨겨져요.
+            </p>
+            <label className={styles.field}>
+              <span className={styles.lab}>악기 연습 페이지</span>
+              <input
+                className="inpField"
+                id="nlPractice"
+                type="url"
+                placeholder="https://www.notion.so/…"
+                autoComplete="off"
+                value={nlPractice}
+                onChange={(e) => setNlPractice(e.target.value)}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.lab}>학습 영상 노트 데이터베이스</span>
+              <input
+                className="inpField"
+                id="nlNotes"
+                type="url"
+                placeholder="https://www.notion.so/…"
+                autoComplete="off"
+                value={nlNotes}
+                onChange={(e) => setNlNotes(e.target.value)}
+              />
+            </label>
+            <div className={styles.row}>
+              <button
+                className="ghostBtn"
+                type="button"
+                id="nlSave"
+                onClick={() => {
+                  raw.set('ulp:notion-practice', nlPractice.trim());
+                  raw.set('ulp:notion-notes', nlNotes.trim());
+                  setNlMsg('✓ 저장했어요');
+                }}
+              >
+                저장
+              </button>
+            </div>
+            <p className={`msg${nlMsg ? ' ok' : ''}`} id="nlMsg" role="status">
+              {nlMsg}
+            </p>
+          </div>
+
+          </div>
+        </details>
       </section>
 
       <GeminiKeyOnboardingModal

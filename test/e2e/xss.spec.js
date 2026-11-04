@@ -539,7 +539,7 @@ test('E8 설정 화면(settings.html) 노션 백업 ZIP 미리보기 XSS 검사'
     }
   );
 
-  await page.goto('/settings.html');
+  await page.goto('/settings.html#advanced');
 
   // 더미 파일 입력
   await page.setInputFiles('#inpImportZip', {
@@ -621,7 +621,7 @@ test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XS
     }
   );
 
-  await page.goto('/settings.html');
+  await page.goto('/settings.html#advanced');
 
   // #btnCheckNotionKey 클릭
   await page.click('#btnCheckNotionKey');

@@ -116,5 +116,11 @@ for (const width of WIDTHS) {
     await page.waitForTimeout(200);
     const problems = await page.evaluate(collectGapProblems, SCALE);
     expect(problems).toEqual([]);
+    // 노션 연동은 고급 설정 접힘 안(계획/앱_명세.md §5) — 기본 접힘, 펼쳐도 간격 규칙 같음
+    await expect(page.locator('#advNotion')).not.toHaveAttribute('open', '');
+    await expect(page.locator('#ntnToken')).toBeHidden();
+    await page.locator('#advNotion > summary').click();
+    await expect(page.locator('#ntnToken')).toBeVisible();
+    expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
   });
 }

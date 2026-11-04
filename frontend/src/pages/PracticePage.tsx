@@ -1851,9 +1851,6 @@ export function PracticePage(): React.ReactElement {
             songsList.map(renderSongItem)
           )}
         </ul>
-        <SafeLink className={`pp-settings ${styles.ppSettingsLink}`} href="settings.html#notion">
-          노션 연결 설정 →
-        </SafeLink>
       </aside>
       <div className={`pp-scrim ${styles.ppScrim}`} id="scrim" hidden={!libOpen} onClick={closeDrawer} />
 

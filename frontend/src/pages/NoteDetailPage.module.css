@@ -216,3 +216,21 @@
   color: var(--bg);
   font-weight: 700;
 }
+
+/* CH-5: 코드 진행 수집 토글 */
+.collectBox {
+  gap: 6px;
+}
+
+.collectLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.collectLabel input {
+  width: 20px;
+  height: 20px;
+}

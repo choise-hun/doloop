@@ -563,3 +563,22 @@ test('R1-S10: 노션 DB 링크를 붙여넣어도 DB ID만 저장하고, 템플�
   assert.equal((guide[0].match(/<li>/g) || []).length, 5);
   assert.match(readText('public/config.js'), /notionTemplateUrl: 'https:\/\/app\.notion\.com\/p\/4097a337e26f8167aa10eb435edb676e\?source=copy_link'/);
 });
+
+test('CH-7b: 노션 연동은 설정 맨 아래 고급 접힘 안으로 은닉(계획/앱_명세.md §5), 다른 화면의 노션 유도 없음', () => {
+  const src = readText('frontend/src/pages/SettingsPage.tsx');
+  const a = src.indexOf('id="advNotion"');
+  const end = src.indexOf('</details>', a);
+  assert.ok(a > 0 && end > a, '고급 설정 details가 있어야 함');
+  assert.ok(src.indexOf('id="screen"') < a, '고급 설정은 화면 섹션 뒤(맨 아래)');
+  for (const id of ['btnNotionTemplate', 'ntnGuide', 'ntnToken', 'btnSyncEnable', 'inpImportZip', 'nlPractice']) {
+    const i = src.indexOf(`id="${id}"`);
+    assert.ok(i > a && i < end, `${id}는 고급 설정 안에 있어야 함`);
+  }
+  assert.ok(src.indexOf('id="btnExportZip"') < a, '백업 ZIP 내보내기는 밖에 남음');
+  assert.ok(!/<details[^>]*id="advNotion"[^>]*\sopen\s*>/.test(src) && src.includes("useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash))"), '기본 접힘, 노션 해시로 오면 펼침');
+  const home = readText('frontend/src/pages/HomePage.tsx');
+  assert.ok(!home.includes('노션 연결 →'));
+  assert.match(home, /id="notionBig"[\s\S]{0,120}hidden=\{!mainNotionUrl\}/, 'NOTION 큰 링크는 주소가 있을 때만');
+  assert.ok(!readText('frontend/src/pages/PracticePage.tsx').includes('노션 연결 설정'));
+  assert.ok(!readText('frontend/src/pages/NotesPage.tsx').includes('노션에 자동 정리'));
+});

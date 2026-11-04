@@ -10,8 +10,6 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
     sourcemap: false,
-    // public/lib/*.js는 브라우저 전역 겸용 CJS라 Rollup CJS 변환 대상에 넣는다 (RZ-3)
-    commonjsOptions: { include: [/node_modules/, /public[\\/]lib[\\/]/] },
   },
   server: {
     port: 5173,

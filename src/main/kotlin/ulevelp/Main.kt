@@ -45,11 +45,13 @@ import ulevelp.routes.registerMeRoutes
 import ulevelp.routes.registerNoteRoutes
 import ulevelp.routes.registerNotionSyncRoutes
 import ulevelp.routes.registerPracticeRoutes
+import ulevelp.routes.registerProgressionRoutes
 import ulevelp.routes.registerSessionRoutes
 import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
 import ulevelp.service.CategoryService
+import ulevelp.service.ProgressionService
 import ulevelp.service.ExportImportService
 import ulevelp.service.HttpIntegrationCheckClient
 import ulevelp.service.IntegrationCheckClient
@@ -108,7 +110,7 @@ fun runAnalyzeJobCli(jobId: UUID) = runBlocking {
 // React 빌드(spa.html)가 대신 서빙하는 HTML 진입 경로 (RZ-3)
 private val SPA_ENTRY_PAGES = setOf(
     "index.html", "chords.html", "practice.html", "log.html",
-    "notes.html", "note.html", "settings.html", "privacy.html"
+    "notes.html", "note.html", "settings.html", "privacy.html", "progressions.html"
 )
 
 fun main(args: Array<String>) {
@@ -174,6 +176,7 @@ fun Application.module(
     val profileService = ProfileService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
+    val progressionService = ProgressionService(db)
     val practiceService = PracticeService(db)
     val storageTrashService = StorageTrashService(db, storageClient)
     val takeService = TakeService(db, storageClient)
@@ -310,6 +313,7 @@ fun Application.module(
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService)
+            registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
             registerSessionRoutes(jwtVerifier, profileService, sessionService)

@@ -207,7 +207,7 @@ export function NotesPage(): React.ReactElement {
       <div className={styles.headerBlock}>
         <h1 className={`page-title ${styles.pageTitle}`}>Notes</h1>
         <p className={`page-sub ${styles.pageSub}`}>
-          유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 학습 노트를 생성하고 노션에 자동 정리해요. 보통 1~3분 걸려요.{' '}
+          유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 학습 노트를 생성해요. 보통 1~3분 걸려요.{' '}
           <SafeLink id="notionLink" href={notionLinkUrl} external hidden={!notionLinkUrl}>
             노션에서 보기 ↗
           </SafeLink>

@@ -868,3 +868,46 @@
   }
 }
 
+
+/* CH-6: 취향 코드 진행 — 범위 토글·카드 버튼 줄 */
+.progScopeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.progScopeBtn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.progScopeBtnOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.progActs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.progActs .randBtn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.randBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

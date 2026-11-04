@@ -1,8 +1,12 @@
 // frontend/src/lib/musicEngine.ts
 // @ts-ignore
-import * as rawCT from '../../../public/lib/theory.js';
+import rawCT from './engine/theory.mjs';
 // @ts-ignore
-import * as rawGE from '../../../public/lib/voicing.js';
+import rawGE from './engine/voicing.mjs';
+// @ts-ignore
+import * as rawPath from './engine/progressionPath.mjs';
+// @ts-ignore
+import * as rawShapes from './engine/chordShapes.mjs';
 
 export type TuningId = 'g6' | 'g7' | 'b4' | 'b5' | 'b6';
 
@@ -96,8 +100,127 @@ export interface AudioEngine {
   click(when?: number, accent?: boolean): void;
 }
 
-const CT_MOD: any = (rawCT as any).default || rawCT;
-const GE_MOD: any = (rawGE as any).default || rawGE;
+export interface VoicingNote {
+  s: number;
+  f: number;
+  pitch: number;
+  pc: number;
+  deg: string;
+  cls: 'root' | '3' | '5' | '7' | 'ext' | 'bass';
+}
+
+export interface Voicing {
+  root: number;
+  q: string | null;
+  name: string;
+  score: number;
+  span: number;
+  outside: number;
+  gaps: number;
+  guide: number;
+  top: number;
+  avgFret: number;
+  notes: VoicingNote[];
+  frets: number[];
+  /** genVoicingsByDegrees 결과에만: 받은 도수 목록, 6개 이상이라 뺀 도수 (생략 순서 5 → R → 9) */
+  degrees?: string[];
+  omit?: string[];
+  /** shapes standard·both 후보에만(compact 기본은 없음): compact = genVoicingsByDegrees, table = 정석 폼 표(chordForms.json), rule = 정석 폼 규칙 생성 */
+  kind?: 'compact' | 'table' | 'rule';
+  /** 정석 폼(table·rule)에만: 손가락 수, 바레 프렛(절대), 표 폼 출처·고친 폼 */
+  fingers?: number;
+  barres?: number[];
+  src?: string;
+  fix?: 'mute-low';
+  /** 정석 폼에만: 표 폼(정답지)에 3% 미만인 특징 — 규칙 폼(kind rule)에 있으면 "검토 전" 표시 대상 (CH-2c-3) */
+  flags?: Array<'split-barre' | 'semitone' | 'three-strings' | 'top-muted'>;
+  /** 규칙 폼 자동 회피로 1등에 올라간 폼(점수를 1등 바로 위로 맞춤) */
+  avoided?: boolean;
+}
+
+export interface VoicingOptions {
+  lo?: number;
+  hi?: number;
+  maxSpan?: number;
+  minNotes?: number;
+  maxNotes?: number;
+  maxGap?: number;
+  needGuide?: number;
+  allowedPcs?: number[] | null;
+  outsideMax?: number;
+  top?: { s: number; f: number } | null;
+}
+
+export interface DegreeVoicingOptions extends VoicingOptions {
+  /** 슬래시 베이스 피치클래스 — 맨 아래 음을 이 음으로 */
+  bass?: number;
+  /** 결과 voicing.name (기본: 근음 이름) */
+  name?: string;
+  /** 꼭 들어갈 도수 (기본: 확장음 + b5·#5) */
+  must?: string[];
+}
+
+/** CH-2 parseChord 결과(ChordOk)와 같은 모양 */
+export interface PathChord {
+  root: number;
+  degrees: string[];
+  bass?: number;
+  raw?: string;
+  /** 정규 퀄리티 — 있어야 정석 폼 표를 찾는다(없으면 규칙 생성만) */
+  quality?: string;
+}
+
+/** frontend/src/lib/engine/chordForms.json (CH-2c-1) */
+export interface FormTableForm {
+  frets: number[];
+  fingers: number[];
+  barres: number[];
+  src: string;
+  omit?: string[];
+  add?: string[];
+  fix?: 'mute-low';
+}
+export interface FormTable {
+  source: Record<string, string>;
+  tuning?: number[];
+  /** none: 사람 검토에서 "정석 폼 없음"(빼기)으로 정한 코드 → standard 후보 0개(화면은 compact로 대체) */
+  forms: Record<string, { name: string; forms: FormTableForm[]; none?: boolean }>;
+}
+
+export interface ShapeOptions {
+  /** 프렛 범위 (기본 0~12 — 개방현은 lo 0일 때만) */
+  lo?: number;
+  hi?: number;
+  /** 규칙 생성만: 울리는 줄 최소(3), 누르는 프렛 폭(4), 손가락(4), 가운데 막는 줄(1) */
+  minStrings?: number;
+  maxSpan?: number;
+  maxFingers?: number;
+  maxInnerMute?: number;
+}
+
+export interface PathOptions extends VoicingOptions {
+  /** compact(기본) = 재즈식 3~4음(기존 결과) · standard = 정석 폼(표 → 없으면 규칙) · both = 둘 다 점수 순 */
+  shapes?: 'compact' | 'standard' | 'both';
+  /** shapes가 standard·both일 때 표 (loadChordForms()). 없으면 규칙 생성만 */
+  formTable?: FormTable | null;
+  /** 코드마다 점수 상위 몇 개를 후보로 (기본 30) */
+  topK?: number;
+  /** 돌려줄 경로 수 (기본 3) */
+  paths?: number;
+  /** 마지막 → 첫 코드 이동도 비용에 넣기 (반복 재생) */
+  loop?: boolean;
+}
+
+export interface VoicingPath {
+  total: number;
+  cost: number;
+  voicings: Voicing[];
+}
+
+const CT_MOD: any = rawCT;
+const GE_MOD: any = rawGE;
+const PATH_MOD: any = rawPath;
+const SHAPES_MOD: any = rawShapes;
 
 export const CT = {
   OPEN: CT_MOD.OPEN as number[],
@@ -174,11 +297,36 @@ export const GE = {
   chordName: GE_MOD.chordName as (root: number, q: string) => string,
   pentPcs: GE_MOD.pentPcs as (root: number, type: 'min' | 'maj') => number[],
   genVoicings: GE_MOD.genVoicings,
-  trans: GE_MOD.trans,
+  genVoicingsByDegrees: GE_MOD.genVoicingsByDegrees as (root: number, degrees: string[], opts?: DegreeVoicingOptions) => Voicing[],
+  trans: GE_MOD.trans as (a: Voicing, b: Voicing) => number,
   search251: GE_MOD.search251,
   topNoteDominants: GE_MOD.topNoteDominants,
   fretStr: GE_MOD.fretStr as (v: { frets: number[] }) => string,
 };
+
+/** 진행 보이싱 경로 (engine/progressionPath.mjs) */
+export const PATH = {
+  chordCandidates: PATH_MOD.chordCandidates as (chord: PathChord, opts?: PathOptions) => { voicings: Voicing[]; bassDropped: boolean },
+  bestPaths: PATH_MOD.bestPaths as (chords: PathChord[], opts?: PathOptions) => VoicingPath[],
+};
+
+/** 정석 코드 폼 (engine/chordShapes.mjs) — 표는 인자로 받는다 */
+export const SHAPES = {
+  formId: SHAPES_MOD.formId as (chord: PathChord) => string | null,
+  tableForms: SHAPES_MOD.tableForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
+  ruleForms: SHAPES_MOD.ruleForms as (chord: PathChord, opts?: ShapeOptions) => Voicing[],
+  standardForms: SHAPES_MOD.standardForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
+  withReview: SHAPES_MOD.withReview as (table: FormTable, review: FormTable | null | undefined) => FormTable,
+};
+
+let formTablePromise: Promise<FormTable> | null = null;
+/** 정석 폼 표(gzip 약 35KB) + 사람 검토 결과(chordFormReview.json)를 따로 받아 합친다 — 진행 연주 탭에서만 부르면 첫 화면 번들에 안 들어간다 */
+export function loadChordForms(): Promise<FormTable> {
+  formTablePromise ??= Promise.all([import('./engine/chordForms.json'), import('./engine/chordFormReview.json')]).then(([t, r]) =>
+    SHAPES.withReview((t.default ?? t) as unknown as FormTable, (r.default ?? r) as unknown as FormTable),
+  );
+  return formTablePromise;
+}
 
 export function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
