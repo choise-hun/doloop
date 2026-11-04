@@ -97,7 +97,7 @@
 ## 3. 연습 곡 API (`Songs`)
 
 > 프런트엔드 `public/data.js`의 `ULData.songs.*` 메서드와 1:1 대응하며, 반환되는 곡 객체 구조는 기존 `Code.gs`의 `readSong` 형식과 완벽히 호환됩니다.
-> **곡 객체(`SongDto`)는 모든 곡 응답에서 3.1의 14개 필드 그대로입니다**(`{ "song": { ... } }`의 `...`도 같음). `totalSeconds`는 그 곡 세션 `seconds` 합(초). `resumeUrl`은 `PUBLIC_APP_URL`(배포 기본값·운영 값 `https://ulevelp-d5ympfsmfq-du.a.run.app/`) + `practice.html?v=&t=&a=&b=&r=`로, `public/practice.js`의 `resumeUrl()`과 같은 규칙(`t`는 `pos ?? a`의 정수 내림, 0이면 생략 / `a`·`b`는 있을 때만 / `r`은 1이 아닐 때만)으로 계산합니다(FR-SONG-6). 구현 상세는 `개발산출물/명세/K1-1_구현명세.md`.
+> **곡 객체(`SongDto`)는 모든 곡 응답에서 3.1의 15개 필드 그대로입니다**(`{ "song": { ... } }`의 `...`도 같음). `categoryIds`는 그 곡에 붙은 분류 id 배열(분류 `sortOrder` 순, 미분류면 `[]`, 3.7절). `totalSeconds`는 그 곡 세션 `seconds` 합(초). `resumeUrl`은 `PUBLIC_APP_URL`(배포 기본값·운영 값 `https://ulevelp-d5ympfsmfq-du.a.run.app/`) + `practice.html?v=&t=&a=&b=&r=`로, `public/practice.js`의 `resumeUrl()`과 같은 규칙(`t`는 `pos ?? a`의 정수 내림, 0이면 생략 / `a`·`b`는 있을 때만 / `r`은 1이 아닐 때만)으로 계산합니다(FR-SONG-6). 구현 상세는 `개발산출물/명세/K1-1_구현명세.md`.
 
 ### 3.1 내 연습 곡 목록 조회
 - **`GET /api/v1/songs`**
@@ -120,6 +120,7 @@
       "rate": 0.75,
       "lastDate": "2026-10-30",
       "memo": "39초 구간 보이싱 손가락 번호 주의",
+      "categoryIds": ["d7e8f9a0-0000-4000-8000-000000000001"],
       "totalSeconds": 3420,
       "resumeUrl": "https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=dQw4w9WgXcQ&t=42&a=38&b=55.2&r=0.75"
     }
@@ -188,7 +189,8 @@
 
 ### 3.5 곡 상태·메모 수정 및 곡 삭제
 - **`PATCH /api/v1/songs/{songId}`**
-  - **Request Body:** `{ "status": "보류", "memo": "다음 달 재도전", "title": "수정할 제목(선택)" }` — 셋 중 하나 이상 필요. `status`는 코드·한글 모두 허용, `memo` 2000자 이하, `title`은 빈 문자열 불가.
+  - **Request Body:** `{ "status": "보류", "memo": "다음 달 재도전", "title": "수정할 제목(선택)", "categoryIds": ["<분류 id>"] }` — 넷 중 하나 이상 필요(없으면 `400 INVALID_INPUT` "수정할 값(status, memo, title, categoryIds)이 없습니다."). `status`는 코드·한글 모두 허용, `memo` 2000자 이하, `title`은 빈 문자열 불가.
+  - **`categoryIds`:** 그 곡의 분류를 **통째로 교체**한다(`[]`이면 전부 해제, 중복 id는 한 번만). 최대 10개, 각 항목은 내 분류 id여야 한다(형식 오류·남의 분류·없는 분류는 `400 INVALID_INPUT`, 이때 기존 분류는 그대로). 분류는 노션으로 보내지 않으므로 **분류만 바꾼 요청은 `sync_outbox`에 적재하지 않는다**(`status`·`memo`·`title` 중 하나라도 있으면 `song` `upsert` 적재).
   - **Response (`200 OK`):** `{ "song": { ... } }`
 - **`DELETE /api/v1/songs/{songId}`**
   - **설명:** 곡과 하위 `sessions`, `takes`를 삭제하고 녹음 파일은 `storage_trash`로 지웁니다. 노션 연동 활성화 시 곡과 각 세션의 `delete` 이벤트를 `sync_outbox`에 적재합니다(`FR-SONG-5`, 절차는 [04 3.2.1절](04-db-design.md)).
@@ -208,6 +210,16 @@
 ```
 - **규칙:** `items`는 최대 100개(넘으면 `400`). 기기 기록은 믿을 수 없으므로 항목 하나가 틀려도 요청 전체를 거부하지 않습니다 — `videoId` 형식이 틀린 항목·같은 `videoId` 중복·이미 있는 곡은 `skipped`로 셉니다. 범위를 벗어난 `pos`·`a`·`b`·`date`는 `null`, `rate`는 `1.0`으로 바꿔 저장합니다. 새 곡 제목은 oEmbed로 채웁니다(트랜잭션 밖, 동시 8건). `migratedLocalAt`은 처리 뒤 프로필 값이며 `markMigrated: false`이고 원래 없으면 `null`.
 - **Response (`200 OK`):** `{ "created": 1, "skipped": 0, "migratedLocalAt": "2026-10-30T09:30:00Z" }`
+
+### 3.7 곡 분류 (`Categories`)
+- **설명:** 사용자가 직접 만드는 곡 분류(홈 바로가기·플레이어 분류 폴더). 기본 분류는 없고, 곡 하나에 여러 개를 붙인다(곡 쪽은 3.5절 `categoryIds`). 노션 미전송. 테이블은 [04 2.1절](04-db-design.md).
+- **분류 객체(`CategoryDto`, 5개 필드):** `{ "id": "d7e8f9a0-...", "name": "Jazz", "sortOrder": 0, "onHome": true, "songCount": 3 }` — `songCount`는 이 분류가 붙은 내 곡 수.
+- **`GET /api/v1/categories`** → `200 { "categories": [CategoryDto, ...] }` (`sortOrder`, 만든 순).
+- **`POST /api/v1/categories`** `{ "name": "Jazz" }` → `201 { "category": CategoryDto }` (맨 뒤 순서). `name`은 앞뒤 공백을 빼고 1~20자(아니면 `400 INVALID_INPUT`). 같은 이름(대소문자 무시)이 있으면 `409 CONFLICT`. 사용자당 50개를 넘으면 `400 INVALID_INPUT`.
+- **`PATCH /api/v1/categories/{categoryId}`** `{ "name"?: "재즈", "onHome"?: false }` (하나 이상) → `200 { "category": CategoryDto }`. 이름 규칙·중복은 POST와 같다(자기 이름은 중복 아님).
+- **`PUT /api/v1/categories/order`** `{ "ids": [...] }` → `200 { "categories": [...] }`. `ids`는 내 분류 **전부를 중복 없이** 원하는 순서로 담아야 한다(누락·중복·남의 id·형식 오류는 `400 INVALID_INPUT`).
+- **`DELETE /api/v1/categories/{categoryId}`** → `200 { "ok": true }`. 곡과의 연결만 지워지고 곡은 남는다.
+- 없는 분류·남의 분류·비 UUID 경로는 `404 NOT_FOUND`, 토큰 없음 `401 UNAUTHORIZED`. 모든 응답 `Cache-Control: no-store`.
 
 ---
 

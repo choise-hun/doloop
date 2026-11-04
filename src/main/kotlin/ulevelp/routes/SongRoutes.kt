@@ -15,6 +15,7 @@ import ulevelp.auth.requireAuthUser
 import ulevelp.service.*
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.UUID
 
 fun Route.registerSongRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
@@ -117,9 +118,10 @@ fun Route.registerSongRoutes(
             val hasStatus = body.containsKey("status") && body["status"] !is JsonNull
             val hasMemo = body.containsKey("memo") && body["memo"] !is JsonNull
             val hasTitle = body.containsKey("title") && body["title"] !is JsonNull
+            val hasCategoryIds = body.containsKey("categoryIds") && body["categoryIds"] !is JsonNull
 
-            if (!hasStatus && !hasMemo && !hasTitle) {
-                throw InvalidInputException("수정할 값(status, memo, title)이 없습니다.")
+            if (!hasStatus && !hasMemo && !hasTitle && !hasCategoryIds) {
+                throw InvalidInputException("수정할 값(status, memo, title, categoryIds)이 없습니다.")
             }
 
             val statusCode = if (hasStatus) {
@@ -143,7 +145,24 @@ fun Route.registerSongRoutes(
                 t
             } else null
 
-            val updated = songService.update(user.id, songId, UpdateSongInput(statusCode, memo, title))
+            val categoryIds = if (hasCategoryIds) {
+                val arr = body.requireArray("categoryIds", CategoryService.MAX_PER_SONG)
+                arr.map { elem ->
+                    if (elem !is JsonPrimitive || !elem.isString) {
+                        throw InvalidInputException("categoryIds 형식이 올바르지 않습니다.")
+                    }
+                    // fromString은 "1-1-1-1-1"도 받으므로 표준 표기와 같은지 한 번 더 본다
+                    runCatching { UUID.fromString(elem.content) }.getOrNull()
+                        ?.takeIf { it.toString() == elem.content.lowercase() }
+                        ?: throw InvalidInputException("categoryIds 형식이 올바르지 않습니다.")
+                }.distinct()
+            } else null
+
+            val updated = songService.update(
+                user.id,
+                songId,
+                UpdateSongInput(statusCode, memo, title, categoryIds = categoryIds)
+            )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongEnvelope(song = updated))
         }

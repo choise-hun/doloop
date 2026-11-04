@@ -36,6 +36,7 @@ import ulevelp.notion.NotionPushWorker
 import ulevelp.notion.NotionSyncService
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
+import ulevelp.routes.registerCategoryRoutes
 import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerExportImportRoutes
 import ulevelp.routes.registerIntegrationRoutes
@@ -48,6 +49,7 @@ import ulevelp.routes.registerSessionRoutes
 import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
+import ulevelp.service.CategoryService
 import ulevelp.service.ExportImportService
 import ulevelp.service.HttpIntegrationCheckClient
 import ulevelp.service.IntegrationCheckClient
@@ -171,6 +173,7 @@ fun Application.module(
 
     val profileService = ProfileService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
+    val categoryService = CategoryService(db)
     val practiceService = PracticeService(db)
     val storageTrashService = StorageTrashService(db, storageClient)
     val takeService = TakeService(db, storageClient)
@@ -306,6 +309,7 @@ fun Application.module(
         route("/api/v1") {
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
+            registerCategoryRoutes(jwtVerifier, profileService, categoryService)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
             registerSessionRoutes(jwtVerifier, profileService, sessionService)

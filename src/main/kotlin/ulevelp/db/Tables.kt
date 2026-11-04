@@ -241,6 +241,36 @@ object StorageTrashTable : Table("storage_trash") {
     override val primaryKey = PrimaryKey(id)
 }
 
+/**
+ * 13. categories (사용자 정의 곡 분류 - V2, 노션 미전송)
+ */
+object CategoriesTable : Table("categories") {
+    val id = uuid("id").autoGenerate()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val name = text("name")
+    val sortOrder = integer("sort_order").default(0)
+    val onHome = bool("on_home").default(true)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        uniqueIndex(userId, id)
+    }
+}
+
+/**
+ * 14. song_categories (곡 ↔ 분류 N:M - V2)
+ */
+object SongCategoriesTable : Table("song_categories") {
+    val userId = uuid("user_id")
+    val songId = uuid("song_id")
+    val categoryId = uuid("category_id")
+
+    override val primaryKey = PrimaryKey(songId, categoryId)
+}
+
 val ALL_TABLES: List<Table> = listOf(
     UsersTable,
     ProfilesTable,
@@ -253,6 +283,8 @@ val ALL_TABLES: List<Table> = listOf(
     NotionSyncTable,
     NotionLinksTable,
     SyncOutboxTable,
-    StorageTrashTable
+    StorageTrashTable,
+    CategoriesTable,
+    SongCategoriesTable
 )
 

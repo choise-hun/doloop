@@ -14,6 +14,7 @@ export interface SongDto {
   rate: number;
   lastDate: string | null;
   memo: string;
+  categoryIds: string[];
   totalSeconds: number;
   resumeUrl: string;
 }

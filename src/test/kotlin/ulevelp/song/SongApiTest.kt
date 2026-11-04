@@ -103,7 +103,7 @@ class SongApiTest {
 
         val expectedKeys = setOf(
             "id", "title", "artist", "status", "statusCode", "videoId",
-            "pos", "a", "b", "rate", "lastDate", "memo", "totalSeconds", "resumeUrl"
+            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl"
         )
         assertEquals(expectedKeys, songObj.keys)
 
@@ -912,7 +912,7 @@ class SongApiTest {
         val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
         val songObj = json["song"]!!.jsonObject
         assertEquals(1560L, songObj["totalSeconds"]!!.jsonPrimitive.long)
-        assertEquals(14, songObj.keys.size)
+        assertEquals(15, songObj.keys.size)
 
         val sessionsArr = json["sessions"]!!.jsonArray
         assertEquals(2, sessionsArr.size)
@@ -1005,5 +1005,139 @@ class SongApiTest {
         }
         assertEquals(HttpStatusCode.NotFound, resInvalid.status)
         assertStandardError(resInvalid.bodyAsText(), 404, "NOT_FOUND")
+    }
+
+    private suspend fun createCategory(client: io.ktor.client.HttpClient, token: String, name: String): String {
+        val res = client.post("/api/v1/categories") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"$name"}""")
+        }
+        assertEquals(HttpStatusCode.Created, res.status)
+        return Json.parseToJsonElement(res.bodyAsText()).jsonObject["category"]!!.jsonObject["id"]!!.jsonPrimitive.content
+    }
+
+    private fun categoryIdsOf(body: String): List<String> =
+        Json.parseToJsonElement(body).jsonObject["song"]!!.jsonObject["categoryIds"]!!.jsonArray.map { it.jsonPrimitive.content }
+
+    @Test
+    fun `S16 PATCH categoryIds 교체·해제·잘못된 값·남의 곡`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        val userB = UUID.randomUUID()
+        val tokenB = TestJwt.token(userB)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+
+        val postRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"dQw4w9WgXcQ","title":"Song C"}""")
+        }
+        assertEquals(HttpStatusCode.Created, postRes.status)
+        val songId = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+        // 새 곡은 미분류
+        assertEquals(emptyList(), categoryIdsOf(postRes.bodyAsText()))
+
+        val jazz = createCategory(client, tokenA, "Jazz")
+        val practice = createCategory(client, tokenA, "연습곡")
+        val otherUsers = createCategory(client, tokenB, "Pop")
+
+        suspend fun patch(token: String, body: String) = client.patch("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        // 1. 두 개 설정 (분류 순서대로 응답, 중복 id는 한 번만)
+        val p1 = patch(tokenA, """{"categoryIds":["$practice","$jazz","$jazz"]}""")
+        assertEquals(HttpStatusCode.OK, p1.status)
+        assertEquals(listOf(jazz, practice), categoryIdsOf(p1.bodyAsText()))
+
+        // 목록·상세에도 반영
+        val listRes = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        val listed = Json.parseToJsonElement(listRes.bodyAsText()).jsonObject["songs"]!!.jsonArray[0].jsonObject
+        assertEquals(listOf(jazz, practice), listed["categoryIds"]!!.jsonArray.map { it.jsonPrimitive.content })
+        val detailRes = client.get("/api/v1/songs/$songId") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(listOf(jazz, practice), categoryIdsOf(detailRes.bodyAsText()))
+
+        // 2. status만 바꾸면 분류 유지
+        val p2 = patch(tokenA, """{"status":"보류"}""")
+        assertEquals(listOf(jazz, practice), categoryIdsOf(p2.bodyAsText()))
+
+        // 3. 통째로 교체
+        val p3 = patch(tokenA, """{"categoryIds":["$practice"]}""")
+        assertEquals(listOf(practice), categoryIdsOf(p3.bodyAsText()))
+
+        // 4. [] -> 전부 해제
+        val p4 = patch(tokenA, """{"categoryIds":[]}""")
+        assertEquals(HttpStatusCode.OK, p4.status)
+        assertEquals(emptyList(), categoryIdsOf(p4.bodyAsText()))
+
+        // 5. 남의 분류·형식 오류·11개 -> 400, 기존 값 유지
+        patch(tokenA, """{"categoryIds":["$jazz"]}""")
+        val elevenIds = (1..11).joinToString(",") { "\"${UUID.randomUUID()}\"" }
+        for (bad in listOf("""["$otherUsers"]""", """["not-a-uuid"]""", "[1]", "\"$jazz\"", "[$elevenIds]")) {
+            val res = patch(tokenA, """{"categoryIds":$bad}""")
+            assertEquals(HttpStatusCode.BadRequest, res.status, "categoryIds=$bad")
+            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+        }
+        val after = client.get("/api/v1/songs/$songId") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(listOf(jazz), categoryIdsOf(after.bodyAsText()))
+
+        // 6. 남의 곡 -> 404
+        val pB = patch(tokenB, """{"categoryIds":["$otherUsers"]}""")
+        assertEquals(HttpStatusCode.NotFound, pB.status)
+        assertStandardError(pB.bodyAsText(), 404, "NOT_FOUND")
+    }
+
+    @Test
+    fun `S17 분류만 바꾼 PATCH는 outbox에 적재하지 않는다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val postRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"dQw4w9WgXcQ","title":"Song A"}""")
+        }
+        assertEquals(HttpStatusCode.Created, postRes.status)
+        val songId = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+        val rock = createCategory(client, tokenA, "Rock")
+
+        transaction(db) {
+            NotionSyncTable.insert {
+                it[userId] = userA
+                it[enabled] = true
+            }
+        }
+
+        // 1. 분류만 -> 0행
+        val categoryOnly = client.patch("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"categoryIds":["$rock"]}""")
+        }
+        assertEquals(HttpStatusCode.OK, categoryOnly.status)
+        transaction(db) {
+            assertEquals(0L, SyncOutboxTable.selectAll().count())
+        }
+
+        // 2. 분류 + memo -> 1행
+        val withMemo = client.patch("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"categoryIds":[],"memo":"메모"}""")
+        }
+        assertEquals(HttpStatusCode.OK, withMemo.status)
+        transaction(db) {
+            val outboxRows = SyncOutboxTable.selectAll().toList()
+            assertEquals(1, outboxRows.size)
+            assertEquals("song", outboxRows[0][SyncOutboxTable.entity])
+            assertEquals("upsert", outboxRows[0][SyncOutboxTable.op])
+        }
     }
 }
