@@ -481,7 +481,7 @@ export function HomePage(): React.ReactElement {
         }
       : null;
 
-  // 노션 바로가기 링크
+  // 노션 바로가기 링크 — 노션 연동은 동결·은닉(계획/앱_명세.md §5). 설정 고급 메뉴에 주소를 넣은 사용자에게만 보인다
   const nlPracticeUrl = safeUrl(raw.get('ulp:notion-practice'));
   const nlNotesUrl = safeUrl(raw.get('ulp:notion-notes'));
   const mainNotionUrl = nlPracticeUrl || nlNotesUrl;
@@ -686,8 +686,8 @@ export function HomePage(): React.ReactElement {
             <div className={styles.subCol}>
               <div className={styles.subColHead}>
                 <h3 className={styles.subColTitle}>PLAYER · 내 연습 곡</h3>
-                <SafeLink href="settings.html#keys" className={styles.widgetLink}>
-                  노션 연결 →
+                <SafeLink href="log.html#songs" className={styles.widgetLink}>
+                  곡 보관함 →
                 </SafeLink>
               </div>
               <ul
@@ -894,8 +894,9 @@ export function HomePage(): React.ReactElement {
       <SafeLink
         className={`notion-big ${styles.notionBig}`}
         id="notionBig"
-        href={mainNotionUrl || 'settings.html#links'}
+        href={mainNotionUrl || '#'}
         external={Boolean(mainNotionUrl)}
+        hidden={!mainNotionUrl}
       >
         NOTION
       </SafeLink>
