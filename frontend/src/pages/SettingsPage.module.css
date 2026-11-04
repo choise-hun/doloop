@@ -29,7 +29,7 @@
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .setSec h2 {
@@ -51,6 +51,39 @@
   color: var(--ink);
 }
 
+/* 간격 스케일: 섹션 16 · 패널 12 · 라벨 6. 빈 메시지 줄은 간격 칸을 차지하지 않는다 */
+.setSec p:empty {
+  display: none;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stackTight {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detailsBody {
+  margin-top: 12px;
+}
+
+.guide {
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.fileInput {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  max-width: 100%;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -58,8 +91,7 @@
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
 }
 
 .panel h3 {
@@ -110,6 +142,14 @@
   flex-wrap: wrap;
 }
 
+/* 좁은 폭에서 긴 버튼 글자가 패널 밖으로 나가지 않게 줄바꿈 */
+.row > :global(.pillBtn),
+.row > :global(.ghostBtn) {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
 .checkRow {
   display: flex;
   align-items: center;
@@ -140,10 +180,9 @@
   border: 1px dashed var(--line);
   border-radius: var(--radius-card);
   padding: 14px 16px;
-  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .previewSummary {
