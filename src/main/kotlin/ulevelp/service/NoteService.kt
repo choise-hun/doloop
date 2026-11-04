@@ -47,6 +47,8 @@ data class AnalyzeJobCreateResponse(
 @Serializable
 data class AnalysisJobDto(
     val id: String,
+    /** `note`(학습 노트 분석) | `progression`(코드 진행 영상 분석, CH-4) */
+    val kind: String = NoteService.JOB_KIND_NOTE,
     val url: String,
     val tags: List<String>,
     val status: String,
@@ -128,6 +130,9 @@ class NoteService(
         const val MAX_CONCURRENT_JOBS_PER_USER = 1
         const val RECENT_JOBS_LIMIT = 20
         const val JOB_EXECUTION_TIMEOUT_MS = 54L * 60L * 1000L // 54분
+        const val JOB_KIND_NOTE = "note"
+        const val JOB_KIND_PROGRESSION = "progression"
+        val JOB_KINDS = setOf(JOB_KIND_NOTE, JOB_KIND_PROGRESSION)
     }
 
     private fun requireDb(): Database =
@@ -148,8 +153,10 @@ class NoteService(
         rawUrl: String,
         rawTags: List<String>,
         memo: String,
-        dispatcher: AnalyzeJobDispatcher
+        dispatcher: AnalyzeJobDispatcher,
+        kind: String = JOB_KIND_NOTE
     ): AnalyzeJobCreateResponse {
+        require(kind in JOB_KINDS) { "unknown job kind: $kind" }
         val database = requireDb()
 
         val videoId = ExportImportService.extractVideoId(rawUrl)
@@ -226,6 +233,7 @@ class NoteService(
                 it[url] = normalizedUrl
                 it[tags] = orderedTags
                 it[AnalysisJobsTable.memo] = memo
+                it[AnalysisJobsTable.kind] = kind
                 it[status] = "queued"
                 it[createdAt] = nowUtc
             }
@@ -283,6 +291,7 @@ class NoteService(
         val url = jobRow[AnalysisJobsTable.url]
         val tags = jobRow[AnalysisJobsTable.tags]
         val memo = jobRow[AnalysisJobsTable.memo]
+        val isProgression = jobRow[AnalysisJobsTable.kind] == JOB_KIND_PROGRESSION
 
         // 2. 트랜잭션 밖에서 외부 호출 (최대 jobTimeoutMs)
         try {
@@ -295,7 +304,11 @@ class NoteService(
                 val title = meta?.title?.takeIf { it.isNotBlank() }?.take(300) ?: url
                 val channel = meta?.author?.take(200) ?: ""
 
-                val (schema, prompt) = GeminiSchemas.buildPrompt(tags, memo)
+                val (schema, prompt) = if (isProgression) {
+                    GeminiSchemas.buildProgressionPrompt(memo)
+                } else {
+                    GeminiSchemas.buildPrompt(tags, memo)
+                }
                 val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema)
                 val analysis = result.analysis
 
@@ -358,8 +371,20 @@ class NoteService(
                         it[NotesTable.analysis] = analysis
                         it[NotesTable.diagramsSvg] = JsonArray(diagramsSvg.map { svg -> JsonPrimitive(svg) })
                         it[NotesTable.model] = gemini.model
+                        it[NotesTable.collectProgressions] = isProgression
                         it[createdAt] = nowUtc
                         it[updatedAt] = nowUtc
+                    }
+
+                    // 코드 진행 영상: 같은 트랜잭션에서 화성 진행마다 진행 행 (설계 §2-2·§3-5). 0개면 노트만
+                    if (isProgression) {
+                        val rows = ProgressionExtract.fromAnalysis(
+                            analysis = analysis,
+                            noteTitle = title,
+                            channel = channel,
+                            videoId = videoId
+                        )
+                        insertFromNote(userId, noteId, "video", rows)
                     }
 
                     AnalysisJobsTable.update({ AnalysisJobsTable.id eq jobId }) {
@@ -564,6 +589,7 @@ class NoteService(
 
     private fun rowToJobDto(row: ResultRow): AnalysisJobDto = AnalysisJobDto(
         id = row[AnalysisJobsTable.id].toString(),
+        kind = row[AnalysisJobsTable.kind],
         url = row[AnalysisJobsTable.url],
         tags = row[AnalysisJobsTable.tags],
         status = row[AnalysisJobsTable.status],

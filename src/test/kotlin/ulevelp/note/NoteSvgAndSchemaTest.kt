@@ -116,6 +116,44 @@ class NoteSvgAndSchemaTest {
         assertTrue(prompt.contains("사용자 메모(특히 신경 써서 볼 부분): 보이싱 위주"))
     }
 
+    private fun progressionItem(schema: JsonObject): JsonObject =
+        schema["properties"]!!.jsonObject["harmony"]!!.jsonObject["properties"]!!.jsonObject["progressions"]!!
+            .jsonObject["items"]!!.jsonObject
+
+    @Test
+    fun sv5b_geminiSchemas_buildProgressionPrompt_extendsHarmonyOnly() {
+        val (schema, prompt) = GeminiSchemas.buildProgressionPrompt("후렴 위주")
+
+        // 공통 5개 + harmony만
+        assertEquals(
+            setOf("summary", "key_concepts", "difficulty", "moments", "practice", "harmony"),
+            schema["properties"]!!.jsonObject.keys
+        )
+        val item = progressionItem(schema)
+        val expected = listOf("name", "song", "artist", "key", "instrument", "start", "end", "chords")
+        assertEquals(expected, item["properties"]!!.jsonObject.keys.toList())
+        assertEquals(expected, item["required"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertTrue(item["properties"]!!.jsonObject["key"]!!.jsonObject["description"]!!.jsonPrimitive.content.contains("A min"))
+        // 코드 객체는 기존 화성 스키마와 같다 (노트 다이어그램 렌더러 재사용)
+        val (noteSchema, notePrompt) = GeminiSchemas.buildPrompt(listOf("화성"), "후렴 위주")
+        val noteItem = progressionItem(noteSchema)
+        assertEquals(noteItem["properties"]!!.jsonObject["chords"], item["properties"]!!.jsonObject["chords"])
+        assertEquals(schema["properties"]!!.jsonObject["harmony"]!!.jsonObject["properties"]!!.jsonObject["concepts"],
+            noteSchema["properties"]!!.jsonObject["harmony"]!!.jsonObject["properties"]!!.jsonObject["concepts"])
+
+        // 일반 노트 화성 스키마는 그대로 (회귀 방지)
+        assertEquals(listOf("name", "key", "instrument", "chords"), noteItem["properties"]!!.jsonObject.keys.toList())
+        assertFalse(notePrompt.contains("[코드 진행]"))
+
+        assertTrue(prompt.contains("분류 태그: 화성\n"))
+        assertTrue(prompt.contains("- [코드 진행] 이 영상은 코드 진행을"))
+        assertTrue(prompt.contains("maj7/M7/Δ"))
+        assertTrue(prompt.contains("\n- [화성] 코드 진행은 코드 단위로 빠짐없이"))
+        assertTrue(prompt.indexOf("[코드 진행]") < prompt.indexOf("[화성]"))
+        assertTrue(prompt.endsWith("사용자 메모(특히 신경 써서 볼 부분): 후렴 위주"))
+        assertFalse(GeminiSchemas.buildProgressionPrompt("  ").second.contains("사용자 메모"))
+    }
+
     @Test
     fun sv6_notionNoteBlockBuilder_secondsAndTsLink() {
         assertEquals(135, NotionNoteBlockBuilder.seconds("2:15"))

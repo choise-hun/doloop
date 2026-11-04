@@ -72,6 +72,7 @@ class NoteApiTest {
 
         transaction(db) {
             SyncOutboxTable.deleteAll()
+            ProgressionsTable.deleteAll()
             AnalysisJobsTable.deleteAll()
             NotesTable.deleteAll()
             IntegrationsTable.deleteAll()
@@ -1001,5 +1002,245 @@ class NoteApiTest {
         for (i in 0 until createdAts.size - 1) {
             assertTrue(createdAts[i] >= createdAts[i + 1])
         }
+    }
+
+    private fun newNoteService() = NoteService(
+        db = db,
+        integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+        videoMetaClient = FakeVideoMetaClient(),
+        geminiClient = fakeGeminiClient
+    )
+
+    private suspend fun postProgressionAnalyze(client: HttpClient, token: String?, body: String): HttpResponse =
+        client.post("/api/v1/progressions/analyze") {
+            if (token != null) header(HttpHeaders.Authorization, "Bearer $token")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(body)
+        }
+
+    /** 코드 진행 영상 분석 응답: 진행 2개(곡 진행 + 코드 0개짜리) + 화면/추정 근거 */
+    private fun progressionAnalysis(): JsonObject = buildJsonObject {
+        putJsonObject("summary") {
+            put("headline", "Just the Two of Us 진행 분석")
+            putJsonArray("points") {}
+        }
+        putJsonArray("key_concepts") { add(JsonPrimitive("4536")) }
+        put("difficulty", "입문")
+        putJsonArray("moments") {}
+        putJsonArray("practice") {}
+        putJsonObject("harmony") {
+            putJsonArray("progressions") {
+                addJsonObject {
+                    put("name", "후렴")
+                    put("song", "Just the Two of Us")
+                    put("artist", "Grover Washington Jr.")
+                    put("key", "F major")
+                    put("instrument", "건반")
+                    put("start", "0:40")
+                    put("end", "1:05")
+                    putJsonArray("chords") {
+                        for ((sym, rom, src) in listOf(Triple("Bbmaj7", "IVmaj7", "화면"), Triple("A7", "III7", "화면"), Triple("Dm7", "vi7", "추정"))) {
+                            addJsonObject {
+                                put("symbol", sym)
+                                put("roman", rom)
+                                put("function", "")
+                                put("split", false)
+                                putJsonArray("lh") {}
+                                putJsonArray("rh") { add(JsonPrimitive("F4")) }
+                                putJsonArray("frets") {}
+                                put("voicing_note", "")
+                                put("nuance", "")
+                                put("source", src)
+                                put("timestamp", "0:42")
+                            }
+                        }
+                    }
+                }
+                addJsonObject {
+                    put("name", "빈 진행")
+                    put("song", "")
+                    put("artist", "")
+                    put("key", "")
+                    put("instrument", "기타")
+                    put("start", "")
+                    put("end", "")
+                    putJsonArray("chords") {}
+                }
+            }
+            putJsonArray("concepts") {}
+        }
+    }
+
+    @Test
+    fun n17_progressionAnalyze_createsNoteAndCollectedRows() = testApplication {
+        seedGeminiKey(userA)
+        var seenPrompt = ""
+        var seenSchema = JsonObject(emptyMap())
+        fakeGeminiClient.handler = { _, _, _, prompt, schema ->
+            seenPrompt = prompt
+            seenSchema = schema
+            GeminiGenerateResult(progressionAnalysis(), "{}")
+        }
+        configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
+
+        val postRes = postProgressionAnalyze(client, tokenA, buildJsonObject {
+            put("url", "https://youtu.be/dQw4w9WgXcQ")
+            put("memo", "후렴 위주")
+        }.toString())
+        assertEquals(HttpStatusCode.Accepted, postRes.status, postRes.bodyAsText())
+        assertEquals("no-store", postRes.headers[HttpHeaders.CacheControl])
+        val postBody = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject
+        assertEquals(setOf("jobId", "status"), postBody.keys)
+        assertEquals("queued", postBody["status"]!!.jsonPrimitive.content)
+        val jobIdStr = postBody["jobId"]!!.jsonPrimitive.content
+
+        // 실행 전: 작업 kind=progression, tags=[화성]
+        val queued = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$jobIdStr") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject
+        assertEquals("progression", queued["kind"]!!.jsonPrimitive.content)
+        assertEquals(listOf("화성"), queued["tags"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", queued["url"]!!.jsonPrimitive.content)
+
+        newNoteService().executeJob(UUID.fromString(jobIdStr))
+
+        // 진행 전용 프롬프트·확장 스키마로 호출됨
+        assertTrue(seenPrompt.contains("- [코드 진행]"), seenPrompt)
+        assertTrue(seenPrompt.contains("사용자 메모(특히 신경 써서 볼 부분): 후렴 위주"))
+        val itemProps = seenSchema["properties"]!!.jsonObject["harmony"]!!.jsonObject["properties"]!!.jsonObject["progressions"]!!
+            .jsonObject["items"]!!.jsonObject["properties"]!!.jsonObject
+        assertTrue("song" in itemProps.keys && "start" in itemProps.keys)
+
+        val job = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$jobIdStr") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject
+        assertEquals("done", job["status"]!!.jsonPrimitive.content)
+        assertEquals("progression", job["kind"]!!.jsonPrimitive.content)
+        val noteIdStr = job["noteId"]!!.jsonPrimitive.content
+
+        // 노트: 태그 화성, 수집 켜짐, 다이어그램 2개(진행 수만큼)
+        val note = Json.parseToJsonElement(client.get("/api/v1/notes/$noteIdStr") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["note"]!!.jsonObject
+        assertEquals(listOf("화성"), note["tags"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(true, note["collectProgressions"]!!.jsonPrimitive.boolean)
+        assertEquals(2, note["diagramsSvg"]!!.jsonArray.size)
+
+        // 진행 행: 코드 있는 진행 1개만 (빈 진행은 행 없음)
+        val list = Json.parseToJsonElement(client.get("/api/v1/progressions?scope=analysis") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
+        assertEquals(1, list.size)
+        val p = list[0].jsonObject
+        assertEquals("analysis", p["kind"]!!.jsonPrimitive.content)
+        assertEquals("ai", p["origin"]!!.jsonPrimitive.content)
+        assertEquals("video", p["route"]!!.jsonPrimitive.content)
+        assertEquals("추정", p["evidence"]!!.jsonPrimitive.content)
+        assertEquals("Just the Two of Us", p["title"]!!.jsonPrimitive.content)
+        assertEquals("Grover Washington Jr.", p["artist"]!!.jsonPrimitive.content)
+        assertEquals("후렴", p["part"]!!.jsonPrimitive.content)
+        assertEquals("Fake Channel", p["channel"]!!.jsonPrimitive.content)
+        assertEquals("F Major", p["key"]!!.jsonPrimitive.content)
+        assertEquals("건반", p["instrument"]!!.jsonPrimitive.content)
+        assertEquals(40, p["startSec"]!!.jsonPrimitive.int)
+        assertEquals(65, p["endSec"]!!.jsonPrimitive.int)
+        assertEquals("dQw4w9WgXcQ", p["videoId"]!!.jsonPrimitive.content)
+        assertEquals(noteIdStr, p["noteId"]!!.jsonPrimitive.content)
+        val chords = p["chords"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("Bbmaj7", "A7", "Dm7"), chords.map { it["symbol"]!!.jsonPrimitive.content })
+        assertEquals(listOf("IVM7", "III7", "vi7"), chords.map { it["roman"]!!.jsonPrimitive.content })
+        assertEquals(setOf("symbol", "roman", "source", "timestamp"), chords[0].keys)
+
+        // 레퍼런스 범위엔 없음
+        val refs = Json.parseToJsonElement(client.get("/api/v1/progressions?scope=reference") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
+        assertEquals(0, refs.size)
+
+        // 다른 사용자에겐 안 보임
+        val other = Json.parseToJsonElement(client.get("/api/v1/progressions") {
+            header(HttpHeaders.Authorization, "Bearer $tokenB")
+        }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
+        assertEquals(0, other.size)
+    }
+
+    @Test
+    fun n18_progressionAnalyze_noProgressions_validation_andSharedLimit() = testApplication {
+        configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
+        val okBody = buildJsonObject { put("url", "https://www.youtube.com/watch?v=dQw4w9WgXcQ") }.toString()
+
+        // 401 · 412(키 없음) · 400(URL)
+        assertEquals(HttpStatusCode.Unauthorized, postProgressionAnalyze(client, null, okBody).status)
+        val noKey = postProgressionAnalyze(client, tokenA, okBody)
+        assertEquals(HttpStatusCode.PreconditionFailed, noKey.status)
+        assertStandardError(noKey.bodyAsText(), 412, "NO_KEY")
+        seedGeminiKey(userA)
+        val badUrl = postProgressionAnalyze(client, tokenA, """{"url":"https://example.com/x"}""")
+        assertEquals(HttpStatusCode.BadRequest, badUrl.status)
+        assertStandardError(badUrl.bodyAsText(), 400, "INVALID_INPUT")
+        val noUrl = postProgressionAnalyze(client, tokenA, """{"memo":"x"}""")
+        assertEquals(HttpStatusCode.BadRequest, noUrl.status)
+        assertStandardError(noUrl.bodyAsText(), 400, "INVALID_INPUT")
+
+        // 화성 진행 0개 → 노트만, 작업 done, 진행 행 0
+        fakeGeminiClient.defaultResult = FakeGeminiClient.defaultSuccessResult()
+        val res = postProgressionAnalyze(client, tokenA, okBody)
+        assertEquals(HttpStatusCode.Accepted, res.status)
+        val jobId = Json.parseToJsonElement(res.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+
+        // 노트 분석과 동시 1건 제한 합산: 진행 작업이 queued인 동안 노트 분석 429
+        val noteRes = client.post("/api/v1/notes/analyze") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("url", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+                putJsonArray("tags") { add(JsonPrimitive("화성")) }
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.TooManyRequests, noteRes.status)
+        assertStandardRateLimitError(noteRes.bodyAsText())
+
+        newNoteService().executeJob(UUID.fromString(jobId))
+        val job = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$jobId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject
+        assertEquals("done", job["status"]!!.jsonPrimitive.content)
+        val noteId = job["noteId"]!!.jsonPrimitive.content
+        val note = Json.parseToJsonElement(client.get("/api/v1/notes/$noteId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["note"]!!.jsonObject
+        assertEquals(true, note["collectProgressions"]!!.jsonPrimitive.boolean)
+        val list = Json.parseToJsonElement(client.get("/api/v1/progressions") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
+        assertEquals(0, list.size)
+
+        // 일반 노트 분석 작업은 kind=note, 노트 수집 꺼짐, 진행 행 없음 (회귀)
+        val noteJobRes = client.post("/api/v1/notes/analyze") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(buildJsonObject {
+                put("url", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+                putJsonArray("tags") { add(JsonPrimitive("화성")) }
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.Accepted, noteJobRes.status)
+        val noteJobId = Json.parseToJsonElement(noteJobRes.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+        fakeGeminiClient.defaultResult = null
+        fakeGeminiClient.handler = { _, _, _, _, _ -> GeminiGenerateResult(progressionAnalysis(), "{}") }
+        newNoteService().executeJob(UUID.fromString(noteJobId))
+        val jobs = Json.parseToJsonElement(client.get("/api/v1/notes/jobs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["jobs"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("note", "progression"), jobs.map { it["kind"]!!.jsonPrimitive.content })
+        val noteJobNoteId = jobs[0]["noteId"]!!.jsonPrimitive.content
+        val plainNote = Json.parseToJsonElement(client.get("/api/v1/notes/$noteJobNoteId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["note"]!!.jsonObject
+        assertEquals(false, plainNote["collectProgressions"]!!.jsonPrimitive.boolean)
+        val after = Json.parseToJsonElement(client.get("/api/v1/progressions") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
+        assertEquals(0, after.size)
     }
 }

@@ -313,7 +313,7 @@ fun Application.module(
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService)
-            registerProgressionRoutes(jwtVerifier, profileService, progressionService)
+            registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
             registerSessionRoutes(jwtVerifier, profileService, sessionService)
