@@ -19,7 +19,108 @@ import {
   pickNextIndex,
   ProgressionItem,
 } from '../lib/progressions';
+import { genreLabel, HomeGenreSlot, loadHomeGenres, saveHomeGenres, setOpenGenre } from '../lib/genres';
 import styles from './HomePage.module.css';
+
+// 최근 곡 위젯 아래 장르 바로가기 `ㅁ ㅁ ㅁ +`. +는 표시 장르·순서 설정 팝업
+function GenreShortcuts(): React.ReactElement {
+  const [slots, setSlots] = useState<HomeGenreSlot[]>(() => loadHomeGenres());
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleDown);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleDown);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const update = (next: HomeGenreSlot[]) => {
+    setSlots(next);
+    saveHomeGenres(next);
+  };
+  const toggle = (id: string) => update(slots.map((s) => (s.id === id ? { ...s, on: !s.on } : s)));
+  const move = (idx: number, dir: -1 | 1) => {
+    const to = idx + dir;
+    if (to < 0 || to >= slots.length) return;
+    const next = [...slots];
+    [next[idx], next[to]] = [next[to], next[idx]];
+    update(next);
+  };
+
+  const shown = slots.filter((s) => s.on);
+
+  return (
+    <div className={styles.genreWrap} ref={wrapRef}>
+      <div className={styles.genreRow} id="genreRow" aria-label="장르 바로가기">
+        {shown.map((s) => (
+          <SafeLink
+            key={s.id}
+            href="practice.html"
+            className={styles.genreCell}
+            data-genre={s.id}
+            onClick={() => setOpenGenre(s.id)}
+          >
+            {genreLabel(s.id)}
+          </SafeLink>
+        ))}
+        <button
+          type="button"
+          className={`${styles.genreCell} ${styles.genreAdd}`}
+          id="genreSettingsBtn"
+          aria-label="홈 장르 버튼 설정"
+          aria-expanded={open}
+          aria-controls="genreSettings"
+          onClick={() => setOpen((v) => !v)}
+        >
+          +
+        </button>
+      </div>
+      {open && (
+        <div className={styles.genrePop} id="genreSettings" role="dialog" aria-label="홈 장르 버튼 설정">
+          <p className={styles.genrePopTitle}>홈에 보일 장르 · 순서</p>
+          <ul className={styles.genrePopList}>
+            {slots.map((s, idx) => (
+              <li key={s.id} data-genre={s.id}>
+                <label className={styles.genrePopLabel}>
+                  <input type="checkbox" checked={s.on} onChange={() => toggle(s.id)} />
+                  {genreLabel(s.id)}
+                </label>
+                <button
+                  type="button"
+                  className={styles.genreMove}
+                  aria-label={`${genreLabel(s.id)} 위로`}
+                  disabled={idx === 0}
+                  onClick={() => move(idx, -1)}
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  className={styles.genreMove}
+                  aria-label={`${genreLabel(s.id)} 아래로`}
+                  disabled={idx === slots.length - 1}
+                  onClick={() => move(idx, 1)}
+                >
+                  ▼
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function HomePage(): React.ReactElement {
   const authState = useAuth();
@@ -357,6 +458,7 @@ export function HomePage(): React.ReactElement {
               </div>
             </div>
           )}
+          <GenreShortcuts />
         </div>
       </section>
 
@@ -388,6 +490,11 @@ export function HomePage(): React.ReactElement {
                   );
                 })}
               </ul>
+              <div className={styles.subColAction}>
+                <SafeLink className={styles.sectionBtn} id="betterChordsBtn" href="chords.html">
+                  코드 연습실
+                </SafeLink>
+              </div>
             </div>
 
             <div className={styles.subCol}>
@@ -398,7 +505,7 @@ export function HomePage(): React.ReactElement {
                 </SafeLink>
               </div>
               <ul
-                className={`frame-list ${styles.frameList}${activeUid && songs.length > 0 ? '' : ` ${styles.songsEmpty}`}`}
+                className={`frame-list ${styles.frameList}`}
                 id="songs"
               >
                 {!activeUid ? (
@@ -434,16 +541,12 @@ export function HomePage(): React.ReactElement {
                   })
                 )}
               </ul>
+              <div className={styles.subColAction}>
+                <SafeLink className={styles.sectionBtn} id="betterPlayerBtn" href="practice.html">
+                  플레이어
+                </SafeLink>
+              </div>
             </div>
-          </div>
-
-          <div className={styles.betterActions}>
-            <SafeLink className="ghostBtn" href="chords.html">
-              코드 연습실 열기
-            </SafeLink>
-            <SafeLink className="ghostBtn" href="practice.html">
-              플레이어 열기
-            </SafeLink>
           </div>
         </section>
 
@@ -489,7 +592,7 @@ export function HomePage(): React.ReactElement {
               <div className={styles.noteBox} id="recentNoteEmpty">
                 <div className={styles.recentPlaceholder}>NO NOTE</div>
                 <div className={styles.noteBoxBody}>
-                  <p className={styles.noteBoxSummary}>아직 생성한 학습 노트가 없어요.</p>
+                  <p className={`${styles.noteBoxSummary} ${styles.wrapText}`}>아직 생성한 학습 노트가 없어요.</p>
                   <div className={styles.noteBoxFoot}>
                     <SafeLink href="notes.html" className={styles.widgetLink}>
                       노트 만들러 가기 →
@@ -500,7 +603,7 @@ export function HomePage(): React.ReactElement {
             )}
           </div>
 
-          <div className={styles.vaultSection} id="progressionPickerSection">
+          <div className={`${styles.vaultSection} ${styles.vaultSectionGrow}`} id="progressionPickerSection">
             <div className={styles.subColHead}>
               <h3 className={styles.subColTitle}>취향 코드 진행 꺼내보기</h3>
               <SafeLink href="chords.html#reint" className={styles.widgetLink}>
@@ -564,12 +667,6 @@ export function HomePage(): React.ReactElement {
                 </button>
               </div>
             </div>
-          </div>
-
-          <div className={styles.betterActions}>
-            <SafeLink className="ghostBtn" href="notes.html">
-              학습 노트 열기
-            </SafeLink>
           </div>
         </section>
       </div>
