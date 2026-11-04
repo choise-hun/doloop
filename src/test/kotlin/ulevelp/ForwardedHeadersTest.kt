@@ -1,8 +1,13 @@
 package ulevelp
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import org.slf4j.LoggerFactory
 import kotlin.test.*
 
 class ForwardedHeadersTest {
@@ -31,5 +36,27 @@ class ForwardedHeadersTest {
             behindCloudRun("https://evil.example.com") { header(HttpHeaders.XForwardedHost, "evil.example.com") },
             "X-Forwarded-Host 위조"
         )
+    }
+
+    @Test
+    fun `FX-1 CORS가 거부한 요청은 라우트를 돌지 않고 ERROR 로그도 남기지 않는다`() = testApplication {
+        application {
+            module(dbConfig = null, authConfig = null, allowedOrigins = listOf("https://choise-hun.github.io"))
+        }
+        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        root.addAppender(appender)
+        try {
+            // 인증이 필요한 라우트: 거부 뒤에도 라우트가 돌면 401을 던지고, 이미 보낸 응답에 헤더를 붙이다 ERROR가 난다
+            val get = client.get("/api/v1/me") { header(HttpHeaders.Origin, "https://evil.example.com") }
+            assertEquals(HttpStatusCode.Forbidden, get.status, "GET 거부")
+            val post = client.post("/api/v1/songs") { header(HttpHeaders.Origin, "https://evil.example.com") }
+            assertEquals(HttpStatusCode.Forbidden, post.status, "POST 거부")
+
+            val errors = appender.list.filter { it.level == Level.ERROR }
+            assertTrue(errors.isEmpty(), "ERROR 로그: ${errors.map { it.formattedMessage + " / " + it.throwableProxy?.message }}")
+        } finally {
+            root.detachAppender(appender)
+        }
     }
 }

@@ -239,6 +239,13 @@ fun Application.module(
         }
     }
 
+    // CORS는 Validators 단계에서 거부할 때 403을 보내기만 하고 파이프라인을 끝내지 않는다.
+    // 그대로 두면 라우트가 돌아 이미 보낸 응답에 헤더를 붙이다 ERROR가 난다(FX-1).
+    // Validators는 internal이라 다음 단계 Call에 routing보다 먼저 건다
+    intercept(ApplicationCallPipeline.Call) {
+        if (call.response.isCommitted) finish()
+    }
+
     install(ContentNegotiation) {
         json(
             Json {
