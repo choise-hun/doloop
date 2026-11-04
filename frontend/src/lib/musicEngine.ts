@@ -5,6 +5,8 @@ import rawCT from './engine/theory.mjs';
 import rawGE from './engine/voicing.mjs';
 // @ts-ignore
 import * as rawPath from './engine/progressionPath.mjs';
+// @ts-ignore
+import * as rawShapes from './engine/chordShapes.mjs';
 
 export type TuningId = 'g6' | 'g7' | 'b4' | 'b5' | 'b6';
 
@@ -123,6 +125,13 @@ export interface Voicing {
   /** genVoicingsByDegrees 결과에만: 받은 도수 목록, 6개 이상이라 뺀 도수 (생략 순서 5 → R → 9) */
   degrees?: string[];
   omit?: string[];
+  /** shapes standard·both 후보에만(compact 기본은 없음): compact = genVoicingsByDegrees, table = 정석 폼 표(chordForms.json), rule = 정석 폼 규칙 생성 */
+  kind?: 'compact' | 'table' | 'rule';
+  /** 정석 폼(table·rule)에만: 손가락 수, 바레 프렛(절대), 표 폼 출처·고친 폼 */
+  fingers?: number;
+  barres?: number[];
+  src?: string;
+  fix?: 'mute-low';
 }
 
 export interface VoicingOptions {
@@ -153,9 +162,42 @@ export interface PathChord {
   degrees: string[];
   bass?: number;
   raw?: string;
+  /** 정규 퀄리티 — 있어야 정석 폼 표를 찾는다(없으면 규칙 생성만) */
+  quality?: string;
+}
+
+/** frontend/src/lib/engine/chordForms.json (CH-2c-1) */
+export interface FormTableForm {
+  frets: number[];
+  fingers: number[];
+  barres: number[];
+  src: string;
+  omit?: string[];
+  add?: string[];
+  fix?: 'mute-low';
+}
+export interface FormTable {
+  source: Record<string, string>;
+  tuning: number[];
+  forms: Record<string, { name: string; forms: FormTableForm[] }>;
+}
+
+export interface ShapeOptions {
+  /** 프렛 범위 (기본 0~12 — 개방현은 lo 0일 때만) */
+  lo?: number;
+  hi?: number;
+  /** 규칙 생성만: 울리는 줄 최소(3), 누르는 프렛 폭(4), 손가락(4), 가운데 막는 줄(1) */
+  minStrings?: number;
+  maxSpan?: number;
+  maxFingers?: number;
+  maxInnerMute?: number;
 }
 
 export interface PathOptions extends VoicingOptions {
+  /** compact(기본) = 재즈식 3~4음(기존 결과) · standard = 정석 폼(표 → 없으면 규칙) · both = 둘 다 점수 순 */
+  shapes?: 'compact' | 'standard' | 'both';
+  /** shapes가 standard·both일 때 표 (loadChordForms()). 없으면 규칙 생성만 */
+  formTable?: FormTable | null;
   /** 코드마다 점수 상위 몇 개를 후보로 (기본 30) */
   topK?: number;
   /** 돌려줄 경로 수 (기본 3) */
@@ -173,6 +215,7 @@ export interface VoicingPath {
 const CT_MOD: any = rawCT;
 const GE_MOD: any = rawGE;
 const PATH_MOD: any = rawPath;
+const SHAPES_MOD: any = rawShapes;
 
 export const CT = {
   OPEN: CT_MOD.OPEN as number[],
@@ -261,6 +304,21 @@ export const PATH = {
   chordCandidates: PATH_MOD.chordCandidates as (chord: PathChord, opts?: PathOptions) => { voicings: Voicing[]; bassDropped: boolean },
   bestPaths: PATH_MOD.bestPaths as (chords: PathChord[], opts?: PathOptions) => VoicingPath[],
 };
+
+/** 정석 코드 폼 (engine/chordShapes.mjs) — 표는 인자로 받는다 */
+export const SHAPES = {
+  formId: SHAPES_MOD.formId as (chord: PathChord) => string | null,
+  tableForms: SHAPES_MOD.tableForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
+  ruleForms: SHAPES_MOD.ruleForms as (chord: PathChord, opts?: ShapeOptions) => Voicing[],
+  standardForms: SHAPES_MOD.standardForms as (chord: PathChord, table: FormTable | null | undefined, opts?: ShapeOptions) => Voicing[],
+};
+
+let formTablePromise: Promise<FormTable> | null = null;
+/** 정석 폼 표(gzip 약 35KB)를 따로 받아 온다 — 진행 연주 탭에서만 부르면 첫 화면 번들에 안 들어간다 */
+export function loadChordForms(): Promise<FormTable> {
+  formTablePromise ??= import('./engine/chordForms.json').then((m) => (m.default ?? m) as unknown as FormTable);
+  return formTablePromise;
+}
 
 export function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);

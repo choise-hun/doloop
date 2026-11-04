@@ -1,21 +1,42 @@
 // 진행 보이싱 경로: 코드마다 보이싱 후보를 만들고 이웃 사이 이동 비용(GE.trans)이 작은 연결을 고른다
 // search251(2-5-1 고정 3코드)을 길이 N 진행으로 넓힌 DP. 점수 = 보이싱 점수 합 - 이동 비용 합 (search251과 같은 식)
 import GE from './voicing.mjs';
+import { standardForms } from './chordShapes.mjs';
 
-const DEF = { lo: 1, hi: 12, topK: 30, paths: 3, loop: false };
+const DEF = { lo: 1, hi: 12, topK: 30, paths: 3, loop: false, shapes: 'compact' };
 const VOPT_KEYS = ['lo', 'hi', 'maxSpan', 'minNotes', 'maxNotes', 'maxGap', 'needGuide', 'outsideMax', 'allowedPcs'];
+const SHAPES = ['compact', 'standard', 'both'];
 
-// chord: CH-2 parseChord 결과 모양 { root, degrees, bass?, raw? }
-// 슬래시 베이스로 보이싱이 없으면 베이스 없이 다시 만든다(bassDropped: true)
+// 한 코드(베이스 그대로)의 후보: compact = genVoicingsByDegrees(재즈식 3~4음, 기존 결과),
+// standard = 정석 폼(표 → 없으면 규칙, chordShapes.mjs). 정석 폼의 lo 기본은 0(개방현), compact는 1 그대로
+function gen(chord, o, opts) {
+  let out = [];
+  if (o.shapes !== 'standard') {
+    const vopt = {};
+    for (const k of VOPT_KEYS) if (o[k] !== undefined) vopt[k] = o[k];
+    if (chord.raw) vopt.name = chord.raw;
+    if (chord.bass != null) vopt.bass = chord.bass;
+    out = GE.genVoicingsByDegrees(chord.root, chord.degrees, vopt);
+    if (o.shapes === 'both') for (const v of out) v.kind = 'compact'; // compact 기본은 결과 객체도 그대로
+  }
+  if (o.shapes !== 'compact') {
+    const sopt = { lo: opts.lo ?? 0, hi: o.hi };
+    const seen = new Set(out.map((v) => v.frets.join(',')));
+    for (const v of standardForms(chord, o.formTable, sopt)) if (!seen.has(v.frets.join(','))) out.push(v);
+  }
+  return out;
+}
+
+// chord: CH-2 parseChord 결과 모양 { root, degrees, quality?, bass?, raw? } — quality가 있어야 정석 폼 표를 찾는다
+// opts.shapes: 'compact'(기본, 기존 결과) | 'standard'(정석 폼만) | 'both'(둘 다 점수 순). opts.formTable = chordForms.json
+// 슬래시 베이스로 보이싱이 없으면 베이스 없이 다시 만든다(bassDropped: true). 모르는 shapes → 후보 0개
 function chordCandidates(chord, opts) {
   const o = Object.assign({}, DEF, opts || {});
-  const vopt = {};
-  for (const k of VOPT_KEYS) if (o[k] !== undefined) vopt[k] = o[k];
-  if (chord.raw) vopt.name = chord.raw;
-  let voicings = GE.genVoicingsByDegrees(chord.root, chord.degrees, Object.assign({}, vopt, { bass: chord.bass }));
+  if (!SHAPES.includes(o.shapes)) return { voicings: [], bassDropped: false };
+  let voicings = gen(chord, o, opts || {});
   let bassDropped = false;
   if (!voicings.length && chord.bass != null) {
-    voicings = GE.genVoicingsByDegrees(chord.root, chord.degrees, vopt);
+    voicings = gen(Object.assign({}, chord, { bass: undefined }), o, opts || {});
     bassDropped = voicings.length > 0;
   }
   voicings.sort((a, b) => b.score - a.score);
@@ -29,8 +50,8 @@ function bestPaths(chords, opts) {
   if (!Array.isArray(chords) || !chords.length) return [];
   const cache = new Map();
   const cand = chords.map((c) => {
-    const key = [c.root, c.degrees.join(','), c.bass ?? '', c.raw ?? ''].join('|');
-    if (!cache.has(key)) cache.set(key, chordCandidates(c, o).voicings);
+    const key = [c.root, c.degrees.join(','), c.quality ?? '', c.bass ?? '', c.raw ?? ''].join('|');
+    if (!cache.has(key)) cache.set(key, chordCandidates(c, opts).voicings); // DEF는 chordCandidates가 합친다(정석 폼 lo 기본 0 유지)
     return cache.get(key);
   });
   if (cand.some((vs) => !vs.length)) return [];
