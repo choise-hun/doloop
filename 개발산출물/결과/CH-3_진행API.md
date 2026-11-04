@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-04 (mac)
 - 입력: `결과/CH-1b_설계.md` §2·§3·§4-3·§5-3·§9, `결과/CH-2_코드파서.md`(키 철자 `KEYS`)
-- 상태: **완료** — `./gradlew test` 216개 통과, 로컬 DB curl(정상·401·400·404) 확인, PR #63 CI는 진행 파일에 기록
+- 상태: **완료** — `./gradlew test` 216개 통과, 로컬 DB curl(정상·401·400·404) 확인, **Draft PR #63 CI 전부 통과**(Test Node 22·24, Kotlin JDK 21, E2E spa·legacy, Docker build & smoke — run 41830466374, 커밋 `8470bb5`)
 - 원격 DB: **V3 미적용**(로컬 postgres 컨테이너에만 적용 → 확인 뒤 삭제). 운영 반영은 CH-8 뒤 배포 때 Flyway가 한다
 
 ## 1. 바꾼 파일 (§9 목록 그대로)
