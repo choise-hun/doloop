@@ -167,16 +167,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
-      # Pages는 모든 파일에 max-age=600을 걸어서, 노션 임베드·아이패드 웹뷰가 새 HTML에 옛 CSS·JS를 섞어 씀.
+      # Pages는 폐지(R1-A2): 옛 노션 링크·북마크가 살도록 레거시 화면과 같은 파일명으로 Cloud Run 이동 페이지만 올림.
+      # public/ 은 Cloud Run 롤백(ULP_UI=legacy)·E2E에 쓰여 저장소에 남는다
+      - name: Build redirect pages
+        run: |
+          mkdir -p _site
+          cp pages/redirect.js pages/redirect.css _site/
+          for f in public/*.html 404.html; do cp pages/redirect.html "_site/$(basename "$f")"; done
+          ls _site
+      # Pages는 모든 파일에 max-age=600을 걸어서, 새 HTML에 옛 CSS·JS가 섞일 수 있음.
       # 배포마다 로컬 CSS·JS 주소에 커밋 버전을 붙여 HTML이 바뀌면 CSS·JS도 새로 받게 함
       - name: Version asset URLs
         run: |
           v="${GITHUB_SHA::7}"
-          sed -i -E "s#(href|src)=\"([a-z0-9/_-]+\.(css|js))\"#\1=\"\2?v=$v\"#g" public/*.html
-          grep -c "?v=$v" public/*.html
-      # 화면은 브라우저에서 모든 계산을 하므로 public/ 만 올립니다 (/api 는 Pages 에서 제공되지 않음)
+          sed -i -E "s#(href|src)=\"([a-z0-9/_-]+\.(css|js))\"#\1=\"\2?v=$v\"#g" _site/*.html
+          grep -c "?v=$v" _site/*.html
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: public
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
