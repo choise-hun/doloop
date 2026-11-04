@@ -9,7 +9,7 @@
 - 인증·DB·녹음: Supabase(Google OAuth, PostgreSQL, Storage), 녹음은 Google Drive 연결 시 사용자 드라이브에 저장
 - 외부 연동: 노션(연습 곡·기록·학습 노트 push), Gemini(학습 노트 분석, 사용자 본인 키)
 
-> GitHub Pages(`choise-hun.github.io/ULevelP`)의 옛 화면은 폐지 예정입니다. 위 서비스 주소를 쓰세요.
+> GitHub Pages(`choise-hun.github.io/ULevelP`)는 폐지되었고, 옛 주소는 위 서비스의 같은 화면으로 이동합니다(쿼리 유지). 노션 임베드 안에서는 이동하지 못하므로 임베드 대신 링크를 쓰세요.
 
 | 화면 | 하는 일 |
 | --- | --- |
