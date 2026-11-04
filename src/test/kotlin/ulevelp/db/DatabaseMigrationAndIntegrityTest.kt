@@ -412,7 +412,7 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `progressions checks, note SET NULL, unique note index and progression entity in outbox`() {
+    fun `progressions checks, note SET NULL, unique note index and no progression entity in outbox`() {
         val userId = UUID.randomUUID()
         val noteId = UUID.randomUUID()
         val chords = kotlinx.serialization.json.Json.parseToJsonElement("""[{"symbol":"C"}]""")
@@ -473,13 +473,6 @@ class DatabaseMigrationAndIntegrityTest {
         })
 
         transaction(db) {
-            // 노션 대상에 progression 허용
-            SyncOutboxTable.insert {
-                it[SyncOutboxTable.userId] = userId
-                it[entity] = "progression"
-                it[entityId] = UUID.randomUUID()
-                it[op] = "upsert"
-            }
             // analysis_jobs.kind 기본 note
             AnalysisJobsTable.insert {
                 it[AnalysisJobsTable.userId] = userId
@@ -493,17 +486,20 @@ class DatabaseMigrationAndIntegrityTest {
             val row = ProgressionsTable.selectAll().single()
             assertEquals(null, row[ProgressionsTable.noteId])
         }
-        val badEntity = assertFailsWith<ExposedSQLException> {
-            transaction(db) {
-                SyncOutboxTable.insert {
-                    it[SyncOutboxTable.userId] = userId
-                    it[entity] = "chord"
-                    it[entityId] = UUID.randomUUID()
-                    it[op] = "upsert"
+        // 노션 연동은 동결(계획/앱_명세.md §5) — 코드 진행은 노션 대상이 아니다
+        for (bad in listOf("progression", "chord")) {
+            val badEntity = assertFailsWith<ExposedSQLException> {
+                transaction(db) {
+                    SyncOutboxTable.insert {
+                        it[SyncOutboxTable.userId] = userId
+                        it[entity] = bad
+                        it[entityId] = UUID.randomUUID()
+                        it[op] = "upsert"
+                    }
                 }
             }
+            assertEquals("23514", badEntity.sqlState)
         }
-        assertEquals("23514", badEntity.sqlState)
 
         // 사용자 삭제 → CASCADE
         transaction(db) {

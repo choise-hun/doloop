@@ -405,11 +405,6 @@ ALTER TABLE notes ADD COLUMN collect_progressions BOOLEAN NOT NULL DEFAULT false
 -- analysis_jobs: 작업 종류 (기존 행은 note)
 ALTER TABLE analysis_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'note' CHECK (kind IN ('note', 'progression'));
 
--- 노션 push 대상에 progression 추가 (V1 인라인 CHECK의 기본 이름)
-ALTER TABLE notion_links DROP CONSTRAINT notion_links_entity_check;
-ALTER TABLE notion_links ADD CONSTRAINT notion_links_entity_check CHECK (entity IN ('song', 'session', 'take', 'note', 'progression'));
-ALTER TABLE sync_outbox DROP CONSTRAINT sync_outbox_entity_check;
-ALTER TABLE sync_outbox ADD CONSTRAINT sync_outbox_entity_check CHECK (entity IN ('song', 'session', 'take', 'note', 'progression'));
 ```
 
 ---
