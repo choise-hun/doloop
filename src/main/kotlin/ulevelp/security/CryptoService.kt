@@ -171,9 +171,10 @@ class CryptoService(
 
         /**
          * Google Gemini (AI Studio) API 키 형식:
-         * - `AIza` + 영숫자/`_`/`-` 35자 (총 39자)
+         * - 구형 `AIza` + 영숫자/`_`/`-` 35자 (총 39자)
+         * - 신형 `AQ.` + 영숫자/`_`/`-` 30~120자 (실측 53자). 실제 유효성은 저장 시 Google 확인에 맡긴다
          */
-        val GEMINI_API_KEY_REGEX = Regex("^AIza[0-9A-Za-z_-]{35}$")
+        val GEMINI_API_KEY_REGEX = Regex("^(AIza[0-9A-Za-z_-]{35}|AQ\\.[0-9A-Za-z_-]{30,120})$")
 
         /**
          * 노션 데이터베이스 ID 형식:
@@ -238,7 +239,7 @@ class CryptoService(
                 "gemini" -> if (!GEMINI_API_KEY_REGEX.matches(trimmed)) {
                     throw InvalidIntegrationKeyException(
                         provider = "gemini",
-                        message = "유효하지 않은 Gemini API 키 형식입니다 (AIza로 시작하는 39자리 키여야 합니다)."
+                        message = "유효하지 않은 Gemini API 키 형식입니다 (AIza로 시작하는 39자리 키 또는 AQ.로 시작하는 키여야 합니다)."
                     )
                 }
                 else -> throw InvalidIntegrationKeyException(
