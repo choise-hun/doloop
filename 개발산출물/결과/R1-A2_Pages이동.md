@@ -2,7 +2,7 @@
 
 - **날짜:** 2026-11-04
 - **근거:** `결과/R1_Pages처리결정.md` §2 A·§6 (임베드 처리 = (c) 링크로 교체), `결과/R1-A1_공개URL전환.md`
-- **상태:** PR ①(이 문서) 올림 → 머지 후 main CI의 `deploy-pages`가 실제 Pages를 바꾼다. 실제 Pages 확인(§4)은 머지 뒤
+- **상태:** **완료** — PR #54 머지(`5f7056d`) → main CI `Deploy to GitHub Pages` 성공, 실제 Pages 실측 통과(§4-1)
 
 ## 1. 설계 결정
 
@@ -61,6 +61,47 @@ curl -s -o /dev/null -w "%{http_code}\n" https://choise-hun.github.io/ULevelP/no
 
 브라우저로 `https://choise-hun.github.io/ULevelP/practice.html?v=dQw4w9WgXcQ&t=42` → `https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=dQw4w9WgXcQ&t=42`로 바뀌는지 본다.
 
+## 4-1. 실제 Pages 실측 (2026-11-04, 머지 후)
+
+main CI `5f7056d`(PR #54)·`71e1b48`(PR #55) 모두 `Deploy to GitHub Pages` success. 실측 시점 Pages 배포본 = `71e1b48`(`redirect.{js,css}?v=71e1b48`). `da355b7`(PR #56) CI는 진행 중이었으나 `pages/` 변경 없음 — 캐시 버전만 바뀐다.
+
+**curl:**
+
+```text
+/              200 redirect.js?v=1 id=root:0
+index.html     200 redirect.js?v=1 id=root:0
+practice.html  200 redirect.js?v=1 id=root:0
+chords.html    200 redirect.js?v=1 id=root:0
+log.html       200 redirect.js?v=1 id=root:0
+notes.html     200 redirect.js?v=1 id=root:0
+note.html      200 redirect.js?v=1 id=root:0
+settings.html  200 redirect.js?v=1 id=root:0
+login.html     404 redirect.js?v=1 id=root:0     ← 레거시 목록에 없는 경로 = 404.html(이동 페이지)
+nope.html      404 redirect.js?v=1 id=root:0
+redirect.js    200  Content-Type: application/javascript; charset=utf-8  Cache-Control: max-age=600
+               const TARGET = 'https://ulevelp-d5ympfsmfq-du.a.run.app';
+```
+
+**Playwright chromium (실제 Pages → Cloud Run):**
+
+```text
+OK   /practice.html?v=dQw4w9WgXcQ&t=42 → https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=dQw4w9WgXcQ&t=42 (#root 1)
+OK   /practice.html?v=abc&t=10&a=3&b=9.5&r=0.75#x → https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=abc&t=10&a=3&b=9.5&r=0.75#x (#root 1)
+OK   / → https://ulevelp-d5ympfsmfq-du.a.run.app/ (#root 1)
+OK   /note.html?id=n1 → https://ulevelp-d5ympfsmfq-du.a.run.app/note.html?id=n1 (#root 1)
+OK   /privacy.html → https://ulevelp-d5ympfsmfq-du.a.run.app/privacy.html (#root 1)
+OK   /nope.html?q=1 → https://ulevelp-d5ympfsmfq-du.a.run.app/?q=1 (#root 1)
+iframe url 그대로: https://choise-hun.github.io/ULevelP/practice.html?v=abc&t=10
+iframe #framed 보임: true / #moving 보임: false
+iframe #go: https://ulevelp-d5ympfsmfq-du.a.run.app/practice.html?v=abc&t=10 _blank noopener
+JS 꺼짐 url: https://choise-hun.github.io/ULevelP/practice.html?v=abc / 링크: https://ulevelp-d5ympfsmfq-du.a.run.app/ true
+CSP 위반: 0 []
+```
+
+(iframe은 `about:blank` 페이지에서 Pages를 임베드. 확인 스크립트는 세션 임시 폴더에만 두고 저장소에 넣지 않음)
+
+→ 완료 기준(옛 Pages 링크가 쿼리·해시 포함 Cloud Run 같은 화면으로 이동, 임베드는 새 창 링크) 충족.
+
 ## 5. 노션 임베드 조사 결과 (§6 질문 2 재확인)
 
 Notion 검색(`choise-hun.github.io ULevelP`, `github.io/ULevelP practice.html`)과 페이지 조회 결과:
@@ -93,7 +134,8 @@ Notion 검색(`choise-hun.github.io ULevelP`, `github.io/ULevelP practice.html`)
 
 ## 6. 남은 것
 
-- 머지 후 §4 실측
+- ~~머지 후 §4 실측~~ → §4-1 통과
+- 공식 템플릿 SETTING 안내(노션)에 DB 링크 단계 반영 — 사용자 직접(§5-1)
 - (선택) `guitar-practice` 저장소 Pages 정리 — 노션 링크는 §5에서 이미 run.app으로 바꿈
-- PR ② `PUBLIC_APP_URL` 기본값 run.app 전환(`deploy-cloudrun.sh`·`deploy-cloudrun.yml`·`docs/03-api-spec.md`) — 별도 PR
+- ~~PR ② `PUBLIC_APP_URL` 기본값 run.app 전환~~ → PR #55 머지(`71e1b48`)
 - `ALLOWED_ORIGINS`에서 `github.io` 제거·레거시 `public/*.js` 정리는 결정 문서 §2 A ③(롤백 기간 뒤, 별도 결정)
