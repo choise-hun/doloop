@@ -11,8 +11,7 @@ const MAIN_NAV: Array<{ key: ActiveNavKey; label: string; href: string | null }>
   { key: 'learn', label: 'LEARN', href: 'chords.html' },
   { key: 'play', label: 'PLAY', href: 'practice.html' },
   { key: 'trails', label: 'TRAILS', href: 'log.html' },
-  // TODO(stub): 코드 진행 모음 페이지가 생기면 href 연결 (코드진행_기능_기획_메모.md)
-  { key: 'chords', label: 'CHORDS', href: null },
+  { key: 'chords', label: 'CHORDS', href: 'progressions.html' },
   { key: 'notes', label: 'NOTES', href: 'notes.html' },
 ];
 

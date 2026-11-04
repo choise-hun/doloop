@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { NotesPage } from './pages/NotesPage';
 import { NoteDetailPage } from './pages/NoteDetailPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { ProgressionsPage } from './pages/ProgressionsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ export function App(): React.ReactElement {
           <Route path="/chords.html" element={<ChordsPage />} />
           <Route path="/practice.html" element={<PracticePage />} />
           <Route path="/log.html" element={<LogPage />} />
+          <Route path="/progressions.html" element={<ProgressionsPage />} />
           <Route path="/notes.html" element={<NotesPage />} />
           <Route path="/note.html" element={<NoteDetailPage />} />
           <Route path="/settings.html" element={<SettingsPage />} />

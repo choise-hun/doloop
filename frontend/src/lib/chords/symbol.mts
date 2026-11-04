@@ -262,3 +262,13 @@ export function chordPcs(chord: ChordOk): number[] {
   if (chord.bass !== undefined) set.add(chord.bass);
   return [...set];
 }
+
+// 같은 음을 내는 도수 묶음(예: m7b5#11 → [["b5","#11"]]). 엔진은 앞쪽 도수만 연주한다(CH-2b) → 화면 경고용
+export function duplicatePitches(chord: ChordOk): string[][] {
+  const byPc = new Map<number, string[]>();
+  for (const d of chord.degrees) {
+    const pc = DEGREE_SEMITONES[d] % 12;
+    byPc.set(pc, [...(byPc.get(pc) ?? []), d]);
+  }
+  return [...byPc.values()].filter((g) => g.length > 1);
+}
