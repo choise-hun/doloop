@@ -5,10 +5,10 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const ENTRY = ['index.html', 'chords.html', 'practice.html', 'log.html', 'notes.html', 'note.html', 'settings.html', 'privacy.html'];
+const ENTRY = ['index.html', 'chords.html', 'practice.html', 'log.html', 'notes.html', 'note.html', 'settings.html', 'privacy.html', 'progressions.html'];
 
 describe('RZ3-1: Ktor·server.js SPA 진입 경로 목록 일치', () => {
-  test('Main.kt SPA_ENTRY_PAGES와 server.js SPA_PAGES가 8개 진입 경로로 같다', () => {
+  test('Main.kt SPA_ENTRY_PAGES와 server.js SPA_PAGES가 9개 진입 경로로 같다', () => {
     const kt = read('src/main/kotlin/ulevelp/Main.kt');
     const js = read('server.js');
     for (const p of ENTRY) {

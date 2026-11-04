@@ -1,4 +1,4 @@
-// 반응형 가로 스크롤 검사 (RZ-3): 390·768·1280px × 8개 화면, 가로 스크롤 0건
+// 반응형 가로 스크롤 검사 (RZ-3): 390·768·1280px × 9개 화면, 가로 스크롤 0건
 'use strict';
 const { test, expect } = require('@playwright/test');
 
@@ -11,6 +11,7 @@ const PAGES = [
   '/note.html?id=00000000-0000-0000-0000-000000000001',
   '/settings.html',
   '/privacy.html',
+  '/progressions.html',
 ];
 
 for (const width of [390, 768, 1280]) {
