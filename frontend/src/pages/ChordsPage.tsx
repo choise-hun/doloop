@@ -960,8 +960,8 @@ export function ChordsPage(): React.ReactElement {
       <div className={styles.pane}>
       <header className={styles.pageHeader}>
         <div className={styles.headRow}>
-          <h1 className={styles.pageTitle}>코드 연습실</h1>
-          <a href="/practice.html" className={styles.practiceLink}>
+          <h1 className={styles.pageTitle} data-align-group="head: center-y">코드 연습실</h1>
+          <a href="/practice.html" className={styles.practiceLink} data-align-group="head: center-y">
             플레이어로 돌아가기 →
           </a>
         </div>
@@ -979,6 +979,7 @@ export function ChordsPage(): React.ReactElement {
             role="tab"
             type="button"
             className={styles.tab}
+            data-align-group="tabs: top,height"
             aria-selected={activeTab === t.id}
             onClick={() => handleTabChange(t.id)}
           >

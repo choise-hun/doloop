@@ -219,7 +219,7 @@ export function SettingsPage(): React.ReactElement {
 
   return (
     <AppShell variant="narrow" activeNav="settings" showThemeToggle>
-      <div className={styles.headerBlock}>
+      <div className={styles.headerBlock} data-align-group="col: left">
         <h1 className={`page-title ${styles.pageTitle}`}>Setting</h1>
         <p className={`page-sub ${styles.pageSub}`}>
           구글 계정으로 로그인하면 연습 기록과 녹음을 어디서나 이어갈 수 있어요.
@@ -227,7 +227,7 @@ export function SettingsPage(): React.ReactElement {
       </div>
 
       {/* 1. 계정 및 Google Drive 저장소 */}
-      <section className={`set-sec ${styles.setSec}`} id="account" aria-labelledby="hAccount">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="account" aria-labelledby="hAccount">
         <h2 id="hAccount">계정</h2>
         <p id="accDesc">Google 계정으로 로그인하면 노션 설정 없이도 연습 곡과 녹음을 바로 저장할 수 있어요.</p>
 
@@ -452,7 +452,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 2. 데이터 백업 */}
-      <section className={`set-sec ${styles.setSec}`} id="nx" aria-labelledby="hNx">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="nx" aria-labelledby="hNx">
         <h2 id="hNx">데이터 백업</h2>
         <p>서비스에 저장된 데이터를 ZIP으로 백업할 수 있어요.</p>
         <div className={styles.panel}>
@@ -514,7 +514,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 3. 외부 연동 키 관리 · BYOK */}
-      <section className={`set-sec ${styles.setSec}`} id="keys" aria-labelledby="hKeys">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="keys" aria-labelledby="hKeys">
         <h2 id="hKeys">외부 연동 키 관리 · BYOK</h2>
         <p>
           Google Gemini API 키를 등록하면 학습 노트 분석을 쓸 수 있어요. 키는 서버에 안전하게 암호화(AES-256-GCM)되어 보관돼요.
@@ -523,8 +523,8 @@ export function SettingsPage(): React.ReactElement {
         {/* Gemini 연동 카드 */}
         <div className={styles.panel}>
           <div className={styles.cardHead}>
-            <h3>Gemini 연동</h3>
-            <span className={`${styles.badge}${geminiHasKey ? ' ' + styles.badgeOk : ''}`} id="geminiKeyStatus">
+            <h3 data-align-group="keyHead: center-y">Gemini 연동</h3>
+            <span className={`${styles.badge}${geminiHasKey ? ' ' + styles.badgeOk : ''}`} id="geminiKeyStatus" data-align-group="keyHead: center-y">
               {geminiStatusText}
             </span>
           </div>
@@ -673,7 +673,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 4. 화면 모드 */}
-      <section className={`set-sec ${styles.setSec}`} id="screen" aria-labelledby="hScreen">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" aria-labelledby="hScreen">
         <h2 id="hScreen">화면</h2>
         <div className={`seg-pill ${styles.segPill}`} role="group" aria-label="화면 모드">
           {(
@@ -701,7 +701,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 6. 고급 설정 — 노션 연동(2026-11-05 중단·동결: 새 기능 없음, 계획/앱_명세.md §5). 기본 접힘 */}
-      <section className={`set-sec ${styles.setSec}`} id="advanced" aria-labelledby="hAdvanced">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="advanced" aria-labelledby="hAdvanced">
         <details
           className={styles.advanced}
           id="advNotion"
