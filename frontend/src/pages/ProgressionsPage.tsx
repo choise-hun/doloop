@@ -4,7 +4,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
-import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
 import { ProgressionEditor } from '../components/progressions/ProgressionEditor';
 import { ProgressionRow } from '../components/progressions/ProgressionRow';
 import { PastePanel } from '../components/progressions/PastePanel';
@@ -15,11 +14,11 @@ import { hasSequence } from '../lib/chords/stats.mts';
 import pStyles from '../components/progressions/Progressions.module.css';
 import { emptyForm, filterScope, jobOptionsLabel, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions, summarizeDoneJobs } from '../components/progressions/model.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
-import { auth, useAuth } from '../lib/auth';
+import { auth, canUseAi, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
 import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '../lib/progressions';
 import { videoIdFrom } from '../lib/security';
-import { describeJobError, isKeyInvalidError } from '../lib/jobError.mts';
+import { describeJobError } from '../lib/jobError.mts';
 import styles from './ProgressionsPage.module.css';
 
 const SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
@@ -69,8 +68,6 @@ export function ProgressionsPage(): React.ReactElement {
   const [manualInit, setManualInit] = useState<{ form: ProgressionForm; seq: number }>({ form: emptyForm(), seq: 0 });
   const [justSaved, setJustSaved] = useState<ProgressionDto | null>(null);
   const [jobs, setJobs] = useState<AnalysisJobDto[]>([]);
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [keyOverride, setKeyOverride] = useState<boolean | null>(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
   const [tasteFilter, setTasteFilter] = useState(''); // 취향 통계 줄(묶음·이동)로 목록 거르기
@@ -79,14 +76,8 @@ export function ProgressionsPage(): React.ReactElement {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackedRef = useRef<Set<string>>(new Set());
 
-  const hasKey = (() => {
-    if (!loggedIn) return false;
-    if (keyOverride !== null) return keyOverride;
-    const cached = apiClient.getCachedKeys();
-    if (cached && cached.gemini) return true;
-    const me = auth.getMe();
-    return Boolean(me && me.keys && me.keys.gemini);
-  })();
+  // M1-3c: /me를 받기 전에는 막지 않는다(서버가 403으로 판단)
+  const aiAllowed = loggedIn && (!authState.me || canUseAi(authState.me));
 
   const loadList = useCallback(async (uid: string | null) => {
     const mySeq = ++listSeqRef.current;
@@ -126,9 +117,6 @@ export function ProgressionsPage(): React.ReactElement {
         for (const j of mine) if (isActive(j)) trackedRef.current.add(j.id);
         const shown = mine.filter((j) => isActive(j) || trackedRef.current.has(j.id));
         setJobs(shown);
-        if (mine.some((j) => j.status === 'failed' && isKeyInvalidError(j.error) && trackedRef.current.has(j.id))) {
-          setKeyOverride(false);
-        }
         if (finishedNow) void loadList(uid);
         if (shown.some(isActive)) {
           pollRef.current = setTimeout(() => void refreshJobs(uid), 5000);
@@ -142,7 +130,6 @@ export function ProgressionsPage(): React.ReactElement {
 
   useEffect(() => {
     trackedRef.current.clear();
-    setKeyOverride(null);
     setJustSaved(null);
     void loadList(activeUid);
     void refreshJobs(activeUid);
@@ -292,9 +279,7 @@ export function ProgressionsPage(): React.ReactElement {
               <div role="tabpanel" id={`progTabPanel-${addTab}`} aria-labelledby={`progTab-${addTab}`}>
                 {addTab === 'video' && (
                   <VideoAnalyzeForm
-                    hasKey={hasKey}
-                    onOpenKeyModal={() => setOnboardingOpen(true)}
-                    onKeyMissing={() => setKeyOverride(false)}
+                    aiAllowed={aiAllowed}
                     busy={jobs.some(isActive)}
                     onRequested={(jobId) => {
                       trackedRef.current.add(jobId);
@@ -453,14 +438,6 @@ export function ProgressionsPage(): React.ReactElement {
         </aside>
       </div>
 
-      <GeminiKeyOnboardingModal
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
-        onSaved={() => {
-          setKeyOverride(true);
-          setOnboardingOpen(false);
-        }}
-      />
     </AppShell>
   );
 }

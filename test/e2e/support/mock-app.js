@@ -12,8 +12,12 @@ const DEFAULT_ME = {
   takeUsedBytes: 0,
   takeQuotaBytes: 209715200,
   migratedLocalAt: '2026-10-30T00:00:00Z',
-  keys: { notion: null, gemini: null },
-  // 나중에 덧붙일 자리: tier·credits(M1-1), locale(L1-1) — 화면 spec은 opts.me로 덮어쓴다
+  keys: { notion: null },
+  // M1-3b /me: 무료 티어(AI 분석 불가) — 유료 상태는 화면 spec이 opts.me로 덮어쓴다. locale(L1-1)은 나중에
+  tier: 'free',
+  billingTier: 'free',
+  limits: { songs: 10, categories: 2, takeBytes: 5242880, takeSongs: 2, takeDurationSec: 120, drive: false, ai: false, communityWrite: false },
+  credits: { monthly: 0, purchased: 0 },
 };
 
 const LONG_TITLE = 'Neo-Soul Practice Session With A Very Long Title That Should Never Break The Card Layout';

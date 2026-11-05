@@ -129,4 +129,77 @@ class GeminiClientErrorTest {
         assertEquals(buildJsonObject { put("fps", 3.0); put("start_offset", "40s"); put("end_offset", "80s") }, metas[1])
         assertEquals(buildJsonObject { put("fps", 1.0) }, metas[2])
     }
+
+    /** M1-3b: 요청에 maxOutputTokens 8192, 응답 usageMetadata·modelVersion → 결과 토큰 수 */
+    @Test
+    fun m13b_usageAndModelVersion_parsed_andMaxOutputTokensSent() {
+        val bodies = java.util.concurrent.CopyOnWriteArrayList<JsonObject>()
+        val ok = buildJsonObject {
+            putJsonArray("candidates") {
+                addJsonObject {
+                    putJsonObject("content") { putJsonArray("parts") { addJsonObject { put("text", "{\"a\":1}") } } }
+                    put("finishReason", "STOP")
+                }
+            }
+            putJsonObject("usageMetadata") {
+                put("promptTokenCount", 2999)
+                put("candidatesTokenCount", 2319)
+                put("thoughtsTokenCount", 7)
+                put("totalTokenCount", 5325)
+            }
+            put("modelVersion", "gemini-3.8-flash")
+        }.toString()
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        server.createContext("/models/gemini-flash-latest:generateContent") { exchange ->
+            bodies.add(Json.parseToJsonElement(exchange.requestBody.readBytes().toString(Charsets.UTF_8)).jsonObject)
+            val bytes = ok.toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.write(bytes)
+            exchange.responseBody.close()
+        }
+        server.start()
+        val result = try {
+            runBlocking { HttpGeminiClient(baseUrl = "http://127.0.0.1:${server.address.port}", retryDelayBaseMs = 1L).call() }
+        } finally {
+            server.stop(0)
+        }
+        assertEquals(8192, bodies.single()["generationConfig"]!!.jsonObject["maxOutputTokens"]!!.jsonPrimitive.int)
+        assertEquals(2999, result.promptTokens)
+        assertEquals(2319, result.outputTokens)
+        assertEquals(7, result.thoughtsTokens)
+        assertEquals("gemini-3.8-flash", result.modelVersion)
+        assertEquals(buildJsonObject { put("a", 1) }, result.analysis)
+    }
+
+    /** M1-3b: 사용량 없는 응답 → 토큰 0, modelVersion null */
+    @Test
+    fun m13b_noUsage_zeroTokens() = withFakeGemini(200, buildJsonObject {
+        putJsonArray("candidates") {
+            addJsonObject { putJsonObject("content") { putJsonArray("parts") { addJsonObject { put("text", "{}") } } } }
+        }
+    }.toString()) { client, _ ->
+        val r = client.call()
+        assertEquals(0, r.promptTokens)
+        assertEquals(0, r.outputTokens)
+        assertEquals(0, r.thoughtsTokens)
+        assertNull(r.modelVersion)
+    }
+
+    /** M1-3a §3 → M1-3b: finishReason MAX_TOKENS(잘린 JSON)는 따로 알아본다, 재시도 없음 */
+    @Test
+    fun m13b_maxTokens_distinctCode_noRetry() = withFakeGemini(200, buildJsonObject {
+        putJsonArray("candidates") {
+            addJsonObject {
+                putJsonObject("content") { putJsonArray("parts") { addJsonObject { put("text", "{\"summary\": {\"headl") } } }
+                put("finishReason", "MAX_TOKENS")
+            }
+        }
+        putJsonObject("usageMetadata") { put("promptTokenCount", 40000); put("candidatesTokenCount", 8192) }
+    }.toString()) { client, calls ->
+        val ex = assertFailsWith<GeminiApiException> { client.call() }
+        assertEquals(1, calls.get())
+        assertEquals("GEMINI_MAX_TOKENS", ex.code)
+        assertTrue(ex.message.startsWith("GEMINI_MAX_TOKENS: "), ex.message)
+        assertTrue(ex.message.contains("8192"), ex.message)
+    }
 }

@@ -1,4 +1,5 @@
 // R1-2 설정(SettingsPage) · 노트(NotesPage/NoteDetailPage) · Gemini 1분 온보딩 모달 검증 테스트 (R1-S1 ~ R1-S8)
+// M1-3c: React의 Gemini 키 칸·온보딩 모달은 삭제(서버 키 + 크레딧). 모달 검사는 레거시 public/*에만 남는다(롤백용, 손대지 않음)
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -10,21 +11,6 @@ const ROOT = path.join(__dirname, '..');
 
 function readText(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), 'utf8').replace(/\r\n/g, '\n');
-}
-
-// GeminiKeyOnboardingModal.tsx에서 validateGeminiKeyFormat 함수만 추출해 VM에서 실행
-function loadValidateGeminiKeyFormat() {
-  const src = readText('frontend/src/components/common/GeminiKeyOnboardingModal.tsx');
-  const m = src.match(/export const GEMINI_KEY_REGEX[\s\S]*?export function validateGeminiKeyFormat[\s\S]*?\n\}/);
-  assert.ok(m, 'validateGeminiKeyFormat 정의가 존재해야 함');
-  const jsCode = m[0]
-    .replace(/export\s+interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\n\}/g, '')
-    .replace(/export const /g, 'const ')
-    .replace(/export function validateGeminiKeyFormat\([^)]*\):\s*GeminiKeyValidationResult/, 'function validateGeminiKeyFormat(rawInput)')
-    .concat('\nmodule.exports = { GEMINI_KEY_REGEX, validateGeminiKeyFormat };');
-  const mod = { exports: {} };
-  vm.runInNewContext(jsCode, { module: mod, exports: mod.exports, String });
-  return mod.exports.validateGeminiKeyFormat;
 }
 
 // NoteDetailPage.tsx에서 parseTimestampSec 함수 추출
@@ -40,33 +26,11 @@ function loadParseTimestampSec() {
   return mod.exports;
 }
 
-test('R1-S1: validateGeminiKeyFormat — 빈 문자열·공백 포함 39자 유효 키·오류 입력 경계값 검증', () => {
-  const validate = loadValidateGeminiKeyFormat();
-
-  const rIdle = validate('   ');
-  assert.equal(rIdle.valid, false);
-  assert.equal(rIdle.status, 'idle');
-
-  const validFakeKey = 'AI' + 'za' + 'A1b2_-'.repeat(5) + 'abcde'; // 4 + 30 + 5 = 39자
-  assert.equal(validFakeKey.length, 39);
-  const rOk = validate('  ' + validFakeKey + '\n ');
-  assert.equal(rOk.valid, true);
-  assert.equal(rOk.status, 'ok');
-  assert.equal(rOk.trimmed, validFakeKey);
-  assert.ok(rOk.hint.includes('39자'));
-
-  const rShort = validate('AIza12345');
-  assert.equal(rShort.valid, false);
-  assert.equal(rShort.status, 'err');
-  assert.ok(rShort.hint.includes('현재 9자'));
-});
-
 test('R1-S2: <GeminiKeyOnboardingModal /> 및 정적 HTML — 3대 안심 배지·AI Studio 링크·4단계 가이드·verify: true 검증', () => {
-  const modalTsx = readText('frontend/src/components/common/GeminiKeyOnboardingModal.tsx');
   const pubSettings = readText('public/settings.html');
   const pubNotes = readText('public/notes.html');
 
-  for (const target of [modalTsx, pubSettings, pubNotes]) {
+  for (const target of [pubSettings, pubNotes]) {
     assert.ok(target.includes('AI 기능을 무료로 이용하기 위한 1분 설정'), '온보딩 모달 타이틀 필수');
     assert.ok(target.includes('무료 사용 가능 (분당 15회 무료 요청)'), '안심 배지 1 필수');
     assert.ok(target.includes('신용카드 등록 불필요'), '안심 배지 2 필수');
@@ -75,12 +39,12 @@ test('R1-S2: <GeminiKeyOnboardingModal /> 및 정적 HTML — 3대 안심 배지
     assert.ok(target.includes('Create API key in new project'), '4단계 발급 안내 문구 필수');
   }
 
-  assert.ok(modalTsx.includes('verify: true'), '모달 저장 시 verify: true 전달 필수');
+  // M1-3c: React 쪽 모달은 없어야 한다
+  assert.ok(!fs.existsSync(path.join(ROOT, 'frontend/src/components/common/GeminiKeyOnboardingModal.tsx')), 'React Gemini 온보딩 모달은 삭제');
 });
 
 test('R1-S3: R1-2 신규 CSS Modules 4종 & public/site.css — 순백(#ffffff/#fff) 0건 및 중간 곡률 0건', () => {
   const cssFiles = [
-    'frontend/src/components/common/GeminiKeyOnboardingModal.module.css',
     'frontend/src/pages/SettingsPage.module.css',
     'frontend/src/pages/NotesPage.module.css',
     'frontend/src/pages/NoteDetailPage.module.css',
@@ -113,12 +77,17 @@ test('R1-S4: SettingsPage, NotesPage, NoteDetailPage, PrivacyPage 및 App.tsx �
   for (const id of [
     'account', 'accEmail', 'accName', 'quotaBar', 'driveStoragePanel',
     'nx', 'inpImportZip', 'btnPreviewZip', 'nxPreviewBox', 'nxPreviewList',
-    'keys', 'notionKeyStatus', 'ntnSongsDb', 'ntnSessionsDb', 'geminiKeyStatus', 'gemModel', 'btnOpenGeminiModal',
+    'credits', 'creditTier', 'creditMsg', 'creditTotal', 'creditBuckets', 'creditNext', 'notionKeyStatus', 'ntnSongsDb', 'ntnSessionsDb',
   ]) {
     assert.ok(settingsTsx.includes(`id="${id}"`), 'SettingsPage.tsx 누락 ID: ' + id);
   }
+  // M1-3c: Gemini 키 칸(BYOK) 없음
+  for (const id of ['keys', 'geminiKeyStatus', 'gemKey', 'gemModel', 'btnOpenGeminiModal']) {
+    assert.ok(!settingsTsx.includes(`id="${id}"`), 'SettingsPage.tsx에 남은 Gemini 키 ID: ' + id);
+  }
+  assert.ok(!notesTsx.includes('btnKeyGateModal'), 'NotesPage.tsx 키 발급 버튼 삭제');
 
-  for (const id of ['keyGateBox', 'keyGateMsg', 'btnKeyGateModal', 'form', 'url', 'preview', 'tags', 'memo', 'submit', 'jobs', 'notesList']) {
+  for (const id of ['keyGateBox', 'keyGateMsg', 'form', 'url', 'preview', 'tags', 'memo', 'submit', 'jobs', 'notesList']) {
     assert.ok(notesTsx.includes(`id="${id}"`), 'NotesPage.tsx 누락 ID: ' + id);
   }
 

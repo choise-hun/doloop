@@ -463,17 +463,17 @@ class AuthAndProfileApiTest {
         assertTrue(firstJson["migratedLocalAt"] is JsonNull)
         val keysObj = firstJson["keys"]!!.jsonObject
         assertTrue(keysObj["notion"] is JsonNull)
-        assertTrue(keysObj["gemini"] is JsonNull)
+        assertFalse("gemini" in keysObj, "M1-3b: keys.gemini는 응답에서 뺐다")
 
         // RS256 서명 토큰 및 이메일 변경 + 녹음 용량 + 키 힌트 반영 확인
         val masterKey = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 1).toByte() })
         val crypto = CryptoService.fromBase64Key(masterKey)
         val rawNotionSecret = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
         val encPayload = crypto.encryptProviderKey(userId, "notion", rawNotionSecret, appId = "ulevelp")
-        val otherAppGeminiPayload = crypto.encryptProviderKey(
+        val otherAppNotionPayload = crypto.encryptProviderKey(
             userId,
-            "gemini",
-            "AIzaSyA1234567890abcdefghijk123456789ab",
+            "notion",
+            "ntn_0000000000abcdefghijABCDEFGHIJzzzz",
             appId = "guitar-practice"
         )
         val songId = UUID.randomUUID()
@@ -531,11 +531,11 @@ class AuthAndProfileApiTest {
             IntegrationsTable.insert {
                 it[IntegrationsTable.userId] = userId
                 it[appId] = "guitar-practice"
-                it[provider] = "gemini"
-                it[encryptedSecret] = otherAppGeminiPayload.encryptedSecret
-                it[iv] = otherAppGeminiPayload.iv
-                it[keyVersion] = otherAppGeminiPayload.keyVersion
-                it[hint] = otherAppGeminiPayload.hint
+                it[provider] = "notion"
+                it[encryptedSecret] = otherAppNotionPayload.encryptedSecret
+                it[iv] = otherAppNotionPayload.iv
+                it[keyVersion] = otherAppNotionPayload.keyVersion
+                it[hint] = otherAppNotionPayload.hint
             }
         }
 
@@ -560,7 +560,7 @@ class AuthAndProfileApiTest {
         val notionKeyObj = secondKeysObj["notion"]!!.jsonObject
         assertEquals("9a8b", notionKeyObj["hint"]?.jsonPrimitive?.content)
         assertTrue(notionKeyObj["updatedAt"]?.jsonPrimitive?.content?.isNotBlank() == true)
-        assertTrue(secondKeysObj["gemini"] is JsonNull, "guitar-practice key must not be shown as ulevelp key")
+        assertEquals(setOf("notion"), secondKeysObj.keys, "keys에는 notion만(M1-3b)")
     }
 
     @Test
@@ -643,7 +643,7 @@ class AuthAndProfileApiTest {
         val now = OffsetDateTime.ofInstant(FIXED_NOW, ZoneOffset.UTC)
         val masterKey = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 3).toByte() })
         val crypto = CryptoService.fromBase64Key(masterKey)
-        val encA = crypto.encryptProviderKey(userA, "gemini", "AIzaSyA1234567890abcdefghijk123456789ab")
+        val encA = crypto.encryptProviderKey(userA, "notion", "ntn_1234567890abcdefghijABCDEFGHIJ9a8b")
 
         // 사용자 A의 하위 데이터 전체 세팅
         transaction(db) {
@@ -699,7 +699,7 @@ class AuthAndProfileApiTest {
             IntegrationsTable.insert {
                 it[userId] = userA
                 it[appId] = "ulevelp"
-                it[provider] = "gemini"
+                it[provider] = "notion"
                 it[encryptedSecret] = encA.encryptedSecret
                 it[iv] = encA.iv
                 it[keyVersion] = encA.keyVersion
@@ -744,7 +744,7 @@ class AuthAndProfileApiTest {
         }
         val meBJson = Json.parseToJsonElement(meBRes.bodyAsText()).jsonObject
         assertEquals(0L, meBJson["takeUsedBytes"]?.jsonPrimitive?.long)
-        assertTrue(meBJson["keys"]!!.jsonObject["gemini"] is JsonNull)
+        assertTrue(meBJson["keys"]!!.jsonObject["notion"] is JsonNull)
 
         // 2. 잘못된 confirmText로 DELETE /api/v1/me 요청 시 400 INVALID_INPUT 거부
         val badDeleteRes = client.delete("/api/v1/me") {

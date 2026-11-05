@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -89,9 +90,9 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V5__tiers_credits_and_community migrations apply cleanly and create all 17 tables`() {
-        assertEquals("5", targetSchemaVersion, "Flyway target schema version should be 5")
-        assertTrue(migrationsExecutedCount >= 5, "V1__init.sql ~ V5__tiers_credits_and_community.sql migrations must have executed")
+    fun `Flyway V1__init to V7__credit_cycle migrations apply cleanly and create all 17 tables`() {
+        assertEquals("7", targetSchemaVersion, "Flyway target schema version should be 7")
+        assertTrue(migrationsExecutedCount >= 7, "V1__init.sql ~ V7__credit_cycle.sql migrations must have executed")
         assertEquals(17, ALL_TABLES.size, "Exposed ALL_TABLES should contain 17 tables")
 
         val actualTables = mutableListOf<String>()
@@ -297,8 +298,8 @@ class DatabaseMigrationAndIntegrityTest {
             transaction(db) {
                 IntegrationsTable.insert {
                     it[IntegrationsTable.userId] = userId
-                    it[appId] = "ulevelp"
-                    it[provider] = "gemini"
+                    it[appId] = "guitar-practice"
+                    it[provider] = "notion"
                     it[encryptedSecret] = payload.encryptedSecret
                     it[iv] = ByteArray(8)
                     it[keyVersion] = 1
@@ -308,6 +309,91 @@ class DatabaseMigrationAndIntegrityTest {
             }
         }
         assertEquals("23514", badIvEx.sqlState, "IV length != 12 must fail with CHECK constraint violation 23514")
+
+        // V6(M1-3b): BYOK 제거 — provider는 notion만(gemini 23514)
+        val geminiEx = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                IntegrationsTable.insert {
+                    it[IntegrationsTable.userId] = userId
+                    it[appId] = "guitar-practice"
+                    it[provider] = "gemini"
+                    it[encryptedSecret] = payload.encryptedSecret
+                    it[iv] = payload.iv
+                    it[keyVersion] = 1
+                    it[hint] = "abcd"
+                    it[config] = buildJsonObject {}
+                }
+            }
+        }
+        assertEquals("23514", geminiEx.sqlState, "provider gemini must fail with CHECK constraint violation 23514 (V6)")
+    }
+
+    @Test
+    fun `V7 credit cycle - 주기 두 열은 함께 채우거나 함께 비우고, 원장 period는 주기 키, topup은 period 필수`() {
+        val userId = UUID.randomUUID()
+        transaction(db) {
+            UsersTable.insert {
+                it[id] = userId
+                it[email] = "cycle@example.com"
+            }
+            ProfilesTable.insert { it[id] = userId }
+        }
+        val next = OffsetDateTime.of(2026, 12, 6, 5, 3, 0, 0, ZoneOffset.UTC)
+        // 한쪽만 채운 행은 거부(진행 파일 §6 — "A = B" CHECK는 한쪽만 채워 시험)
+        for ((n, t) in listOf(next to null, null to "pro")) {
+            val ex = assertFailsWith<ExposedSQLException>("next=$n tier=$t") {
+                transaction(db) {
+                    ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                        it[creditCycleNextAt] = n
+                        it[creditCycleTier] = t
+                    }
+                }
+            }
+            assertEquals("23514", ex.sqlState)
+        }
+        val badTier = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                    it[creditCycleNextAt] = next
+                    it[creditCycleTier] = "free"
+                }
+            }
+        }
+        assertEquals("23514", badTier.sqlState, "주기 티어는 유료만")
+        transaction(db) {
+            ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                it[creditCycleNextAt] = next
+                it[creditCycleTier] = "pro_plus"
+            }
+        }
+
+        fun ledger(reason: String, period: String?) = transaction(db) {
+            CreditLedgerTable.insert {
+                it[CreditLedgerTable.userId] = userId
+                it[bucket] = "monthly"
+                it[delta] = 10
+                it[balanceAfter] = 10
+                it[CreditLedgerTable.reason] = reason
+                it[CreditLedgerTable.period] = period
+            }
+        }
+        ledger("monthly_grant", "2026-11-06T14:03")
+        ledger("monthly_topup", "2026-11-06T14:03")
+        ledger("monthly_expire", "2026-11") // 옛 달 키도 받는다(M1-3b, 운영 배포 전)
+        for ((reason, period) in listOf(
+            "monthly_topup" to null,
+            "monthly_grant" to "2026-11-06",
+            "monthly_grant" to "2026-11-06T24:00",
+            "monthly_grant" to "2026-11-06 14:03",
+            "admin_adjust" to "2026-11-06T14:03",
+            "monthly_bonus" to "2026-11-06T14:03"
+        )) {
+            val ex = assertFailsWith<ExposedSQLException>("$reason $period") { ledger(reason, period) }
+            assertEquals("23514", ex.sqlState, "$reason $period")
+        }
+        val dup = assertFailsWith<ExposedSQLException> { ledger("monthly_grant", "2026-11-06T14:03") }
+        assertEquals("23505", dup.sqlState, "같은 주기 키 지급은 한 번(credit_ledger_period_uq)")
+        transaction(db) { UsersTable.deleteWhere { id eq userId } }
     }
 
     @Test

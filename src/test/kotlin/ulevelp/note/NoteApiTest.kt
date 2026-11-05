@@ -72,6 +72,7 @@ class NoteApiTest {
 
         transaction(db) {
             SyncOutboxTable.deleteAll()
+            CreditLedgerTable.deleteAll()
             ProgressionsTable.deleteAll()
             AnalysisJobsTable.deleteAll()
             NotesTable.deleteAll()
@@ -120,28 +121,8 @@ class NoteApiTest {
         return obj
     }
 
-    private fun seedGeminiKey(userId: UUID, apiKey: String = "AIzaSyFakeKeyForIntegrationTest1234X9zQ", model: String = "gemini-flash-latest") {
-        val crypto = TestCrypto.service ?: error("CryptoService not available")
-        val enc = crypto.encryptProviderKey(userId, "gemini", apiKey, appId = "ulevelp")
-        val now = OffsetDateTime.now(ZoneOffset.UTC)
-        transaction(db) {
-            IntegrationsTable.insert {
-                it[IntegrationsTable.userId] = userId
-                it[appId] = "ulevelp"
-                it[provider] = "gemini"
-                it[encryptedSecret] = enc.encryptedSecret
-                it[iv] = enc.iv
-                it[keyVersion] = enc.keyVersion
-                it[hint] = enc.hint
-                it[config] = buildJsonObject { put("model", model) }
-                it[createdAt] = now
-                it[updatedAt] = now
-            }
-        }
-    }
-
     @Test
-    fun n1_requestAnalyze_withoutGeminiKey_returns412() = testApplication {
+    fun n1_requestAnalyze_freeTier_returns403() = testApplication {
         configureApiTestApp(
             dbConfig = dbConfig,
             geminiClient = fakeGeminiClient,
@@ -157,13 +138,16 @@ class NoteApiTest {
             }.toString())
         }
 
-        assertEquals(HttpStatusCode.PreconditionFailed, res.status)
-        assertStandardError(res.bodyAsText(), 412, "NO_KEY")
+        // M1-3b: BYOK 키 없음 412 → 무료 403 (AI는 유료 + 크레딧)
+        assertEquals(HttpStatusCode.Forbidden, res.status)
+        val err = assertStandardError(res.bodyAsText(), 403, "TIER_UPGRADE_REQUIRED")
+        assertEquals("ai", err["detail"]!!.jsonObject["feature"]!!.jsonPrimitive.content)
+        assertEquals(0, fakeDispatcher.dispatched.size)
     }
 
     @Test
     fun n2_requestAnalyze_invalidUrlOrTags_returns400() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         configureApiTestApp(
             dbConfig = dbConfig,
             geminiClient = fakeGeminiClient,
@@ -209,7 +193,7 @@ class NoteApiTest {
 
     @Test
     fun n3_requestAnalyze_and_executeJob_createsNotesAndSvg() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
 
         // Gemini 응답에 화성(기타 1개, 건반 1개) 설정
         val customAnalysis = buildJsonObject {
@@ -309,7 +293,8 @@ class NoteApiTest {
         // 2. 수동 executeJob 실행 (비동기 완료 시뮬레이션)
         val noteService = NoteService(
             db = db,
-            integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+            creditService = ulevelp.service.CreditService(db, FakeVideoDurationClient()),
+            geminiApiKey = TestCredits.SYSTEM_GEMINI_KEY,
             videoMetaClient = FakeVideoMetaClient(),
             geminiClient = fakeGeminiClient
         )
@@ -345,7 +330,7 @@ class NoteApiTest {
 
     @Test
     fun n4_noteCreation_enqueuesOutbox_whenNotionSyncEnabled() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         transaction(db) {
             NotionSyncTable.insert {
                 it[userId] = userA
@@ -373,7 +358,8 @@ class NoteApiTest {
 
         val noteService = NoteService(
             db = db,
-            integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+            creditService = ulevelp.service.CreditService(db, FakeVideoDurationClient()),
+            geminiApiKey = TestCredits.SYSTEM_GEMINI_KEY,
             videoMetaClient = FakeVideoMetaClient(),
             geminiClient = fakeGeminiClient
         )
@@ -393,7 +379,7 @@ class NoteApiTest {
 
     @Test
     fun n5_concurrentJobLimit_returns429() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         transaction(db) {
             AnalysisJobsTable.insert {
                 it[id] = UUID.randomUUID()
@@ -427,7 +413,7 @@ class NoteApiTest {
 
     @Test
     fun n6_dailyLimit_returns429() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         val now = OffsetDateTime.now(ZoneOffset.UTC)
         transaction(db) {
             for (i in 1..20) {
@@ -465,7 +451,7 @@ class NoteApiTest {
 
     @Test
     fun n7_yesterdayJobs_doNotCountTowardsTodayLimit() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         val twoDaysAgo = OffsetDateTime.now(ZoneOffset.UTC).minusDays(2)
         transaction(db) {
             for (i in 1..20) {
@@ -499,7 +485,7 @@ class NoteApiTest {
 
     @Test
     fun n8_dispatcherFailure_marksJobFailed_and_returns502() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         fakeDispatcher.handler = {
             throw RuntimeException("Job dispatch network error")
         }
@@ -532,11 +518,12 @@ class NoteApiTest {
 
     @Test
     fun n9_geminiFailureAndTimeout_recordsFailedStatusAndError() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
 
         val noteServiceNormal = NoteService(
             db = db,
-            integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+            creditService = ulevelp.service.CreditService(db, FakeVideoDurationClient()),
+            geminiApiKey = TestCredits.SYSTEM_GEMINI_KEY,
             videoMetaClient = FakeVideoMetaClient(),
             geminiClient = fakeGeminiClient
         )
@@ -588,7 +575,8 @@ class NoteApiTest {
         }
         val noteServiceTimeout = NoteService(
             db = db,
-            integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+            creditService = ulevelp.service.CreditService(db, FakeVideoDurationClient()),
+            geminiApiKey = TestCredits.SYSTEM_GEMINI_KEY,
             videoMetaClient = FakeVideoMetaClient(),
             geminiClient = fakeGeminiClient,
             jobTimeoutMs = 20L
@@ -846,8 +834,8 @@ class NoteApiTest {
     }
 
     @Test
-    fun n14_readNotes_afterGeminiKeyDeleted_stillAccessible() = testApplication {
-        seedGeminiKey(userA)
+    fun n14_readNotes_geminiIntegrationRemoved_stillAccessible() = testApplication {
+        TestCredits.seedPaid(db, userA)
         val noteId = UUID.randomUUID()
         transaction(db) {
             NotesTable.insert {
@@ -866,11 +854,12 @@ class NoteApiTest {
             analyzeJobDispatcher = fakeDispatcher
         )
 
-        // 연동 해제
+        // M1-3b: gemini 연동 경로는 지웠다 → 400
         val delKeyRes = client.delete("/api/v1/integrations/gemini") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
         }
-        assertEquals(HttpStatusCode.OK, delKeyRes.status)
+        assertEquals(HttpStatusCode.BadRequest, delKeyRes.status)
+        assertStandardError(delKeyRes.bodyAsText(), 400, "INVALID_INPUT")
 
         // 노트 목록 조회 여전히 가능
         val listRes = client.get("/api/v1/notes") {
@@ -1006,7 +995,8 @@ class NoteApiTest {
 
     private fun newNoteService() = NoteService(
         db = db,
-        integrationService = ulevelp.service.IntegrationService(db, TestCrypto.service, FakeIntegrationCheckClient()),
+        creditService = ulevelp.service.CreditService(db, FakeVideoDurationClient()),
+            geminiApiKey = TestCredits.SYSTEM_GEMINI_KEY,
         videoMetaClient = FakeVideoMetaClient(),
         geminiClient = fakeGeminiClient
     )
@@ -1073,7 +1063,7 @@ class NoteApiTest {
 
     @Test
     fun n17_progressionAnalyze_createsNoteAndCollectedRows() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         var seenPrompt = ""
         var seenSchema = JsonObject(emptyMap())
         fakeGeminiClient.handler = { _, _, _, prompt, schema ->
@@ -1090,7 +1080,8 @@ class NoteApiTest {
         assertEquals(HttpStatusCode.Accepted, postRes.status, postRes.bodyAsText())
         assertEquals("no-store", postRes.headers[HttpHeaders.CacheControl])
         val postBody = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject
-        assertEquals(setOf("jobId", "status"), postBody.keys)
+        assertEquals(setOf("jobId", "status", "reservedCredits"), postBody.keys)
+        assertEquals(14, postBody["reservedCredits"]!!.jsonPrimitive.int) // 영상 240초(가짜 길이)·보통 → M1-3a §6 예약 14
         assertEquals("queued", postBody["status"]!!.jsonPrimitive.content)
         val jobIdStr = postBody["jobId"]!!.jsonPrimitive.content
 
@@ -1169,12 +1160,12 @@ class NoteApiTest {
         configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
         val okBody = buildJsonObject { put("url", "https://www.youtube.com/watch?v=dQw4w9WgXcQ") }.toString()
 
-        // 401 · 412(키 없음) · 400(URL)
+        // 401 · 403(무료) · 400(URL)
         assertEquals(HttpStatusCode.Unauthorized, postProgressionAnalyze(client, null, okBody).status)
-        val noKey = postProgressionAnalyze(client, tokenA, okBody)
-        assertEquals(HttpStatusCode.PreconditionFailed, noKey.status)
-        assertStandardError(noKey.bodyAsText(), 412, "NO_KEY")
-        seedGeminiKey(userA)
+        val free = postProgressionAnalyze(client, tokenA, okBody)
+        assertEquals(HttpStatusCode.Forbidden, free.status)
+        assertStandardError(free.bodyAsText(), 403, "TIER_UPGRADE_REQUIRED")
+        TestCredits.seedPaid(db, userA)
         val badUrl = postProgressionAnalyze(client, tokenA, """{"url":"https://example.com/x"}""")
         assertEquals(HttpStatusCode.BadRequest, badUrl.status)
         assertStandardError(badUrl.bodyAsText(), 400, "INVALID_INPUT")
@@ -1247,7 +1238,7 @@ class NoteApiTest {
     /** GA-2: 구간·속도 선택 필드 → 작업 DTO → Gemini 영상 옵션(`진행_분석설정.md` §3-2) */
     @Test
     fun n19_progressionAnalyze_rangeAndPace_toJobAndGeminiOptions() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         fakeGeminiClient.handler = { _, _, _, _, _ -> GeminiGenerateResult(progressionAnalysis(), "{}") }
         configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
         val auth: HttpRequestBuilder.() -> Unit = { header(HttpHeaders.Authorization, "Bearer $tokenA") }
@@ -1315,7 +1306,7 @@ class NoteApiTest {
     /** GA-4: 같은 영상·구간·속도 코드 진행 분석은 24시간 안에 409 DUPLICATE_ANALYSIS, force면 새 작업(`진행_분석설정.md` GA-4) */
     @Test
     fun n20_progressionAnalyze_duplicateBlocked_forceAllows() = testApplication {
-        seedGeminiKey(userA)
+        TestCredits.seedPaid(db, userA)
         configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
         val jobIdOf = { body: String -> UUID.fromString(Json.parseToJsonElement(body).jsonObject["jobId"]!!.jsonPrimitive.content) }
         val setJob = { id: UUID, status: String, hoursAgo: Long ->

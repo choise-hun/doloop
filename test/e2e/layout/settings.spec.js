@@ -5,16 +5,68 @@ const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES } = require('../support/mock-app');
 
+// M1-3c: 유료(Pro) 계정 — /me 티어·잔액 + GET /credits(다음 지급). 무료는 STATES.user(DEFAULT_ME = free)
+const PRO_ME = {
+  tier: 'pro',
+  billingTier: 'free',
+  limits: { songs: 100, categories: 7, takeBytes: 104857600, takeSongs: null, takeDurationSec: null, drive: true, ai: true, communityWrite: true },
+  credits: { monthly: 152, purchased: 40 },
+};
+const CREDITS_ROUTE = [
+  (url) => url.pathname === '/api/v1/credits',
+  (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify({ monthly: 152, purchased: 40, total: 192, monthlyGrant: 170, nextGrantAt: '2026-11-30T15:00:00Z' }),
+    }),
+];
+const USER_PRO = { ...STATES.user, me: PRO_ME, routes: [CREDITS_ROUTE] };
+const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO };
+
+async function settingsReady(page, state) {
+  if (state === 'guest') await page.locator('#accGuest').waitFor();
+  else await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+  if (state === 'userPro') await expect(page.locator('#creditNext')).toContainText('170');
+}
+
 layoutSuite({
   name: 'settings',
   path: '/settings.html',
-  states: ['guest', 'user'],
-  ready: async (page, state) => {
-    if (state === 'user') await expect(page.locator('#accEmail')).toHaveText('a@example.com');
-    else await page.locator('#accGuest').waitFor();
-  },
-  dark: 'user',
+  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }],
+  ready: settingsReady,
+  dark: 'userPro',
 });
+
+// M1-3c: Gemini 키 칸·키 발급 모달이 없고, 크레딧 칸이 티어별 문구를 보인다
+for (const state of ['guest', 'user', 'userPro']) {
+  test(`M1-3c settings ${state} 크레딧 칸(Gemini 키 칸 없음)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockApp(page, SETTINGS_STATES[state]);
+    await page.goto('/settings.html', { waitUntil: 'load' });
+    test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+    await settingsReady(page, state);
+    for (const id of ['#keys', '#gemKey', '#gemModel', '#geminiKeyStatus', '#btnOpenGeminiModal', '#geminiOnboardingModal']) {
+      await expect(page.locator(id)).toHaveCount(0);
+    }
+    await expect(page.locator('main')).not.toContainText('BYOK');
+    await expect(page.locator('main')).not.toContainText('Gemini API 키');
+    const sec = page.locator('#credits');
+    await expect(sec.locator('h2')).toHaveText('AI 분석 크레딧');
+    if (state === 'guest') {
+      await expect(page.locator('#creditMsg')).toContainText('로그인');
+    } else if (state === 'user') {
+      await expect(page.locator('#creditTier')).toHaveText('무료');
+      await expect(page.locator('#creditMsg')).toContainText('Pro 플랜부터');
+    } else {
+      await expect(page.locator('#creditTier')).toHaveText('Pro');
+      await expect(page.locator('#creditTotal')).toHaveText('192');
+      await expect(page.locator('#creditBuckets')).toHaveText('월 지급 152 · 구매 40');
+      // 2026-11-30T15:00Z = 12월 1일 0시(KST)
+      await expect(page.locator('#creditNext')).toHaveText('다음 지급 12월 1일 · 170크레딧');
+    }
+  });
+}
 
 // 옛 settings-spacing.spec.js에서 옮김(판정 함수 그대로, 가짜 인증만 mockApp으로)
 const WIDTHS = [1280, 390];
@@ -80,15 +132,14 @@ function collectWrappedPills() {
   return out;
 }
 
-for (const state of ['guest', 'user']) {
+for (const state of ['guest', 'user', 'userPro']) {
   for (const width of [390, 768, 1280]) {
     test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await mockApp(page, STATES[state]);
+      await mockApp(page, SETTINGS_STATES[state]);
       await page.goto('/settings.html', { waitUntil: 'load' });
       test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
-      if (state === 'user') await expect(page.locator('#accEmail')).toHaveText('a@example.com');
-      else await page.locator('#accGuest').waitFor();
+      await settingsReady(page, state);
       await page.evaluate(() => document.fonts.ready);
       // 접힌 details(고급 설정·계정 삭제 등)를 모두 펼쳐 안쪽 버튼도 잰다
       await page.evaluate(() => document.querySelectorAll('main details').forEach((d) => (d.open = true)));

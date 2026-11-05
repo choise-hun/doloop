@@ -1,24 +1,25 @@
 // CH-5: 코드 진행 영상 — URL + 메모 → POST /progressions/analyze (작업 큐, 결과는 목록 맨 위 작업 줄에서)
 // GA-2: 구간(시작~끝) + 코드 진행 변화 속도(느림·보통·빠름 → 초당 캡처량). 개발산출물/진행_분석설정.md §3-2
 // GA-4: 중복 방지 — 누르는 순간 ref 잠금, 분석 중이면 버튼 잠금, 409 DUPLICATE_ANALYSIS면 "다시 분석"(force)
+// M1-3c: Gemini는 서버 키 + 크레딧 — 분석 가능 여부는 /me limits.ai(무료 false), 오류 문구는 describeAnalyzeRequestError
 import React, { useRef, useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { apiClient } from '../../lib/apiClient';
+import { describeAnalyzeRequestError } from '../../lib/jobError.mts';
 import { thumb, videoIdFrom } from '../../lib/security';
 import { PACES, PACE_LABEL, checkRange } from './model.mts';
 import type { Pace } from './model.mts';
 import styles from './Progressions.module.css';
 
 export interface VideoAnalyzeFormProps {
-  hasKey: boolean;
-  onOpenKeyModal: () => void;
+  /** AI 분석을 쓸 수 있는 티어(/me limits.ai) */
+  aiAllowed: boolean;
   onRequested: (jobId: string) => void;
-  onKeyMissing: () => void;
   /** 이 화면의 코드 진행 분석이 대기·진행 중(서버 동시 1건 제한) */
   busy?: boolean;
 }
 
-export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMissing, busy = false }: VideoAnalyzeFormProps): React.ReactElement {
+export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: VideoAnalyzeFormProps): React.ReactElement {
   const [url, setUrl] = useState('');
   const [memo, setMemo] = useState('');
   const [startText, setStartText] = useState('');
@@ -63,7 +64,8 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         force: confirmDup,
       });
       setConfirmDup(false);
-      setMsg({ text: '분석을 요청했어요. 보통 1~3분 뒤 목록 맨 위에 진행이 생겨요. 학습 노트도 같이 남습니다.', kind: 'ok' });
+      const reserved = typeof r.reservedCredits === 'number' ? ` (${r.reservedCredits}크레딧 예약 — 실제 사용량만 빠져요)` : '';
+      setMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤 목록 맨 위에 진행이 생겨요. 학습 노트도 같이 남습니다.`, kind: 'ok' });
       setUrl('');
       setMemo('');
       setStartText('');
@@ -71,12 +73,11 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
       setPace('normal');
       onRequested(r.jobId);
     } catch (err: any) {
-      if (err && (err.code === 'NO_KEY' || err.status === 412)) onKeyMissing();
       if (err && err.code === 'DUPLICATE_ANALYSIS') {
         setConfirmDup(true);
         setMsg({ text: '이미 같은 영상·구간·속도로 분석했어요. 다시 분석하려면 "다시 분석"을 한 번 더 눌러 주세요.', kind: 'err' });
       } else {
-        setMsg({ text: (err && err.message) || '요청 실패', kind: 'err' });
+        setMsg({ text: describeAnalyzeRequestError(err), kind: 'err' });
       }
     } finally {
       sendingRef.current = false;
@@ -90,13 +91,10 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         코드 진행을 설명하거나 연주하는 영상을 넣으면 AI가 진행(코드·로마숫자·키·구간)을 뽑아 바로 모아 둡니다. 화면에 보이거나 말한
         코드를 우선하고, 짐작한 코드는 "추정"으로 표시돼요.
       </p>
-      {!hasKey && (
+      {!aiAllowed && (
         <div className={styles.keyGate} id="progKeyGate">
-          <span>영상 분석에는 Gemini API 키가 필요해요.</span>
-          <button type="button" className="ghostBtn" onClick={onOpenKeyModal}>
-            🔑 1분 무료 키 발급
-          </button>
-          <SafeLink href="settings.html#keys">SETTING에서 등록 →</SafeLink>
+          <span>AI 영상 분석은 Pro 플랜부터 쓸 수 있어요. 직접 입력은 무료로 쓸 수 있어요.</span>
+          <SafeLink href="settings.html#credits">SETTING에서 크레딧 보기 →</SafeLink>
         </div>
       )}
       <label className={styles.field}>
@@ -178,7 +176,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         />
       </label>
       <div className={styles.actions}>
-        <button className="pillBtn" type="submit" id="progVideoSubmit" disabled={sending || busy || !hasKey}>
+        <button className="pillBtn" type="submit" id="progVideoSubmit" disabled={sending || busy || !aiAllowed}>
           {busy ? '분석 중…' : confirmDup ? '다시 분석' : '분석 요청'}
         </button>
       </div>

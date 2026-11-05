@@ -29,14 +29,6 @@ data class NotionCheckResponse(
     val maxUploadMB: Int = 5
 )
 
-@Serializable
-data class GeminiCheckResponse(
-    val ok: Boolean = true,
-    val provider: String = "gemini",
-    val model: String,
-    val displayName: String
-)
-
 interface IntegrationCheckClient {
     suspend fun checkNotion(
         token: String,
@@ -44,16 +36,10 @@ interface IntegrationCheckClient {
         sessionsDb: String,
         notesDb: String?
     ): NotionCheckResponse
-
-    suspend fun checkGemini(
-        apiKey: String,
-        model: String
-    ): GeminiCheckResponse
 }
 
 class HttpIntegrationCheckClient(
     private val notionBaseUrl: String = "https://api.notion.com/v1",
-    private val geminiBaseUrl: String = "https://generativelanguage.googleapis.com/v1beta",
     private val httpClient: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
 ) : IntegrationCheckClient {
 
@@ -212,73 +198,4 @@ class HttpIntegrationCheckClient(
             maxUploadMB = maxUploadMB
         )
     }
-
-    override suspend fun checkGemini(
-        apiKey: String,
-        model: String
-    ): GeminiCheckResponse = withContext(Dispatchers.IO) {
-        val baseUri = geminiBaseUrl.trimEnd('/')
-        val req = HttpRequest.newBuilder()
-            .uri(URI("$baseUri/models/$model"))
-            .header("x-goog-api-key", apiKey)
-            .header("Accept", "application/json")
-            .timeout(Duration.ofSeconds(5))
-            .GET()
-            .build()
-
-        val resp = try {
-            httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            throw ApiException(
-                HttpStatusCode.BadGateway,
-                "GEMINI_API_ERROR",
-                "Gemini API 호출에 실패했습니다 (${e.message ?: "네트워크 오류"}).",
-                source = "gemini"
-            )
-        }
-
-        val status = resp.statusCode()
-        when (status) {
-            200 -> {
-                val json = try {
-                    Json.parseToJsonElement(resp.body()).jsonObject
-                } catch (_: Exception) {
-                    throw ApiException(
-                        HttpStatusCode.BadGateway,
-                        "GEMINI_API_ERROR",
-                        "Gemini API 응답 파싱에 실패했습니다.",
-                        source = "gemini"
-                    )
-                }
-                val displayName = (json["displayName"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: model
-                GeminiCheckResponse(
-                    ok = true,
-                    provider = "gemini",
-                    model = model,
-                    displayName = displayName
-                )
-            }
-            400, 401, 403 -> throw ApiException(
-                HttpStatusCode.BadRequest,
-                "PROVIDER_KEY_INVALID",
-                "Gemini API 키가 유효하지 않거나 권한이 없습니다.",
-                source = "gemini"
-            )
-            404 -> throw ApiException(
-                HttpStatusCode.NotFound,
-                "GEMINI_MODEL_NOT_FOUND",
-                "지정한 Gemini 모델($model)을 찾을 수 없습니다.",
-                source = "gemini"
-            )
-            else -> throw ApiException(
-                HttpStatusCode.BadGateway,
-                "GEMINI_API_ERROR",
-                "Gemini API 호출에 실패했습니다 (HTTP $status).",
-                source = "gemini"
-            )
-        }
-    }
 }
-

@@ -2,11 +2,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
-import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
-import { auth, useAuth } from '../lib/auth';
+import { auth, canUseAi, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, NoteSummaryDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
-import { describeJobError, isKeyInvalidError } from '../lib/jobError.mts';
+import { describeAnalyzeRequestError, describeJobError } from '../lib/jobError.mts';
 import styles from './NotesPage.module.css';
 
 export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
@@ -50,26 +49,15 @@ export function NotesPage(): React.ReactElement {
   const filterTagRef = useRef(filterTag);
   filterTagRef.current = filterTag;
 
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [localHasKeyOverride, setLocalHasKeyOverride] = useState(false);
 
   const notesReqSeqRef = useRef(0);
   const jobsReqSeqRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeJobIdsRef = useRef<Set<string>>(new Set());
 
-  const checkHasGeminiKey = (): boolean => {
-    if (!apiClient.isLoggedIn()) return false;
-    if (localHasKeyOverride) return true;
-    const cached = apiClient.getCachedKeys();
-    if (cached && cached.gemini) return true;
-    const me = auth.getMe();
-    if (me && me.keys && me.keys.gemini) return true;
-    return false;
-  };
-
-  const hasGemini = checkHasGeminiKey();
   const loggedIn = Boolean(activeUid && apiClient.isLoggedIn());
+  // M1-3c: 분석 가능 여부는 /me limits.ai(무료 false). /me를 받기 전에는 막지 않는다(서버가 403으로 판단)
+  const tierBlocked = loggedIn && Boolean(authState.me) && !canUseAi(authState.me);
   const pickedVideoId = videoIdFrom(urlVal);
   const notionLinkUrl = safeUrl(raw.get('ulp:notion-notes'));
 
@@ -117,13 +105,6 @@ export function NotesPage(): React.ReactElement {
       const safeJobs = Array.isArray(fetchedJobs) ? fetchedJobs : [];
       setJobs(safeJobs);
 
-      const hasInvalidKeyJob = safeJobs.some(
-        (j) => j && j.status === 'failed' && isKeyInvalidError(j.error)
-      );
-      if (hasInvalidKeyJob) {
-        setLocalHasKeyOverride(false);
-      }
-
       const hasActive = safeJobs.some((j) => j && (j.status === 'queued' || j.status === 'running'));
       const newlyFinished = safeJobs.some((j) => j && j.status === 'done' && activeJobIdsRef.current.has(j.id));
       activeJobIdsRef.current = new Set(
@@ -145,7 +126,6 @@ export function NotesPage(): React.ReactElement {
   };
 
   useEffect(() => {
-    setLocalHasKeyOverride(false);
     activeJobIdsRef.current.clear();
     void refreshJobsAndNotes(activeUid);
     void loadNotesOnly(filterTagRef.current, activeUid);
@@ -170,8 +150,12 @@ export function NotesPage(): React.ReactElement {
       setFormMsg({ text: '태그를 하나 이상 골라주세요.', kind: 'err' });
       return;
     }
-    if (!checkHasGeminiKey()) {
-      setFormMsg({ text: 'Gemini API 키가 필요해요. 1분 무료 키 발급 모달 또는 SETTING에서 등록해 주세요.', kind: 'err' });
+    if (!loggedIn) {
+      setFormMsg({ text: '로그인하면 영상 분석을 요청할 수 있어요.', kind: 'err' });
+      return;
+    }
+    if (tierBlocked) {
+      setFormMsg({ text: 'AI 영상 분석은 Pro 플랜부터 쓸 수 있어요.', kind: 'err' });
       return;
     }
 
@@ -179,36 +163,34 @@ export function NotesPage(): React.ReactElement {
     setFormMsg({ text: '분석 요청을 보내는 중...', kind: '' });
     try {
       const orderedTags = NOTE_FORM_TAGS.filter((t) => selectedTags.includes(t));
-      await apiClient.notes.analyze({
+      const r = await apiClient.notes.analyze({
         url: `https://www.youtube.com/watch?v=${pickedVideoId}`,
         tags: orderedTags,
         memo: memoVal.trim(),
       });
-      setFormMsg({ text: '분석을 요청했어요. 보통 1~3분 뒤에 정리가 완료돼요.', kind: 'ok' });
+      const reserved = typeof r.reservedCredits === 'number' ? ` (${r.reservedCredits}크레딧 예약 — 실제 사용량만 빠져요)` : '';
+      setFormMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤에 정리가 완료돼요.`, kind: 'ok' });
       setUrlVal('');
       setMemoVal('');
       void refreshJobsAndNotes(activeUid);
     } catch (err: any) {
-      if (err && (err.code === 'NO_KEY' || err.status === 412)) {
-        setLocalHasKeyOverride(false);
-      }
-      setFormMsg({ text: (err && err.message) || '요청 실패', kind: 'err' });
+      setFormMsg({ text: describeAnalyzeRequestError(err), kind: 'err' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const keyGateVisible = !loggedIn || !hasGemini;
+  const keyGateVisible = !loggedIn || tierBlocked;
   const keyGateText = !loggedIn
-    ? '로그인하고 SETTING에서 Gemini 키를 등록하면 영상 분석을 요청할 수 있어요.'
-    : '학습 노트 분석을 쓰려면 Gemini API 키가 필요해요.';
+    ? '로그인하면 영상 분석을 요청할 수 있어요.'
+    : 'AI 영상 분석은 Pro 플랜부터 쓸 수 있어요. 분석할 때마다 크레딧을 써요.';
 
   return (
     <AppShell variant="narrow" activeNav="notes">
       <div className={styles.headerBlock}>
         <h1 className={`page-title ${styles.pageTitle}`}>Notes</h1>
         <p className={`page-sub ${styles.pageSub}`}>
-          유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 학습 노트를 생성해요. 보통 1~3분 걸려요.{' '}
+          유튜브 링크와 태그를 넣으면 AI가 영상을 분석해서 학습 노트를 생성해요. 보통 1~3분 걸려요.{' '}
           <SafeLink id="notionLink" href={notionLinkUrl} external hidden={!notionLinkUrl}>
             노션에서 보기 ↗
           </SafeLink>
@@ -218,15 +200,11 @@ export function NotesPage(): React.ReactElement {
       <div className={`card key-gate-box ${styles.keyGateBox}`} id="keyGateBox" hidden={!keyGateVisible}>
         <p id="keyGateMsg">{keyGateText}</p>
         <div className={styles.keyGateActions}>
-          <button
-            type="button"
-            className="pillBtn"
-            id="btnKeyGateModal"
-            onClick={() => setOnboardingOpen(true)}
-          >
-            🔑 1분 무료 키 발급 &amp; 바로 연결하기
-          </button>
-          <SafeLink href="settings.html#keys">SETTING에서 Gemini 키 등록 →</SafeLink>
+          {loggedIn ? (
+            <SafeLink href="settings.html#credits">SETTING에서 크레딧 보기 →</SafeLink>
+          ) : (
+            <SafeLink href="settings.html#account">로그인 →</SafeLink>
+          )}
         </div>
       </div>
 
@@ -425,18 +403,6 @@ export function NotesPage(): React.ReactElement {
         )}
       </div>
 
-      <GeminiKeyOnboardingModal
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
-        onSaved={() => {
-          setLocalHasKeyOverride(true);
-          setOnboardingOpen(false);
-          setFormMsg({
-            text: '✓ 무료 Gemini API 키 연결이 완료되었어요! 지금 바로 분석 요청을 눌러보세요.',
-            kind: 'ok',
-          });
-        }}
-      />
     </AppShell>
   );
 }

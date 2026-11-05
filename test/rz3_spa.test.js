@@ -56,9 +56,8 @@ describe('RZ3-4: React 화면 제목·설정 버튼 줄바꿈', () => {
       assert.ok(read(`frontend/src/pages/${name}.tsx`).includes(`document.title = '${title}'`), name);
     }
   });
-  test('#btnOpenGeminiModal이 legacy·React 모두 줄바꿈을 허용한다', () => {
+  test('#btnOpenGeminiModal이 legacy에서 줄바꿈을 허용한다(React는 M1-3c에서 버튼 삭제)', () => {
     assert.match(read('public/site.css'), /#btnOpenGeminiModal\s*\{[^}]*white-space:\s*normal/);
-    assert.match(read('frontend/src/pages/SettingsPage.module.css'), /\.geminiGuideBtn\s*\{[^}]*white-space:\s*normal/);
-    assert.match(read('frontend/src/pages/SettingsPage.tsx'), /styles\.geminiGuideBtn/);
+    assert.doesNotMatch(read('frontend/src/pages/SettingsPage.tsx'), /btnOpenGeminiModal|geminiGuideBtn/);
   });
 });

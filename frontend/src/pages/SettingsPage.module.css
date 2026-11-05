@@ -266,12 +266,17 @@
   font-weight: 700;
 }
 
-.geminiGuideBtn {
-  white-space: normal;
-  max-width: 100%;
-  text-align: center;
-  padding-top: 10px;
-  padding-bottom: 10px;
+.creditTotalLine {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.creditTotal {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 고급 설정(노션 연동 — 동결·은닉, 계획/앱_명세.md §5) */

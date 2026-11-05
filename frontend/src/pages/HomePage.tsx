@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
-import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
 import { useAuth } from '../lib/auth';
 import { apiClient, CategoryDto, LocalSongRecord, NoteSummaryDto, ProgressionDto, ProgressionScope, SongDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
@@ -330,18 +329,8 @@ export function HomePage(): React.ReactElement {
     el.addEventListener('input', handleNativeInput);
     return () => el.removeEventListener('input', handleNativeInput);
   }, []);
-  const [geminiModalOpen, setGeminiModalOpen] = useState(false);
   const pickedVideoId = videoIdFrom(goUrl);
   const hasInvalidUrl = Boolean(goUrl.trim() && !pickedVideoId);
-
-  const checkHasGeminiKey = (): boolean => {
-    if (!apiClient.isLoggedIn()) return false;
-    const cached = apiClient.getCachedKeys();
-    if (cached && cached.gemini) return true;
-    const me = authState.me;
-    if (me && me.keys && me.keys.gemini) return true;
-    return false;
-  };
 
   // 2. 코드 연습실 마지막 탭
   const [lastTab] = useState<string>(() => getLastChordTab());
@@ -542,12 +531,6 @@ export function HomePage(): React.ReactElement {
               <SafeLink
                 className="ghostBtn"
                 id="goNote"
-                onClick={(e) => {
-                  if (apiClient.isLoggedIn() && !checkHasGeminiKey()) {
-                    e.preventDefault();
-                    setGeminiModalOpen(true);
-                  }
-                }}
                 href={
                   pickedVideoId
                     ? 'notes.html?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + pickedVideoId)
@@ -977,17 +960,6 @@ export function HomePage(): React.ReactElement {
         <span id="copy">©{new Date().getFullYear()}</span>
       </footer>
 
-      <GeminiKeyOnboardingModal
-        open={geminiModalOpen}
-        onClose={() => setGeminiModalOpen(false)}
-        onSaved={() => {
-          setGeminiModalOpen(false);
-          const target = pickedVideoId
-            ? 'notes.html?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + pickedVideoId)
-            : 'notes.html';
-          window.location.href = target;
-        }}
-      />
     </AppShell>
   );
 }
