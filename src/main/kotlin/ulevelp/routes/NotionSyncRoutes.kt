@@ -13,6 +13,7 @@ import ulevelp.auth.SupabaseAuthPlugin
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.auth.requireAuthUser
 import ulevelp.notion.NotionPushWorker
+import ulevelp.service.CreditService
 import ulevelp.service.TierService
 import ulevelp.notion.NotionSyncService
 import ulevelp.service.ProfileService
@@ -69,8 +70,20 @@ fun Route.registerNotionSyncRoutes(
 fun Route.registerInternalCronRoutes(
     cronOidcVerifier: CronOidcVerifier?,
     notionPushWorker: NotionPushWorker,
-    tierService: TierService
+    tierService: TierService,
+    creditService: CreditService
 ) {
+    // 매월 1일 00:00 KST(Cloud Scheduler ulevelp-monthly-credits): 월 지급분 소멸 → 유료 티어 지급(Q5, M1-1 §3)
+    post("/internal/cron/monthly-credits") {
+        if (cronOidcVerifier == null) {
+            throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")
+        }
+        cronOidcVerifier.verifyBearerHeader(call.request.header(HttpHeaders.Authorization))
+        val res = creditService.runMonthlyGrant()
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(HttpStatusCode.OK, res)
+    }
+
     // 매일 00:05 KST(Cloud Scheduler ulevelp-tier-expire): 기한 지난 tier_override 해제 + 다운그레이드 정리(M1-1 §1-3)
     post("/internal/cron/tier-expire") {
         if (cronOidcVerifier == null) {

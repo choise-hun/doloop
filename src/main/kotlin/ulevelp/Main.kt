@@ -39,6 +39,7 @@ import ulevelp.routes.ChordApi
 import ulevelp.routes.registerAdminRoutes
 import ulevelp.routes.registerCategoryRoutes
 import ulevelp.routes.registerChordRoutes
+import ulevelp.routes.registerCreditRoutes
 import ulevelp.routes.registerExportImportRoutes
 import ulevelp.routes.registerIntegrationRoutes
 import ulevelp.routes.registerInternalCronRoutes
@@ -53,6 +54,9 @@ import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
 import ulevelp.service.AdminService
 import ulevelp.service.CategoryService
+import ulevelp.service.CreditService
+import ulevelp.service.VideoDurationClient
+import ulevelp.service.YoutubeDataVideoClient
 import ulevelp.service.TierService
 import ulevelp.service.ProgressionService
 import ulevelp.service.ExportImportService
@@ -95,20 +99,21 @@ fun parsePublicAppUrl(raw: String?): String {
     return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
 }
 
+/** 서버 Gemini 키 (Secret Manager `SYSTEM_GEMINI_API_KEY` → 같은 이름 env, M1-3b) */
+fun systemGeminiApiKeyFromEnv(): String? = System.getenv("SYSTEM_GEMINI_API_KEY")?.trim()?.takeIf { it.isNotEmpty() }
+
 fun runAnalyzeJobCli(jobId: UUID) = runBlocking {
     val dbConfig = DatabaseFactory.fromEnvOrNull()
         ?: error("ANALYZE_JOB_CLI_ERROR: DB 설정(DATABASE_URL / REMOTE_DB_HOST)이 없습니다.")
     val (_, database) = DatabaseFactory.init(dbConfig)
-    val cryptoService = CryptoService.fromEnvOrNull()
-    val integrationCheckClient = HttpIntegrationCheckClient()
-    val integrationService = IntegrationService(database, cryptoService, integrationCheckClient)
     val videoMetaClient = YoutubeOEmbedClient()
     val geminiClient = HttpGeminiClient()
     val noteService = NoteService(
         db = database,
-        integrationService = integrationService,
+        creditService = CreditService(database, YoutubeDataVideoClient()),
         videoMetaClient = videoMetaClient,
-        geminiClient = geminiClient
+        geminiClient = geminiClient,
+        geminiApiKey = systemGeminiApiKeyFromEnv()
     )
     noteService.executeJob(jobId)
 }
@@ -140,6 +145,7 @@ fun Application.module(
     allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS")),
     videoMetaClient: VideoMetaClient = YoutubeOEmbedClient(),
     playlistClient: PlaylistClient = YoutubeDataPlaylistClient(),
+    videoDurationClient: VideoDurationClient = YoutubeDataVideoClient(),
     publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL")),
     storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull(),
     cryptoService: CryptoService? = CryptoService.fromEnvOrNull(),
@@ -147,6 +153,7 @@ fun Application.module(
     notionClient: NotionClient = HttpNotionClient(),
     cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) },
     geminiClient: GeminiClient = HttpGeminiClient(),
+    geminiApiKey: String? = systemGeminiApiKeyFromEnv(),
     analyzeJobDispatcher: AnalyzeJobDispatcher? = null,
     uiMode: String = System.getenv("ULP_UI").orEmpty()
 ) {
@@ -183,6 +190,7 @@ fun Application.module(
     val profileService = ProfileService(db)
     val tierService = TierService(db)
     val adminService = AdminService(db)
+    val creditService = CreditService(db, videoDurationClient)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
     val playlistImportService = PlaylistImportService(db, playlistClient)
@@ -207,11 +215,15 @@ fun Application.module(
         notionClient = notionClient,
         storageClient = storageClient
     )
+    if (geminiApiKey == null) {
+        environment.log.warn("서버 Gemini 키(SYSTEM_GEMINI_API_KEY)가 없어 AI 분석 요청이 503으로 막힙니다.")
+    }
     val noteService = NoteService(
         db = db,
-        integrationService = integrationService,
+        creditService = creditService,
         videoMetaClient = videoMetaClient,
         geminiClient = geminiClient,
+        geminiApiKey = geminiApiKey,
         notionPushWorker = notionPushWorker
     )
     val cloudRunJobUri = System.getenv("CLOUD_RUN_ANALYZE_JOB_URI")?.takeIf { it.isNotBlank() }
@@ -333,6 +345,7 @@ fun Application.module(
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
             registerNoteRoutes(jwtVerifier, profileService, noteService, effectiveDispatcher)
             registerAdminRoutes(jwtVerifier, profileService, adminService)
+            registerCreditRoutes(jwtVerifier, profileService, creditService)
 
             route("{...}") {
                 handle {
@@ -358,7 +371,7 @@ fun Application.module(
             }
         }
 
-        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker, tierService)
+        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker, tierService, creditService)
 
         route("{path...}") {
             handle {

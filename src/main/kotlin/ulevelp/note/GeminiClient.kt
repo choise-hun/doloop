@@ -20,9 +20,17 @@ class GeminiApiException(
     override val message: String
 ) : RuntimeException(message)
 
+/**
+ * 토큰 수는 응답 `usageMetadata`(없으면 0) — 크레딧 정산에 쓴다(M1-3b, `결과/M1-3a_크레딧수치.md` §6).
+ * [modelVersion]은 응답 `modelVersion`(없으면 null)
+ */
 data class GeminiGenerateResult(
     val analysis: JsonObject,
-    val usageSummary: String
+    val usageSummary: String,
+    val promptTokens: Int = 0,
+    val outputTokens: Int = 0,
+    val thoughtsTokens: Int = 0,
+    val modelVersion: String? = null
 )
 
 /**
@@ -49,6 +57,7 @@ interface GeminiClient {
 class HttpGeminiClient(
     private val baseUrl: String = "https://generativelanguage.googleapis.com/v1beta",
     private val frameFps: Double = System.getenv("GEMINI_FRAME_FPS")?.toDoubleOrNull() ?: 0.2,
+    private val maxOutputTokens: Int = MAX_OUTPUT_TOKENS,
     private val maxAttempts: Int = 4,
     private val retryDelayBaseMs: Long = 30_000L,
     private val requestTimeout: Duration = Duration.ofMinutes(12),
@@ -90,6 +99,7 @@ class HttpGeminiClient(
                 put("responseMimeType", "application/json")
                 put("responseJsonSchema", responseJsonSchema)
                 put("mediaResolution", "MEDIA_RESOLUTION_LOW")
+                put("maxOutputTokens", maxOutputTokens)
                 putJsonObject("thinkingConfig") {
                     put("thinkingLevel", "LOW")
                 }
@@ -183,6 +193,13 @@ class HttpGeminiClient(
         const val CODE_RATE_LIMIT = "GEMINI_RATE_LIMIT"
         const val CODE_OVERLOADED = "GEMINI_OVERLOADED"
         const val CODE_API_ERROR = "GEMINI_API_ERROR"
+        /** 출력이 `maxOutputTokens`에서 잘림(`finishReason: MAX_TOKENS`) — 상한을 다시 볼 근거(M1-3a §3) */
+        const val CODE_MAX_TOKENS = "GEMINI_MAX_TOKENS"
+
+        /** 고정 모델(M1-3a §1 — 별칭 `gemini-flash-latest`가 가리키던 버전) */
+        const val MODEL = "gemini-3.8-flash"
+        /** 출력 상한(M1-3a §3 — 실측 최대 2400의 약 3.4배). 크레딧 예약액의 출력 몫 */
+        const val MAX_OUTPUT_TOKENS = 8192
     }
 
     private fun parseGeminiResponse(body: String): GeminiGenerateResult {
@@ -195,6 +212,17 @@ class HttpGeminiClient(
         val candidates = root["candidates"]?.jsonArray
         val candidate = candidates?.firstOrNull()?.jsonObject
             ?: throw GeminiApiException(500, "GEMINI_API_ERROR", "Gemini 응답에 candidates가 없습니다.")
+
+        val usageObj = root["usageMetadata"] as? JsonObject
+        fun usageInt(name: String): Int = (usageObj?.get(name) as? JsonPrimitive)?.intOrNull?.coerceAtLeast(0) ?: 0
+        if ((candidate["finishReason"] as? JsonPrimitive)?.contentOrNull == "MAX_TOKENS") {
+            logger.warn("Gemini 출력이 상한에서 잘림 maxOutputTokens={} usage={}", maxOutputTokens, usageObj ?: "-")
+            throw GeminiApiException(
+                500,
+                CODE_MAX_TOKENS,
+                "$CODE_MAX_TOKENS: 분석 결과가 출력 상한(${maxOutputTokens}토큰)을 넘어 잘렸습니다. 구간을 줄여 다시 시도해 주세요."
+            )
+        }
 
         val parts = candidate["content"]?.jsonObject?.get("parts")?.jsonArray
             ?: throw GeminiApiException(500, "GEMINI_API_ERROR", "Gemini 응답에 content.parts가 없습니다.")
@@ -215,8 +243,14 @@ class HttpGeminiClient(
             throw GeminiApiException(500, "GEMINI_API_ERROR", "Gemini 추출 데이터 JSON 파싱 실패: ${e.message}")
         }
 
-        val usage = root["usageMetadata"]?.toString() ?: ""
-        return GeminiGenerateResult(analysis = analysis, usageSummary = usage)
+        return GeminiGenerateResult(
+            analysis = analysis,
+            usageSummary = usageObj?.toString() ?: "",
+            promptTokens = usageInt("promptTokenCount"),
+            outputTokens = usageInt("candidatesTokenCount"),
+            thoughtsTokens = usageInt("thoughtsTokenCount"),
+            modelVersion = (root["modelVersion"] as? JsonPrimitive)?.contentOrNull?.take(100)
+        )
     }
 }
 

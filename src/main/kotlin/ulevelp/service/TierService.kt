@@ -28,7 +28,9 @@ data class TierLimits(
     val takeDurationSec: Int?,
     val drive: Boolean,
     val ai: Boolean,
-    val communityWrite: Boolean
+    val communityWrite: Boolean,
+    /** 매월 1일 지급 크레딧(Q4·Q5, `결과/M1-3a_크레딧수치.md` §5) */
+    val monthlyCredits: Int = 0
 ) {
     companion object {
         const val FREE = "free"
@@ -38,8 +40,8 @@ data class TierLimits(
 
         private val BY_TIER = mapOf(
             FREE to TierLimits(10, 2, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false),
-            PRO to TierLimits(100, 7, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true),
-            PRO_PLUS to TierLimits(150, 10, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true)
+            PRO to TierLimits(100, 7, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170),
+            PRO_PLUS to TierLimits(150, 10, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350)
         )
 
         fun of(tier: String): TierLimits = BY_TIER[tier] ?: BY_TIER.getValue(FREE)

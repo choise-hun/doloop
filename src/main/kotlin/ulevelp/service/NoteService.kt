@@ -25,6 +25,7 @@ import ulevelp.note.GeminiClient
 import ulevelp.note.GeminiSchemas
 import ulevelp.note.GeminiVideoOptions
 import ulevelp.note.GuitarSvgRenderer
+import ulevelp.note.HttpGeminiClient
 import ulevelp.note.HarmonyChordDto
 import ulevelp.note.KeyboardSvgRenderer
 import ulevelp.note.ProgressionExtract
@@ -42,7 +43,9 @@ import java.util.UUID
 @Serializable
 data class AnalyzeJobCreateResponse(
     val jobId: String,
-    val status: String = "queued"
+    val status: String = "queued",
+    /** 이 작업에 예약한 크레딧(M1-3b). 완료 때 정산, 실패 때 전액 반환 */
+    val reservedCredits: Int = 0
 )
 
 /** 코드 진행 영상 분석 옵션(GA-2, `진행_분석설정.md` §3-2). 검증은 라우트에서 끝난 값 */
@@ -67,6 +70,12 @@ data class AnalysisJobDto(
     val startSec: Int? = null,
     val endSec: Int? = null,
     val pace: String? = null,
+    /** 크레딧(M1-3b): 예약액, 정산 확정액(null = 미정산, 실패 = 0), 응답 토큰 수(완료만) */
+    val reservedCredits: Int = 0,
+    val chargedCredits: Int? = null,
+    val promptTokens: Int? = null,
+    val outputTokens: Int? = null,
+    val thoughtsTokens: Int? = null,
     val createdAt: String,
     val startedAt: String? = null,
     val finishedAt: String? = null
@@ -129,9 +138,11 @@ data class NoteDetailResponse(
 
 class NoteService(
     private val db: Database?,
-    private val integrationService: IntegrationService,
+    private val creditService: CreditService,
     private val videoMetaClient: VideoMetaClient,
     private val geminiClient: GeminiClient,
+    /** 서버 Gemini 키(env `SYSTEM_GEMINI_API_KEY`, M1-3b — BYOK 제거). null이면 분석 요청 503 */
+    private val geminiApiKey: String?,
     private val jobTimeoutMs: Long = JOB_EXECUTION_TIMEOUT_MS,
     private val clock: Clock = Clock.systemUTC(),
     private val notionPushWorker: ulevelp.notion.NotionPushWorker? = null
@@ -160,6 +171,13 @@ class NoteService(
             HttpStatusCode.ServiceUnavailable,
             "DB_UNAVAILABLE",
             "데이터베이스가 연결되어 있지 않습니다."
+        )
+
+    private fun requireGeminiKey(): String =
+        geminiApiKey ?: throw ApiException(
+            HttpStatusCode.ServiceUnavailable,
+            "GEMINI_UNAVAILABLE",
+            "AI 분석이 설정되어 있지 않습니다. 잠시 뒤 다시 시도해 주세요."
         )
 
     private fun formatTimestamp(t: OffsetDateTime?): String? =
@@ -200,19 +218,23 @@ class NoteService(
             throw InvalidInputException("유효한 분석 태그를 1개 이상 선택해 주세요.")
         }
 
-        // Gemini 키 존재 및 복호화 가능 확인 (미등록 시 412 NO_KEY)
-        integrationService.requireDecryptedGemini(userId, "ulevelp")
+        // 무료 403은 YouTube 길이 조회 전에(트랜잭션 안에서 한 번 더 확인)
+        val preTier = DatabaseFactory.dbQuery(database) { tierContext(userId) }
+        if (!preTier.limits.ai) throw aiUpgradeRequired(preTier.tier)
+        requireGeminiKey()
+
+        // 예약액(M1-3a §6): 구간 없으면 YouTube 영상 길이
+        val seconds = creditService.analysisSeconds(videoId, options?.startSec, options?.endSec)
+        val reserveAmount = CreditMath.reserve(kind, options?.pace, seconds)
 
         val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
         val todayUtc = LocalDate.now(clock.withZone(ZoneOffset.UTC))
         val todayStartUtc = todayUtc.atStartOfDay().atOffset(ZoneOffset.UTC)
 
-        val jobId = DatabaseFactory.dbQuery(database) {
-            // 사용자 프로필 행 잠금 (동시성 보호)
-            ProfilesTable.select(ProfilesTable.id)
-                .where { ProfilesTable.id eq userId }
-                .forUpdate(ForUpdateOption.ForUpdate)
-                .singleOrNull() ?: throw NotFoundException("사용자 프로필을 찾을 수 없습니다.")
+        val (jobId, reservation) = DatabaseFactory.dbQuery(database) {
+            // 사용자 프로필 행 잠금 (동시성 보호) + 실제 티어 다시 확인
+            val ctx = tierContext(userId, lock = true)
+            if (!ctx.limits.ai) throw aiUpgradeRequired(ctx.tier)
 
             // 0) GA-4 중복 방지: 같은 코드 진행 분석(영상·구간·속도)이 24시간 안에 대기·진행·완료면 409
             if (kind == JOB_KIND_PROGRESSION && options != null && !force) {
@@ -290,7 +312,8 @@ class NoteService(
                 it[status] = "queued"
                 it[createdAt] = nowUtc
             }
-            newId
+            // 3) 크레딧 예약 — 잔액 부족 402는 작업 행까지 되돌린다
+            newId to reserveCredits(userId, newId, reserveAmount)
         }
 
         // 트랜잭션 밖에서 디스패처 호출
@@ -302,11 +325,12 @@ class NoteService(
             logger.error("분석 작업 디스패치 실패 jobId={}: {}", jobId, e.message, e)
             try {
                 DatabaseFactory.dbQuery(database) {
-                    AnalysisJobsTable.update({ (AnalysisJobsTable.id eq jobId) and (AnalysisJobsTable.status eq "queued") }) {
+                    val updated = AnalysisJobsTable.update({ (AnalysisJobsTable.id eq jobId) and (AnalysisJobsTable.status eq "queued") }) {
                         it[status] = "failed"
                         it[error] = "dispatch_failed: ${(e.message ?: "").take(200)}"
                         it[finishedAt] = clock.instant().atOffset(ZoneOffset.UTC)
                     }
+                    if (updated > 0) refundCredits(jobId)
                 }
             } catch (updateEx: Exception) {
                 logger.error("디스패치 실패 상태 업데이트 실패 jobId={}: {}", jobId, updateEx.message)
@@ -318,8 +342,11 @@ class NoteService(
             )
         }
 
-        return AnalyzeJobCreateResponse(jobId = jobId.toString(), status = "queued")
+        return AnalyzeJobCreateResponse(jobId = jobId.toString(), status = "queued", reservedCredits = reservation.total)
     }
+
+    private fun aiUpgradeRequired(tier: String): ApiException =
+        tierUpgradeRequired("ai", tier, "AI 분석은 유료 플랜에서 쓸 수 있습니다.")
 
     suspend fun executeJob(jobId: UUID) {
         val database = requireDb()
@@ -357,7 +384,7 @@ class NoteService(
         // 2. 트랜잭션 밖에서 외부 호출 (최대 jobTimeoutMs)
         try {
             withTimeout(jobTimeoutMs) {
-                val gemini = integrationService.requireDecryptedGemini(userId, "ulevelp")
+                val apiKey = requireGeminiKey()
                 val videoId = ExportImportService.extractVideoId(url)
                     ?: throw InvalidInputException("잘못된 영상 URL")
 
@@ -370,7 +397,9 @@ class NoteService(
                 } else {
                     GeminiSchemas.buildPrompt(tags, memo)
                 }
-                val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema, videoOptions)
+                val result = geminiClient.generateNoteAnalysis(apiKey, HttpGeminiClient.MODEL, url, prompt, schema, videoOptions)
+                val modelVersion = result.modelVersion ?: HttpGeminiClient.MODEL
+                val actualCredits = CreditMath.charge(result.promptTokens, result.outputTokens, result.thoughtsTokens)
                 val analysis = result.analysis
                 // GA-3 실측용: 속도·구간별 토큰 사용량(usageMetadata, 한 줄 JSON)
                 logger.info(
@@ -438,7 +467,7 @@ class NoteService(
                         it[NotesTable.difficulty] = difficulty
                         it[NotesTable.analysis] = analysis
                         it[NotesTable.diagramsSvg] = JsonArray(diagramsSvg.map { svg -> JsonPrimitive(svg) })
-                        it[NotesTable.model] = gemini.model
+                        it[NotesTable.model] = modelVersion
                         it[NotesTable.collectProgressions] = isProgression
                         it[createdAt] = nowUtc
                         it[updatedAt] = nowUtc
@@ -460,7 +489,14 @@ class NoteService(
                         it[AnalysisJobsTable.noteId] = noteId
                         it[error] = null
                         it[finishedAt] = nowUtc
+                        it[AnalysisJobsTable.promptTokens] = result.promptTokens
+                        it[AnalysisJobsTable.outputTokens] = result.outputTokens
+                        it[AnalysisJobsTable.thoughtsTokens] = result.thoughtsTokens
+                        it[AnalysisJobsTable.modelVersion] = modelVersion
                     }
+                    // 정산: 예약과의 차액 반환(구매분부터) 또는 잔액 안에서 추가 차감
+                    val charged = settleCredits(jobId, actualCredits)
+                    logger.info("크레딧 정산 jobId={} actual={} charged={}", jobId, actualCredits, charged)
 
                     OutboxRepository.enqueueIfSyncEnabled(userId, "note", noteId, "upsert")
                 }
@@ -483,11 +519,13 @@ class NoteService(
             withContext(NonCancellable) {
                 try {
                     DatabaseFactory.dbQuery(database) {
-                        AnalysisJobsTable.update({ (AnalysisJobsTable.id eq jobId) and (AnalysisJobsTable.status neq "done") }) {
+                        val updated = AnalysisJobsTable.update({ (AnalysisJobsTable.id eq jobId) and (AnalysisJobsTable.status inList listOf("queued", "running")) }) {
                             it[status] = "failed"
                             it[error] = errMsg
                             it[finishedAt] = clock.instant().atOffset(ZoneOffset.UTC)
                         }
+                        // 실패 = 예약 전액 반환(M1-1 §3)
+                        if (updated > 0) refundCredits(jobId)
                     }
                 } catch (updateEx: Exception) {
                     logger.error("실패 상태 기록 실패 jobId={}: {}", jobId, updateEx.message)
@@ -666,6 +704,11 @@ class NoteService(
         startSec = row[AnalysisJobsTable.startSec],
         endSec = row[AnalysisJobsTable.endSec],
         pace = row[AnalysisJobsTable.pace],
+        reservedCredits = row[AnalysisJobsTable.reservedMonthly] + row[AnalysisJobsTable.reservedPurchased],
+        chargedCredits = row[AnalysisJobsTable.chargedCredits],
+        promptTokens = row[AnalysisJobsTable.promptTokens],
+        outputTokens = row[AnalysisJobsTable.outputTokens],
+        thoughtsTokens = row[AnalysisJobsTable.thoughtsTokens],
         createdAt = formatTimestampNotNull(row[AnalysisJobsTable.createdAt]),
         startedAt = formatTimestamp(row[AnalysisJobsTable.startedAt]),
         finishedAt = formatTimestamp(row[AnalysisJobsTable.finishedAt])

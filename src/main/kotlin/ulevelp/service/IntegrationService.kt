@@ -53,23 +53,11 @@ data class SaveNotionKeyInput(
     val notesDb: String?
 )
 
-data class SaveGeminiKeyInput(
-    val appId: String,
-    val apiKey: String?,
-    val model: String,
-    val verify: Boolean = true
-)
-
 data class DecryptedNotionIntegration(
     val token: String,
     val songsDb: String,
     val sessionsDb: String,
     val notesDb: String?
-)
-
-data class DecryptedGeminiIntegration(
-    val apiKey: String,
-    val model: String
 )
 
 class IntegrationService(
@@ -80,9 +68,9 @@ class IntegrationService(
 
     companion object {
         val VALID_APP_IDS = setOf("ulevelp", "guitar-practice")
-        val VALID_PROVIDERS = setOf("notion", "gemini")
-        const val DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
-        val GEMINI_MODEL_REGEX = Regex("^[a-z0-9][a-z0-9.-]{0,63}$")
+        /** Gemini는 M1-3b부터 서버 키 + 크레딧(BYOK 제거, V6) */
+        val VALID_PROVIDERS = setOf("notion")
+        const val REMOVED_PROVIDER_GEMINI = "gemini"
 
         private fun formatTimestamp(dt: OffsetDateTime): String =
             DateTimeFormatter.ISO_INSTANT.format(dt.toInstant())
@@ -229,125 +217,6 @@ class IntegrationService(
         }
     }
 
-    suspend fun saveGemini(userId: UUID, input: SaveGeminiKeyInput): IntegrationDto {
-        validateAppId(input.appId)
-        val crypto = requireCrypto()
-
-        val model = input.model.trim().ifEmpty { DEFAULT_GEMINI_MODEL }
-        if (!GEMINI_MODEL_REGEX.matches(model)) {
-            throw InvalidInputException("model 형식이 올바르지 않습니다.")
-        }
-
-        val rawApiKey = input.apiKey?.trim()?.takeIf { it.isNotEmpty() }
-        val targetApiKey: String?
-        val encryptedPayload: EncryptedPayload?
-        val database = requireDb()
-
-        if (rawApiKey != null) {
-            try {
-                encryptedPayload = crypto.encryptProviderKey(userId, "gemini", rawApiKey, appId = input.appId)
-            } catch (e: InvalidIntegrationKeyException) {
-                throw InvalidInputException(e.message)
-            }
-            targetApiKey = rawApiKey
-        } else {
-            val existingSecret = DatabaseFactory.dbQuery(database) {
-                IntegrationsTable
-                    .selectAll()
-                    .where {
-                        (IntegrationsTable.userId eq userId) and
-                        (IntegrationsTable.appId eq input.appId) and
-                        (IntegrationsTable.provider eq "gemini")
-                    }
-                    .singleOrNull()
-            } ?: throw InvalidInputException("최초 등록 시 Gemini API 키(apiKey)가 필요합니다.")
-
-            targetApiKey = if (input.verify) {
-                crypto.decryptProviderKey(
-                    userId = userId,
-                    provider = "gemini",
-                    encryptedSecret = existingSecret[IntegrationsTable.encryptedSecret],
-                    iv = existingSecret[IntegrationsTable.iv],
-                    appId = input.appId
-                )
-            } else {
-                null
-            }
-            encryptedPayload = null
-        }
-
-        // 트랜잭션 밖 실시간 핑 검증
-        val checkRes = if (input.verify && targetApiKey != null) {
-            checkClient.checkGemini(targetApiKey, model)
-        } else {
-            null
-        }
-
-        val configJson = buildJsonObject {
-            put("model", model)
-        }
-
-        return DatabaseFactory.dbQuery(database) {
-            val existing = IntegrationsTable
-                .selectAll()
-                .where {
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq input.appId) and
-                    (IntegrationsTable.provider eq "gemini")
-                }
-                .singleOrNull()
-
-            val now = OffsetDateTime.now(ZoneOffset.UTC)
-            if (existing == null) {
-                IntegrationsTable.insert {
-                    it[this.userId] = userId
-                    it[this.appId] = input.appId
-                    it[this.provider] = "gemini"
-                    it[this.encryptedSecret] = encryptedPayload!!.encryptedSecret
-                    it[this.iv] = encryptedPayload.iv
-                    it[this.keyVersion] = encryptedPayload.keyVersion
-                    it[this.hint] = encryptedPayload.hint
-                    it[this.config] = configJson
-                    it[this.createdAt] = now
-                    it[this.updatedAt] = now
-                }
-            } else {
-                IntegrationsTable.update({
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq input.appId) and
-                    (IntegrationsTable.provider eq "gemini")
-                }) {
-                    it[config] = configJson
-                    if (encryptedPayload != null) {
-                        it[encryptedSecret] = encryptedPayload.encryptedSecret
-                        it[iv] = encryptedPayload.iv
-                        it[keyVersion] = encryptedPayload.keyVersion
-                        it[hint] = encryptedPayload.hint
-                    }
-                    it[updatedAt] = now
-                }
-            }
-
-            val updatedRow = IntegrationsTable
-                .selectAll()
-                .where {
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq input.appId) and
-                    (IntegrationsTable.provider eq "gemini")
-                }
-                .single()
-
-            IntegrationDto(
-                provider = "gemini",
-                hint = updatedRow[IntegrationsTable.hint],
-                config = updatedRow[IntegrationsTable.config] as? JsonObject ?: configJson,
-                updatedAt = formatTimestamp(updatedRow[IntegrationsTable.updatedAt]),
-                verified = input.verify,
-                displayName = checkRes?.displayName
-            )
-        }
-    }
-
     suspend fun checkNotion(userId: UUID, appId: String): NotionCheckResponse {
         val decrypted = requireDecryptedNotion(userId, appId)
         return checkClient.checkNotion(
@@ -355,14 +224,6 @@ class IntegrationService(
             songsDb = decrypted.songsDb,
             sessionsDb = decrypted.sessionsDb,
             notesDb = decrypted.notesDb
-        )
-    }
-
-    suspend fun checkGemini(userId: UUID, appId: String): GeminiCheckResponse {
-        val decrypted = requireDecryptedGemini(userId, appId)
-        return checkClient.checkGemini(
-            apiKey = decrypted.apiKey,
-            model = decrypted.model
         )
     }
 
@@ -429,43 +290,4 @@ class IntegrationService(
             )
         }
     }
-
-    internal suspend fun requireDecryptedGemini(userId: UUID, appId: String = "ulevelp"): DecryptedGeminiIntegration {
-        validateAppId(appId)
-        val crypto = requireCrypto()
-        val database = requireDb()
-
-        return DatabaseFactory.dbQuery(database) {
-            val row = IntegrationsTable
-                .selectAll()
-                .where {
-                    (IntegrationsTable.userId eq userId) and
-                    (IntegrationsTable.appId eq appId) and
-                    (IntegrationsTable.provider eq "gemini")
-                }
-                .singleOrNull()
-                ?: throw ApiException(
-                    HttpStatusCode.PreconditionFailed,
-                    "NO_KEY",
-                    "등록된 키가 없습니다. 먼저 키를 저장해 주세요."
-                )
-
-            val decryptedKey = crypto.decryptProviderKey(
-                userId = userId,
-                provider = "gemini",
-                encryptedSecret = row[IntegrationsTable.encryptedSecret],
-                iv = row[IntegrationsTable.iv],
-                appId = appId
-            )
-
-            val configObj = row[IntegrationsTable.config] as? JsonObject ?: JsonObject(emptyMap())
-            val m = (configObj["model"] as? JsonPrimitive)?.content ?: DEFAULT_GEMINI_MODEL
-
-            DecryptedGeminiIntegration(
-                apiKey = decryptedKey,
-                model = m
-            )
-        }
-    }
 }
-

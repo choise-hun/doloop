@@ -21,7 +21,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import ulevelp.api.ApiException
 import ulevelp.db.*
-import ulevelp.service.GeminiCheckResponse
 import ulevelp.service.HttpIntegrationCheckClient
 import ulevelp.support.*
 import java.io.OutputStream
@@ -241,27 +240,41 @@ class IntegrationApiTest {
     }
 
     @Test
-    fun `K4 Gemini 키 등록 및 기본 모델 적용`() = testApp { client ->
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-
+    fun `K4 Gemini 연동 경로 삭제 (M1-3b — 서버 키 + 크레딧)`() = testApp { client ->
         val putResp = client.put("/api/v1/integrations/gemini") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
             header(HttpHeaders.ContentType, "application/json")
             setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
+                put("apiKey", "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ")
             }.toString())
         }
-        assertEquals(HttpStatusCode.OK, putResp.status)
-        val bodyText = putResp.bodyAsText()
-        assertFalse(bodyText.contains("SyFakeKeyForIntegrationTest"), "응답 본문에 Gemini 키 원문이 노출되면 안 됩니다")
-        val json = Json.parseToJsonElement(bodyText).jsonObject
-        assertEquals("gemini", json["provider"]?.jsonPrimitive?.content)
-        assertEquals("X9zQ", json["hint"]?.jsonPrimitive?.content)
-        assertEquals("gemini-flash-latest", json["config"]?.jsonObject?.get("model")?.jsonPrimitive?.content)
+        assertEquals(HttpStatusCode.BadRequest, putResp.status)
+        assertStandardError(putResp.bodyAsText(), 400, "INVALID_INPUT")
+
+        val chk = client.post("/api/v1/integrations/gemini/check") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.BadRequest, chk.status)
+        assertStandardError(chk.bodyAsText(), 400, "INVALID_INPUT")
+
+        val del = client.delete("/api/v1/integrations/gemini") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.BadRequest, del.status)
+        assertStandardError(del.bodyAsText(), 400, "INVALID_INPUT")
+
+        // 모르는 공급자는 지금처럼 404
+        val unknown = client.delete("/api/v1/integrations/slack") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.NotFound, unknown.status)
+
+        // 401은 그대로
+        assertEquals(HttpStatusCode.Unauthorized, client.put("/api/v1/integrations/gemini").status)
     }
 
     @Test
-    fun `K5 잘못된 키·DB ID·모델 형식 거부`() = testApp { client ->
+    fun `K5 잘못된 키·DB ID 형식 거부`() = testApp { client ->
         val validDb = "959cbe517e224419b48ca3313895a427"
 
         // ① 최초 등록 시 token 누락
@@ -303,29 +316,6 @@ class IntegrationApiTest {
         val err3 = assertStandardError(r3.bodyAsText(), 400, "INVALID_INPUT")
         assertTrue(err3["message"]?.jsonPrimitive?.content?.contains("songsDb") == true)
 
-        // ④ 잘못된 Gemini 키 "AIzaShort"
-        val r4 = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", "AIzaShort")
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.BadRequest, r4.status)
-        assertStandardError(r4.bodyAsText(), 400, "INVALID_INPUT")
-
-        // ⑤ 잘못된 model "BAD MODEL!"
-        val r5 = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ")
-                put("model", "BAD MODEL!")
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.BadRequest, r5.status)
-        assertStandardError(r5.bodyAsText(), 400, "INVALID_INPUT")
-
         // ⑥ 잘못된 appId "other"
         val r6 = client.put("/api/v1/integrations/notion") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
@@ -345,8 +335,6 @@ class IntegrationApiTest {
     fun `K6 연결 점검 성공 (check)`() = testApp { client ->
         val rawToken = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
         val dbId = "959cbe517e224419b48ca3313895a427"
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-
         // 키 등록
         client.put("/api/v1/integrations/notion") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
@@ -355,13 +343,6 @@ class IntegrationApiTest {
                 put("token", rawToken)
                 put("songsDb", dbId)
                 put("sessionsDb", dbId)
-            }.toString())
-        }
-        client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
             }.toString())
         }
 
@@ -375,15 +356,6 @@ class IntegrationApiTest {
         assertEquals("연습 곡", notionJson["songsTitle"]?.jsonPrimitive?.content)
         assertEquals("연습 기록", notionJson["sessionsTitle"]?.jsonPrimitive?.content)
         assertEquals(5, notionJson["maxUploadMB"]?.jsonPrimitive?.int)
-
-        // ② POST /api/v1/integrations/gemini/check
-        val chkGemini = client.post("/api/v1/integrations/gemini/check") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-        }
-        assertEquals(HttpStatusCode.OK, chkGemini.status)
-        val gemJson = Json.parseToJsonElement(chkGemini.bodyAsText()).jsonObject
-        assertEquals("gemini", gemJson["provider"]?.jsonPrimitive?.content)
-        assertEquals("gemini-flash-latest", gemJson["model"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -394,18 +366,18 @@ class IntegrationApiTest {
         assertEquals(HttpStatusCode.PreconditionFailed, chkNotion.status)
         assertStandardError(chkNotion.bodyAsText(), 412, "NO_KEY")
 
+        // gemini는 경로 자체를 지웠다(M1-3b) → 400
         val chkGemini = client.post("/api/v1/integrations/gemini/check") {
             header(HttpHeaders.Authorization, "Bearer $tokenB")
         }
-        assertEquals(HttpStatusCode.PreconditionFailed, chkGemini.status)
-        assertStandardError(chkGemini.bodyAsText(), 412, "NO_KEY")
+        assertEquals(HttpStatusCode.BadRequest, chkGemini.status)
+        assertStandardError(chkGemini.bodyAsText(), 400, "INVALID_INPUT")
     }
 
     @Test
     fun `K8 연결 점검 실패 (누락 속성·401·404)`() = testApp { client ->
         val rawToken = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
         val dbId = "959cbe517e224419b48ca3313895a427"
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
 
         client.put("/api/v1/integrations/notion") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
@@ -414,13 +386,6 @@ class IntegrationApiTest {
                 put("token", rawToken)
                 put("songsDb", dbId)
                 put("sessionsDb", dbId)
-            }.toString())
-        }
-        client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
             }.toString())
         }
 
@@ -469,21 +434,6 @@ class IntegrationApiTest {
         }
         assertEquals(HttpStatusCode.NotFound, r3.status)
         assertStandardError(r3.bodyAsText(), 404, "NOTION_OBJECT_NOT_FOUND", expectedSource = "notion")
-
-        // ④ Gemini 403
-        fakeCheckClient.geminiHandler = { _, _ ->
-            throw ApiException(
-                HttpStatusCode.BadRequest,
-                "PROVIDER_KEY_INVALID",
-                "Gemini API 키가 유효하지 않거나 권한이 없습니다.",
-                source = "gemini"
-            )
-        }
-        val r4 = client.post("/api/v1/integrations/gemini/check") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-        }
-        assertEquals(HttpStatusCode.BadRequest, r4.status)
-        assertStandardError(r4.bodyAsText(), 400, "PROVIDER_KEY_INVALID", expectedSource = "gemini")
     }
 
     @Test
@@ -578,9 +528,7 @@ class IntegrationApiTest {
     fun `K11 사용자 A·B 교차 접근 차단`() = testApp { client ->
         val rawToken = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
         val dbId = "959cbe517e224419b48ca3313895a427"
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-
-        // A가 노션·Gemini 키 등록
+        // A가 노션 키 등록
         client.put("/api/v1/integrations/notion") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
             header(HttpHeaders.ContentType, "application/json")
@@ -588,13 +536,6 @@ class IntegrationApiTest {
                 put("token", rawToken)
                 put("songsDb", dbId)
                 put("sessionsDb", dbId)
-            }.toString())
-        }
-        client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
             }.toString())
         }
 
@@ -624,7 +565,7 @@ class IntegrationApiTest {
         }
         assertEquals(HttpStatusCode.OK, r4.status)
         val j4 = Json.parseToJsonElement(r4.bodyAsText()).jsonObject
-        assertEquals(2, j4["integrations"]?.jsonArray?.size)
+        assertEquals(1, j4["integrations"]?.jsonArray?.size)
     }
 
     @Test
@@ -676,11 +617,6 @@ class IntegrationApiTest {
                 }
             }.toString()
 
-            val geminiModelJson = buildJsonObject {
-                put("name", "models/gemini-flash-latest")
-                put("displayName", "Gemini Flash Latest")
-            }.toString()
-
             server.createContext("/v1/databases/songs-ok") { exchange ->
                 val bytes = normalSongsDbJson.toByteArray(StandardCharsets.UTF_8)
                 exchange.responseHeaders.set("Content-Type", "application/json")
@@ -716,18 +652,10 @@ class IntegrationApiTest {
                 exchange.responseBody.use { it.write(bytes) }
             }
 
-            server.createContext("/v1beta/models/gemini-flash-latest") { exchange ->
-                val bytes = geminiModelJson.toByteArray(StandardCharsets.UTF_8)
-                exchange.responseHeaders.set("Content-Type", "application/json")
-                exchange.sendResponseHeaders(200, bytes.size.toLong())
-                exchange.responseBody.use { it.write(bytes) }
-            }
-
             server.start()
 
             val client = HttpIntegrationCheckClient(
-                notionBaseUrl = "http://localhost:$port/v1",
-                geminiBaseUrl = "http://localhost:$port/v1beta"
+                notionBaseUrl = "http://localhost:$port/v1"
             )
 
             // ① 정상 DB 스키마 JSON
@@ -767,174 +695,8 @@ class IntegrationApiTest {
             assertEquals("NOTION_OBJECT_NOT_FOUND", e3.code)
             assertEquals(HttpStatusCode.NotFound, e3.status)
 
-            // ④ Gemini 모델 200 응답 -> GeminiCheckResponse 반환
-            val geminiRes = client.checkGemini(
-                apiKey = "AIzaSyFakeKeyForTest",
-                model = "gemini-flash-latest"
-            )
-            assertTrue(geminiRes.ok)
-            assertEquals("gemini", geminiRes.provider)
-            assertEquals("gemini-flash-latest", geminiRes.model)
-            assertEquals("Gemini Flash Latest", geminiRes.displayName)
-
         } finally {
             server?.stop(0)
         }
     }
-
-    @Test
-    fun `K13 Gemini 키 저장 시 즉시 핑 검증 통과(verified = true)`() = testApp { client ->
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-        fakeCheckClient.geminiHandler = { apiKey, model ->
-            GeminiCheckResponse(
-                ok = true,
-                provider = "gemini",
-                model = model,
-                displayName = "Gemini 1.5 Flash"
-            )
-        }
-
-        val putResp = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.OK, putResp.status)
-        val json = Json.parseToJsonElement(putResp.bodyAsText()).jsonObject
-        assertEquals("gemini", json["provider"]?.jsonPrimitive?.content)
-        assertEquals("X9zQ", json["hint"]?.jsonPrimitive?.content)
-        assertEquals(true, json["verified"]?.jsonPrimitive?.boolean)
-        assertEquals("Gemini 1.5 Flash", json["displayName"]?.jsonPrimitive?.content)
-        assertEquals(1, fakeCheckClient.geminiCalls.size)
-        assertEquals(rawGemKey to "gemini-flash-latest", fakeCheckClient.geminiCalls.first())
-    }
-
-    @Test
-    fun `K14 무효한 Gemini 키 저장 시 400 PROVIDER_KEY_INVALID 거부 및 DB 미저장`() = testApp { client ->
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-        fakeCheckClient.geminiHandler = { _, _ ->
-            throw ApiException(
-                HttpStatusCode.BadRequest,
-                "PROVIDER_KEY_INVALID",
-                "Gemini API 키가 유효하지 않거나 권한이 없습니다.",
-                source = "gemini"
-            )
-        }
-
-        val putResp = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.BadRequest, putResp.status)
-        val err = assertStandardError(putResp.bodyAsText(), 400, "PROVIDER_KEY_INVALID", expectedSource = "gemini")
-        assertEquals("Gemini API 키가 유효하지 않거나 권한이 없습니다.", err["message"]?.jsonPrimitive?.content)
-
-        // DB에 저장되지 않았는지 확인
-        val listResp = client.get("/api/v1/integrations") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-        }
-        assertEquals(HttpStatusCode.OK, listResp.status)
-        val listJson = Json.parseToJsonElement(listResp.bodyAsText()).jsonObject
-        val arr = listJson["integrations"]?.jsonArray
-        assertNotNull(arr)
-        assertEquals(0, arr.size)
-
-        transaction(db) {
-            val count = IntegrationsTable.selectAll().where {
-                (IntegrationsTable.userId eq userA) and (IntegrationsTable.provider eq "gemini")
-            }.count()
-            assertEquals(0L, count)
-        }
-    }
-
-    @Test
-    fun `K15 verify = false 옵션 시 핑 검증 건너뛰기`() = testApp { client ->
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-        fakeCheckClient.geminiCalls.clear()
-
-        val putResp = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
-                put("verify", false)
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.OK, putResp.status)
-        val json = Json.parseToJsonElement(putResp.bodyAsText()).jsonObject
-        assertEquals("gemini", json["provider"]?.jsonPrimitive?.content)
-        assertEquals("X9zQ", json["hint"]?.jsonPrimitive?.content)
-        assertEquals(false, json["verified"]?.jsonPrimitive?.boolean)
-        assertTrue(json["displayName"] is JsonNull)
-        assertEquals(0, fakeCheckClient.geminiCalls.size)
-    }
-
-    @Test
-    fun `K16 기존 키 유지 모델만 변경 시 핑 검증`() = testApp { client ->
-        val rawGemKey = "AIza" + "SyFakeKeyForIntegrationTest1234X9zQ"
-        fakeCheckClient.geminiHandler = { apiKey, model ->
-            GeminiCheckResponse(
-                ok = true,
-                provider = "gemini",
-                model = model,
-                displayName = if (model == "gemini-1.5-pro") "Gemini 1.5 Pro" else "Gemini 1.5 Flash"
-            )
-        }
-
-        // ① 최초 키 등록
-        val put1 = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("apiKey", rawGemKey)
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.OK, put1.status)
-
-        fakeCheckClient.geminiCalls.clear()
-
-        // ② apiKey 없이 model만 변경하여 PUT
-        val put2 = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("model", "gemini-1.5-pro")
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.OK, put2.status)
-        val json2 = Json.parseToJsonElement(put2.bodyAsText()).jsonObject
-        assertEquals("gemini", json2["provider"]?.jsonPrimitive?.content)
-        assertEquals("X9zQ", json2["hint"]?.jsonPrimitive?.content)
-        assertEquals("gemini-1.5-pro", json2["config"]?.jsonObject?.get("model")?.jsonPrimitive?.content)
-        assertEquals(true, json2["verified"]?.jsonPrimitive?.boolean)
-        assertEquals("Gemini 1.5 Pro", json2["displayName"]?.jsonPrimitive?.content)
-
-        // 복호화된 기존 키로 핑 검증이 이루어졌는지 확인
-        assertEquals(1, fakeCheckClient.geminiCalls.size)
-        assertEquals(rawGemKey to "gemini-1.5-pro", fakeCheckClient.geminiCalls.first())
-
-        fakeCheckClient.geminiCalls.clear()
-
-        // ③ apiKey 없이 model 변경 + verify = false (복호화 및 핑 호출 생략)
-        val put3 = client.put("/api/v1/integrations/gemini") {
-            header(HttpHeaders.Authorization, "Bearer $tokenA")
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(buildJsonObject {
-                put("model", "gemini-1.5-flash")
-                put("verify", false)
-            }.toString())
-        }
-        assertEquals(HttpStatusCode.OK, put3.status)
-        val json3 = Json.parseToJsonElement(put3.bodyAsText()).jsonObject
-        assertEquals("gemini-1.5-flash", json3["config"]?.jsonObject?.get("model")?.jsonPrimitive?.content)
-        assertEquals(false, json3["verified"]?.jsonPrimitive?.boolean)
-        assertTrue(json3["displayName"] is JsonNull)
-        assertEquals(0, fakeCheckClient.geminiCalls.size, "verify=false 시 핑 호출이 없어야 합니다")
-    }
 }
-

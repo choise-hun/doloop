@@ -26,8 +26,7 @@ data class KeySummaryDto(
 
 @Serializable
 data class KeysStatusDto(
-    val notion: KeySummaryDto? = null,
-    val gemini: KeySummaryDto? = null
+    val notion: KeySummaryDto? = null
 )
 
 @Serializable
@@ -366,8 +365,7 @@ class ProfileService(private val db: Database?) {
             takeQuotaBytes = limits.takeBytes, // 실제 티어 한도(take_quota_bytes 열은 읽지 않음, A2)
             migratedLocalAt = row[ProfilesTable.migratedLocalAt]?.let { formatTimestamp(it) },
             keys = KeysStatusDto(
-                notion = findKeySummary("notion"),
-                gemini = findKeySummary("gemini")
+                notion = findKeySummary("notion")
             ),
             tier = tier,
             billingTier = row[ProfilesTable.billingTier],

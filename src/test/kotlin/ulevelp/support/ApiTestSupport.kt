@@ -12,11 +12,11 @@ import ulevelp.notion.NotionClient
 import ulevelp.note.AnalyzeJobDispatcher
 import ulevelp.note.GeminiClient
 import ulevelp.security.CryptoService
-import ulevelp.service.GeminiCheckResponse
 import ulevelp.service.IntegrationCheckClient
 import ulevelp.service.NotionCheckResponse
 import ulevelp.service.VideoMeta
 import ulevelp.service.VideoMetaClient
+import ulevelp.service.VideoDurationClient
 import ulevelp.service.PlaylistClient
 import ulevelp.service.YoutubePlaylist
 import ulevelp.service.YoutubeDataPlaylistClient
@@ -37,6 +37,8 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.selectAll
+import ulevelp.service.applyCredit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -248,6 +250,20 @@ class FakePlaylistClient(
     }
 }
 
+/** 가짜 YouTube 영상 길이(M1-3b). [error]가 있으면 그 예외 */
+class FakeVideoDurationClient(
+    @Volatile var durationSec: Int = 240,
+    @Volatile var error: ApiException? = null
+) : VideoDurationClient {
+    val calls = CopyOnWriteArrayList<String>()
+
+    override suspend fun durationSec(videoId: String): Int {
+        calls.add(videoId)
+        error?.let { throw it }
+        return durationSec
+    }
+}
+
 object TestCrypto {
     val keyBytes = ByteArray(32) { (it + 1).toByte() }
     val service = CryptoService(keyBytes)
@@ -255,10 +271,8 @@ object TestCrypto {
 
 class FakeIntegrationCheckClient : IntegrationCheckClient {
     @Volatile var notionHandler: (suspend (token: String, songsDb: String, sessionsDb: String, notesDb: String?) -> NotionCheckResponse)? = null
-    @Volatile var geminiHandler: (suspend (apiKey: String, model: String) -> GeminiCheckResponse)? = null
 
     val notionCalls = CopyOnWriteArrayList<List<String?>>()
-    val geminiCalls = CopyOnWriteArrayList<Pair<String, String>>()
 
     override suspend fun checkNotion(
         token: String,
@@ -278,21 +292,6 @@ class FakeIntegrationCheckClient : IntegrationCheckClient {
             maxUploadMB = 5
         )
     }
-
-    override suspend fun checkGemini(
-        apiKey: String,
-        model: String
-    ): GeminiCheckResponse {
-        geminiCalls.add(apiKey to model)
-        val handler = geminiHandler
-        if (handler != null) return handler(apiKey, model)
-        return GeminiCheckResponse(
-            ok = true,
-            provider = "gemini",
-            model = model,
-            displayName = if (model == "gemini-flash-latest") "Gemini Flash Latest" else model
-        )
-    }
 }
 
 fun ApplicationTestBuilder.configureApiTestApp(
@@ -305,7 +304,9 @@ fun ApplicationTestBuilder.configureApiTestApp(
     notionClient: NotionClient = FakeNotionClient(),
     cronOidcVerifier: CronOidcVerifier? = CronOidcVerifier(TestCronJwt.cronConfig),
     geminiClient: GeminiClient = FakeGeminiClient(),
-    analyzeJobDispatcher: AnalyzeJobDispatcher? = null
+    analyzeJobDispatcher: AnalyzeJobDispatcher? = null,
+    videoDurationClient: VideoDurationClient = FakeVideoDurationClient(),
+    geminiApiKey: String? = TestCredits.SYSTEM_GEMINI_KEY
 ) {
     application {
         module(
@@ -321,6 +322,8 @@ fun ApplicationTestBuilder.configureApiTestApp(
             notionClient = notionClient,
             cronOidcVerifier = cronOidcVerifier,
             geminiClient = geminiClient,
+            geminiApiKey = geminiApiKey,
+            videoDurationClient = videoDurationClient,
             analyzeJobDispatcher = analyzeJobDispatcher
         )
     }
@@ -367,6 +370,51 @@ object TestTier {
         org.jetbrains.exposed.sql.transactions.transaction(db) {
             ulevelp.db.ProfilesTable.update({ ulevelp.db.ProfilesTable.id eq userId }) {
                 it[ulevelp.db.ProfilesTable.role] = role
+            }
+        }
+    }
+}
+
+/**
+ * 테스트용 크레딧 (M1-3b). 지급도 원장 행으로 한다(applyCredit) — "원장 합계 = 잔액" 불변식이 테스트 내내 지켜지게
+ */
+object TestCredits {
+    const val SYSTEM_GEMINI_KEY = "test-system-gemini-key"
+
+    fun grant(db: org.jetbrains.exposed.sql.Database, userId: UUID, amount: Int, bucket: String = ulevelp.service.BUCKET_PURCHASED) {
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            applyCredit(userId, bucket, amount, "admin_adjust")
+        }
+    }
+
+    /** 유료 티어 + 크레딧 (기존 BYOK 키 시드 자리) */
+    fun seedPaid(db: org.jetbrains.exposed.sql.Database, userId: UUID, purchased: Int = 500, tier: String = "pro") {
+        TestTier.set(db, userId, tier)
+        if (purchased > 0) grant(db, userId, purchased)
+    }
+
+    /** (monthly, purchased) */
+    fun balances(db: org.jetbrains.exposed.sql.Database, userId: UUID): Pair<Int, Int> =
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            val row = ulevelp.db.ProfilesTable.selectAll().where { ulevelp.db.ProfilesTable.id eq userId }.single()
+            row[ulevelp.db.ProfilesTable.monthlyCredits] to row[ulevelp.db.ProfilesTable.purchasedCredits]
+        }
+
+    /** 불변식(진행 파일 §5): 버킷별 SUM(delta) = 잔액, 모든 balance_after ≥ 0, 버킷별 마지막 balance_after = 잔액 */
+    fun assertInvariant(db: org.jetbrains.exposed.sql.Database, userId: UUID) {
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            val (monthly, purchased) = balances(db, userId)
+            val rows = ulevelp.db.CreditLedgerTable.selectAll()
+                .where { ulevelp.db.CreditLedgerTable.userId eq userId }
+                .orderBy(ulevelp.db.CreditLedgerTable.id)
+                .toList()
+            for ((bucket, balance) in listOf("monthly" to monthly, "purchased" to purchased)) {
+                val bucketRows = rows.filter { it[ulevelp.db.CreditLedgerTable.bucket] == bucket }
+                assertEquals(balance, bucketRows.sumOf { it[ulevelp.db.CreditLedgerTable.delta] }, "원장 합계 = 잔액 ($bucket)")
+                assertTrue(bucketRows.all { it[ulevelp.db.CreditLedgerTable.balanceAfter] >= 0 }, "balance_after >= 0 ($bucket)")
+                bucketRows.lastOrNull()?.let {
+                    assertEquals(balance, it[ulevelp.db.CreditLedgerTable.balanceAfter], "마지막 balance_after = 잔액 ($bucket)")
+                }
             }
         }
     }

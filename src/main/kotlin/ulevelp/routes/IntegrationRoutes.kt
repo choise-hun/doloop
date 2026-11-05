@@ -7,8 +7,8 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import ulevelp.api.InvalidInputException
 import ulevelp.api.NotFoundException
-import ulevelp.api.optBoolean
 import ulevelp.api.optString
 import ulevelp.api.receiveJsonObject
 import ulevelp.auth.SupabaseAuthPlugin
@@ -17,7 +17,6 @@ import ulevelp.auth.requireAuthUser
 import ulevelp.service.IntegrationListResponse
 import ulevelp.service.IntegrationService
 import ulevelp.service.ProfileService
-import ulevelp.service.SaveGeminiKeyInput
 import ulevelp.service.SaveNotionKeyInput
 
 fun Route.registerIntegrationRoutes(
@@ -62,25 +61,10 @@ fun Route.registerIntegrationRoutes(
             call.respond(HttpStatusCode.OK, dto)
         }
 
+        // M1-3b: Gemini 키 등록 경로 삭제 — AI 분석은 서버 키 + 크레딧(M1-1 §5-4)
         put("/gemini") {
-            val user = call.requireAuthUser()
-            val body = call.receiveJsonObject()
-            val appId = body.optString("appId", 64) ?: "ulevelp"
-            val apiKey = body.optString("apiKey", 256)
-            val model = body.optString("model", 64) ?: IntegrationService.DEFAULT_GEMINI_MODEL
-            val verify = body.optBoolean("verify", true)
-
-            val dto = integrationService.saveGemini(
-                userId = user.id,
-                input = SaveGeminiKeyInput(
-                    appId = appId,
-                    apiKey = apiKey,
-                    model = model,
-                    verify = verify
-                )
-            )
-            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
-            call.respond(HttpStatusCode.OK, dto)
+            call.requireAuthUser()
+            throw geminiRemoved()
         }
 
         post("/{provider}/check") {
@@ -88,18 +72,11 @@ fun Route.registerIntegrationRoutes(
             val provider = call.parameters["provider"]
             val appId = call.request.queryParameters["appId"] ?: "ulevelp"
 
-            if (provider == null || provider !in IntegrationService.VALID_PROVIDERS) {
-                throw NotFoundException("지원하지 않는 연동 공급자입니다.")
-            }
+            requireSupportedProvider(provider)
 
+            val res = integrationService.checkNotion(user.id, appId)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
-            if (provider == "notion") {
-                val res = integrationService.checkNotion(user.id, appId)
-                call.respond(HttpStatusCode.OK, res)
-            } else {
-                val res = integrationService.checkGemini(user.id, appId)
-                call.respond(HttpStatusCode.OK, res)
-            }
+            call.respond(HttpStatusCode.OK, res)
         }
 
         delete("/{provider}") {
@@ -107,13 +84,20 @@ fun Route.registerIntegrationRoutes(
             val provider = call.parameters["provider"]
             val appId = call.request.queryParameters["appId"] ?: "ulevelp"
 
-            if (provider == null || provider !in IntegrationService.VALID_PROVIDERS) {
-                throw NotFoundException("지원하지 않는 연동 공급자입니다.")
-            }
-
-            integrationService.delete(user.id, appId, provider)
+            integrationService.delete(user.id, appId, requireSupportedProvider(provider))
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
     }
+}
+
+private fun geminiRemoved() = InvalidInputException("지원하지 않는 연동입니다. AI 분석은 서버에서 크레딧으로 처리하므로 Gemini 키를 등록하지 않습니다.")
+
+/** gemini = 지운 연동(400 INVALID_INPUT, M1-1 §5-4), 그 밖의 모르는 이름 = 404(기존 그대로) */
+private fun requireSupportedProvider(provider: String?): String {
+    if (provider == IntegrationService.REMOVED_PROVIDER_GEMINI) throw geminiRemoved()
+    if (provider == null || provider !in IntegrationService.VALID_PROVIDERS) {
+        throw NotFoundException("지원하지 않는 연동 공급자입니다.")
+    }
+    return provider
 }

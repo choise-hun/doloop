@@ -89,9 +89,9 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V5__tiers_credits_and_community migrations apply cleanly and create all 17 tables`() {
-        assertEquals("5", targetSchemaVersion, "Flyway target schema version should be 5")
-        assertTrue(migrationsExecutedCount >= 5, "V1__init.sql ~ V5__tiers_credits_and_community.sql migrations must have executed")
+    fun `Flyway V1__init to V6__remove_byok_gemini migrations apply cleanly and create all 17 tables`() {
+        assertEquals("6", targetSchemaVersion, "Flyway target schema version should be 6")
+        assertTrue(migrationsExecutedCount >= 6, "V1__init.sql ~ V6__remove_byok_gemini.sql migrations must have executed")
         assertEquals(17, ALL_TABLES.size, "Exposed ALL_TABLES should contain 17 tables")
 
         val actualTables = mutableListOf<String>()
@@ -297,8 +297,8 @@ class DatabaseMigrationAndIntegrityTest {
             transaction(db) {
                 IntegrationsTable.insert {
                     it[IntegrationsTable.userId] = userId
-                    it[appId] = "ulevelp"
-                    it[provider] = "gemini"
+                    it[appId] = "guitar-practice"
+                    it[provider] = "notion"
                     it[encryptedSecret] = payload.encryptedSecret
                     it[iv] = ByteArray(8)
                     it[keyVersion] = 1
@@ -308,6 +308,23 @@ class DatabaseMigrationAndIntegrityTest {
             }
         }
         assertEquals("23514", badIvEx.sqlState, "IV length != 12 must fail with CHECK constraint violation 23514")
+
+        // V6(M1-3b): BYOK 제거 — provider는 notion만(gemini 23514)
+        val geminiEx = assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                IntegrationsTable.insert {
+                    it[IntegrationsTable.userId] = userId
+                    it[appId] = "guitar-practice"
+                    it[provider] = "gemini"
+                    it[encryptedSecret] = payload.encryptedSecret
+                    it[iv] = payload.iv
+                    it[keyVersion] = 1
+                    it[hint] = "abcd"
+                    it[config] = buildJsonObject {}
+                }
+            }
+        }
+        assertEquals("23514", geminiEx.sqlState, "provider gemini must fail with CHECK constraint violation 23514 (V6)")
     }
 
     @Test
