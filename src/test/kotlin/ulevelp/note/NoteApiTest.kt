@@ -1311,4 +1311,80 @@ class NoteApiTest {
         newNoteService().executeJob(UUID.fromString(noteJobId))
         assertNull(fakeGeminiClient.videoOptionsCalls.last())
     }
+
+    /** GA-4: 같은 영상·구간·속도 코드 진행 분석은 24시간 안에 409 DUPLICATE_ANALYSIS, force면 새 작업(`진행_분석설정.md` GA-4) */
+    @Test
+    fun n20_progressionAnalyze_duplicateBlocked_forceAllows() = testApplication {
+        seedGeminiKey(userA)
+        configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
+        val jobIdOf = { body: String -> UUID.fromString(Json.parseToJsonElement(body).jsonObject["jobId"]!!.jsonPrimitive.content) }
+        val setJob = { id: UUID, status: String, hoursAgo: Long ->
+            transaction(db) {
+                AnalysisJobsTable.update({ AnalysisJobsTable.id eq id }) {
+                    it[AnalysisJobsTable.status] = status
+                    it[createdAt] = OffsetDateTime.now(ZoneOffset.UTC).minusHours(hoursAgo)
+                }
+            }
+        }
+        val a = """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":40,"endSec":80,"pace":"fast"}"""
+
+        // 첫 요청 202 → 대기 중에 같은 요청(주소 형식만 다름) 409 — 동시 1건(429)보다 먼저
+        val r1 = postProgressionAnalyze(client, tokenA, a)
+        assertEquals(HttpStatusCode.Accepted, r1.status, r1.bodyAsText())
+        val job1 = jobIdOf(r1.bodyAsText())
+        val dupQueued = postProgressionAnalyze(client, tokenA, """{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","startSec":40,"endSec":80,"pace":"fast"}""")
+        assertEquals(HttpStatusCode.Conflict, dupQueued.status, dupQueued.bodyAsText())
+        assertStandardError(dupQueued.bodyAsText(), 409, "DUPLICATE_ANALYSIS")
+
+        // 완료 뒤에도 409, force:false도 409
+        setJob(job1, "done", 1)
+        assertEquals(HttpStatusCode.Conflict, postProgressionAnalyze(client, tokenA, a).status)
+        assertEquals(HttpStatusCode.Conflict, postProgressionAnalyze(client, tokenA, a.dropLast(1) + ""","force":false}""").status)
+
+        // force 형식 오류 400
+        val badForce = postProgressionAnalyze(client, tokenA, a.dropLast(1) + ""","force":"yes"}""")
+        assertEquals(HttpStatusCode.BadRequest, badForce.status)
+        assertStandardError(badForce.bodyAsText(), 400, "INVALID_INPUT")
+
+        // force:true → 새 작업 202
+        val rForce = postProgressionAnalyze(client, tokenA, a.dropLast(1) + ""","force":true}""")
+        assertEquals(HttpStatusCode.Accepted, rForce.status, rForce.bodyAsText())
+        setJob(jobIdOf(rForce.bodyAsText()), "done", 1)
+
+        // 구간·속도가 다르면 다른 분석 → 202
+        for (other in listOf(
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":40,"endSec":80,"pace":"normal"}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":40,"pace":"fast"}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","pace":"fast"}"""
+        )) {
+            val r = postProgressionAnalyze(client, tokenA, other)
+            assertEquals(HttpStatusCode.Accepted, r.status, other + " " + r.bodyAsText())
+            setJob(jobIdOf(r.bodyAsText()), "done", 1)
+        }
+
+        // 실패한 작업은 중복 아님 → 바로 다시 202
+        val b = """{"url":"https://youtu.be/oWQZopUx0fA"}"""
+        val rb = postProgressionAnalyze(client, tokenA, b)
+        assertEquals(HttpStatusCode.Accepted, rb.status, rb.bodyAsText())
+        setJob(jobIdOf(rb.bodyAsText()), "failed", 0)
+        val rb2 = postProgressionAnalyze(client, tokenA, b)
+        assertEquals(HttpStatusCode.Accepted, rb2.status, rb2.bodyAsText())
+        // 24시간 지난 완료 작업도 중복 아님
+        setJob(jobIdOf(rb2.bodyAsText()), "done", 25)
+        val rb3 = postProgressionAnalyze(client, tokenA, b)
+        assertEquals(HttpStatusCode.Accepted, rb3.status, rb3.bodyAsText())
+        setJob(jobIdOf(rb3.bodyAsText()), "done", 1)
+
+        // 노트 분석은 중복 확인 없음(회귀)
+        val noteBody = """{"url":"https://youtu.be/oWQZopUx0fA","tags":["화성"]}"""
+        for (i in 1..2) {
+            val nr = client.post("/api/v1/notes/analyze") {
+                header(HttpHeaders.Authorization, "Bearer $tokenA")
+                header(HttpHeaders.ContentType, "application/json")
+                setBody(noteBody)
+            }
+            assertEquals(HttpStatusCode.Accepted, nr.status, nr.bodyAsText())
+            setJob(jobIdOf(nr.bodyAsText()), "done", 1)
+        }
+    }
 }

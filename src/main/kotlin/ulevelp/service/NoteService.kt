@@ -150,6 +150,9 @@ class NoteService(
         /** 코드 진행 변화 속도 → Gemini 초당 캡처량 (`진행_분석설정.md` §3-2) */
         const val PACE_NORMAL = "normal"
         val PACE_FPS: Map<String, Double> = mapOf("slow" to 0.5, PACE_NORMAL to 1.0, "fast" to 3.0)
+
+        /** GA-4: 같은 영상·구간·속도 코드 진행 분석을 다시 받지 않는 기간(실패 작업은 제외). `force`면 건너뜀 */
+        val DUPLICATE_WINDOW: Duration = Duration.ofHours(24)
     }
 
     private fun requireDb(): Database =
@@ -172,7 +175,8 @@ class NoteService(
         memo: String,
         dispatcher: AnalyzeJobDispatcher,
         kind: String = JOB_KIND_NOTE,
-        options: AnalysisJobOptions? = null
+        options: AnalysisJobOptions? = null,
+        force: Boolean = false
     ): AnalyzeJobCreateResponse {
         require(kind in JOB_KINDS) { "unknown job kind: $kind" }
         require(options == null || options.pace in PACE_FPS) { "unknown pace: ${options?.pace}" }
@@ -209,6 +213,31 @@ class NoteService(
                 .where { ProfilesTable.id eq userId }
                 .forUpdate(ForUpdateOption.ForUpdate)
                 .singleOrNull() ?: throw NotFoundException("사용자 프로필을 찾을 수 없습니다.")
+
+            // 0) GA-4 중복 방지: 같은 코드 진행 분석(영상·구간·속도)이 24시간 안에 대기·진행·완료면 409
+            if (kind == JOB_KIND_PROGRESSION && options != null && !force) {
+                val since = nowUtc.minus(DUPLICATE_WINDOW)
+                val dup = AnalysisJobsTable.selectAll()
+                    .where {
+                        (AnalysisJobsTable.userId eq userId) and
+                        (AnalysisJobsTable.kind eq JOB_KIND_PROGRESSION) and
+                        (AnalysisJobsTable.url eq normalizedUrl) and
+                        (AnalysisJobsTable.pace eq options.pace) and
+                        (if (options.startSec == null) AnalysisJobsTable.startSec.isNull() else AnalysisJobsTable.startSec eq options.startSec) and
+                        (if (options.endSec == null) AnalysisJobsTable.endSec.isNull() else AnalysisJobsTable.endSec eq options.endSec) and
+                        (AnalysisJobsTable.status inList listOf("queued", "running", "done")) and
+                        (AnalysisJobsTable.createdAt greaterEq since)
+                    }
+                    .limit(1)
+                    .count()
+                if (dup > 0) {
+                    throw ApiException(
+                        HttpStatusCode.Conflict,
+                        "DUPLICATE_ANALYSIS",
+                        "이미 같은 영상·구간·속도로 분석했어요. 다시 분석하려면 한 번 더 눌러 주세요."
+                    )
+                }
+            }
 
             // 1) 동시 실행 1건 제한
             val activeCount = AnalysisJobsTable.selectAll()
