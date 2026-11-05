@@ -13,7 +13,8 @@ set -euo pipefail
 # 사전 생성 필요 리소스:
 #   - Artifact Registry Docker 저장소 'ulevelp':
 #     gcloud artifacts repositories create ulevelp --repository-format=docker --location=<region>
-#   - Secret Manager 시크릿 (DATABASE_URL, SUPABASE_SECRET_KEY, APP_MASTER_KEY)
+#   - Secret Manager 시크릿 (DATABASE_URL, SUPABASE_SECRET_KEY, APP_MASTER_KEY, SYSTEM_GEMINI_API_KEY, YOUTUBE_DATA_API_KEY)
+#     각 시크릿에 RUNTIME_SA_EMAIL의 roles/secretmanager.secretAccessor 필요(없으면 배포 실패)
 #
 # 필요 환경변수:
 #   GCP_PROJECT_ID       : GCP 프로젝트 ID (필수)
@@ -84,7 +85,7 @@ gcloud run jobs deploy "${CLOUD_RUN_JOB}" \
   --max-retries=0 \
   --cpu=1 \
   --memory=1Gi \
-  --set-secrets="DATABASE_URL=DATABASE_URL:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest"
+  --set-secrets="DATABASE_URL=DATABASE_URL:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest,SYSTEM_GEMINI_API_KEY=SYSTEM_GEMINI_API_KEY:latest"
 
 # 2. 런타임 서비스 계정(RUNTIME_SA_EMAIL)의 Job 실행 IAM 권한 부여 (docs/03-api-spec.md 7.3절)
 echo "==> [2/5] Job '${CLOUD_RUN_JOB}'에 대한 roles/run.developer 권한 부여"
@@ -115,7 +116,7 @@ gcloud run deploy "${CLOUD_RUN_SERVICE}" \
   --cpu-boost \
   --timeout=300s \
   --set-env-vars="^|^SUPABASE_URL=${SUPABASE_URL}|PUBLIC_APP_URL=${PUBLIC_APP_URL}|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|CRON_AUDIENCE=${TARGET_CRON_AUDIENCE}|CRON_SA_EMAIL=${CRON_SA_EMAIL}|CLOUD_RUN_ANALYZE_JOB_URI=${ANALYZE_JOB_URI}|ULP_UI=${ULP_UI}" \
-  --set-secrets="DATABASE_URL=DATABASE_URL:latest,SUPABASE_SECRET_KEY=SUPABASE_SECRET_KEY:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest"
+  --set-secrets="DATABASE_URL=DATABASE_URL:latest,SUPABASE_SECRET_KEY=SUPABASE_SECRET_KEY:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest,SYSTEM_GEMINI_API_KEY=SYSTEM_GEMINI_API_KEY:latest,YOUTUBE_DATA_API_KEY=YOUTUBE_DATA_API_KEY:latest"
 
 SERVICE_URL=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" --region="${GCP_REGION}" --project="${GCP_PROJECT_ID}" --format='value(status.url)')
 echo "--> 배포된 서비스 URL: ${SERVICE_URL}"
