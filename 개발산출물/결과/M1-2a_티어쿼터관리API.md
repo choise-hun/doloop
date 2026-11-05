@@ -107,6 +107,14 @@ curl -s -o /dev/null -w '%{http_code}\n' "$APP/api/v1/admin/users?email=x"      
 
 - 결과(응답 `tier`)를 이 절과 진행 파일에 적는다
 
+### 5-1. 실행 결과 (2026-11-05)
+
+- 배포: `server:cb64405`(main) → Cloud Run `ulevelp`(`https://ulevelp-d5ympfsmfq-du.a.run.app`). 로그 `now at version v5`, `ulevelp-tier-expire` 크론 ENABLED(매일 00:05 KST). 토큰 없는 `GET /api/v1/admin/users` = 401(배포 전 404), `/api/health` 200
+- owner 지정: `.env`의 `DATABASE_URL`로 `UPDATE public.profiles SET role='owner' WHERE id=…`(1행). Supabase MCP 계정에는 이 프로젝트가 없어 쓰지 못함
+- pro 지정(사용자가 직접 curl): `/me` 응답 `tier:"pro"`, `billingTier:"free"`(override라 정상), `limits` = 곡 100·분류 7·녹음 100MB·`takeSongs`/`takeDurationSec` null·drive/ai/communityWrite true — Q2 확정값과 일치
+- `admin_audit`에 `tier_override` 행 1건(reason `운영자 본인 계정 pro 지정(M1-2a)`)
+- 겪은 것: 첫 시도는 `T='<access_token>'`을 안 바꿔서 401·404 → 실제 토큰(브라우저 `localStorage` `sb-…-auth-token`의 `access_token`, 약 1시간 유효)으로 성공
+
 ## 6. 다음 step이 알아야 할 것
 
 - 한도 검사 함수는 `ulevelp.service` 최상위 `Transaction` 확장(`TierService.kt`). M1-2b 재생목록 가져오기는 `remainingSongSlots(ctx)`로 "남은 칸까지", 새 분류는 `requireCategorySlot(ctx)`
