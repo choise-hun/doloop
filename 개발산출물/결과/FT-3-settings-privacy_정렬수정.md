@@ -1,9 +1,10 @@
-# 결과 FT-3-settings·privacy: 설정·개인정보처리방침 스크린샷 검토 (+ 정렬 수정 — 승인 대기)
+# 결과 FT-3-settings·privacy: 설정·개인정보처리방침 스크린샷 검토 + 정렬 수정
 
 - 진행 파일: `개발산출물/진행_프론트정렬규격.md`
 - 입력: `결과/FT-2_전화면점검.md` §4(settings·privacy 약속)·§5(경고) · `결과/FT-3-chords_정렬수정.md` §7 · `개발산출물/프론트_정렬규격.md` v1.2
 - §5-2 결정(2026-11-05): D1 = 나중에(chords 후속 A·B·C는 `인수인계_메모.md` "나중에"로 옮김), D2 = 한 세션·한 PR
-- 상태: **스크린샷 검토 끝, × 5건 → 고칠 파일 목록 승인 대기**(진행 파일 §5-3). 수정·PR은 승인 뒤
+- §5-3 결정(2026-11-05): D3 = X1~X5 전부, D4 = PR #73 머지 뒤 `main`에서 `fix/ft-3-settings-privacy`, X6(파일 입력 필) = 넣지 않음
+- 상태: **완료** — × 5건 수정, 다시 찍은 스크린샷으로 × 칸 갱신(§2), 검증 §5, PR §6
 
 ## 1. 검사 결과 (수정 전, 현재 main과 같은 settings·privacy 코드)
 
@@ -28,14 +29,16 @@ npm run build && LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/settings.spe
 본 캡처: `test-results/layout-shots/`의 settings guest·user × 1280·1150·768·390 + user 1280 다크, privacy guest × 4폭 + 다크.
 추가 캡처(spec에 없는 상태, scratchpad 스크립트 — Playwright + `mockApp(STATES.user)`): settings user에서 `main details` 전부 펼침(계정 삭제·고급 설정) 1280·390, 저장 공간 막대를 40%로 바꾼 `#accQuota` 1280·390.
 1150은 1280과 같은 배치(좌우 여백만 줄어듦), 768은 1280과 같은 1열에 줄바꿈만 다름 — 판정은 1280·390 대표, 다른 점만 적음.
-판정 `○` 문제없음 · `△` 둠(사유) · `×` 고칠 것(§3 X번호).
+판정 `○` 문제없음 · `△` 둠(사유) · `×` 고칠 것(§3 X번호) · `×→○` 수정 후 다시 찍어 확인.
+
+**수정 후 다시 찍음(2026-11-05):** `LAYOUT_SHOTS=1` settings·privacy 전 상태 + scratchpad 스크립트로 settings user 펼침 1280·390, `#accQuota` 막대 0%·40% 1280·390. 390 필 높이·안내 글 길이는 같은 스크립트로 실측(§5).
 
 | 화면·상태 | Q1 강한 버튼 | Q2 여백 | Q3 기준선 | Q4 위계 | Q5 빈 상태 | Q6 390 순서·768 | Q7 유채색 | Q8 필·곡률·글자 | Q9 다크 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| settings guest | △ ① | ○ | ○ | △ ② | ○ (로그인 필 하나로 안내) | ○ | ○ (개인정보 링크 파랑 작은 면적) | × X4·X5 (390) | — |
-| settings user | △ ① | ○ | ○ | △ ② | **× X1** 0MB인데 막대가 꽉 찬 회색 | ○ (연결 확인·해제 390에서 둘째 줄 — 자연스러움) | **× X1** 사용량 막대가 기본 초록 | × X4·X5 (390) | × X1 (다크도 같은 회색 막대), 그 밖 ○ |
-| settings user 펼침 | △ ① (노션 키 저장·연동 켜기 추가) | ○ | ○ | ○ | ○ | ○ | ○ | × X4·X5 (390 연동 켜기 두 줄·ntn 안내 잘림), △ ③ | — |
-| privacy guest | ○ (버튼 없음) | **× X2** 설명→목록 30px·섹션 아래 빔 | ○ | △ ②, **× X3** 제목에 요구사항 ID | — (정적 문서) | ○ (4번 제목 390 두 줄 — X3으로 짧아짐) | ○ | ○ | ○ |
+| settings guest | △ ① | ○ | ○ | △ ② | ○ (로그인 필 하나로 안내) | ○ | ○ (개인정보 링크 파랑 작은 면적) | ×→○ X4·X5 (390) | — |
+| settings user | △ ① | ○ | ○ | △ ② | **×→○ X1** 0MB면 옅은 트랙(`--surface2`)만 | ○ (연결 확인·해제 390에서 둘째 줄 — 자연스러움) | **×→○ X1** 40%에서 잉크색 값 | ×→○ X4·X5 (390 가이드 필 48px 한 줄, 안내 글 끝까지 보임) | ×→○ X1 (다크 0MB 어두운 트랙), 그 밖 ○ |
+| settings user 펼침 | △ ① (노션 키 저장·연동 켜기 추가) | ○ | ○ | ○ | ○ | ○ | ○ | ×→○ X4·X5 (390 연동 켜기 48px 한 줄·ntn 안내 끝까지), △ ③ | — |
+| privacy guest | ○ (버튼 없음) | **×→○ X2** 설명→목록 16px(섹션 gap만), 섹션 아래 빔 없음 | ○ | △ ②, **×→○ X3** 제목 ID 삭제 | — (정적 문서) | △ 4번 제목 390 `…권\n리` 두 줄 — ID는 빠졌지만 아래 전역 `word-break` 항목과 같은 원인이라 둠 | ○ | ○ | ○ |
 
 사유·관찰:
 - ① 설정은 독립 섹션의 나열이라 섹션마다 주 행동 필이 하나씩 있다(Drive 저장소 사용·Gemini 키 저장·테마 선택 칸, 펼치면 노션 키 저장·연동 켜기). 한 섹션 안에서는 하나 — 둠
@@ -44,7 +47,9 @@ npm run build && LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/settings.spe
 - 390 한글 줄바꿈이 낱말 중간(`연\n습`, `영\n구`)에서 끊김 — 전역 `word-break` 결정이라 둠(전 화면 공통, 바꾸면 L1-2 다국어와 같이 보는 게 맞음)
 - 상단 오른쪽 계정 표시가 `TE`(표시 이름 앞 글자)·390 메뉴 세 줄 — AppShell, W-1
 
-## 3. × 목록 (고칠 것 — 승인 대기)
+## 3. × 목록 (2026-11-05 전부 수정)
+
+- X4 실제 문구는 처방(안)보다 짧게 갔다: `🔑 무료 API 키 발급 가이드 (1분)`은 390에서 293px가 필요해 칸(270px)을 넘어 여전히 두 줄(74.7px) → `(1분)`을 빼 `🔑 무료 API 키 발급 가이드`(250px, 48px 한 줄). "1분"은 바로 위 설명 문단("아래 1분 가이드로…")에 이미 있다
 
 | # | 증상 | 원인 | 처방(안) | 파일 |
 | --- | --- | --- | --- | --- |
@@ -57,8 +62,35 @@ npm run build && LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/settings.spe
 - 테스트 영향: 위 문구·`quotaBar`를 찾는 테스트 없음(`grep` 확인 — `test/e2e`·`frontend/src`). 선택자·id는 안 바뀜
 - 바뀌는 파일 3개: `frontend/src/pages/SettingsPage.module.css`, `frontend/src/pages/SettingsPage.tsx`, `frontend/src/pages/PrivacyPage.tsx` (+ 이 결과 파일·진행 파일)
 
-## 4. 다음에 할 것 (승인 뒤)
+## 4. 한 순서
 
-1. PR #73(FT-3-chords) 머지 확인 → `main`에서 `fix/ft-3-settings-privacy`
-2. X1~X5 수정 → `npm run build` → settings·privacy layout spec(+ `LAYOUT_STRICT=1`로 privacy `[col]` 경고 사라짐 확인) → `LAYOUT_SHOTS=1` 다시 찍어 × 칸을 `×→○`로 갱신, X1은 40% 막대 캡처로 색 확인
-3. 전체 `npx playwright test`·`npm test` → 커밋·PR(base main)·CI → 이 파일 §5·§6(검증·PR)과 진행 파일 갱신, FT-3 완료 표시
+1. PR #73 머지 확인(2026-11-05 06:33 UTC) → `main`에서 `fix/ft-3-settings-privacy`
+2. X1~X5 수정 → `npm run build` → settings·privacy layout spec(일반·`LAYOUT_STRICT=1`) → `LAYOUT_SHOTS=1` + 펼침·막대 캡처 → X4 390 두 줄 남아 문구 한 번 더 줄임 → 다시 빌드·검사·캡처
+3. 전체 `npx playwright test`·`npm test` → 커밋·PR(base main)·CI
+
+## 5. 검증 (수정 후)
+
+```
+npm run build && LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/settings.spec.js test/e2e/layout/privacy.spec.js
+16 passed (16.4s)
+
+LAYOUT_STRICT=1 npx playwright test test/e2e/layout/settings.spec.js test/e2e/layout/privacy.spec.js
+privacy: G8 [col] 경고 사라짐. 남은 경고는 nav.siteNav·span.navMain(AppShell, W-1)뿐
+settings: §1 표와 같은 경고(checkRow 11px·cardHead·G7b) — 모두 "둠"
+
+npx playwright test            → 189 passed (3.5m)
+npm test                       → 394 중 392 pass, 2 fail — CH-2c 정석폼 JSON CRLF 비교(win 기존 함정, 진행 파일 §8, 변경 전과 같음·CI 무관)
+```
+
+390 실측(scratchpad `measure.js` — Playwright + `mockApp(STATES.user)`, `main details` 펼침):
+
+| 대상 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| Gemini 가이드 필 | 두 줄 | `🔑 무료 API 키 발급 가이드` 250px·높이 48px (칸 270px) |
+| 연동 켜기 필 | 두 줄 | `연동 켜기 (노션 데이터 이관)` 254px·48px |
+| Gemini·노션 키 안내 글 | 잘림 | 글자 폭 + 안쪽 여백 ≤ 입력 칸 268px (둘 다 들어감) |
+| 저장 공간 막대 | 0MB 꽉 찬 회색, 값 기본 초록 | 0%: `--surface2` 트랙만, 40%: `--ink` 값 (라이트·다크) |
+
+## 6. PR
+
+- PR #(작성 중) `fix/ft-3-settings-privacy` → `main`
