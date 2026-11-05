@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-05 (win)
 - 입력: `진행_분석설정.md` §3-1
-- 상태: **완료** — 로컬 테스트 통과, PR CI는 §3
+- 상태: **완료** — 로컬 테스트 통과, PR #65 CI 전부 통과(§3)
 - 스키마·API 모양 변경 없음(`analysis_jobs.error` 문자열 앞에 코드만 붙임)
 
 ## 1. 바꾼 것
@@ -32,7 +32,8 @@ ULP_UI=spa npx playwright test         75 passed (1.6m) — P5b 포함
 
 ## 3. PR·CI
 
-- (push 뒤 기록)
+- PR #65 (Draft) `fix/gemini-analysis-options` → `main`, head `9037bce`
+- CI run 41948536298 전부 통과 — Node 22·24·Kotlin(JDK 21)·E2E spa·legacy·Docker build & smoke
 
 ## 4. GA-2에 넘길 것
 
