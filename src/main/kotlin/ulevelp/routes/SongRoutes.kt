@@ -21,7 +21,8 @@ fun Route.registerSongRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
     songService: SongService,
-    storageTrashService: StorageTrashService
+    storageTrashService: StorageTrashService,
+    playlistImportService: PlaylistImportService
 ) {
     route("/songs") {
         install(SupabaseAuthPlugin) {
@@ -106,6 +107,45 @@ fun Route.registerSongRoutes(
             val response = songService.migrateLocal(user.id, items, invalidCount, markMigrated)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, response)
+        }
+
+        // 재생목록 가져오기 (M1-1 §5-3, M1-2b)
+        get("/import-playlist/preview") {
+            val user = call.requireAuthUser()
+            val url = call.request.queryParameters["url"]?.trim()
+            if (url.isNullOrEmpty() || url.length > PlaylistImportService.MAX_URL_LENGTH) {
+                throw InvalidInputException("url 값이 필요합니다.")
+            }
+            val preview = playlistImportService.preview(user.id, url)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, preview)
+        }
+
+        post("/import-playlist") {
+            val user = call.requireAuthUser()
+            val body = call.receiveJsonObject()
+            val url = body.requireString("url", PlaylistImportService.MAX_URL_LENGTH)
+            if (url.isEmpty()) throw InvalidInputException("url 값이 필요합니다.")
+
+            // categoryId 또는 newCategory:true 중 하나만 (둘 다/없음 400)
+            val hasCategoryId = body.containsKey("categoryId") && body["categoryId"] !is JsonNull
+            val newCategory = body.optBoolean("newCategory", false)
+            val categoryName = body.optString("categoryName", CategoryService.MAX_NAME_LENGTH)
+            if (hasCategoryId == newCategory) {
+                throw InvalidInputException("categoryId 또는 newCategory:true 중 하나만 보내야 합니다.")
+            }
+            if (categoryName != null && !newCategory) {
+                throw InvalidInputException("categoryName은 newCategory:true와 함께만 쓸 수 있습니다.")
+            }
+            if (categoryName != null && categoryName.isEmpty()) {
+                throw InvalidInputException("categoryName은 비워 둘 수 없습니다.")
+            }
+            val target = if (newCategory) PlaylistTarget.NewCategory(categoryName)
+            else PlaylistTarget.Existing(body.requireUuid("categoryId"))
+
+            val result = playlistImportService.import(user.id, url, target)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, result)
         }
 
         get("/{songId}") {
