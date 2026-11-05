@@ -164,8 +164,9 @@ test('R0-T5 ~ R0-T10: 공통 래퍼 5종 및 보안 DOM 컴포넌트 3종·AppSh
 
   // R0-T7: apiClient.ts
   assert.ok(apiSrc.includes('replaceOldSongTakes'), 'apiClient.ts E1-1 replaceOldSongTakes 지원 필수');
-  assert.ok(apiSrc.includes('payload.verify = Boolean(input.verify)'), 'apiClient.ts E1-1 verify 지원 필수');
-  assert.ok(apiSrc.includes('PROVIDER_KEY_INVALID:'), 'apiClient.ts 비동기 잡 키 무효화 감지 필수');
+  // M1-3c: Gemini 키 저장(verify)·키 무효화 감지는 서버 키 전환으로 삭제 — 대신 402·403 뒤 /me 다시 받기
+  assert.ok(!apiSrc.includes('/api/v1/integrations/gemini'), 'apiClient.ts에 Gemini 키 저장 경로가 남으면 안 됨');
+  assert.ok(apiSrc.includes('refreshMeAfterAnalyzeError'), 'apiClient.ts 분석 402·403 뒤 /me 갱신 필수');
 
   // R0-T8: drive.ts
   assert.ok(driveSrc.includes('let inMemoryToken'), 'drive.ts 인메모리 토큰 클로저 필수');

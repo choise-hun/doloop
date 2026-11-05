@@ -2,9 +2,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
-import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardingModal';
-import { auth, useAuth } from '../lib/auth';
-import { apiClient, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
+import { auth, canUseAi, useAuth } from '../lib/auth';
+import { apiClient, CreditsSummaryDto, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
+import { tierLabel } from '../lib/jobError.mts';
 import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
 import styles from './SettingsPage.module.css';
@@ -73,14 +73,8 @@ export function SettingsPage(): React.ReactElement {
   const [syncMsg, setSyncMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
   const [busySync, setBusySync] = useState(false);
 
-  // Gemini 키 및 온보딩 모달 상태
-  const [geminiStatusText, setGeminiStatusText] = useState('미등록');
-  const [geminiHasKey, setGeminiHasKey] = useState(false);
-  const [gemKey, setGemKey] = useState('');
-  const [gemModel, setGemModel] = useState('');
-  const [gemKeyMsg, setGemKeyMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
-  const [busyGemKey, setBusyGemKey] = useState(false);
-  const [geminiModalOpen, setGeminiModalOpen] = useState(false);
+  // AI 분석 크레딧(M1-3c): 잔액은 /me credits, 다음 지급은 GET /credits
+  const [creditSummary, setCreditSummary] = useState<CreditsSummaryDto | null>(null);
 
   // 고급 설정(노션) 접힘: 노션 관련 해시로 들어오면 펼친다
   const [advOpen, setAdvOpen] = useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash));
@@ -110,14 +104,10 @@ export function SettingsPage(): React.ReactElement {
     setNtnSongsDb('');
     setNtnSessionsDb('');
     setNtnNotesDb('');
-    setGeminiStatusText('미등록');
-    setGeminiHasKey(false);
-    setGemKey('');
-    setGemModel('');
+    setCreditSummary(null);
     setSyncState({ enabled: false, pending: 0, failed: 0 });
     setSyncStatusError('');
     setNtnKeyMsg({ text: '', kind: '' });
-    setGemKeyMsg({ text: '', kind: '' });
     setSyncMsg({ text: '', kind: '' });
     setDriveMsg({ text: '', kind: '' });
   };
@@ -125,7 +115,6 @@ export function SettingsPage(): React.ReactElement {
   const applyKeysList = (list: IntegrationDto[]) => {
     const arr = Array.isArray(list) ? list : [];
     const ntn = arr.find((it) => it.provider === 'notion');
-    const gem = arr.find((it) => it.provider === 'gemini');
 
     if (ntn) {
       setNotionHasKey(true);
@@ -143,17 +132,6 @@ export function SettingsPage(): React.ReactElement {
       setNtnNotesDb('');
     }
 
-    if (gem) {
-      setGeminiHasKey(true);
-      setGeminiStatusText(`설정됨 (끝 4자리 ${gem.hint || ''} · ${(gem.updatedAt || '').slice(0, 10)})`);
-      const cfg = gem.config || {};
-      if (cfg.model) setGemModel(String(cfg.model));
-    } else {
-      setGeminiHasKey(false);
-      setGeminiStatusText('미등록');
-      setGemKey('');
-      setGemModel('');
-    }
   };
 
   const loadSyncStatusForUid = async (uid: string) => {
@@ -185,11 +163,38 @@ export function SettingsPage(): React.ReactElement {
         if (activeUid !== auth.getUser()?.id || myKeySeq !== keysReqSeqRef.current) return;
         const msg = (e && e.message) || '연동 키 목록을 불러오지 못했어요.';
         setNtnKeyMsg({ text: msg, kind: 'err' });
-        setGemKeyMsg({ text: msg, kind: 'err' });
       });
 
     void loadSyncStatusForUid(activeUid);
   }, [activeUid]);
+
+  // 유료 계정만 다음 지급 정보를 받는다(무료는 월 지급 0)
+  const meTier = authState.me ? authState.me.tier || 'free' : '';
+  useEffect(() => {
+    if (!activeUid || !meTier || meTier === 'free') return;
+    let alive = true;
+    apiClient.credits
+      .summary()
+      .then((c) => {
+        if (alive && activeUid === auth.getUser()?.id) setCreditSummary(c);
+      })
+      .catch(() => {
+        /* 다음 지급 줄만 빠진다 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeUid, meTier]);
+
+  const aiAllowed = canUseAi(authState.me);
+  const meCredits = (authState.me && authState.me.credits) || { monthly: 0, purchased: 0 };
+  const nextGrantText = (() => {
+    if (!creditSummary || !creditSummary.nextGrantAt || !(creditSummary.monthlyGrant > 0)) return '';
+    const d = new Date(creditSummary.nextGrantAt);
+    if (Number.isNaN(d.getTime())) return '';
+    const day = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(d);
+    return `다음 지급 ${day} · ${creditSummary.monthlyGrant}크레딧`;
+  })();
 
   // 프로필 및 쿼터 계산
   const email = (authState.me && authState.me.email) || (authState.user && authState.user.email) || '';
@@ -513,162 +518,45 @@ export function SettingsPage(): React.ReactElement {
         </p>
       </section>
 
-      {/* 3. 외부 연동 키 관리 · BYOK */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="keys" aria-labelledby="hKeys">
-        <h2 id="hKeys">외부 연동 키 관리 · BYOK</h2>
-        <p>
-          Google Gemini API 키를 등록하면 학습 노트 분석을 쓸 수 있어요. 키는 서버에 안전하게 암호화(AES-256-GCM)되어 보관돼요.
-        </p>
-
-        {/* Gemini 연동 카드 */}
+      {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="credits" aria-labelledby="hCredits">
+        <h2 id="hCredits">AI 분석 크레딧</h2>
+        <p>학습 노트·코드 진행 영상 분석에 크레딧을 써요. 분석이 실패하면 예약한 크레딧은 모두 돌아와요.</p>
         <div className={styles.panel}>
           <div className={styles.cardHead}>
-            <h3 data-align-group="keyHead: center-y">Gemini 연동</h3>
-            <span className={`${styles.badge}${geminiHasKey ? ' ' + styles.badgeOk : ''}`} id="geminiKeyStatus" data-align-group="keyHead: center-y">
-              {geminiStatusText}
-            </span>
+            <h3 data-align-group="creditHead: center-y">남은 크레딧</h3>
+            {signedIn && meTier && (
+              <span className={`${styles.badge}${aiAllowed ? ' ' + styles.badgeOk : ''}`} id="creditTier" data-align-group="creditHead: center-y">
+                {tierLabel(meTier)}
+              </span>
+            )}
           </div>
-          <p className="hint">
-            Google AI Studio에서 발급받은 무료 Gemini API 키를 등록해요. 키가 없다면 아래 1분 가이드로 바로 발급받을 수 있어요.
-          </p>
-          <div className={styles.row}>
-            <button
-              type="button"
-              className={`ghostBtn ${styles.geminiGuideBtn}`}
-              id="btnOpenGeminiModal"
-              onClick={() => setGeminiModalOpen(true)}
-            >
-              🔑 무료 API 키 발급 가이드
-            </button>
-          </div>
-          <label className={styles.field}>
-            <span className={styles.lab}>Gemini API 키 (AIza...)</span>
-            <input
-              className="inpField"
-              id="gemKey"
-              type="password"
-              placeholder="AIza… (비워두면 기존 키 유지)"
-              autoComplete="off"
-              value={gemKey}
-              onChange={(e) => setGemKey(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.lab}>사용 모델</span>
-            <input
-              className="inpField"
-              id="gemModel"
-              type="text"
-              placeholder="gemini-flash-latest"
-              autoComplete="off"
-              value={gemModel}
-              onChange={(e) => setGemModel(e.target.value)}
-            />
-          </label>
-          <div className={styles.row}>
-            <button
-              className="pillBtn"
-              type="button"
-              id="btnSaveGeminiKey"
-              disabled={busyGemKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setGemKeyMsg({ text: '로그인 후 키를 저장할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyGemKey(true);
-                setGemKeyMsg({ text: '저장 및 검증 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  const dto = await apiClient.integrations.saveGemini({
-                    apiKey: gemKey.trim() || null,
-                    model: gemModel.trim() || undefined,
-                  });
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGemKey('');
-                  if (dto) {
-                    setGeminiHasKey(true);
-                    setGeminiStatusText(`설정됨 (끝 4자리 ${dto.hint || ''} · ${(dto.updatedAt || '').slice(0, 10)})`);
-                    if (dto.config && dto.config.model) {
-                      setGemModel(String(dto.config.model));
-                    }
-                  }
-                  setGemKeyMsg({ text: '✓ Gemini 키를 저장했어요.', kind: 'ok' });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGemKeyMsg({ text: (e && e.message) || 'Gemini 키 저장에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyGemKey(false);
-                }
-              }}
-            >
-              Gemini 키 저장
-            </button>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnCheckGeminiKey"
-              disabled={busyGemKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setGemKeyMsg({ text: '로그인 후 연결을 확인할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyGemKey(true);
-                setGemKeyMsg({ text: '연결 확인 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  const r = await apiClient.integrations.check('gemini');
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGemKeyMsg({ text: `✓ 연결 성공 (${r.displayName || r.model || ''})`, kind: 'ok' });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGemKeyMsg({ text: (e && e.message) || 'Gemini 연결 확인에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyGemKey(false);
-                }
-              }}
-            >
-              연결 확인
-            </button>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnDelGeminiKey"
-              disabled={busyGemKey}
-              onClick={async () => {
-                if (!activeUid) {
-                  setGemKeyMsg({ text: '로그인 후 연결을 해제할 수 있어요.', kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyGemKey(true);
-                setGemKeyMsg({ text: '연결 해제 중…', kind: '' });
-                keysReqSeqRef.current++;
-                try {
-                  await apiClient.integrations.remove('gemini');
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGeminiHasKey(false);
-                  setGeminiStatusText('미등록');
-                  setGemKey('');
-                  setGemModel('');
-                  setGemKeyMsg({ text: '✓ Gemini 연동을 해제했어요.', kind: 'ok' });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setGemKeyMsg({ text: (e && e.message) || 'Gemini 연동 해제에 실패했어요.', kind: 'err' });
-                } finally {
-                  setBusyGemKey(false);
-                }
-              }}
-            >
-              연결 해제
-            </button>
-          </div>
-          <p className={`msg${gemKeyMsg.kind ? ' ' + gemKeyMsg.kind : ''}`} id="gemKeyMsg" role="status">
-            {gemKeyMsg.text}
-          </p>
+          {!signedIn ? (
+            <p className="hint" id="creditMsg">
+              로그인하면 남은 크레딧을 볼 수 있어요.
+            </p>
+          ) : !aiAllowed ? (
+            <p className="hint" id="creditMsg">
+              AI 영상 분석(학습 노트·코드 진행)은 Pro 플랜부터 쓸 수 있어요.
+            </p>
+          ) : (
+            <>
+              <p className={styles.creditTotalLine}>
+                <b id="creditTotal" className={styles.creditTotal}>
+                  {meCredits.monthly + meCredits.purchased}
+                </b>{' '}
+                크레딧
+              </p>
+              <p className="hint" id="creditBuckets">
+                월 지급 {meCredits.monthly} · 구매 {meCredits.purchased}
+              </p>
+              {nextGrantText && (
+                <p className="hint" id="creditNext">
+                  {nextGrantText}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </section>
 
@@ -1248,22 +1136,6 @@ export function SettingsPage(): React.ReactElement {
         </details>
       </section>
 
-      <GeminiKeyOnboardingModal
-        open={geminiModalOpen}
-        initialModel={gemModel || 'gemini-flash-latest'}
-        onClose={() => setGeminiModalOpen(false)}
-        onSaved={(dto) => {
-          setGeminiHasKey(true);
-          setGeminiStatusText(`설정됨 (끝 4자리 ${dto.hint || ''} · ${(dto.updatedAt || '').slice(0, 10)})`);
-          if (dto.config && dto.config.model) {
-            setGemModel(String(dto.config.model));
-          }
-          setGemKeyMsg({
-            text: `✓ 연결 완료! 무료 Gemini 모델이 정상 작동합니다 (끝 4자리 ${dto.hint || ''})`,
-            kind: 'ok',
-          });
-        }}
-      />
     </AppShell>
   );
 }

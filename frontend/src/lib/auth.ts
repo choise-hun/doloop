@@ -19,8 +19,27 @@ export interface MeProfile {
   migratedLocalAt: string | null;
   keys: {
     notion: KeySummaryDto | null;
-    gemini: KeySummaryDto | null;
   };
+  // M1-2a·M1-3b: 실제 티어(override 반영)·한도·크레딧 잔액. AI 분석 가능 여부는 limits.ai로만 판단한다
+  tier?: 'free' | 'pro' | 'pro_plus' | string;
+  limits?: TierLimitsDto;
+  credits?: { monthly: number; purchased: number };
+}
+
+export interface TierLimitsDto {
+  songs: number | null;
+  categories: number | null;
+  takeBytes: number;
+  takeSongs: number | null;
+  takeDurationSec: number | null;
+  drive: boolean;
+  ai: boolean;
+  communityWrite: boolean;
+}
+
+/** AI 영상 분석(노트·코드 진행)을 요청할 수 있는 계정인지 — 서버 /me limits.ai(무료 false) */
+export function canUseAi(me: MeProfile | null | undefined): boolean {
+  return Boolean(me && me.limits && me.limits.ai);
 }
 
 export interface ProfilePatchInput {
@@ -99,7 +118,6 @@ function createAuthModule() {
       const payload = {
         uid: me.id,
         notion: me.keys && me.keys.notion ? me.keys.notion : null,
-        gemini: me.keys && me.keys.gemini ? me.keys.gemini : null,
       };
       localStorage.setItem('ulp:keys', JSON.stringify(payload));
     } catch {
@@ -166,9 +184,6 @@ function createAuthModule() {
     const res = await fetch(url, Object.assign({}, options, { headers }));
     const data = res.status === 204 ? null : await res.json().catch(() => null);
     if (!res.ok) {
-      if (data && data.code === 'PROVIDER_KEY_INVALID') {
-        clearKeysCache();
-      }
       const msg = (data && (data.message || data.error)) || '요청 처리에 실패했어요 (' + res.status + ')';
       const err: ApiClientError = new Error(msg);
       err.status = res.status;

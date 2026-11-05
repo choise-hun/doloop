@@ -99,7 +99,7 @@ function fakeStore(initial = [], opts = {}) {
         const n = jobs.length + 1;
         jobs.unshift({ id: `00000000-0000-4000-8000-0000000000j${n}`, kind: 'progression', url: body.url, tags: ['화성'], status: 'queued', error: null, noteId: null, startSec: body.startSec ?? null, endSec: body.endSec ?? null, pace: body.pace ?? 'normal', createdAt: new Date().toISOString(), _n: n, _polls: 0 });
         if (opts.analyzeDelayMs) await new Promise((r) => setTimeout(r, opts.analyzeDelayMs));
-        return json(route, { jobId: jobs[0].id, status: 'queued' }, 202);
+        return json(route, { jobId: jobs[0].id, status: 'queued', reservedCredits: 14 }, 202);
       }
       if (p === '/api/v1/notes/jobs' && method === 'GET') {
         // 작업마다 두 번째 조회부터 완료 + 진행 2개 생성(n번째 작업 노트 = ...n{n+1})
@@ -158,7 +158,7 @@ function fakeStore(initial = [], opts = {}) {
 }
 
 // 가짜 인증 (home-category.spec.js setupLoggedIn에서 옮김)
-async function setupLoggedIn(page, store, { gemini = false } = {}) {
+async function setupLoggedIn(page, store, { ai = false } = {}) {
   await page.route(
     (url) => url.pathname.endsWith('.html') || url.pathname === '/',
     async (route) => {
@@ -191,7 +191,11 @@ async function setupLoggedIn(page, store, { gemini = false } = {}) {
     json(route, {
       id: UID, email: 'a@example.com', displayName: 'Tester', role: 'user', storageProvider: 'supabase', driveFolderId: null,
       takeUsedBytes: 0, takeQuotaBytes: 209715200, migratedLocalAt: '2026-10-30T00:00:00Z',
-      keys: { notion: null, gemini: gemini ? { hint: 'AIza…abcd', updatedAt: '2026-11-04T00:00:00Z' } : null },
+      keys: { notion: null },
+      // M1-3c: AI 분석 가능 여부는 limits.ai(무료 false, Pro true)
+      tier: ai ? 'pro' : 'free',
+      limits: { songs: ai ? 100 : 10, categories: ai ? 7 : 2, takeBytes: 0, takeSongs: null, takeDurationSec: null, drive: ai, ai, communityWrite: ai },
+      credits: { monthly: ai ? 170 : 0, purchased: 0 },
     })
   );
 }
@@ -326,7 +330,7 @@ test('P4 붙여넣기: 가사 줄은 건너뛰고 반복 묶음 후보 → 직�
 
 test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개 수집 · 노트 보기"', async ({ page }) => {
   const store = fakeStore();
-  await setupLoggedIn(page, store, { gemini: true });
+  await setupLoggedIn(page, store, { ai: true });
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#progAddBtn').click();
   await page.locator('#progTab-video').click();
@@ -353,22 +357,24 @@ test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개
 
 test('P5b 분석 실패: 원인 코드별 제목·안내를 보여 준다(GA-1)', async ({ page }) => {
   const store = fakeStore([], { failWith: 'GEMINI_BILLING: Gemini 크레딧이 부족합니다 (HTTP 402). — Your prepayment credits are depleted.' });
-  await setupLoggedIn(page, store, { gemini: true });
+  await setupLoggedIn(page, store, { ai: true });
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#progAddBtn').click();
   await page.locator('#progTab-video').click();
   await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
   await page.locator('#progVideoSubmit').click();
   const li = page.locator('#progJobs li');
-  await expect(li).toContainText('크레딧 부족', { timeout: 12000 });
-  await expect(li).toContainText('AI Studio에서 결제');
+  // M1-3b 서버 키: 사용자가 고칠 수 없는 문제 → "서비스 점검" + 크레딧 반환 안내(B10)
+  await expect(li).toContainText('서비스 점검', { timeout: 12000 });
+  await expect(li).toContainText('크레딧은 돌려드렸어요');
+  await expect(li).not.toContainText('AI Studio');
   await expect(li.locator('[data-error-code]')).toHaveAttribute('data-error-code', 'GEMINI_BILLING');
   await expect(li).not.toContainText('분석 실패');
 });
 
 test('P5c 구간 + 코드 진행 변화 속도: 잘못된 구간은 막고, 요청 본문·작업 줄에 반영(GA-2)', async ({ page }) => {
   const store = fakeStore();
-  await setupLoggedIn(page, store, { gemini: true });
+  await setupLoggedIn(page, store, { ai: true });
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#progAddBtn').click();
   await page.locator('#progTab-video').click();
@@ -402,7 +408,7 @@ test('P5c 구간 + 코드 진행 변화 속도: 잘못된 구간은 막고, 요�
 
 test('P5d 중복 방지 + 완료 줄 합치기: 두 번 눌러도 요청 1건, 분석 중 잠금, 같은 설정은 "다시 분석", 완료는 한 줄(GA-4)', async ({ page }) => {
   const store = fakeStore([], { dedupe: true, analyzeDelayMs: 300 });
-  await setupLoggedIn(page, store, { gemini: true });
+  await setupLoggedIn(page, store, { ai: true });
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#progAddBtn').click();
   await page.locator('#progTab-video').click();
@@ -442,13 +448,45 @@ test('P5d 중복 방지 + 완료 줄 합치기: 두 번 눌러도 요청 1건, �
   await expect(done.locator('a')).toHaveText('최근 노트 보기');
 });
 
-test('P6 키 없음: 영상 탭에 키 안내, 요청 버튼 잠김', async ({ page }) => {
+test('P6 무료(limits.ai false): 영상 탭에 Pro 안내, 요청 버튼 잠김, 키 발급 버튼 없음(M1-3c)', async ({ page }) => {
   await setupLoggedIn(page, fakeStore());
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#progAddBtn').click();
   await page.locator('#progTab-video').click();
-  await expect(page.locator('#progKeyGate')).toContainText('Gemini API 키가 필요해요');
+  await expect(page.locator('#progKeyGate')).toContainText('Pro 플랜부터');
+  await expect(page.locator('#progKeyGate a')).toHaveAttribute('href', 'settings.html#credits');
+  await expect(page.locator('#progKeyGate button')).toHaveCount(0);
   await expect(page.locator('#progVideoSubmit')).toBeDisabled();
+});
+
+test('P6b 분석 요청 402·403 → 크레딧·티어 문구, 202 → 예약 크레딧 표시(M1-3c)', async ({ page }) => {
+  const store = fakeStore();
+  await setupLoggedIn(page, store, { ai: true });
+  let mode = 'credits';
+  await page.route(
+    (url) => url.pathname === '/api/v1/progressions/analyze',
+    (route) => {
+      if (mode === 'credits') {
+        return json(route, { ok: false, status: 402, code: 'INSUFFICIENT_CREDITS', message: '크레딧이 부족합니다.', detail: { required: 11, balance: 5 } }, 402);
+      }
+      if (mode === 'tier') {
+        return json(route, { ok: false, status: 403, code: 'TIER_UPGRADE_REQUIRED', message: 's', detail: { feature: 'ai', tier: 'free', nextTier: 'pro' } }, 403);
+      }
+      return route.fallback();
+    }
+  );
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progTab-video').click();
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toHaveText('크레딧이 부족해요 (필요 11 · 남은 5). 구간을 줄이거나 다음 지급 뒤에 다시 시도해 주세요.');
+  mode = 'tier';
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toHaveText('AI 영상 분석은 Pro 플랜부터 쓸 수 있어요.');
+  mode = 'ok';
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요 (14크레딧 예약');
 });
 
 test('P7 노트 상세 "코드 진행 수집에 넣기": 켜면 N개 + CHORDS 링크, 끄면 고친 진행 확인', async ({ page }) => {

@@ -29,7 +29,10 @@ export function PrivacyPage(): React.ReactElement {
             <b>오디오 녹음:</b> 사용자가 연습 도중 직접 녹음한 오디오 파일.
           </li>
           <li>
-            <b>외부 연동 키:</b> 사용자가 직접 등록한 Notion 토큰·DB ID 및 Gemini API 키(서버 마스터 키 기반 AES-256-GCM 암호화 보관).
+            <b>외부 연동 키:</b> 사용자가 직접 등록한 Notion 토큰·DB ID(서버 마스터 키 기반 AES-256-GCM 암호화 보관).
+          </li>
+          <li>
+            <b>이용 플랜·크레딧:</b> 이용 플랜(무료·Pro·Pro+), AI 분석 크레딧 잔액과 지급·사용 기록(분석 작업별 예약·정산·반환량, 사용 토큰 수).
           </li>
         </ul>
       </section>
@@ -40,7 +43,11 @@ export function PrivacyPage(): React.ReactElement {
         <ul>
           <li>다중 기기 간 연습 진행 위치, 연습 구간, 연습 시간 및 녹음 파일의 실시간 동기화.</li>
           <li>사용자가 선택적으로 요청한 Notion 데이터베이스 실시간 동기화.</li>
-          <li>사용자가 선택적으로 요청한 Gemini 기반 학습 영상 분석 및 지판/건반 다이어그램 생성.</li>
+          <li>
+            사용자가 선택적으로 요청한 학습 영상 분석 및 지판/건반 다이어그램 생성. 분석은 서비스가 운영하는 Google Gemini API로 처리하며, 이때
+            영상 주소·분석 구간·메모가 Google에 전달됩니다.
+          </li>
+          <li>AI 분석 크레딧의 지급·차감·반환 관리.</li>
         </ul>
       </section>
 

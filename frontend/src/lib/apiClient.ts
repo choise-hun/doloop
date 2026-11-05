@@ -125,7 +125,7 @@ export interface DriveTakeRegisterMeta extends TakeUploadMeta {
 }
 
 export interface IntegrationDto {
-  provider: 'notion' | 'gemini' | string;
+  provider: 'notion' | string;
   hint: string;
   config: Record<string, any>;
   updatedAt: string;
@@ -140,10 +140,13 @@ export interface SaveNotionInput {
   notesDb?: string | null;
 }
 
-export interface SaveGeminiInput {
-  apiKey?: string | null;
-  model?: string;
-  verify?: boolean;
+/** GET /api/v1/credits (M1-3b) — nextGrantAt: 다음 월 지급 시각(ISO), 월 지급 0이면 null */
+export interface CreditsSummaryDto {
+  monthly: number;
+  purchased: number;
+  total: number;
+  monthlyGrant: number;
+  nextGrantAt: string | null;
 }
 
 export interface NotionSyncStatusDto {
@@ -167,6 +170,9 @@ export interface AnalysisJobDto {
   startSec?: number | null;
   endSec?: number | null;
   pace?: 'slow' | 'normal' | 'fast' | string | null;
+  /** M1-3b 크레딧: 예약량, 정산량(null = 미정산, 실패 = 0) */
+  reservedCredits?: number;
+  chargedCredits?: number | null;
   createdAt: string;
   startedAt?: string | null;
   finishedAt?: string | null;
@@ -712,23 +718,22 @@ async function confirmNotionZip(previewToken: string) {
   });
 }
 
-function getCachedKeys(): { notion: KeySummaryDto | null; gemini: KeySummaryDto | null } {
+function getCachedKeys(): { notion: KeySummaryDto | null } {
   try {
     const raw = localStorage.getItem('ulp:keys');
-    if (!raw) return { notion: null, gemini: null };
+    if (!raw) return { notion: null };
     const parsed = JSON.parse(raw);
     const A = getAuthRef();
     const user = A && typeof A.getUser === 'function' ? A.getUser() : null;
     if (user && user.id && parsed && parsed.uid === user.id) {
       return {
         notion: parsed.notion || null,
-        gemini: parsed.gemini || null,
       };
     }
   } catch {
     /* ignore */
   }
-  return { notion: null, gemini: null };
+  return { notion: null };
 }
 
 async function listIntegrations(): Promise<IntegrationDto[]> {
@@ -757,28 +762,7 @@ async function saveNotionIntegration(input: SaveNotionInput): Promise<Integratio
   return r;
 }
 
-async function saveGeminiIntegration(input: SaveGeminiInput): Promise<IntegrationDto> {
-  requireLogin();
-  const A = getAuthRef();
-  const payload: Record<string, unknown> = {
-    appId: 'ulevelp',
-    apiKey: input?.apiKey,
-    model: input?.model,
-  };
-  if (input && input.verify !== undefined) {
-    payload.verify = Boolean(input.verify);
-  }
-  const r = await A.apiFetch('/api/v1/integrations/gemini', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-  if (A && typeof A.fetchMe === 'function') {
-    await A.fetchMe();
-  }
-  return r;
-}
-
-async function checkIntegration(provider: 'notion' | 'gemini' | string) {
+async function checkIntegration(provider: 'notion' | string) {
   requireLogin();
   const path = '/api/v1/integrations/' + encodeURIComponent(provider) + '/check?appId=ulevelp';
   return await getAuthRef().apiFetch(path, {
@@ -786,7 +770,7 @@ async function checkIntegration(provider: 'notion' | 'gemini' | string) {
   });
 }
 
-async function removeIntegration(provider: 'notion' | 'gemini' | string): Promise<{ ok: boolean }> {
+async function removeIntegration(provider: 'notion' | string): Promise<{ ok: boolean }> {
   requireLogin();
   const A = getAuthRef();
   const path = '/api/v1/integrations/' + encodeURIComponent(provider) + '?appId=ulevelp';
@@ -832,31 +816,18 @@ async function syncPush() {
   });
 }
 
-function clearCachedGeminiKey(): void {
+/** M1-3b: 티어 부족(403)·크레딧 부족(402)이면 /me(limits·credits)를 다시 받아 화면의 분석 버튼 판단을 맞춘다 */
+async function refreshMeAfterAnalyzeError(err: any): Promise<void> {
+  if (!err || !(err.status === 402 || err.code === 'TIER_UPGRADE_REQUIRED')) return;
+  const A = getAuthRef();
   try {
-    const raw = localStorage.getItem('ulp:keys');
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      parsed.gemini = null;
-      localStorage.setItem('ulp:keys', JSON.stringify(parsed));
-    }
+    if (A && typeof A.fetchMe === 'function') await A.fetchMe();
   } catch {
-    /* ignore */
+    /* 원래 오류를 그대로 보여 준다 */
   }
 }
 
-function checkJobsForInvalidKey(jobs: AnalysisJobDto[]): void {
-  if (!Array.isArray(jobs)) return;
-  const hasInvalid = jobs.some(
-    (j) => j && j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:')
-  );
-  if (hasInvalid) {
-    clearCachedGeminiKey();
-  }
-}
-
-async function noteAnalyze(input: { url: string; tags: string[]; memo?: string }): Promise<{ jobId: string; status: string }> {
+async function noteAnalyze(input: { url: string; tags: string[]; memo?: string }): Promise<{ jobId: string; status: string; reservedCredits?: number }> {
   requireLogin();
   try {
     const r = await getAuthRef().apiFetch('/api/v1/notes/analyze', {
@@ -867,31 +838,28 @@ async function noteAnalyze(input: { url: string; tags: string[]; memo?: string }
         memo: input?.memo,
       }),
     });
-    return { jobId: r.jobId, status: r.status };
+    return { jobId: r.jobId, status: r.status, reservedCredits: r.reservedCredits };
   } catch (err: any) {
-    if (err && (err.code === 'NO_KEY' || err.status === 412)) {
-      clearCachedGeminiKey();
-    }
+    await refreshMeAfterAnalyzeError(err);
     throw err;
   }
+}
+
+async function creditsSummary(): Promise<CreditsSummaryDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/credits');
 }
 
 async function listNoteJobs(): Promise<AnalysisJobDto[]> {
   requireLogin();
   const r = await getAuthRef().apiFetch('/api/v1/notes/jobs');
-  const jobs = r && Array.isArray(r.jobs) ? r.jobs : [];
-  checkJobsForInvalidKey(jobs);
-  return jobs;
+  return r && Array.isArray(r.jobs) ? r.jobs : [];
 }
 
 async function getNoteJob(jobId: string): Promise<AnalysisJobDto> {
   requireLogin();
   const path = '/api/v1/notes/jobs/' + encodeURIComponent(jobId);
-  const r = await getAuthRef().apiFetch(path);
-  if (r) {
-    checkJobsForInvalidKey([r]);
-  }
-  return r;
+  return await getAuthRef().apiFetch(path);
 }
 
 async function listNotes(tag?: string): Promise<NoteSummaryDto[]> {
@@ -995,7 +963,7 @@ async function analyzeProgression(input: {
   pace?: 'slow' | 'normal' | 'fast';
   /** GA-4: 24시간 안 같은 분석(409 DUPLICATE_ANALYSIS)을 일부러 다시 할 때 */
   force?: boolean;
-}): Promise<{ jobId: string; status: string }> {
+}): Promise<{ jobId: string; status: string; reservedCredits?: number }> {
   requireLogin();
   try {
     const body: Record<string, unknown> = { url: input?.url, memo: input?.memo };
@@ -1007,11 +975,9 @@ async function analyzeProgression(input: {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    return { jobId: r.jobId, status: r.status };
+    return { jobId: r.jobId, status: r.status, reservedCredits: r.reservedCredits };
   } catch (err: any) {
-    if (err && (err.code === 'NO_KEY' || err.status === 412)) {
-      clearCachedGeminiKey();
-    }
+    await refreshMeAfterAnalyzeError(err);
     throw err;
   }
 }
@@ -1140,7 +1106,6 @@ export const apiClient = {
   integrations: {
     list: listIntegrations,
     saveNotion: saveNotionIntegration,
-    saveGemini: saveGeminiIntegration,
     check: checkIntegration,
     remove: removeIntegration,
   },
@@ -1150,6 +1115,9 @@ export const apiClient = {
     disable: syncDisable,
     pull: syncPull,
     push: syncPush,
+  },
+  credits: {
+    summary: creditsSummary,
   },
   notes: {
     analyze: noteAnalyze,
