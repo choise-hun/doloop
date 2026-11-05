@@ -6,6 +6,7 @@ import { GeminiKeyOnboardingModal } from '../components/common/GeminiKeyOnboardi
 import { auth, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, NoteSummaryDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
+import { describeJobError, isKeyInvalidError } from '../lib/jobError.mts';
 import styles from './NotesPage.module.css';
 
 export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
@@ -117,7 +118,7 @@ export function NotesPage(): React.ReactElement {
       setJobs(safeJobs);
 
       const hasInvalidKeyJob = safeJobs.some(
-        (j) => j && j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:')
+        (j) => j && j.status === 'failed' && isKeyInvalidError(j.error)
       );
       if (hasInvalidKeyJob) {
         setLocalHasKeyOverride(false);
@@ -306,10 +307,7 @@ export function NotesPage(): React.ReactElement {
             const vid = videoIdFrom(job.url || '');
             const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.join(', ') : '(태그 없음)';
             const timeStr = formatAgo(job.createdAt);
-            const isKeyErr =
-              job.status === 'failed' &&
-              typeof job.error === 'string' &&
-              job.error.startsWith('PROVIDER_KEY_INVALID:');
+            const why = job.status === 'failed' ? describeJobError(job.error) : null;
             return (
               <li key={job.id} className={`run ${styles.runItem}`}>
                 {vid ? (
@@ -324,6 +322,11 @@ export function NotesPage(): React.ReactElement {
                   <div className={`sub ${styles.runSub}`}>
                     {(timeStr ? `${timeStr} · ` : '') + (job.url || '')}
                   </div>
+                  {why && (
+                    <div className={styles.runHint} data-error-code={why.code} title={why.detail || undefined}>
+                      {why.hint}
+                    </div>
+                  )}
                 </div>
                 <div className={`acts ${styles.runActs}`}>
                   {job.status === 'done' && job.noteId && (
@@ -349,8 +352,8 @@ export function NotesPage(): React.ReactElement {
                         ? '분석 중'
                         : job.status === 'done'
                           ? '완료'
-                          : isKeyErr
-                            ? '키 오류'
+                          : why
+                            ? why.title
                             : '실패'}
                   </span>
                 </div>

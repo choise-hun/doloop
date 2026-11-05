@@ -67,7 +67,7 @@ const AI_ROW = row({
 });
 
 // docs/03-api-spec.md 8.5 규칙만큼만 흉내 내는 가짜 저장소
-function fakeStore(initial = []) {
+function fakeStore(initial = [], opts = {}) {
   let seq = 0;
   const items = initial.map((x) => ({ ...x }));
   const calls = [];
@@ -97,7 +97,10 @@ function fakeStore(initial = []) {
       }
       if (p === '/api/v1/notes/jobs' && method === 'GET') {
         // 두 번째 조회부터 완료 + 진행 2개 생성
-        if (jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'done') {
+        if (opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'failed') {
+          jobs[0].status = 'failed';
+          jobs[0].error = opts.failWith;
+        } else if (!opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'done') {
           jobs[0].status = 'done';
           jobs[0].noteId = '00000000-0000-4000-8000-0000000000n2';
           items.unshift(
@@ -337,6 +340,21 @@ test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개
   await expect(page.locator('#progJobs li')).toContainText('2개 수집', { timeout: 12000 });
   await expect(page.locator('#progJobs li a')).toHaveAttribute('href', 'note.html?id=00000000-0000-4000-8000-0000000000n2');
   await expect(rows(page)).toHaveCount(2);
+});
+
+test('P5b 분석 실패: 원인 코드별 제목·안내를 보여 준다(GA-1)', async ({ page }) => {
+  const store = fakeStore([], { failWith: 'GEMINI_BILLING: Gemini 크레딧이 부족합니다 (HTTP 402). — Your prepayment credits are depleted.' });
+  await setupLoggedIn(page, store, { gemini: true });
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progTab-video').click();
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  await page.locator('#progVideoSubmit').click();
+  const li = page.locator('#progJobs li');
+  await expect(li).toContainText('크레딧 부족', { timeout: 12000 });
+  await expect(li).toContainText('AI Studio에서 결제');
+  await expect(li.locator('[data-error-code]')).toHaveAttribute('data-error-code', 'GEMINI_BILLING');
+  await expect(li).not.toContainText('분석 실패');
 });
 
 test('P6 키 없음: 영상 탭에 키 안내, 요청 버튼 잠김', async ({ page }) => {

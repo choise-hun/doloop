@@ -19,6 +19,7 @@ import { auth, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
 import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '../lib/progressions';
 import { videoIdFrom } from '../lib/security';
+import { describeJobError, isKeyInvalidError } from '../lib/jobError.mts';
 import styles from './ProgressionsPage.module.css';
 
 const SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
@@ -125,7 +126,7 @@ export function ProgressionsPage(): React.ReactElement {
         for (const j of mine) if (isActive(j)) trackedRef.current.add(j.id);
         const shown = mine.filter((j) => isActive(j) || trackedRef.current.has(j.id));
         setJobs(shown);
-        if (mine.some((j) => j.status === 'failed' && typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:') && trackedRef.current.has(j.id))) {
+        if (mine.some((j) => j.status === 'failed' && isKeyInvalidError(j.error) && trackedRef.current.has(j.id))) {
           setKeyOverride(false);
         }
         if (finishedNow) void loadList(uid);
@@ -203,8 +204,13 @@ export function ProgressionsPage(): React.ReactElement {
     const label = vid ? `youtu.be/${vid}` : j.url;
     if (isActive(j)) return <>{j.status === 'queued' ? '대기 중' : '분석 중'} · {label}</>;
     if (j.status === 'failed') {
-      const keyErr = typeof j.error === 'string' && j.error.startsWith('PROVIDER_KEY_INVALID:');
-      return <>{keyErr ? 'Gemini 키 오류' : '분석 실패'} · {label}</>;
+      const why = describeJobError(j.error);
+      return (
+        <>
+          <span title={why.detail || undefined}>{why.title}</span> · {label}
+          <span className={styles.jobHint} data-error-code={why.code}>{why.hint}</span>
+        </>
+      );
     }
     const n = j.noteId ? items.filter((p) => p.noteId === j.noteId).length : 0;
     const noteLink = j.noteId ? (
