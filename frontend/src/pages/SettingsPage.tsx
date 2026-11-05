@@ -538,7 +538,7 @@ export function SettingsPage(): React.ReactElement {
               id="btnOpenGeminiModal"
               onClick={() => setGeminiModalOpen(true)}
             >
-              🔑 1분 만에 무료 API 키 발급받기 (가이드 열기)
+              🔑 무료 API 키 발급 가이드
             </button>
           </div>
           <label className={styles.field}>
@@ -547,7 +547,7 @@ export function SettingsPage(): React.ReactElement {
               className="inpField"
               id="gemKey"
               type="password"
-              placeholder="AIza... (수정 시 비워두면 기존 키 유지)"
+              placeholder="AIza… (비워두면 기존 키 유지)"
               autoComplete="off"
               value={gemKey}
               onChange={(e) => setGemKey(e.target.value)}
@@ -748,7 +748,7 @@ export function SettingsPage(): React.ReactElement {
                   className="inpField"
                   id="ntnToken"
                   type="password"
-                  placeholder="ntn_... (수정 시 비워두면 기존 키 유지)"
+                  placeholder="ntn_… (비워두면 기존 키 유지)"
                   autoComplete="off"
                   value={ntnToken}
                   onChange={(e) => setNtnToken(e.target.value)}
@@ -952,7 +952,7 @@ export function SettingsPage(): React.ReactElement {
                       }
                     }}
                   >
-                    연동 켜기 (기존 노션 데이터 이관)
+                    연동 켜기 (노션 데이터 이관)
                   </button>
                   <button
                     className="ghostBtn"

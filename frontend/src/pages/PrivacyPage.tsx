@@ -58,7 +58,7 @@ export function PrivacyPage(): React.ReactElement {
       </section>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH4">
-        <h2 id="privH4">4. 개인정보의 열람 및 영구 삭제 권리 (FR-AUTH-4)</h2>
+        <h2 id="privH4">4. 개인정보의 열람 및 영구 삭제 권리</h2>
         <p>사용자는 언제든지 자신의 개인정보를 열람하거나 영구 삭제를 요구할 수 있습니다:</p>
         <ul>
           <li>

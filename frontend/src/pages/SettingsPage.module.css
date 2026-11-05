@@ -51,6 +51,15 @@
   color: var(--ink);
 }
 
+/* 섹션 바로 아래 목록(개인정보처리방침): 브라우저 기본 margin 16px 0을 없애 섹션 gap 16px만 남긴다 */
+.setSec > ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* 간격 스케일: 섹션 16 · 패널 12 · 라벨 6. 빈 메시지 줄은 간격 칸을 차지하지 않는다 */
 .setSec p:empty {
   display: none;
@@ -173,6 +182,19 @@
   border-radius: var(--radius-card);
   overflow: hidden;
   background: var(--surface2);
+}
+
+/* 옛 public/site.css .tl-bar 규칙 이식 — 없으면 Chromium 기본 회색 트랙·초록 값으로 그려진다 */
+.quotaBar::-webkit-progress-bar {
+  background: var(--surface2);
+}
+
+.quotaBar::-webkit-progress-value {
+  background: var(--ink);
+}
+
+.quotaBar::-moz-progress-bar {
+  background: var(--ink);
 }
 
 .previewBox {
