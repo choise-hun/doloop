@@ -459,7 +459,7 @@ class AuthAndProfileApiTest {
         assertEquals("supabase", firstJson["storageProvider"]?.jsonPrimitive?.content)
         assertTrue(firstJson["driveFolderId"] is JsonNull)
         assertEquals(0L, firstJson["takeUsedBytes"]?.jsonPrimitive?.long)
-        assertEquals(209_715_200L, firstJson["takeQuotaBytes"]?.jsonPrimitive?.long)
+        assertEquals(5_242_880L, firstJson["takeQuotaBytes"]?.jsonPrimitive?.long) // 무료 티어 한도(M1-2a)
         assertTrue(firstJson["migratedLocalAt"] is JsonNull)
         val keysObj = firstJson["keys"]!!.jsonObject
         assertTrue(keysObj["notion"] is JsonNull)
@@ -568,6 +568,8 @@ class AuthAndProfileApiTest {
         configureTestApp()
         val userId = UUID.randomUUID()
         val token = signJwt(sub = userId.toString(), email = "patch@example.com")
+        assertEquals(HttpStatusCode.OK, client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $token") }.status)
+        ulevelp.support.TestTier.set(db, userId, "pro") // Drive 저장소는 유료(M1-2a)
 
         // 1. role, takeQuotaBytes 변조 시도와 함께 허용된 필드 수정 (FR-AUTH-3)
         val patchRes = client.patch("/api/v1/me") {
@@ -592,7 +594,7 @@ class AuthAndProfileApiTest {
         assertEquals("2026-10-30T09:30:00Z", patchJson["migratedLocalAt"]?.jsonPrimitive?.content)
         // 권한 및 쿼터 변조 무시 확인
         assertEquals("user", patchJson["role"]?.jsonPrimitive?.content)
-        assertEquals(209_715_200L, patchJson["takeQuotaBytes"]?.jsonPrimitive?.long)
+        assertEquals(104_857_600L, patchJson["takeQuotaBytes"]?.jsonPrimitive?.long) // pro 한도, 변조 무시
 
         // 2. 노션 실시간 연동이 활성화된 상태에서 storageProvider: "drive" 변경 시 409 Conflict 거부 (FR-SYNC-5)
         transaction(db) {

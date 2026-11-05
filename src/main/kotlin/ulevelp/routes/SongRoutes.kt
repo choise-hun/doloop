@@ -59,8 +59,14 @@ fun Route.registerSongRoutes(
             val artist = body.optString("artist", 200) ?: ""
             val rateDbl = body.optDouble("rate", 0.25, 2.0) ?: 1.00
             val rate = BigDecimal.valueOf(rateDbl).setScale(2, RoundingMode.HALF_UP)
+            // 선택 입력 a·b(M1-1 A6 — 공개 폴더 곡 1개 담기). 새 곡일 때만 쓰인다
+            val a = body.optDouble("a", 0.0, 86400.0)?.let { BigDecimal.valueOf(it).setScale(1, RoundingMode.HALF_UP) }
+            val b = body.optDouble("b", 0.0, 86400.0)?.let { BigDecimal.valueOf(it).setScale(1, RoundingMode.HALF_UP) }
+            if (a != null && b != null && a >= b) {
+                throw InvalidInputException("a는 b보다 작아야 합니다.")
+            }
 
-            val result = songService.create(user.id, CreateSongInput(videoId, title, artist, rate))
+            val result = songService.create(user.id, CreateSongInput(videoId, title, artist, rate, a, b))
             val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
 
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")

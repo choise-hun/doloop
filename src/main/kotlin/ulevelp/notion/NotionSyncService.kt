@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
 import ulevelp.api.NotFoundException
 import ulevelp.db.*
+import ulevelp.service.requireSongSlots
+import ulevelp.service.tierContext
 import ulevelp.service.ExportImportService
 import ulevelp.service.IntegrationService
 import ulevelp.service.SongService
@@ -202,8 +204,9 @@ class NotionSyncService(
         var importedSessions = 0
         val sessionContexts = mutableListOf<ImportedSessionContext>()
 
-        // 4. 트랜잭션 2: 곡·세션 멱등 병합 및 notion_links 연결
+        // 4. 트랜잭션 2: 곡·세션 멱등 병합 및 notion_links 연결. 새 곡이 곡 한도를 넘으면 통째 403(M1-1 A3)
         DatabaseFactory.dbQuery(database) {
+            val tierCtx = tierContext(userId, lock = true)
             for (ps in parsedSongs) {
                 val existingSong = SongsTable.selectAll().where {
                     (SongsTable.userId eq userId) and (SongsTable.videoId eq ps.videoId)
@@ -211,6 +214,7 @@ class NotionSyncService(
 
                 val songId: UUID
                 if (existingSong == null) {
+                    requireSongSlots(tierCtx, 1)
                     songId = UUID.randomUUID()
                     SongsTable.insert {
                         it[id] = songId
@@ -359,8 +363,7 @@ class NotionSyncService(
 
                         // 쿼터 확인 및 업로드
                         val withinQuota = DatabaseFactory.dbQuery(database) {
-                            val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.forUpdate().single()
-                            val quota = profile[ProfilesTable.takeQuotaBytes]
+                            val quota = tierContext(userId, lock = true).limits.takeBytes // 실제 티어 한도(M1-1 A2)
                             val usedExpr = TakesTable.sizeBytes.sum()
                             val usedBytes = TakesTable.select(usedExpr)
                                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
@@ -379,8 +382,7 @@ class NotionSyncService(
                         storageClient.upload(sKey, bytes, mime)
 
                         DatabaseFactory.dbQuery(database) {
-                            val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.forUpdate().single()
-                            val quota = profile[ProfilesTable.takeQuotaBytes]
+                            val quota = tierContext(userId, lock = true).limits.takeBytes // 실제 티어 한도(M1-1 A2)
                             val usedExpr = TakesTable.sizeBytes.sum()
                             val usedBytes = TakesTable.select(usedExpr)
                                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
@@ -631,6 +633,7 @@ class NotionSyncService(
                     upsertNotionLink(database, "song", existingSongId, userId, ps.pageId, null, nowUtc)
                     updatedSongs++
                 } else {
+                    requireSongSlots(tierContext(userId, lock = true), 1) // 새 곡 — 곡 한도(M1-1 A3)
                     val newId = UUID.randomUUID()
                     SongsTable.insert {
                         it[id] = newId

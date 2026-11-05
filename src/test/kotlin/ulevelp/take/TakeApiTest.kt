@@ -271,19 +271,13 @@ class TakeApiTest {
         ensureUser(client, tokenA)
         val songId = createTestSong(client, tokenA)
 
-        // 쿼터 1500으로 설정
-        transaction(db) {
-            ProfilesTable.update({ ProfilesTable.id eq uidA }) {
-                it[takeQuotaBytes] = 1500L
-            }
-        }
-
-        // ① 1000바이트 업로드 -> 성공
-        val res1 = client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(1000))
+        // 쿼터 = 무료 티어 5MB(5,242,880). take_quota_bytes 열은 V5부터 읽지 않는다(M1-1 A2)
+        // ① 5,000,000바이트 업로드 -> 성공
+        val res1 = client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(5_000_000))
         assertEquals(HttpStatusCode.Created, res1.status)
 
-        // ② 600바이트 업로드 -> 413 거부 (1000 + 600 = 1600 > 1500)
-        val res2 = client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(600))
+        // ② 300,000바이트 업로드 -> 413 거부 (5,300,000 > 5,242,880)
+        val res2 = client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(300_000))
         assertEquals(HttpStatusCode.PayloadTooLarge, res2.status)
         assertStandardError(res2.bodyAsText(), 413, "TAKE_QUOTA_EXCEEDED")
 
@@ -295,7 +289,7 @@ class TakeApiTest {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
         }
         val meJson = Json.parseToJsonElement(meRes.bodyAsText()).jsonObject
-        assertEquals(1000L, meJson["takeUsedBytes"]?.jsonPrimitive?.long)
+        assertEquals(5_000_000L, meJson["takeUsedBytes"]?.jsonPrimitive?.long)
     }
 
     @Test
@@ -304,17 +298,13 @@ class TakeApiTest {
         ensureUser(client, tokenA)
         val songId = createTestSong(client, tokenA)
 
-        transaction(db) {
-            ProfilesTable.update({ ProfilesTable.id eq uidA }) {
-                it[takeQuotaBytes] = 1000L
-            }
-        }
+        // 쿼터 = 무료 티어 5MB. 3MB 2건 동시 → 한 건만 들어가야 한다
         fake.uploadDelayMs = 300L
 
         // 600바이트 2건 동시 업로드
         val (res1, res2) = coroutineScope {
-            val d1 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(600)) }
-            val d2 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(600)) }
+            val d1 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(3_000_000)) }
+            val d2 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(3_000_000)) }
             Pair(d1.await(), d2.await())
         }
 
@@ -343,17 +333,13 @@ class TakeApiTest {
         ensureUser(client, tokenA)
         val songId = createTestSong(client, tokenA)
 
-        transaction(db) {
-            ProfilesTable.update({ ProfilesTable.id eq uidA }) {
-                it[takeQuotaBytes] = 1000L
-            }
-        }
+        // 쿼터 = 무료 티어 5MB. 3MB 2건 동시 → 한 건만 들어가야 한다
         fake.uploadDelayMs = 300L
         fake.failDelete = true
 
         val (res1, res2) = coroutineScope {
-            val d1 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(600)) }
-            val d2 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(600)) }
+            val d1 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(3_000_000)) }
+            val d2 = async { client.uploadTake(tokenA, defaultMetadata(songId), ByteArray(3_000_000)) }
             Pair(d1.await(), d2.await())
         }
 
@@ -398,6 +384,7 @@ class TakeApiTest {
     fun `T7 크기 경계`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // 파일 하나 50MB 경계는 유료(총량 100MB)에서 본다
         val songId = createTestSong(client, tokenA)
 
         // ① 52,428,801바이트 (50MB 초과)
@@ -1094,6 +1081,7 @@ class TakeApiTest {
     fun `T22 Drive JSON 녹음 등록 및 클라우드 스토리지 쿼터 0 증가 (FR-DRIVE-2)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         val songId = createTestSong(client, tokenA)
 
         val meRes1 = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
@@ -1140,6 +1128,7 @@ class TakeApiTest {
     fun `T23 Drive JSON 등록 시 당일 세션 자동 생성 (ensureSession)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         val songId = createTestSong(client, tokenA)
 
         val driveRes = client.post("/api/v1/takes") {
@@ -1178,6 +1167,7 @@ class TakeApiTest {
     fun `T24 노션 연동 활성 중 Drive 녹음 등록 및 이전 409 거부 (FR-SYNC-5)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         val songId = createTestSong(client, tokenA)
 
         val meRes = client.get("/api/v1/me") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
@@ -1295,6 +1285,7 @@ class TakeApiTest {
     fun `T26 기존 Supabase 녹음 Drive 이전 (POST migrate-drive) 후 스토리지 파일 삭제 및 쿼터 반환 (FR-DRIVE-3)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         val songId = createTestSong(client, tokenA)
 
         val rawBytes = ByteArray(10000) { 1 }
@@ -1387,7 +1378,9 @@ class TakeApiTest {
     fun `T28 타 사용자 녹음 다운로드 및 Drive 이전 차단 (404 NOT_FOUND)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         ensureUser(client, tokenB)
+        TestTier.set(db, uidB, "pro")
         val songIdA = createTestSong(client, tokenA)
 
         val uploadRes = client.post("/api/v1/takes") {
@@ -1454,34 +1447,26 @@ class TakeApiTest {
     }
 
     @Test
-    fun `T30 다른 곡에 녹음 존재 시 기본 409 SINGLE_SONG_TAKE_LIMIT 거부`() = testApplication {
+    fun `T30 무료 녹음 곡 수 - 2곡까지 허용, 3번째 곡 403 FREE_TAKE_SONG_LIMIT_EXCEEDED (옛 SINGLE_SONG_TAKE_LIMIT 대체, M1-1 A1)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
         val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
-        val up1 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(100))
-        assertEquals(HttpStatusCode.Created, up1.status)
-        val up2 = client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(200))
-        assertEquals(HttpStatusCode.Created, up2.status)
+        assertEquals(HttpStatusCode.Created, client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(100)).status)
+        assertEquals(HttpStatusCode.Created, client.uploadTake(tokenA, defaultMetadata(songId1), ByteArray(200)).status)
 
+        // 곡 2는 이제 허용(옛 규칙은 409)
         val songId2 = createTestSong(client, tokenA, videoId = "song2222222")
+        assertEquals(HttpStatusCode.Created, client.uploadTake(tokenA, defaultMetadata(songId2), ByteArray(300)).status)
 
-        // 곡 2에 replaceOldSongTakes=false(기본)로 녹음 업로드 시도
-        val upFail = client.uploadTake(tokenA, defaultMetadata(songId2), ByteArray(300))
-        assertEquals(HttpStatusCode.Conflict, upFail.status)
-        val err = Json.parseToJsonElement(upFail.bodyAsText()).jsonObject
-        assertEquals("SINGLE_SONG_TAKE_LIMIT", err["code"]?.jsonPrimitive?.content)
-        assertEquals(
-            "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요.",
-            err["message"]?.jsonPrimitive?.content
-        )
+        // 곡 3은 무료 2곡 한도로 403
+        val songId3 = createTestSong(client, tokenA, videoId = "song3333333")
+        val upFail = client.uploadTake(tokenA, defaultMetadata(songId3), ByteArray(300))
+        assertEquals(HttpStatusCode.Forbidden, upFail.status)
+        assertStandardError(upFail.bodyAsText(), 403, "FREE_TAKE_SONG_LIMIT_EXCEEDED")
 
-        // FakeStorageClient에 곡 2 파일 업로드 안 됨, 곡 1 녹음 2개 보존
-        assertEquals(2, fake.objects.size)
+        assertEquals(3, fake.objects.size)
         transaction(db) {
-            val takes1 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
-            val takes2 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId2) }.toList()
-            assertEquals(2, takes1.size)
-            assertEquals(0, takes2.size)
+            assertEquals(0, TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId3) }.count())
         }
     }
 
@@ -1526,6 +1511,7 @@ class TakeApiTest {
     fun `T32 교체 시 기존 Google Drive(storage='drive') 녹음은 보존`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
+        TestTier.set(db, uidA, "pro") // Drive는 유료 기능(M1-2a)
         val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
 
         // 곡 1에 drive 녹음 1개 등록
@@ -1583,7 +1569,7 @@ class TakeApiTest {
     }
 
     @Test
-    fun `T33 최근 연습 곡이 아닌 과거 곡에 녹음 업로드 시 409 RECENT_SONG_ONLY 거부`() = testApplication {
+    fun `T33 최근 연습 곡이 아닌 과거 곡에도 녹음 저장 가능 (옛 RECENT_SONG_ONLY 삭제, M1-1 A1)`() = testApplication {
         configureApiTestApp(dbConfig, storageClient = fake)
         ensureUser(client, tokenA)
         val songId1 = createTestSong(client, tokenA, videoId = "song1111111")
@@ -1600,22 +1586,8 @@ class TakeApiTest {
             }
         }
 
-        // 곡 1에 date = yesterday 로 녹음 업로드 요청 시도
-        val pastMeta = defaultMetadata(songId1, date = yesterday)
-        val res = client.uploadTake(tokenA, pastMeta, ByteArray(100))
-        assertEquals(HttpStatusCode.Conflict, res.status)
-        val err = Json.parseToJsonElement(res.bodyAsText()).jsonObject
-        assertEquals("RECENT_SONG_ONLY", err["code"]?.jsonPrimitive?.content)
-        assertEquals(
-            "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다.",
-            err["message"]?.jsonPrimitive?.content
-        )
-
-        // 사전 검증(트랜잭션 A)으로 차단되어 스토리지 파일 및 DB 녹음이 생성되지 않았음 확인
-        assertEquals(0, fake.objects.size)
-        transaction(db) {
-            val takes1 = TakesTable.selectAll().where { TakesTable.songId eq UUID.fromString(songId1) }.toList()
-            assertEquals(0, takes1.size)
-        }
+        val res = client.uploadTake(tokenA, defaultMetadata(songId1, date = yesterday), ByteArray(100))
+        assertEquals(HttpStatusCode.Created, res.status)
+        assertEquals(1, fake.objects.size)
     }
 }

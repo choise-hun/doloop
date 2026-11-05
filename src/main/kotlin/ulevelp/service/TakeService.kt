@@ -7,17 +7,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
-import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
 import ulevelp.api.InvalidInputException
 import ulevelp.api.NotFoundException
 import ulevelp.db.DatabaseFactory
 import ulevelp.db.OutboxRepository
-import ulevelp.db.ProfilesTable
 import ulevelp.db.SessionsTable
 import ulevelp.db.SongsTable
 import ulevelp.db.NotionSyncTable
@@ -188,6 +185,35 @@ class TakeService(
         }
     }
 
+    /**
+     * 서버 녹음 티어 규칙 (M1-1 §1-2·A1). `replaceOldSongTakes`면 다른 곡의 서버 녹음을 지운 뒤 상태로 계산한다
+     * (옛 화면의 "이전 곡 녹음 교체" 흐름 유지).
+     */
+    private fun Transaction.checkUploadLimits(ctx: TierContext, userId: UUID, input: TakeUploadInput) {
+        requireTakeDuration(ctx, input.durationSec)
+
+        val songIds = serverTakeSongIds(userId)
+        val totalUsed = serverTakeBytes(userId)
+        val (songsAfterReplace, usedAfterReplace) = if (input.replaceOldSongTakes) {
+            val sumExpr = TakesTable.sizeBytes.sum()
+            val otherBytes = TakesTable.select(sumExpr)
+                .where {
+                    (TakesTable.userId eq userId) and
+                    (TakesTable.storage eq "supabase") and
+                    (TakesTable.songId neq input.songId)
+                }
+                .singleOrNull()?.get(sumExpr) ?: 0L
+            songIds.filter { it == input.songId }.toSet() to (totalUsed - otherBytes)
+        } else {
+            songIds to totalUsed
+        }
+
+        requireTakeSongs(ctx, songsAfterReplace, input.songId)
+        if (usedAfterReplace + input.bytes.size > ctx.limits.takeBytes) {
+            throw takeQuotaExceeded(ctx, usedAfterReplace)
+        }
+    }
+
     suspend fun upload(userId: UUID, input: TakeUploadInput): TakeDto {
         val client = storageClient
             ?: throw ApiException(
@@ -197,7 +223,7 @@ class TakeService(
             )
         val database = requireDb()
 
-        // 1. 트랜잭션 A (읽기만): 곡 존재 확인, 최근 연습 곡 검증, 타 곡 녹음 제한 검증 및 쿼터 사전 검사
+        // 1. 트랜잭션 A (읽기만): 곡 존재 확인, 티어 녹음 규칙(무료 2곡·2분·총량 — M1-1 A1) 사전 검사
         DatabaseFactory.dbQuery(database) {
             val songExists = SongsTable
                 .select(SongsTable.id)
@@ -206,70 +232,7 @@ class TakeService(
             if (!songExists) {
                 throw NotFoundException("곡을 찾을 수 없습니다.")
             }
-
-            // 최근 연습 곡 검증: 다른 곡의 lastDate가 input.date보다 크면 차단
-            val hasNewerOtherSong = SongsTable
-                .select(SongsTable.id)
-                .where {
-                    (SongsTable.userId eq userId) and
-                    (SongsTable.id neq input.songId) and
-                    (SongsTable.lastDate greater input.date)
-                }
-                .limit(1)
-                .any()
-            if (hasNewerOtherSong) {
-                throw ApiException(
-                    status = HttpStatusCode.Conflict,
-                    code = "RECENT_SONG_ONLY",
-                    message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다."
-                )
-            }
-
-            // 타 곡 기존 supabase 녹음 확인
-            val otherSongTakes = TakesTable
-                .select(TakesTable.sizeBytes)
-                .where {
-                    (TakesTable.userId eq userId) and
-                    (TakesTable.storage eq "supabase") and
-                    (TakesTable.songId neq input.songId)
-                }
-                .toList()
-
-            if (otherSongTakes.isNotEmpty() && !input.replaceOldSongTakes) {
-                throw ApiException(
-                    status = HttpStatusCode.Conflict,
-                    code = "SINGLE_SONG_TAKE_LIMIT",
-                    message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요."
-                )
-            }
-
-            val quota = ProfilesTable
-                .select(ProfilesTable.takeQuotaBytes)
-                .where { ProfilesTable.id eq userId }
-                .single()[ProfilesTable.takeQuotaBytes]
-
-            val sumExpr = TakesTable.sizeBytes.sum()
-            val totalUsed = TakesTable
-                .select(sumExpr)
-                .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
-                .singleOrNull()
-                ?.get(sumExpr) ?: 0L
-
-            val otherTakesBytes = otherSongTakes.sumOf { it[TakesTable.sizeBytes] }
-            val effectiveUsed = if (input.replaceOldSongTakes) {
-                totalUsed - otherTakesBytes
-            } else {
-                totalUsed
-            }
-
-            if (effectiveUsed + input.bytes.size > quota) {
-                val quotaMb = quota / 1_048_576
-                throw ApiException(
-                    HttpStatusCode.PayloadTooLarge,
-                    "TAKE_QUOTA_EXCEEDED",
-                    "녹음 저장 한도(${quotaMb}MB)를 넘습니다. 오래된 녹음을 지운 뒤 다시 올려 주세요."
-                )
-            }
+            checkUploadLimits(tierContext(userId), userId, input)
         }
 
         // 2. 트랜잭션 밖: 스토리지 업로드
@@ -298,71 +261,21 @@ class TakeService(
                     .where { (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }
                     .singleOrNull() ?: throw NotFoundException("곡을 찾을 수 없습니다.")
 
-                // 2) profiles FOR UPDATE 잠금 선획득 (동시 업로드 정합성 보장)
-                val quota = ProfilesTable
-                    .select(ProfilesTable.takeQuotaBytes)
-                    .where { ProfilesTable.id eq userId }
-                    .forUpdate(ForUpdateOption.ForUpdate)
-                    .single()[ProfilesTable.takeQuotaBytes]
+                // 2) profiles FOR UPDATE 잠금 선획득 (동시 업로드 정합성 보장) 후 티어 규칙 재검사
+                val ctx = tierContext(userId, lock = true)
+                checkUploadLimits(ctx, userId, input)
 
-                // 3) 잠금 획득 후 최근 연습 곡 재검증
-                val hasNewerOtherSong = SongsTable
-                    .select(SongsTable.id)
-                    .where {
-                        (SongsTable.userId eq userId) and
-                        (SongsTable.id neq input.songId) and
-                        (SongsTable.lastDate greater input.date)
-                    }
-                    .limit(1)
-                    .any()
-                if (hasNewerOtherSong) {
-                    throw ApiException(
-                        status = HttpStatusCode.Conflict,
-                        code = "RECENT_SONG_ONLY",
-                        message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다."
-                    )
-                }
-
-                // 4) 잠금 획득 후 타 곡 supabase 녹음 재확인
-                val otherSongTakes = TakesTable
-                    .select(TakesTable.id, TakesTable.storageKey, TakesTable.sizeBytes)
-                    .where {
-                        (TakesTable.userId eq userId) and
-                        (TakesTable.storage eq "supabase") and
-                        (TakesTable.songId neq input.songId)
-                    }
-                    .toList()
-
-                if (otherSongTakes.isNotEmpty() && !input.replaceOldSongTakes) {
-                    throw ApiException(
-                        status = HttpStatusCode.Conflict,
-                        code = "SINGLE_SONG_TAKE_LIMIT",
-                        message = "Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다. Google Drive를 연결하거나 이전 곡의 녹음을 교체해 주세요."
-                    )
-                }
-
-                // 5) 쿼터 재검사
-                val sumExpr = TakesTable.sizeBytes.sum()
-                val totalUsed = TakesTable
-                    .select(sumExpr)
-                    .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
-                    .singleOrNull()
-                    ?.get(sumExpr) ?: 0L
-
-                val otherTakesBytes = otherSongTakes.sumOf { it[TakesTable.sizeBytes] }
-                val effectiveUsed = if (input.replaceOldSongTakes) {
-                    totalUsed - otherTakesBytes
+                val otherSongTakes = if (input.replaceOldSongTakes) {
+                    TakesTable
+                        .select(TakesTable.id, TakesTable.storageKey)
+                        .where {
+                            (TakesTable.userId eq userId) and
+                            (TakesTable.storage eq "supabase") and
+                            (TakesTable.songId neq input.songId)
+                        }
+                        .toList()
                 } else {
-                    totalUsed
-                }
-
-                if (effectiveUsed + input.bytes.size > quota) {
-                    val quotaMb = quota / 1_048_576
-                    throw ApiException(
-                        HttpStatusCode.PayloadTooLarge,
-                        "TAKE_QUOTA_EXCEEDED",
-                        "녹음 저장 한도(${quotaMb}MB)를 넘습니다. 오래된 녹음을 지운 뒤 다시 올려 주세요."
-                    )
+                    emptyList()
                 }
 
                 // 6) 타 곡 supabase 녹음 교체: 조회한 id 목록(oldIds)으로 원자적 삭제 및 trash 적재
@@ -522,6 +435,7 @@ class TakeService(
     suspend fun registerDriveTake(userId: UUID, input: DriveTakeRegisterInput): TakeDto {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
+            requireDrive(tierContext(userId))
             val songExists = SongsTable
                 .select(SongsTable.id)
                 .where { (SongsTable.id eq input.songId) and (SongsTable.userId eq userId) }
@@ -630,6 +544,7 @@ class TakeService(
     suspend fun migrateToDrive(userId: UUID, takeId: UUID, driveFileId: String): Pair<TakeDto, List<Long>> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
+            requireDrive(tierContext(userId))
             val row = TakesTable
                 .select(
                     TakesTable.id,

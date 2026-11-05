@@ -31,6 +31,8 @@ import java.time.ZoneOffset
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.update
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -310,11 +312,13 @@ fun assertStandardError(
     expectedSource: String = "server"
 ): JsonObject {
     val obj = Json.parseToJsonElement(bodyText).jsonObject
+    // detail은 선택 필드(M1-1 A10) — 있을 때만 나온다
     assertEquals(
         setOf("ok", "source", "status", "code", "message", "retryAfter"),
-        obj.keys,
-        "Standard error response must contain exact 6 keys"
+        obj.keys - "detail",
+        "Standard error response must contain exact 6 keys (+ optional detail)"
     )
+    obj["detail"]?.let { assertTrue(it is JsonObject, "detail must be an object") }
     assertEquals(false, obj["ok"]?.jsonPrimitive?.boolean)
     assertEquals(expectedSource, obj["source"]?.jsonPrimitive?.content)
     assertEquals(expectedStatus, obj["status"]?.jsonPrimitive?.int)
@@ -322,4 +326,27 @@ fun assertStandardError(
     assertTrue(obj["message"]?.jsonPrimitive?.content?.isNotBlank() == true)
     assertTrue(obj["retryAfter"] is JsonNull)
     return obj
+}
+
+/**
+ * 테스트용 티어 지정 (M1-2a). 관리 API를 거치지 않고 override를 직접 쓴다 — 한도와 무관한 기존 테스트가
+ * 무료 한도(곡 10·분류 2·녹음 5MB/2곡)에 걸리지 않게 할 때 쓴다
+ */
+object TestTier {
+    fun set(db: org.jetbrains.exposed.sql.Database, userId: UUID, tier: String?) {
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            ulevelp.db.ProfilesTable.update({ ulevelp.db.ProfilesTable.id eq userId }) {
+                it[ulevelp.db.ProfilesTable.tierOverride] = tier
+                it[ulevelp.db.ProfilesTable.tierOverrideUntil] = null
+            }
+        }
+    }
+
+    fun setRole(db: org.jetbrains.exposed.sql.Database, userId: UUID, role: String) {
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            ulevelp.db.ProfilesTable.update({ ulevelp.db.ProfilesTable.id eq userId }) {
+                it[ulevelp.db.ProfilesTable.role] = role
+            }
+        }
+    }
 }

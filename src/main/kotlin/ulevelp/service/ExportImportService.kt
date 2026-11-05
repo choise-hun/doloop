@@ -7,7 +7,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
 import ulevelp.api.InvalidInputException
@@ -834,14 +833,16 @@ class ExportImportService(
         val songIdMap = mutableMapOf<String, UUID>()
         val sessionIdMap = mutableMapOf<Pair<String, LocalDate>, Pair<UUID, UUID>>()
 
-        // 트랜잭션 1: 곡 및 세션 Upsert
+        // 트랜잭션 1: 곡 및 세션 Upsert. 새 곡이 곡 한도를 넘으면 통째 403(M1-1 A3 — 은닉 기능의 우회 방지)
         DatabaseFactory.dbQuery(database) {
+            val tierCtx = tierContext(userId, lock = true)
             for (s in entry.parsedSongs) {
                 val existing = SongsTable.selectAll()
                     .where { (SongsTable.userId eq userId) and (SongsTable.videoId eq s.videoId) }
                     .singleOrNull()
 
                 val songId = if (existing == null) {
+                    requireSongSlots(tierCtx, 1)
                     val newId = UUID.randomUUID()
                     SongsTable.insert {
                         it[id] = newId
@@ -964,9 +965,7 @@ class ExportImportService(
                         .count() > 0L
                     if (dup) return@dbQuery Precheck.DUPLICATE
 
-                    val quota = ProfilesTable.select(ProfilesTable.takeQuotaBytes)
-                        .where { ProfilesTable.id eq userId }
-                        .single()[ProfilesTable.takeQuotaBytes]
+                    val quota = tierContext(userId).limits.takeBytes // 실제 티어 한도(take_quota_bytes는 읽지 않음, A2)
 
                     val sumExpr = TakesTable.sizeBytes.sum()
                     val used = TakesTable.select(sumExpr)
@@ -1007,10 +1006,7 @@ class ExportImportService(
 
                 try {
                     DatabaseFactory.dbQuery(database) {
-                        val quota = ProfilesTable.select(ProfilesTable.takeQuotaBytes)
-                            .where { ProfilesTable.id eq userId }
-                            .forUpdate(ForUpdateOption.ForUpdate)
-                            .single()[ProfilesTable.takeQuotaBytes]
+                        val quota = tierContext(userId, lock = true).limits.takeBytes
 
                         val sumExpr = TakesTable.sizeBytes.sum()
                         val used = TakesTable.select(sumExpr)

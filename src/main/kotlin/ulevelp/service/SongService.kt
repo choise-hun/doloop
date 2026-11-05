@@ -84,7 +84,9 @@ data class CreateSongInput(
     val videoId: String,
     val title: String,
     val artist: String,
-    val rate: BigDecimal
+    val rate: BigDecimal,
+    val a: BigDecimal? = null,
+    val b: BigDecimal? = null
 )
 
 data class CreateSongResult(
@@ -257,8 +259,13 @@ class SongService(
             finalArtist = input.artist
         }
 
-        // 3. 트랜잭션 B: insertIgnore 실행
+        // 3. 트랜잭션 B: 곡 한도(티어) 확인 후 insertIgnore. 프로필 잠금으로 동시 등록도 한도를 넘지 않는다
         return DatabaseFactory.dbQuery(database) {
+            val ctx = tierContext(userId, lock = true)
+            loadSongDto(userId = userId, videoId = input.videoId)?.let {
+                return@dbQuery CreateSongResult(song = it, created = false) // 그 사이 등록됨: 새 곡이 아니라 한도를 쓰지 않는다
+            }
+            requireSongSlots(ctx, 1)
             val newId = UUID.randomUUID()
             val insertedCount = SongsTable.insertIgnore {
                 it[id] = newId
@@ -267,6 +274,8 @@ class SongService(
                 it[artist] = finalArtist
                 it[videoId] = input.videoId
                 it[rate] = input.rate
+                it[a] = input.a
+                it[b] = input.b
             }.insertedCount
 
             if (insertedCount == 1) {
@@ -401,7 +410,9 @@ class SongService(
         }
 
         // 4. 트랜잭션 B: insertIgnore + profiles.migrated_local_at 갱신
+        // 곡 한도를 넘는 새 곡이 있으면 통째 403(부분 등록 없음, M1-1 A3) — 트랜잭션이 전부 되돌린다
         return DatabaseFactory.dbQuery(database) {
+            val ctx = tierContext(userId, lock = true)
             var created = 0
             var conflictCount = 0
 
@@ -421,6 +432,7 @@ class SongService(
                 }.insertedCount
 
                 if (insCount == 1) {
+                    requireSongSlots(ctx, 0)
                     created++
                     OutboxRepository.enqueueIfSyncEnabled(userId, "song", newId, "upsert")
                 } else {
