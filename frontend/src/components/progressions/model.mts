@@ -328,6 +328,21 @@ export function jobOptionsLabel(j: { startSec?: number | null; endSec?: number |
   return [range, pace].filter(Boolean).join(' · ');
 }
 
+/**
+ * GA-4: 끝난(done) 작업을 한 줄로 합친다. jobs는 최신순(서버 /notes/jobs 순서).
+ * collected = 그 작업들의 노트에서 온 진행 수, latestNoteId = 가장 최근 완료 작업의 노트
+ */
+export function summarizeDoneJobs(
+  jobs: ReadonlyArray<{ status: string; noteId?: string | null }>,
+  items: ReadonlyArray<{ noteId?: string | null }>
+): { jobCount: number; collected: number; latestNoteId: string | null } {
+  const done = jobs.filter((j) => j.status === 'done');
+  const noteIds = new Set(done.map((j) => j.noteId).filter((v): v is string => Boolean(v)));
+  const collected = items.filter((p) => p.noteId && noteIds.has(p.noteId)).length;
+  const latest = done.find((j) => j.noteId);
+  return { jobCount: done.length, collected, latestNoteId: latest && latest.noteId ? latest.noteId : null };
+}
+
 // ── 비로그인 시드 (설계 §8: DEFAULT_REFERENCE/ARCHIVE_PROGRESSIONS) ─────
 
 export type SeedItem = { id: string; category: 'REFERENCE' | 'ARCHIVE'; chordsText: string; title: string; keyLabel: string };

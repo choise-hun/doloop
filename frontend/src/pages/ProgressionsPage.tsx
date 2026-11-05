@@ -13,7 +13,7 @@ import { ReadingGuide } from '../components/progressions/ReadingGuide';
 import { TastePanel } from '../components/progressions/TastePanel';
 import { hasSequence } from '../lib/chords/stats.mts';
 import pStyles from '../components/progressions/Progressions.module.css';
-import { emptyForm, filterScope, jobOptionsLabel, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
+import { emptyForm, filterScope, jobOptionsLabel, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions, summarizeDoneJobs } from '../components/progressions/model.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
@@ -199,6 +199,10 @@ export function ProgressionsPage(): React.ReactElement {
     setAddTab(tab);
   };
 
+  // GA-4: 진행 중·실패는 한 줄씩, 끝난 작업은 한 줄로 합쳐 수만 늘린다
+  const openJobs = jobs.filter((j) => j.status !== 'done');
+  const doneSum = useMemo(() => summarizeDoneJobs(jobs, items), [jobs, items]);
+
   const jobLine = (j: AnalysisJobDto): React.ReactNode => {
     const vid = videoIdFrom(j.url || '');
     const opts = jobOptionsLabel(j);
@@ -213,16 +217,24 @@ export function ProgressionsPage(): React.ReactElement {
         </>
       );
     }
-    const n = j.noteId ? items.filter((p) => p.noteId === j.noteId).length : 0;
-    const noteLink = j.noteId ? (
-      <SafeLink href={`note.html?id=${encodeURIComponent(j.noteId)}`}>노트 보기</SafeLink>
+    return null;
+  };
+
+  const doneLine = (): React.ReactNode => {
+    const { jobCount, collected, latestNoteId } = doneSum;
+    const noteLink = latestNoteId ? (
+      <SafeLink href={`note.html?id=${encodeURIComponent(latestNoteId)}`}>{jobCount > 1 ? '최근 노트 보기' : '노트 보기'}</SafeLink>
     ) : null;
-    return n > 0 ? (
+    const prefix = jobCount > 1 ? `영상 ${jobCount}개 · ` : '';
+    return collected > 0 ? (
       <>
-        {n}개 수집 · {noteLink}
+        {prefix}
+        {collected}개 수집 · {noteLink}
       </>
     ) : (
-      <>진행을 찾지 못했습니다 · {noteLink}</>
+      <>
+        {prefix}진행을 찾지 못했습니다 · {noteLink}
+      </>
     );
   };
 
@@ -283,6 +295,7 @@ export function ProgressionsPage(): React.ReactElement {
                     hasKey={hasKey}
                     onOpenKeyModal={() => setOnboardingOpen(true)}
                     onKeyMissing={() => setKeyOverride(false)}
+                    busy={jobs.some(isActive)}
                     onRequested={(jobId) => {
                       trackedRef.current.add(jobId);
                       if (scope === 'reference') pickScope('analysis');
@@ -338,11 +351,16 @@ export function ProgressionsPage(): React.ReactElement {
         <section className={styles.listCol} aria-label="진행 목록">
           {jobs.length > 0 && (
             <ul className={styles.jobs} id="progJobs" aria-label="코드 진행 영상 분석">
-              {jobs.map((j) => (
-                <li key={j.id} data-job={j.id} data-status={j.status} className={isActive(j) ? styles.jobActive : j.status === 'failed' ? styles.jobFail : ''}>
+              {openJobs.map((j) => (
+                <li key={j.id} data-job={j.id} data-status={j.status} className={isActive(j) ? styles.jobActive : styles.jobFail}>
                   {jobLine(j)}
                 </li>
               ))}
+              {doneSum.jobCount > 0 && (
+                <li key="done" data-status="done" data-done-count={doneSum.jobCount}>
+                  {doneLine()}
+                </li>
+              )}
             </ul>
           )}
           {!loggedIn && (

@@ -1,6 +1,7 @@
 // CH-5: 코드 진행 영상 — URL + 메모 → POST /progressions/analyze (작업 큐, 결과는 목록 맨 위 작업 줄에서)
 // GA-2: 구간(시작~끝) + 코드 진행 변화 속도(느림·보통·빠름 → 초당 캡처량). 개발산출물/진행_분석설정.md §3-2
-import React, { useState } from 'react';
+// GA-4: 중복 방지 — 누르는 순간 ref 잠금, 분석 중이면 버튼 잠금, 409 DUPLICATE_ANALYSIS면 "다시 분석"(force)
+import React, { useRef, useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { apiClient } from '../../lib/apiClient';
 import { thumb, videoIdFrom } from '../../lib/security';
@@ -13,9 +14,11 @@ export interface VideoAnalyzeFormProps {
   onOpenKeyModal: () => void;
   onRequested: (jobId: string) => void;
   onKeyMissing: () => void;
+  /** 이 화면의 코드 진행 분석이 대기·진행 중(서버 동시 1건 제한) */
+  busy?: boolean;
 }
 
-export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMissing }: VideoAnalyzeFormProps): React.ReactElement {
+export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMissing, busy = false }: VideoAnalyzeFormProps): React.ReactElement {
   const [url, setUrl] = useState('');
   const [memo, setMemo] = useState('');
   const [startText, setStartText] = useState('');
@@ -23,10 +26,21 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
   const [pace, setPace] = useState<Pace>('normal');
   const [msg, setMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
   const [sending, setSending] = useState(false);
+  const [confirmDup, setConfirmDup] = useState(false); // 409 뒤 한 번 더 누르면 force
+  const sendingRef = useRef(false); // state 반영 전 같은 순간의 두 번째 클릭 막기
   const vid = videoIdFrom(url);
+
+  // 입력이 바뀌면 "다시 분석" 확인을 풀고 처음 상태로
+  function edited<T>(set: (v: T) => void): (v: T) => void {
+    return (v: T) => {
+      setConfirmDup(false);
+      set(v);
+    };
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (sendingRef.current || busy) return;
     if (!vid) {
       setMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
       return;
@@ -36,6 +50,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
       setMsg({ text: range.error, kind: 'err' });
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     setMsg({ text: '분석 요청을 보내는 중...', kind: '' });
     try {
@@ -45,7 +60,9 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         startSec: range.startSec,
         endSec: range.endSec,
         pace,
+        force: confirmDup,
       });
+      setConfirmDup(false);
       setMsg({ text: '분석을 요청했어요. 보통 1~3분 뒤 목록 맨 위에 진행이 생겨요. 학습 노트도 같이 남습니다.', kind: 'ok' });
       setUrl('');
       setMemo('');
@@ -55,8 +72,14 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
       onRequested(r.jobId);
     } catch (err: any) {
       if (err && (err.code === 'NO_KEY' || err.status === 412)) onKeyMissing();
-      setMsg({ text: (err && err.message) || '요청 실패', kind: 'err' });
+      if (err && err.code === 'DUPLICATE_ANALYSIS') {
+        setConfirmDup(true);
+        setMsg({ text: '이미 같은 영상·구간·속도로 분석했어요. 다시 분석하려면 "다시 분석"을 한 번 더 눌러 주세요.', kind: 'err' });
+      } else {
+        setMsg({ text: (err && err.message) || '요청 실패', kind: 'err' });
+      }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -85,7 +108,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
           value={url}
           placeholder="https://www.youtube.com/watch?v=..."
           autoComplete="off"
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => edited(setUrl)(e.target.value)}
         />
       </label>
       {vid && (
@@ -107,7 +130,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
             value={startText}
             placeholder="1:20 또는 80"
             autoComplete="off"
-            onChange={(e) => setStartText(e.target.value)}
+            onChange={(e) => edited(setStartText)(e.target.value)}
           />
         </label>
         <label className={styles.field}>
@@ -122,7 +145,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
             value={endText}
             placeholder="비우면 영상 끝까지"
             autoComplete="off"
-            onChange={(e) => setEndText(e.target.value)}
+            onChange={(e) => edited(setEndText)(e.target.value)}
           />
         </label>
       </div>
@@ -132,7 +155,7 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         </span>
         <div className={styles.segment} role="group" aria-labelledby="progVideoPaceLab" id="progVideoPace">
           {PACES.map((p) => (
-            <button key={p} type="button" data-pace={p} aria-pressed={pace === p} onClick={() => setPace(p)}>
+            <button key={p} type="button" data-pace={p} aria-pressed={pace === p} onClick={() => edited(setPace)(p)}>
               {PACE_LABEL[p]}
             </button>
           ))}
@@ -155,8 +178,8 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
         />
       </label>
       <div className={styles.actions}>
-        <button className="pillBtn" type="submit" id="progVideoSubmit" disabled={sending || !hasKey}>
-          분석 요청
+        <button className="pillBtn" type="submit" id="progVideoSubmit" disabled={sending || busy || !hasKey}>
+          {busy ? '분석 중…' : confirmDup ? '다시 분석' : '분석 요청'}
         </button>
       </div>
       <p className={`msg${msg.kind ? ' ' + msg.kind : ''}`} role="status" id="progVideoMsg">

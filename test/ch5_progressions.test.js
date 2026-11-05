@@ -209,3 +209,24 @@ describe('CH-5-6: 메뉴·라우트·API 연결', () => {
     }
   });
 });
+
+describe('GA-4: 끝난 작업 한 줄로 합치기(summarizeDoneJobs)', () => {
+  test('끝난 작업만 세고, 그 노트들에서 온 진행 수를 더하며, 최근 노트는 맨 앞 완료 작업', () => {
+    const jobs = [
+      { status: 'running', noteId: null },
+      { status: 'done', noteId: 'n3' },
+      { status: 'failed', noteId: null },
+      { status: 'done', noteId: 'n2' },
+    ];
+    const items = [{ noteId: 'n2' }, { noteId: 'n2' }, { noteId: 'n3' }, { noteId: 'other' }, { noteId: null }];
+    assert.deepEqual(M.summarizeDoneJobs(jobs, items), { jobCount: 2, collected: 3, latestNoteId: 'n3' });
+  });
+  test('완료 작업 없음 · 노트 없는 완료(진행 0개) · 빈 입력', () => {
+    assert.deepEqual(M.summarizeDoneJobs([{ status: 'queued' }], [{ noteId: 'n1' }]), { jobCount: 0, collected: 0, latestNoteId: null });
+    assert.deepEqual(M.summarizeDoneJobs([{ status: 'done', noteId: null }], [{ noteId: null }]), { jobCount: 1, collected: 0, latestNoteId: null });
+    assert.deepEqual(M.summarizeDoneJobs([], []), { jobCount: 0, collected: 0, latestNoteId: null });
+  });
+  test('apiClient가 force를 true일 때만 보낸다', () => {
+    assert.ok(read('frontend/src/lib/apiClient.ts').includes('if (input?.force === true) body.force = true;'));
+  });
+});

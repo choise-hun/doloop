@@ -993,6 +993,8 @@ async function analyzeProgression(input: {
   startSec?: number | null;
   endSec?: number | null;
   pace?: 'slow' | 'normal' | 'fast';
+  /** GA-4: 24시간 안 같은 분석(409 DUPLICATE_ANALYSIS)을 일부러 다시 할 때 */
+  force?: boolean;
 }): Promise<{ jobId: string; status: string }> {
   requireLogin();
   try {
@@ -1000,6 +1002,7 @@ async function analyzeProgression(input: {
     if (typeof input?.startSec === 'number') body.startSec = input.startSec;
     if (typeof input?.endSec === 'number') body.endSec = input.endSec;
     if (input?.pace) body.pace = input.pace;
+    if (input?.force === true) body.force = true;
     const r = await getAuthRef().apiFetch('/api/v1/progressions/analyze', {
       method: 'POST',
       body: JSON.stringify(body),

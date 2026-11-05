@@ -72,7 +72,6 @@ function fakeStore(initial = [], opts = {}) {
   const items = initial.map((x) => ({ ...x }));
   const calls = [];
   const jobs = [];
-  let jobPolls = 0;
   let noteCollect = false;
   return {
     items,
@@ -92,23 +91,33 @@ function fakeStore(initial = [], opts = {}) {
         return json(route, { progression: r }, 201);
       }
       if (p === '/api/v1/progressions/analyze' && method === 'POST') {
-        jobs.push({ id: '00000000-0000-4000-8000-0000000000j1', kind: 'progression', url: body.url, tags: ['화성'], status: 'queued', error: null, noteId: null, startSec: body.startSec ?? null, endSec: body.endSec ?? null, pace: body.pace ?? 'normal', createdAt: new Date().toISOString() });
+        // GA-4: 끝난 같은 영상·설정이 있으면 force 없이 409(서버 24시간 중복 규칙 흉내)
+        const same = jobs.find((j) => j.url === body.url && j.status === 'done' && j.pace === (body.pace ?? 'normal') && j.startSec === (body.startSec ?? null) && j.endSec === (body.endSec ?? null));
+        if (opts.dedupe && same && body.force !== true) {
+          return apiError(route, 409, 'DUPLICATE_ANALYSIS', '이미 같은 영상·구간·속도로 분석했어요. 다시 분석하려면 한 번 더 눌러 주세요.');
+        }
+        const n = jobs.length + 1;
+        jobs.unshift({ id: `00000000-0000-4000-8000-0000000000j${n}`, kind: 'progression', url: body.url, tags: ['화성'], status: 'queued', error: null, noteId: null, startSec: body.startSec ?? null, endSec: body.endSec ?? null, pace: body.pace ?? 'normal', createdAt: new Date().toISOString(), _n: n, _polls: 0 });
+        if (opts.analyzeDelayMs) await new Promise((r) => setTimeout(r, opts.analyzeDelayMs));
         return json(route, { jobId: jobs[0].id, status: 'queued' }, 202);
       }
       if (p === '/api/v1/notes/jobs' && method === 'GET') {
-        // 두 번째 조회부터 완료 + 진행 2개 생성
-        if (opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'failed') {
-          jobs[0].status = 'failed';
-          jobs[0].error = opts.failWith;
-        } else if (!opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'done') {
-          jobs[0].status = 'done';
-          jobs[0].noteId = '00000000-0000-4000-8000-0000000000n2';
-          items.unshift(
-            row({ ...AI_ROW, id: '00000000-0000-4000-8000-0000000000c1', noteId: jobs[0].noteId, title: '새 영상 진행 1' }),
-            row({ ...AI_ROW, id: '00000000-0000-4000-8000-0000000000c2', noteId: jobs[0].noteId, title: '새 영상 진행 2' })
-          );
+        // 작업마다 두 번째 조회부터 완료 + 진행 2개 생성(n번째 작업 노트 = ...n{n+1})
+        for (const j of jobs) {
+          if (j.status !== 'queued' || j._polls++ < 1) continue;
+          if (opts.failWith) {
+            j.status = 'failed';
+            j.error = opts.failWith;
+          } else {
+            j.status = 'done';
+            j.noteId = `00000000-0000-4000-8000-0000000000n${j._n + 1}`;
+            items.unshift(
+              row({ ...AI_ROW, id: `00000000-0000-4000-8000-000000000${j._n}c1`, noteId: j.noteId, title: `새 영상 진행 ${j._n}-1` }),
+              row({ ...AI_ROW, id: `00000000-0000-4000-8000-000000000${j._n}c2`, noteId: j.noteId, title: `새 영상 진행 ${j._n}-2` })
+            );
+          }
         }
-        return json(route, { jobs: [...jobs, { id: 'note-job', kind: 'note', url: 'https://youtu.be/x', tags: ['리듬'], status: 'running', createdAt: '2026-11-04T00:00:00Z' }] });
+        return json(route, { jobs: [...jobs.map(({ _n, _polls, ...j }) => j), { id: 'note-job', kind: 'note', url: 'https://youtu.be/x', tags: ['리듬'], status: 'running', createdAt: '2026-11-04T00:00:00Z' }] });
       }
       if (p === `/api/v1/notes/${NOTE_ID}/collect` && method === 'PUT') {
         noteCollect = body.collect === true;
@@ -389,6 +398,48 @@ test('P5c 구간 + 코드 진행 변화 속도: 잘못된 구간은 막고, 요�
   const req = store.calls.find((c) => c.path === '/api/v1/progressions/analyze');
   expect(req.body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '', startSec: 40, endSec: 80, pace: 'fast' });
   await expect(page.locator('#progJobs li')).toContainText('0:40–1:20 · 빠름');
+});
+
+test('P5d 중복 방지 + 완료 줄 합치기: 두 번 눌러도 요청 1건, 분석 중 잠금, 같은 설정은 "다시 분석", 완료는 한 줄(GA-4)', async ({ page }) => {
+  const store = fakeStore([], { dedupe: true, analyzeDelayMs: 300 });
+  await setupLoggedIn(page, store, { gemini: true });
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progTab-video').click();
+  const submit = page.locator('#progVideoSubmit');
+  const analyzeCalls = () => store.calls.filter((c) => c.path === '/api/v1/progressions/analyze');
+
+  // 같은 순간 두 번 클릭 → POST 1건, 작업이 진행 중이면 버튼 잠김
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  await submit.dblclick();
+  await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요');
+  expect(analyzeCalls()).toHaveLength(1);
+  await expect(submit).toBeDisabled();
+  await expect(submit).toHaveText('분석 중…');
+  await expect(page.locator('#progJobs li[data-status="done"]')).toContainText('2개 수집', { timeout: 12000 });
+  await expect(submit).toHaveText('분석 요청');
+
+  // 끝난 것과 같은 영상·설정 → 409 → "다시 분석"(입력을 바꾸면 처음 상태)
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  await submit.click();
+  await expect(page.locator('#progVideoMsg')).toContainText('이미 같은 영상·구간·속도로 분석했어요');
+  await expect(submit).toHaveText('다시 분석');
+  await page.locator('#progVideoPace [data-pace="fast"]').click();
+  await expect(submit).toHaveText('분석 요청');
+  await page.locator('#progVideoPace [data-pace="normal"]').click();
+  await submit.click();
+  await expect(submit).toHaveText('다시 분석');
+  expect(analyzeCalls()).toHaveLength(3);
+  await submit.click();
+  await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요');
+  expect(analyzeCalls()[3].body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '', pace: 'normal', force: true });
+
+  // 두 번째도 끝나면 완료 줄은 한 줄 그대로, 수만 늘고 최근 노트로 연결
+  const done = page.locator('#progJobs li[data-status="done"]');
+  await expect(done).toContainText('영상 2개 · 4개 수집', { timeout: 12000 });
+  await expect(page.locator('#progJobs li')).toHaveCount(1);
+  await expect(done.locator('a')).toHaveAttribute('href', 'note.html?id=00000000-0000-4000-8000-0000000000n3');
+  await expect(done.locator('a')).toHaveText('최근 노트 보기');
 });
 
 test('P6 키 없음: 영상 탭에 키 안내, 요청 버튼 잠김', async ({ page }) => {
