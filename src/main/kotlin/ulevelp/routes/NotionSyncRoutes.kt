@@ -13,6 +13,7 @@ import ulevelp.auth.SupabaseAuthPlugin
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.auth.requireAuthUser
 import ulevelp.notion.NotionPushWorker
+import ulevelp.service.TierService
 import ulevelp.notion.NotionSyncService
 import ulevelp.service.ProfileService
 
@@ -67,8 +68,20 @@ fun Route.registerNotionSyncRoutes(
 
 fun Route.registerInternalCronRoutes(
     cronOidcVerifier: CronOidcVerifier?,
-    notionPushWorker: NotionPushWorker
+    notionPushWorker: NotionPushWorker,
+    tierService: TierService
 ) {
+    // 매일 00:05 KST(Cloud Scheduler ulevelp-tier-expire): 기한 지난 tier_override 해제 + 다운그레이드 정리(M1-1 §1-3)
+    post("/internal/cron/tier-expire") {
+        if (cronOidcVerifier == null) {
+            throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")
+        }
+        cronOidcVerifier.verifyBearerHeader(call.request.header(HttpHeaders.Authorization))
+        val res = tierService.expireOverrides()
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(HttpStatusCode.OK, res)
+    }
+
     post("/internal/cron/notion-push") {
         if (cronOidcVerifier == null) {
             throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")

@@ -36,6 +36,7 @@ import ulevelp.notion.NotionPushWorker
 import ulevelp.notion.NotionSyncService
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
+import ulevelp.routes.registerAdminRoutes
 import ulevelp.routes.registerCategoryRoutes
 import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerExportImportRoutes
@@ -50,7 +51,9 @@ import ulevelp.routes.registerSessionRoutes
 import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
+import ulevelp.service.AdminService
 import ulevelp.service.CategoryService
+import ulevelp.service.TierService
 import ulevelp.service.ProgressionService
 import ulevelp.service.ExportImportService
 import ulevelp.service.HttpIntegrationCheckClient
@@ -174,6 +177,8 @@ fun Application.module(
     }
 
     val profileService = ProfileService(db)
+    val tierService = TierService(db)
+    val adminService = AdminService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
     val progressionService = ProgressionService(db)
@@ -269,7 +274,8 @@ fun Application.module(
                 code = cause.code,
                 message = cause.message,
                 source = cause.source,
-                retryAfter = cause.retryAfter
+                retryAfter = cause.retryAfter,
+                detail = cause.detail
             )
         }
         exception<BadRequestException> { call, cause ->
@@ -321,6 +327,7 @@ fun Application.module(
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
             registerNoteRoutes(jwtVerifier, profileService, noteService, effectiveDispatcher)
+            registerAdminRoutes(jwtVerifier, profileService, adminService)
 
             route("{...}") {
                 handle {
@@ -346,7 +353,7 @@ fun Application.module(
             }
         }
 
-        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker)
+        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker, tierService)
 
         route("{path...}") {
             handle {

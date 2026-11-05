@@ -493,11 +493,7 @@ class NotionPullAndEnableApiTest {
         registerNotionKey(client, tokenA)
 
         // A의 쿼터를 500바이트로 설정
-        transaction(db) {
-            ProfilesTable.update({ ProfilesTable.id eq userA }) {
-                it[takeQuotaBytes] = 500L
-            }
-        }
+        // 쿼터 = 무료 티어 한도 5MB(M1-2a) → 5MB+1 녹음은 건너뛴다
 
         val n1PageId = "page-song-n1"
         val s1PageId = "page-session-s1"
@@ -524,7 +520,7 @@ class NotionPullAndEnableApiTest {
             }
         }
         fakeNotionClient.downloadExternalFileHandler = { url ->
-            Pair(ByteArray(1000) { 0x42 }, "audio/mp4") // 1000B > 500B
+            Pair(ByteArray(5_242_881) { 0x42 }, "audio/mp4") // 5MB+1 > 무료 5MB
         }
 
         val res = client.post("/api/v1/notion/sync/enable") {

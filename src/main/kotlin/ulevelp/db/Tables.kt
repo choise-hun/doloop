@@ -35,6 +35,18 @@ object ProfilesTable : Table("profiles") {
     val driveFolderId = text("drive_folder_id").nullable()
     val takeQuotaBytes = long("take_quota_bytes").default(209_715_200L)
     val migratedLocalAt = timestampWithTimeZone("migrated_local_at").nullable()
+    // V5 티어·크레딧·커뮤니티 열 (개발산출물/결과/M1-1_스키마설계.md §2-1). take_quota_bytes는 V5부터 읽지 않는다(A2)
+    val billingTier = text("billing_tier").default("free")
+    val tierOverride = text("tier_override").nullable()
+    val tierOverrideUntil = timestampWithTimeZone("tier_override_until").nullable()
+    val monthlyCredits = integer("monthly_credits").default(0)
+    val purchasedCredits = integer("purchased_credits").default(0)
+    val locale = text("locale").nullable()
+    val isCreator = bool("is_creator").default(false)
+    val creatorBadge = text("creator_badge").nullable()
+    val creatorBio = text("creator_bio").default("")
+    val shareAutosync = bool("share_autosync").default(false)
+    val sharePracticeLog = bool("share_practice_log").default(false)
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
@@ -312,6 +324,42 @@ object ProgressionsTable : Table("progressions") {
     override val primaryKey = PrimaryKey(id)
 }
 
+/**
+ * 16. credit_ledger (크레딧 원장, V5). 버킷별 delta 합계 = profiles의 그 버킷 잔액
+ */
+object CreditLedgerTable : Table("credit_ledger") {
+    val id = long("id").autoIncrement()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val bucket = text("bucket")
+    val delta = integer("delta")
+    val balanceAfter = integer("balance_after")
+    val reason = text("reason")
+    val period = text("period").nullable()
+    val jobId = uuid("job_id").nullable()
+    val auditId = long("audit_id").nullable()
+    val memo = text("memo").default("")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * 17. admin_audit (owner 관리 작업 기록, V5). 계정 삭제 뒤에도 남도록 FK 없음
+ */
+object AdminAuditTable : Table("admin_audit") {
+    val id = long("id").autoIncrement()
+    val actorId = uuid("actor_id")
+    val action = text("action")
+    val targetUserId = uuid("target_user_id").nullable()
+    val targetId = text("target_id").nullable()
+    val before = jsonb<JsonElement>("before", Json).nullable()
+    val after = jsonb<JsonElement>("after", Json).nullable()
+    val reason = text("reason")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 val ALL_TABLES: List<Table> = listOf(
     UsersTable,
     ProfilesTable,
@@ -327,6 +375,8 @@ val ALL_TABLES: List<Table> = listOf(
     StorageTrashTable,
     CategoriesTable,
     SongCategoriesTable,
-    ProgressionsTable
+    ProgressionsTable,
+    CreditLedgerTable,
+    AdminAuditTable
 )
 

@@ -84,10 +84,8 @@ class CategoryService(private val db: Database?) {
     suspend fun create(userId: UUID, name: String): CategoryDto {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
-            val existingCount = CategoriesTable.selectAll().where { CategoriesTable.userId eq userId }.count()
-            if (existingCount >= MAX_CATEGORIES) {
-                throw InvalidInputException("분류는 최대 ${MAX_CATEGORIES}개까지 만들 수 있습니다.")
-            }
+            // 티어 한도(M1-1 §1-2: 무료 2·Pro 7·Pro+ 10). 프로필 잠금으로 동시 생성도 한도를 넘지 않는다
+            requireCategorySlot(tierContext(userId, lock = true))
             ensureNameFree(userId, name)
 
             val maxExpr = CategoriesTable.sortOrder.max()
@@ -157,6 +155,7 @@ class CategoryService(private val db: Database?) {
     }
 
     companion object {
+        // 순서 바꾸기 요청의 id 개수 상한. 만들 수 있는 개수는 티어 한도(TierLimits.categories)
         const val MAX_CATEGORIES = 50
         const val MAX_NAME_LENGTH = 20
         const val MAX_PER_SONG = 10

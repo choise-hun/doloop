@@ -597,12 +597,7 @@ class ExportImportApiTest {
     fun `NX7 녹음 쿼터(200MB) 초과 시 녹음만 건너뜀`() = testApplication {
         configureApiTestApp(dbConfig = dbConfig, storageClient = fakeStorage)
 
-        // B의 쿼터를 500바이트로 축소
-        transaction(db) {
-            ProfilesTable.update({ ProfilesTable.id eq userB }) {
-                it[takeQuotaBytes] = 500L
-            }
-        }
+        // 쿼터 = B의 무료 티어 한도 5MB(M1-2a, take_quota_bytes는 읽지 않음) → 5MB+1 녹음은 건너뛴다
 
         val songCsv = """
             ${ExportImportService.UTF8_BOM}곡명,아티스트,상태,유튜브 링크,이어서 연습,마지막 위치(초),구간 시작(초),구간 끝(초),속도,마지막 연습일,메모
@@ -614,7 +609,7 @@ class ExportImportApiTest {
             2026-10-30 Song Quota,Song Quota,2026-10-30,10,2,1.00,0:30–1:00,,heavy.m4a
         """.trimIndent()
 
-        val heavyAudio = ByteArray(1000) { 1 }
+        val heavyAudio = ByteArray(5_242_881) { 1 }
         val zipBytes = createZip(
             mapOf(
                 "연습 곡.csv" to songCsv.toByteArray(StandardCharsets.UTF_8),

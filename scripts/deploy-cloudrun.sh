@@ -74,7 +74,7 @@ echo "  Cron SA  : ${CRON_SA_EMAIL}"
 echo "=============================================================================="
 
 # 1. Cloud Run Job 'analyze' 생성/갱신 (KC-D6, gcloud run jobs deploy는 없으면 생성, 있으면 갱신)
-echo "==> [1/4] Cloud Run Job '${CLOUD_RUN_JOB}' 구성"
+echo "==> [1/5] Cloud Run Job '${CLOUD_RUN_JOB}' 구성"
 gcloud run jobs deploy "${CLOUD_RUN_JOB}" \
   --project="${GCP_PROJECT_ID}" \
   --region="${GCP_REGION}" \
@@ -87,7 +87,7 @@ gcloud run jobs deploy "${CLOUD_RUN_JOB}" \
   --set-secrets="DATABASE_URL=DATABASE_URL:latest,APP_MASTER_KEY=APP_MASTER_KEY:latest"
 
 # 2. 런타임 서비스 계정(RUNTIME_SA_EMAIL)의 Job 실행 IAM 권한 부여 (docs/03-api-spec.md 7.3절)
-echo "==> [2/4] Job '${CLOUD_RUN_JOB}'에 대한 roles/run.developer 권한 부여"
+echo "==> [2/5] Job '${CLOUD_RUN_JOB}'에 대한 roles/run.developer 권한 부여"
 gcloud run jobs add-iam-policy-binding "${CLOUD_RUN_JOB}" \
   --project="${GCP_PROJECT_ID}" \
   --region="${GCP_REGION}" \
@@ -97,7 +97,7 @@ gcloud run jobs add-iam-policy-binding "${CLOUD_RUN_JOB}" \
 
 # 3. Cloud Run 서비스 'ulevelp' 배포 (KC-D1, KC-D3)
 ANALYZE_JOB_URI="https://run.googleapis.com/v2/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/jobs/${CLOUD_RUN_JOB}:run"
-echo "==> [3/4] Cloud Run 서비스 '${CLOUD_RUN_SERVICE}' 배포 (ANALYZE_JOB_URI=${ANALYZE_JOB_URI})"
+echo "==> [3/5] Cloud Run 서비스 '${CLOUD_RUN_SERVICE}' 배포 (ANALYZE_JOB_URI=${ANALYZE_JOB_URI})"
 
 # 기존 서비스 URL 확인 및 초기 CRON_AUDIENCE 결정
 EXISTING_URL=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" --region="${GCP_REGION}" --project="${GCP_PROJECT_ID}" --format='value(status.url)' 2>/dev/null || true)
@@ -135,7 +135,7 @@ fi
 # 서버 env(CRON_AUDIENCE)와 Scheduler(--oidc-token-audience)를 FINAL_CRON_AUDIENCE로 완전 일치시켜 401 방지
 SCHEDULER_JOB_NAME="ulevelp-notion-push"
 CRON_URI="${SERVICE_URL}/internal/cron/notion-push"
-echo "==> [4/4] Cloud Scheduler 크론 '${SCHEDULER_JOB_NAME}' 구성 (URI: ${CRON_URI}, Audience: ${FINAL_CRON_AUDIENCE})"
+echo "==> [4/5] Cloud Scheduler 크론 '${SCHEDULER_JOB_NAME}' 구성 (URI: ${CRON_URI}, Audience: ${FINAL_CRON_AUDIENCE})"
 
 if gcloud scheduler jobs describe "${SCHEDULER_JOB_NAME}" --location="${GCP_REGION}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
   echo "--> 기존 Scheduler Job '${SCHEDULER_JOB_NAME}' 갱신"
@@ -158,6 +158,17 @@ else
     --oidc-service-account-email="${CRON_SA_EMAIL}" \
     --oidc-token-audience="${FINAL_CRON_AUDIENCE}"
 fi
+
+# 5. Cloud Scheduler 'ulevelp-tier-expire' — 매일 00:05 KST, 기한 지난 tier_override 해제·다운그레이드 정리 (M1-2a)
+TIER_JOB_NAME="ulevelp-tier-expire"
+TIER_CRON_URI="${SERVICE_URL}/internal/cron/tier-expire"
+echo "==> [5/5] Cloud Scheduler 크론 '${TIER_JOB_NAME}' 구성 (URI: ${TIER_CRON_URI})"
+if gcloud scheduler jobs describe "${TIER_JOB_NAME}" --location="${GCP_REGION}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  TIER_JOB_VERB=update
+else
+  TIER_JOB_VERB=create
+fi
+gcloud scheduler jobs "${TIER_JOB_VERB}" http "${TIER_JOB_NAME}"   --project="${GCP_PROJECT_ID}"   --location="${GCP_REGION}"   --schedule="5 0 * * *"   --time-zone="Asia/Seoul"   --uri="${TIER_CRON_URI}"   --http-method=POST   --oidc-service-account-email="${CRON_SA_EMAIL}"   --oidc-token-audience="${FINAL_CRON_AUDIENCE}"
 
 echo "=============================================================================="
 echo "배포 완료!"

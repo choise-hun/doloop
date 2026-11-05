@@ -41,7 +41,20 @@ data class MeResponseDto(
     val takeUsedBytes: Long,
     val takeQuotaBytes: Long,
     val migratedLocalAt: String? = null,
-    val keys: KeysStatusDto
+    val keys: KeysStatusDto,
+    // V5 티어·크레딧 (개발산출물/결과/M1-1_스키마설계.md §5-1). tier = 실제 티어(override 반영)
+    val tier: String,
+    val billingTier: String,
+    val tierOverrideUntil: String? = null,
+    val limits: TierLimitsDto,
+    val usage: TierUsageDto,
+    val credits: CreditsDto,
+    val locale: String? = null,
+    val isCreator: Boolean,
+    val creatorBadge: String? = null,
+    val creatorBio: String,
+    val shareAutosync: Boolean,
+    val sharePracticeLog: Boolean
 )
 
 class ProfileService(private val db: Database?) {
@@ -200,6 +213,7 @@ class ProfileService(private val db: Database?) {
 
         return DatabaseFactory.dbQuery(database) {
             if (newStorageProvider == "drive") {
+                requireDrive(tierContext(userId)) // 무료는 Drive 불가(M1-1 §5-1)
                 val notionSyncEnabled = NotionSyncTable
                     .selectAll()
                     .where { (NotionSyncTable.userId eq userId) and (NotionSyncTable.enabled eq true) }
@@ -319,13 +333,9 @@ class ProfileService(private val db: Database?) {
             .singleOrNull()
             ?: throw NotFoundException("사용자 프로필을 찾을 수 없습니다.")
 
-        val sumExpr = TakesTable.sizeBytes.sum()
-        val usedBytes = TakesTable
-            .select(sumExpr)
-            .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
-            .singleOrNull()
-            ?.get(sumExpr)
-            ?: 0L
+        val usedBytes = serverTakeBytes(userId)
+        val tier = effectiveTier(row)
+        val limits = TierLimits.of(tier)
 
         val integrationRows = IntegrationsTable
             .select(
@@ -353,12 +363,31 @@ class ProfileService(private val db: Database?) {
             storageProvider = row[ProfilesTable.storageProvider],
             driveFolderId = row[ProfilesTable.driveFolderId],
             takeUsedBytes = usedBytes,
-            takeQuotaBytes = row[ProfilesTable.takeQuotaBytes],
+            takeQuotaBytes = limits.takeBytes, // 실제 티어 한도(take_quota_bytes 열은 읽지 않음, A2)
             migratedLocalAt = row[ProfilesTable.migratedLocalAt]?.let { formatTimestamp(it) },
             keys = KeysStatusDto(
                 notion = findKeySummary("notion"),
                 gemini = findKeySummary("gemini")
-            )
+            ),
+            tier = tier,
+            billingTier = row[ProfilesTable.billingTier],
+            tierOverrideUntil = row[ProfilesTable.tierOverrideUntil]
+                ?.takeIf { row[ProfilesTable.tierOverride] != null }
+                ?.let { formatTimestamp(it) },
+            limits = limits.toDto(),
+            usage = TierUsageDto(
+                songs = songCount(userId),
+                categories = categoryCount(userId),
+                takeBytes = usedBytes,
+                takeSongs = serverTakeSongIds(userId).size.toLong()
+            ),
+            credits = CreditsDto(row[ProfilesTable.monthlyCredits], row[ProfilesTable.purchasedCredits]),
+            locale = row[ProfilesTable.locale],
+            isCreator = row[ProfilesTable.isCreator],
+            creatorBadge = row[ProfilesTable.creatorBadge],
+            creatorBio = row[ProfilesTable.creatorBio],
+            shareAutosync = row[ProfilesTable.shareAutosync],
+            sharePracticeLog = row[ProfilesTable.sharePracticeLog]
         )
     }
 }
