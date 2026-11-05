@@ -1,6 +1,7 @@
 // Playwright 기반 브라우저 XSS 페이로드 E2E 검사 및 CSP 위반 감시 (X2)
 'use strict';
 const { test, expect } = require('@playwright/test');
+const { mockApp } = require('./support/mock-app');
 
 // 3.1 XSS 페이로드 4종
 const PAYLOADS = {
@@ -201,155 +202,22 @@ async function setupMockAuthAndApi(page, opts = {}) {
     });
   });
 
-  // 2. HTML 서빙 시 integrity 속성 동적 제거 (가짜 스텁의 SRI 불일치 에러 방지)
-  await page.route(
-    (url) => url.pathname.endsWith('.html') || url.pathname === '/',
-    async (route) => {
-      const response = await route.fetch();
-      const text = await response.text();
-      const body = text.replace(/\sintegrity="[^"]*"/g, '');
-      await route.fulfill({
-        response,
-        body,
-        headers: {
-          ...response.headers(),
-          'content-length': String(Buffer.byteLength(body)),
-        },
-      });
-    }
-  );
-
-  // 3. 외부 CDN 및 IFrame API 스텁
-  await page.route(/https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@.*/, async (route) => {
-    const stub = `
-      window.supabase = {
-        createClient: function() {
-          const fakeSession = {
-            access_token: 'fake-jwt-token',
-            user: {
-              id: ${JSON.stringify((opts.me && opts.me.id) || '00000000-0000-4000-8000-000000000001')},
-              email: '<img src=x onerror="window.__xss=1">@example.com',
-              user_metadata: { full_name: '"><svg onload="window.__xss=1">' }
-            }
-          };
-          return {
-            auth: {
-              getSession: async function() { return { data: { session: fakeSession }, error: null }; },
-              onAuthStateChange: function(cb) {
-                window.__supabaseAuthListener = cb;
-                return { data: { subscription: { unsubscribe: function() {} } } };
-              },
-              signInWithOAuth: async function() { return { error: null }; },
-              signOut: async function() { return { error: null }; }
-            }
-          };
-        }
-      };
-    `;
-    await route.fulfill({ status: 200, contentType: 'application/javascript', body: stub });
+  // 2. integrity 제거·supabase/YouTube 스텁·API 응답은 공용 장치(test/e2e/support/mock-app.js)
+  //    모르는 /api/v1/*는 예전처럼 실제 서버로 보낸다(unknownApi: 'pass')
+  await mockApp(page, {
+    auth: 'user',
+    me: opts.me !== undefined ? opts.me : DEFAULT_ME,
+    sessionUser: {
+      id: (opts.me && opts.me.id) || '00000000-0000-4000-8000-000000000001',
+      email: '<img src=x onerror="window.__xss=1">@example.com',
+      user_metadata: { full_name: '"><svg onload="window.__xss=1">' },
+    },
+    songs: opts.songs !== undefined ? opts.songs : DEFAULT_SONGS,
+    sessions: opts.sessions !== undefined ? opts.sessions : DEFAULT_SESSIONS,
+    songDetail: opts.songDetail !== undefined ? opts.songDetail : DEFAULT_SONG_DETAIL,
+    takeUrl: opts.takeUrl !== undefined ? opts.takeUrl : { url: 'javascript:window.__xss=1', expiresIn: 3600 },
+    unknownApi: 'pass',
   });
-
-  await page.route(/https:\/\/(www\.)?youtube\.com\/.*/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/javascript',
-      body: 'window.YT = { Player: function() { return { loadVideoById: () => {}, playVideo: () => {}, pauseVideo: () => {}, getCurrentTime: () => 0, getDuration: () => 100, setPlaybackRate: () => {} }; } };',
-    });
-  });
-
-  await page.route(/https:\/\/i\.ytimg\.com\/.*/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([]) });
-  });
-
-  // 4. API 응답 모킹
-  const meData = opts.me !== undefined ? opts.me : DEFAULT_ME;
-  const songsData = opts.songs !== undefined ? opts.songs : DEFAULT_SONGS;
-  const sessionsData = opts.sessions !== undefined ? opts.sessions : DEFAULT_SESSIONS;
-  const detailData = opts.songDetail !== undefined ? opts.songDetail : DEFAULT_SONG_DETAIL;
-  const takeUrlData = opts.takeUrl !== undefined ? opts.takeUrl : { url: 'javascript:window.__xss=1', expiresIn: 3600 };
-
-  await page.route(
-    (url) => url.pathname.startsWith('/api/v1/me'),
-    async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json; charset=utf-8',
-        body: JSON.stringify(meData),
-      });
-    }
-  );
-
-  await page.route(
-    (url) => url.pathname.startsWith('/api/v1/songs'),
-    async (route) => {
-      const urlObj = new URL(route.request().url());
-      const path = urlObj.pathname;
-      if (path.includes('/by-video/')) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify({ song: songsData[0] || null }),
-        });
-      }
-      if (path.includes('/migrate-local')) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify({ created: 0, skipped: 0, migratedLocalAt: '2026-10-30T00:00:00Z' }),
-        });
-      }
-      const idMatch = path.match(/\/api\/v1\/songs\/([a-f0-9-]+)$/);
-      if (idMatch) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify(detailData),
-        });
-      }
-      if (route.request().method() === 'POST') {
-        return route.fulfill({
-          status: 201,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify({ song: songsData[0], created: true }),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json; charset=utf-8',
-        body: JSON.stringify({ songs: songsData }),
-      });
-    }
-  );
-
-  await page.route(
-    (url) => url.pathname.startsWith('/api/v1/sessions'),
-    async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json; charset=utf-8',
-        body: JSON.stringify(sessionsData),
-      });
-    }
-  );
-
-  await page.route(
-    (url) => url.pathname.startsWith('/api/v1/takes'),
-    async (route) => {
-      const urlObj = new URL(route.request().url());
-      if (urlObj.pathname.endsWith('/url')) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify(takeUrlData),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json; charset=utf-8',
-        body: JSON.stringify({ ok: true }),
-      });
-    }
-  );
 }
 
 /**

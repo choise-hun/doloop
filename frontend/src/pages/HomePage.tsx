@@ -160,7 +160,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
   if (!uid) {
     return (
       <div className={styles.genreWrap}>
-        <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기">
+        <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기" data-align-group="strip:bottom@821">
           <p className={`${styles.genreCell} ${styles.genreHint} ${styles.genreHintFull}`} id="categoryHint">
             로그인하면 곡을 분류할 수 있어요
           </p>
@@ -171,7 +171,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
 
   return (
     <div className={styles.genreWrap} ref={wrapRef}>
-      <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기">
+      <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기" data-align-group="strip:bottom@821">
         {shown.map((c) => (
           <SafeLink
             key={c.id}
@@ -494,6 +494,9 @@ export function HomePage(): React.ReactElement {
   const progTasteKind = progStats.patterns[0] ? '자주 나오는 진행' : progStats.moves[0] ? '가장 많은 코드 이동' : '';
   const progTasteHref = 'progressions.html' + (progScope === 'reference' ? '' : '?scope=' + progScope) + '#progTaste';
 
+  // 빈 상태에서만 CHORDS·PLAYER 목록 아랫선을 맞춘다(안내 칸이 높이를 채움) — 프론트_정렬규격.md §3
+  const songsEmpty = !activeUid || songs.length === 0;
+
   const handleGoSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (pickedVideoId) {
@@ -563,7 +566,7 @@ export function HomePage(): React.ReactElement {
 
       {/* 상단 연속성 위젯: 주간 스트릭(Mo~Su)·작심삼일 + 가장 최근 연습했던 곡 */}
       <section className={styles.topWidgets} aria-label="연습 연속성 대시보드">
-        <div className={styles.widgetCard} id="weeklyStreakCard">
+        <div className={styles.widgetCard} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>WEEKLY STREAK</h2>
             <SafeLink href="log.html" className={styles.widgetLink}>
@@ -585,7 +588,12 @@ export function HomePage(): React.ReactElement {
               </div>
             ))}
           </div>
-          <SafeLink href="log.html" className={styles.streakBar} id="streakChallengeBar">
+          <SafeLink
+            href="log.html"
+            className={styles.streakBar}
+            id="streakChallengeBar"
+            data-align-group="strip:bottom@821"
+          >
             <span id="streakChallengeText">{streak.challengeText}</span>
             <span className={styles.streakDots} aria-hidden="true">
               {[1, 2, 3].map((step) => (
@@ -598,7 +606,7 @@ export function HomePage(): React.ReactElement {
           </SafeLink>
         </div>
 
-        <div className={styles.widgetCard} id="recentSongCard">
+        <div className={styles.widgetCard} id="recentSongCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>가장 최근 연습했던 곡</h2>
             {recentSong && (
@@ -616,11 +624,16 @@ export function HomePage(): React.ReactElement {
               <img
                 id="recentSongThumb"
                 className={styles.recentThumb}
+                data-align-group="songBody:top"
                 src={thumb(recentSong.videoId)}
                 alt=""
               />
-              <div className={styles.recentInfo}>
-                <p className={styles.recentSongTitle} id="recentSongTitle">
+              <div className={styles.recentInfo} data-align-group="songBody:top; songText:left">
+                <p
+                  className={styles.recentSongTitle}
+                  id="recentSongTitle"
+                  data-layout-ignore="G3: 최근 곡 제목은 한 줄 말줄임(카드 높이 고정)"
+                >
                   {recentSong.title}
                 </p>
                 <p className={styles.recentSegment} id="recentSongSegment">
@@ -629,6 +642,7 @@ export function HomePage(): React.ReactElement {
                 <SafeLink
                   href={buildPracticeResumeHref(recentSong)}
                   className={styles.widgetLink}
+                  data-align-group="songText:left"
                 >
                   ▶ 이어서 구간 연습하기 →
                 </SafeLink>
@@ -636,8 +650,10 @@ export function HomePage(): React.ReactElement {
             </div>
           ) : (
             <div className={styles.recentBody} id="recentSongEmpty">
-              <div className={styles.recentPlaceholder}>NO SONG</div>
-              <div className={styles.recentInfo}>
+              <div className={styles.recentPlaceholder} data-align-group="songEmpty:top">
+                NO SONG
+              </div>
+              <div className={styles.recentInfo} data-align-group="songEmpty:top">
                 <p className={styles.emptyText}>
                   아직 연습 중인 곡이 없어요. 위 입력창에 유튜브 링크를 붙여넣어 시작하세요.
                 </p>
@@ -650,18 +666,27 @@ export function HomePage(): React.ReactElement {
 
       {/* 하단 메인 분할 대시보드: 좌측 BETTER (연습실) | 우측 VAULT (학습) */}
       <div className={`frames ${styles.splitFrames}`}>
-        <section className={`frame ${styles.frame}`} id="betterFrame" aria-labelledby="fBetter">
+        <section
+          className={`frame ${styles.frame}`}
+          id="betterFrame"
+          aria-labelledby="fBetter"
+          data-align-group="frames:top,bottom@821"
+        >
           <div className={`frame-head ${styles.frameHead}`}>
             <h2 id="fBetter">BETTER</h2>
             <span>연습실</span>
           </div>
 
           <div className={styles.betterCols}>
-            <div className={styles.subCol}>
+            <div className={styles.subCol} data-align-group="chordsCol:center-x">
               <div className={styles.subColHead}>
                 <h3 className={styles.subColTitle}>CHORDS · 7가지 연습 모드</h3>
               </div>
-              <ul className={`frame-list ${styles.frameList}`} id="modes">
+              <ul
+                className={`frame-list ${styles.frameList}`}
+                id="modes"
+                data-align-group={songsEmpty ? 'player:bottom@821' : undefined}
+              >
                 {CHORD_MODES.map(([id, name], idx) => {
                   const isCur = id === lastTab;
                   return (
@@ -677,13 +702,18 @@ export function HomePage(): React.ReactElement {
                 })}
               </ul>
               <div className={styles.subColAction}>
-                <SafeLink className={styles.sectionBtn} id="betterChordsBtn" href="chords.html">
+                <SafeLink
+                  className={styles.sectionBtn}
+                  id="betterChordsBtn"
+                  href="chords.html"
+                  data-align-group="btns:height,bottom@821; chordsCol:center-x; vaultBtm:bottom@821"
+                >
                   코드 연습실
                 </SafeLink>
               </div>
             </div>
 
-            <div className={styles.subCol}>
+            <div className={styles.subCol} data-align-group="playerCol:center-x">
               <div className={styles.subColHead}>
                 <h3 className={styles.subColTitle}>PLAYER · 내 연습 곡</h3>
                 <SafeLink href="log.html#songs" className={styles.widgetLink}>
@@ -693,6 +723,7 @@ export function HomePage(): React.ReactElement {
               <ul
                 className={`frame-list ${styles.frameList}`}
                 id="songs"
+                data-align-group={songsEmpty ? 'player:bottom@821' : undefined}
               >
                 {!activeUid ? (
                   <li className={`note ${styles.noteItem}`}>
@@ -719,7 +750,12 @@ export function HomePage(): React.ReactElement {
                     return (
                       <li key={s.id}>
                         <SafeLink href={`practice.html?v=${encodeURIComponent(s.videoId)}`}>
-                          <span className={`t ${styles.itemTitle}`}>{s.title}</span>
+                          <span
+                            className={`t ${styles.itemTitle}`}
+                            data-layout-ignore="G3: 곡 목록 제목은 한 줄 말줄임(목록 줄 높이 고정)"
+                          >
+                            {s.title}
+                          </span>
                           <span className={`m ${styles.itemMeta}`}>{meta}</span>
                         </SafeLink>
                       </li>
@@ -728,7 +764,12 @@ export function HomePage(): React.ReactElement {
                 )}
               </ul>
               <div className={styles.subColAction}>
-                <SafeLink className={styles.sectionBtn} id="betterPlayerBtn" href="practice.html">
+                <SafeLink
+                  className={styles.sectionBtn}
+                  id="betterPlayerBtn"
+                  href="practice.html"
+                  data-align-group="btns:height,bottom@821; playerCol:center-x"
+                >
                   플레이어
                 </SafeLink>
               </div>
@@ -736,7 +777,12 @@ export function HomePage(): React.ReactElement {
           </div>
         </section>
 
-        <section className={`frame ${styles.frame}`} id="vaultFrame" aria-labelledby="fVault">
+        <section
+          className={`frame ${styles.frame}`}
+          id="vaultFrame"
+          aria-labelledby="fVault"
+          data-align-group="frames:top,bottom@821"
+        >
           <div className={`frame-head ${styles.frameHead}`}>
             <h2 id="fVault">VAULT</h2>
             <span>학습</span>
@@ -753,14 +799,23 @@ export function HomePage(): React.ReactElement {
               <div className={styles.noteBox} id="recentNoteBody">
                 <img
                   className={styles.noteThumb}
+                  data-align-group="noteBody:top"
                   src={thumb(recentNote.videoId)}
                   alt=""
                 />
-                <div className={styles.noteBoxBody}>
-                  <p className={styles.noteBoxTitle} id="recentNoteTitle">
+                <div className={styles.noteBoxBody} data-align-group="noteBody:top; noteText:left">
+                  <p
+                    className={styles.noteBoxTitle}
+                    id="recentNoteTitle"
+                    data-layout-ignore="G3: 최근 노트 제목은 한 줄 말줄임(카드 높이 고정)"
+                  >
                     {recentNote.title || '(제목 없음)'}
                   </p>
-                  <p className={styles.noteBoxSummary} id="recentNoteHeadline">
+                  <p
+                    className={styles.noteBoxSummary}
+                    id="recentNoteHeadline"
+                    data-layout-ignore="G3: 최근 노트 요약은 한 줄 말줄임(카드 높이 고정)"
+                  >
                     {recentNote.headline || recentNote.channel || '핵심 요약 노트'}
                   </p>
                   <div className={styles.noteBoxFoot}>
@@ -768,6 +823,7 @@ export function HomePage(): React.ReactElement {
                       href={`note.html?id=${encodeURIComponent(recentNote.id)}`}
                       className={styles.widgetLink}
                       id="recentNoteLink"
+                      data-align-group="noteText:left"
                     >
                       확인하기 →
                     </SafeLink>
@@ -776,11 +832,13 @@ export function HomePage(): React.ReactElement {
               </div>
             ) : (
               <div className={styles.noteBox} id="recentNoteEmpty">
-                <div className={styles.recentPlaceholder}>NO NOTE</div>
-                <div className={styles.noteBoxBody}>
+                <div className={styles.recentPlaceholder} data-align-group="noteEmpty:top">
+                  NO NOTE
+                </div>
+                <div className={styles.noteBoxBody} data-align-group="noteEmpty:top; noteEmptyText:left">
                   <p className={`${styles.noteBoxSummary} ${styles.wrapText}`}>아직 생성한 학습 노트가 없어요.</p>
                   <div className={styles.noteBoxFoot}>
-                    <SafeLink href="notes.html" className={styles.widgetLink}>
+                    <SafeLink href="notes.html" className={styles.widgetLink} data-align-group="noteEmptyText:left">
                       노트 만들러 가기 →
                     </SafeLink>
                   </div>
@@ -814,7 +872,7 @@ export function HomePage(): React.ReactElement {
               ))}
             </div>
             <div className={styles.progGrid}>
-              <div className={styles.progCard} id="progRefBox">
+              <div className={styles.progCard} id="progRefBox" data-align-group="prog:top,bottom@821; vaultBtm:bottom@821">
                 <div className={styles.progHead}>
                   <span className={styles.progBadge}>{progCurrent ? KIND_LABEL[progCurrent.kind] : progScopeLabel}</span>
                   <span className={styles.progKey} id="progRefKey">
@@ -864,7 +922,7 @@ export function HomePage(): React.ReactElement {
                 )}
               </div>
 
-              <div className={styles.progCard} id="progArchBox">
+              <div className={styles.progCard} id="progArchBox" data-align-group="prog:top,bottom@821">
                 <div className={styles.progHead}>
                   <span className={styles.progBadge}>취향</span>
                   <span className={styles.progKey} id="progArchKey">
