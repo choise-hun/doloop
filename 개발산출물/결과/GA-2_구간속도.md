@@ -45,5 +45,7 @@ ULP_UI=spa npx playwright test         75 passed · 1 failed (2.1m) — P5c 포�
 - 운영 배포 뒤 Flyway 로그에 `Migrating schema "public" to version "4 - analysis job options"` 확인
 - 같은 영상(`youtu.be/oWQZopUx0fA`)으로 ① 보통(구간 없음) ② 빠름 ③ 구간 지정(예 0:40–1:20, 보통) → 4마디 4코드가 잡히는지
 - 구간 지정 시 응답 `start`·`end`·코드 `timestamp`가 **원본 기준인지 구간 기준인지** 확인(구간 기준이면 진행 행 `startSec`이 어긋남 → 서버에서 `startSec` 더하기 필요할 수 있음 — 그때 판단)
-- 토큰 사용량: 지금 `GeminiGenerateResult.usageSummary`(`usageMetadata`)는 **어디에도 로그로 남기지 않는다**. pace별 실측이 필요하면 GA-3에서 `executeJob` 성공 시 한 줄 로그(jobId·pace·usage) 추가를 먼저 제안 → 승인 뒤 §3-2 추정치와 비교
+- 토큰 사용량: `executeJob`이 Gemini 성공 직후 한 줄 INFO 로그를 남긴다(GA-2 추가, 사용자 요청) —
+  `Gemini 분석 완료 jobId=… kind=progression pace=fast range=40~80 fps=3.0 usage={…usageMetadata…}`(노트 분석은 `pace=- range=-~- fps=default`).
+  GA-3에서 Cloud Run Job 로그를 `textPayload:"Gemini 분석 완료"`로 찾아 `promptTokenCount`를 §3-2 추정치와 비교
 - 기존(V4 이전) progression 작업 행은 `pace = NULL` → 실행 시 normal(fps 1)로 처리(남은 queued 행이 있을 때만 해당)
