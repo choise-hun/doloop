@@ -79,4 +79,4 @@ E2E spa (ULP_UI=spa node server.js): 40 passed
 
 - 사용자: §1 콘솔 작업 → 새 클라이언트 ID 전달
 - 코드: `config.js` ID 교체 PR → 배포 → Drive 전환·업로드 실측
-- `진행_프론트정렬규격.md` LY-2에서 `settings-spacing.spec.js`의 간격 판정을 공통 검사기 G8로 흡수
+- `진행_프론트정렬규격.md` FT-2에서 `settings-spacing.spec.js`의 간격 판정을 공통 검사기 G8로 흡수
