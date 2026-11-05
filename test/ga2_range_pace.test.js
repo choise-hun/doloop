@@ -1,4 +1,4 @@
-// GA-2: 코드 진행 영상 분석 구간·속도 순수 함수(frontend/src/components/progressions/model.mts). 규칙: 개발산출물/진행_분석설정.md §3-2
+// GA-2: 코드 진행 영상 분석 구간·속도 순수 함수(frontend/src/components/progressions/model.mts). 규칙: 개발산출물/완료/진행_분석설정.md §3-2
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 
