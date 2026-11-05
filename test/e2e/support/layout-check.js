@@ -253,7 +253,9 @@ function browserCheck(o) {
   const colorUses = (el) => {
     const s = S(el);
     const used = [];
-    if (directText(el) || FORM.has(el.tagName.toUpperCase())) used.push(['color', s.color]);
+    // 체크박스·라디오·범위 입력의 color는 글자로 그려지지 않는다(v1.2)
+    const noText = el.matches('input[type="checkbox"], input[type="radio"], input[type="range"]');
+    if (!noText && (directText(el) || FORM.has(el.tagName.toUpperCase()))) used.push(['color', s.color]);
     used.push(['background', s.backgroundColor]);
     for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
       if (parseFloat(s[`border${side}Width`]) >= 1 && s[`border${side}Style`] !== 'none') used.push(['border', s[`border${side}Color`]]);
@@ -265,7 +267,9 @@ function browserCheck(o) {
     const host = el.closest('svg');
     return host && shown.has(host) && el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
   });
-  const colorTargets = [...all.map((el) => [el, colorUses(el)]), ...svgShapes.map((el) => [el, [['fill', S(el).fill], ['stroke', S(el).stroke]]])];
+  // svg line은 fill이 그려지지 않는다(v1.2)
+  const svgUses = (el) => (el.tagName.toLowerCase() === 'line' ? [] : [['fill', S(el).fill]]).concat([['stroke', S(el).stroke]]);
+  const colorTargets = [...all.map((el) => [el, colorUses(el)]), ...svgShapes.map((el) => [el, svgUses(el)])];
   for (const [el, uses] of colorTargets) {
     for (const [prop, value] of uses) {
       if (!value || value === 'none' || value.startsWith('url(')) continue;
@@ -407,7 +411,7 @@ async function openState(page, { path: url, state, width, ready, mock }) {
   return true;
 }
 
-async function runCheck(page, testInfo, { name, stateName, width, options, dark }) {
+async function runCheck(page, testInfo, { name, stateName, width, options, dark, known }) {
   const result = await checkLayout(page, { ...options, width });
   const shotName = `${name}-${stateName}-${width}${dark ? '-dark' : ''}`;
   if (result.warns.length) {
@@ -419,7 +423,15 @@ async function runCheck(page, testInfo, { name, stateName, width, options, dark 
     fs.mkdirSync(dir, { recursive: true });
     await page.screenshot({ path: path.join(dir, `${shotName}.png`), fullPage: true });
   }
-  const fails = process.env.LAYOUT_STRICT === '1' ? [...result.fails, ...result.warns] : result.fails;
+  // 알려진 실패(규격 §8-2): 목록에 맞으면 기록만 하고 통과, 목록 밖 실패는 그대로 실패. LAYOUT_STRICT=1이면 알려진 것도 실패
+  const isKnown = (f) => (known || []).some((k) => k.match.test(f));
+  const knownFails = result.fails.filter(isKnown);
+  if (knownFails.length) {
+    for (const f of knownFails) testInfo.annotations.push({ type: 'layout-known', description: f });
+    await testInfo.attach('layout-known.txt', { body: knownFails.join('\n'), contentType: 'text/plain' });
+  }
+  const fails =
+    process.env.LAYOUT_STRICT === '1' ? [...result.fails, ...result.warns] : result.fails.filter((f) => !isKnown(f));
   expect(fails, `${shotName} 정렬 검사`).toEqual([]);
 }
 
@@ -434,6 +446,7 @@ async function runCheck(page, testInfo, { name, stateName, width, options, dark 
  * @param {object} [cfg.mock] 모든 상태에 덧붙일 mockApp 옵션(routes 등)
  * @param {string} [cfg.dark] 다크 모드로 한 번 더 볼 상태(1280px)
  * @param {number[]} [cfg.widths]
+ * @param {Array<{match: RegExp, why: string}>} [cfg.known] 알려진 실패(기록만). why에 원인과 고칠 step을 적는다
  */
 function layoutSuite(cfg) {
   const widths = cfg.widths || WIDTHS;
@@ -443,7 +456,7 @@ function layoutSuite(cfg) {
       test(`FT ${cfg.name} ${stateName(state)} ${width}px`, async ({ page }, testInfo) => {
         const ok = await openState(page, { ...cfg, state, width });
         test.skip(!ok, 'legacy 모드: React 화면 아님');
-        await runCheck(page, testInfo, { name: cfg.name, stateName: stateName(state), width, options: cfg.options });
+        await runCheck(page, testInfo, { name: cfg.name, stateName: stateName(state), width, options: cfg.options, known: cfg.known });
       });
     }
   }
@@ -453,7 +466,7 @@ function layoutSuite(cfg) {
       await page.emulateMedia({ colorScheme: 'dark' });
       const ok = await openState(page, { ...cfg, state, width: widths[0] });
       test.skip(!ok, 'legacy 모드: React 화면 아님');
-      await runCheck(page, testInfo, { name: cfg.name, stateName: cfg.dark, width: widths[0], options: cfg.options, dark: true });
+      await runCheck(page, testInfo, { name: cfg.name, stateName: cfg.dark, width: widths[0], options: cfg.options, dark: true, known: cfg.known });
     });
   }
 }
