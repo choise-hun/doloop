@@ -73,7 +73,7 @@ fun Route.registerInternalCronRoutes(
     tierService: TierService,
     creditService: CreditService
 ) {
-    // 매월 1일 00:00 KST(Cloud Scheduler ulevelp-monthly-credits): 월 지급분 소멸 → 유료 티어 지급(Q5, M1-1 §3)
+    // 매시 정각(Cloud Scheduler ulevelp-monthly-credits): 충전 시각이 지난 계정의 월 지급분 소멸 → 유료면 30일 주기 충전(M1-3d)
     post("/internal/cron/monthly-credits") {
         if (cronOidcVerifier == null) {
             throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")
@@ -84,7 +84,8 @@ fun Route.registerInternalCronRoutes(
         call.respond(HttpStatusCode.OK, res)
     }
 
-    // 매일 00:05 KST(Cloud Scheduler ulevelp-tier-expire): 기한 지난 tier_override 해제 + 다운그레이드 정리(M1-1 §1-3)
+    // 매일 00:05 KST(Cloud Scheduler ulevelp-tier-expire): 기한 지난 tier_override 해제 + 다운그레이드 정리(M1-1 §1-3).
+    // 크레딧 주기는 건드리지 않는다 — 무료가 된 계정의 남은 월 지급분은 주기 끝에 monthly-credits가 소멸(M1-3d)
     post("/internal/cron/tier-expire") {
         if (cronOidcVerifier == null) {
             throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")

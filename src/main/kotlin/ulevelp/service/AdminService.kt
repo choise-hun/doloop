@@ -157,7 +157,7 @@ class AdminService(private val db: Database?) {
 
     /**
      * `PUT /admin/users/{userId}/tier-override` — tier null = override 해제(until도 null이어야 함).
-     * 실제 티어가 유료 → free가 되면 같은 트랜잭션에서 다운그레이드 정리(§1-3)
+     * 실제 티어가 유료 → free가 되면 같은 트랜잭션에서 다운그레이드 정리(§1-3), 크레딧 주기 전환 판정(M1-3d)
      */
     suspend fun setTierOverride(
         actorId: UUID,
@@ -179,6 +179,8 @@ class AdminService(private val db: Database?) {
         return DatabaseFactory.dbQuery(requireDb()) {
             val beforeRow = loadUserRow(userId, lock = true)
             val beforeTier = effectiveTier(beforeRow, now)
+            // 충전 시각이 지났는데 cron(매시)이 아직이면 바꾸기 전 티어로 먼저 처리한다(M1-3d)
+            processDueCycle(userId, beforeTier, now.toInstant())
             ProfilesTable.update({ ProfilesTable.id eq userId }) {
                 it[tierOverride] = tier
                 it[tierOverrideUntil] = until
@@ -188,6 +190,8 @@ class AdminService(private val db: Database?) {
             if (TierLimits.isPaid(beforeTier) && !TierLimits.isPaid(afterTier)) {
                 downgradeCleanup(userId)
             }
+            // 무료 → 유료 즉시 지급 + 30일 주기, Pro → Pro+ 차액. 유료 → 무료는 주기 끝까지 유지(M1-3d)
+            onTierChange(userId, beforeTier, afterTier, now.toInstant())
             audit(actorId, "tier_override", userId, tierJson(beforeRow), tierJson(afterRow), reason)
             toDto(loadUserRow(userId))
         }

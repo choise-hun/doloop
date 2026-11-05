@@ -7,6 +7,9 @@ import kotlinx.serialization.json.put
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
@@ -17,8 +20,8 @@ import ulevelp.db.DatabaseFactory
 import ulevelp.db.ProfilesTable
 import ulevelp.note.HttpGeminiClient
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
-import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -70,7 +73,7 @@ data class CreditsSummaryResponse(
     val total: Int,
     /** 실제 티어의 월 지급량(free 0) */
     val monthlyGrant: Int,
-    /** 다음 지급 시각(다음 달 1일 0시 KST). 월 지급이 없으면 null */
+    /** 다음 충전 시각(유료 전환 시점 + 30일 주기, M1-3d). 무료·주기 없음이면 null */
     val nextGrantAt: String? = null
 )
 
@@ -235,8 +238,117 @@ fun Transaction.refundCredits(jobId: UUID) {
     AnalysisJobsTable.update({ AnalysisJobsTable.id eq jobId }) { it[chargedCredits] = 0 }
 }
 
+// ---------- 크레딧 주기 (M1-3d, 진행_티어크레딧.md §3-1) ----------
+// 유료 전환 시점에 즉시 지급하고 그 시점부터 30일(720시간)마다 충전한다. Pro → Pro+는 차액만 즉시(주기 유지),
+// 유료 → 무료는 남은 월 지급분을 주기 끝까지 두고 끝에 소멸(충전 없음). 원장 period = 주기 시작 시각 키(KST 분 단위)
+
+val CREDIT_CYCLE: Duration = Duration.ofDays(30)
+private val CYCLE_KEY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm").withZone(ZoneId.of("Asia/Seoul"))
+
+/** 주기 키 = 주기 시작 시각(KST) 'YYYY-MM-DDTHH:MM' */
+fun cycleKey(start: Instant): String = CYCLE_KEY_FORMAT.format(start)
+
+/** 한 계정의 주기 처리 결과 (cron 집계용) */
+data class CycleOutcome(val expired: Boolean = false, val granted: Boolean = false)
+
+private data class CycleRow(val monthly: Int, val nextAt: Instant?, val tier: String?)
+
+private fun Transaction.lockCycleRow(userId: UUID): CycleRow? =
+    ProfilesTable.select(ProfilesTable.monthlyCredits, ProfilesTable.creditCycleNextAt, ProfilesTable.creditCycleTier)
+        .where { ProfilesTable.id eq userId }
+        .forUpdate(ForUpdateOption.ForUpdate)
+        .singleOrNull()
+        ?.let { CycleRow(it[ProfilesTable.monthlyCredits], it[ProfilesTable.creditCycleNextAt]?.toInstant(), it[ProfilesTable.creditCycleTier]) }
+
+private fun Transaction.setCycle(userId: UUID, nextAt: Instant?, tier: String?) {
+    ProfilesTable.update({ ProfilesTable.id eq userId }) {
+        it[creditCycleNextAt] = nextAt?.atOffset(ZoneOffset.UTC)
+        it[creditCycleTier] = tier
+    }
+}
+
+private fun Transaction.monthlyRowExists(userId: UUID, reason: String, period: String): Boolean = CreditLedgerTable.selectAll().where {
+    (CreditLedgerTable.userId eq userId) and (CreditLedgerTable.bucket eq BUCKET_MONTHLY) and
+        (CreditLedgerTable.reason eq reason) and (CreditLedgerTable.period eq period)
+}.limit(1).count() > 0
+
+/** 남은 월 지급분 소멸(그 주기 키로 한 번) */
+private fun Transaction.expireMonthly(userId: UUID, monthly: Int, period: String): Boolean {
+    if (monthly <= 0 || monthlyRowExists(userId, "monthly_expire", period)) return false
+    applyCredit(userId, BUCKET_MONTHLY, -monthly, "monthly_expire", period = period)
+    return true
+}
+
+/** 월 지급·차액(그 주기 키로 한 번 — 유니크 인덱스 `credit_ledger_period_uq`가 마지막 방어) */
+private fun Transaction.grantMonthly(userId: UUID, amount: Int, reason: String, period: String): Boolean {
+    if (amount <= 0 || monthlyRowExists(userId, reason, period)) return false
+    applyCredit(userId, BUCKET_MONTHLY, amount, reason, period = period)
+    return true
+}
+
+private fun grantOf(tier: String?): Int = tier?.let { TierLimits.of(it).monthlyCredits } ?: 0
+
 /**
- * `/credits*` API·분석 길이 계산·월 지급 cron (M1-1 §3·§5-4·§5-6)
+ * 충전 시각이 지난 주기 처리(cron, 티어 변경 직전). [tier] = 그 시점의 실제 티어.
+ * 남은 월 지급분 소멸 → 유료면 지급하고 다음 = 이전 다음 + 30일(밀림 없음 — cron이 늦어도 경계는 그대로, 여러 주기를
+ * 건너뛰었으면 지금이 든 주기로 한 번만 지급), 무료면 주기 종료(NULL). 주기가 없거나 아직이면 아무것도 안 한다
+ */
+fun Transaction.processDueCycle(userId: UUID, tier: String, now: Instant): CycleOutcome {
+    val row = lockCycleRow(userId) ?: return CycleOutcome()
+    val next = row.nextAt ?: return CycleOutcome()
+    if (next.isAfter(now)) return CycleOutcome()
+    val expired = expireMonthly(userId, row.monthly, cycleKey(next.minus(CREDIT_CYCLE)))
+    if (!TierLimits.isPaid(tier)) {
+        setCycle(userId, null, null)
+        return CycleOutcome(expired = expired)
+    }
+    var start = next
+    while (!start.plus(CREDIT_CYCLE).isAfter(now)) start = start.plus(CREDIT_CYCLE)
+    val granted = grantMonthly(userId, grantOf(tier), "monthly_grant", cycleKey(start))
+    setCycle(userId, start.plus(CREDIT_CYCLE), tier)
+    return CycleOutcome(expired = expired, granted = granted)
+}
+
+/**
+ * 무료 → 유료: 주기 시작. 앞 주기가 아직 돌고 있으면(주기 안 재가입) 그 남은 월 지급분을 소멸하고 새 주기를 연다.
+ * 같은 분에 이미 시작한 주기가 있으면 새로 지급하지 않고 차액만 본다(재실행·같은 분 재가입)
+ */
+fun Transaction.startCreditCycle(userId: UUID, tier: String, now: Instant): CycleOutcome {
+    val row = lockCycleRow(userId) ?: return CycleOutcome()
+    val key = cycleKey(now)
+    if (row.nextAt != null && monthlyRowExists(userId, "monthly_grant", key)) return topUpCreditCycle(userId, tier, now)
+    val expired = row.nextAt?.let { expireMonthly(userId, row.monthly, cycleKey(it.minus(CREDIT_CYCLE))) } ?: false
+    val granted = grantMonthly(userId, grantOf(tier), "monthly_grant", key)
+    setCycle(userId, now.plus(CREDIT_CYCLE), tier)
+    return CycleOutcome(expired = expired, granted = granted)
+}
+
+/**
+ * 유료 → 더 높은 유료(Pro → Pro+): 이번 주기에 지급한 티어와의 차액만 즉시, 다음 충전 시각은 그대로.
+ * 한 주기에 차액은 한 번(내렸다 다시 올려도 `credit_cycle_tier`가 높은 쪽을 기억). 주기가 없으면 시작한다
+ */
+fun Transaction.topUpCreditCycle(userId: UUID, tier: String, now: Instant): CycleOutcome {
+    val row = lockCycleRow(userId) ?: return CycleOutcome()
+    val next = row.nextAt ?: return startCreditCycle(userId, tier, now)
+    val diff = grantOf(tier) - grantOf(row.tier)
+    if (diff <= 0) return CycleOutcome()
+    val granted = grantMonthly(userId, diff, "monthly_topup", cycleKey(next.minus(CREDIT_CYCLE)))
+    setCycle(userId, next, tier)
+    return CycleOutcome(granted = granted)
+}
+
+/**
+ * 티어가 바뀐 트랜잭션 안에서 부른다(관리 API override, 결제 웹훅 M4-2). 유료 → 무료·유료 → 낮은 유료는
+ * 아무것도 안 한다(남은 월 지급분은 주기 끝 cron이 소멸, 차액 회수 없음)
+ */
+fun Transaction.onTierChange(userId: UUID, before: String, after: String, now: Instant): CycleOutcome = when {
+    !TierLimits.isPaid(after) -> CycleOutcome()
+    !TierLimits.isPaid(before) -> startCreditCycle(userId, after, now)
+    else -> topUpCreditCycle(userId, after, now)
+}
+
+/**
+ * `/credits*` API·분석 길이 계산·크레딧 주기 cron (M1-1 §3·§5-4·§5-6, M1-3d)
  */
 class CreditService(
     private val db: Database?,
@@ -249,9 +361,6 @@ class CreditService(
         val KST: ZoneId = ZoneId.of("Asia/Seoul")
         const val DEFAULT_LEDGER_LIMIT = 50
         const val MAX_LEDGER_LIMIT = 200
-        private val PERIOD_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
-
-        fun period(month: YearMonth): String = month.format(PERIOD_FORMAT)
 
         private fun ts(instant: Instant): String = DateTimeFormatter.ISO_INSTANT.format(instant)
     }
@@ -294,13 +403,13 @@ class CreditService(
         val grant = TierLimits.of(effectiveTier(row, now.atOffset(ZoneOffset.UTC))).monthlyCredits
         val monthly = row[ProfilesTable.monthlyCredits]
         val purchased = row[ProfilesTable.purchasedCredits]
-        val nextGrant = YearMonth.from(now.atZone(KST)).plusMonths(1).atDay(1).atStartOfDay(KST).toInstant()
+        val nextGrant = row[ProfilesTable.creditCycleNextAt]?.toInstant()
         CreditsSummaryResponse(
             monthly = monthly,
             purchased = purchased,
             total = monthly + purchased,
             monthlyGrant = grant,
-            nextGrantAt = if (grant > 0) ts(nextGrant) else null
+            nextGrantAt = if (grant > 0 && nextGrant != null) ts(nextGrant) else null
         )
     }
 
@@ -324,45 +433,40 @@ class CreditService(
     }
 
     /**
-     * `POST /internal/cron/monthly-credits` (매월 1일 0시 KST, Q5). 계정마다 한 트랜잭션:
-     * 남은 월 지급분 소멸(period = 지난달) → 실제 티어가 유료면 지급(period = 이번 달).
-     * 같은 달에 다시 돌려도 원장에 그 period 행이 있으면 건너뛴다(유니크 인덱스가 마지막 방어)
+     * `POST /internal/cron/monthly-credits` (매시 정각, M1-3d). 대상 = 충전 시각이 지난 계정 + 주기 없는 유료 계정
+     * (V7 배포 시점 유료·DB로 바로 바꾼 계정 — 이 실행 시각에 주기를 시작). 계정마다 한 트랜잭션, 잠근 뒤 다시 판정하므로
+     * 다시 돌려도(Scheduler 재시도) 중복 지급·소멸이 없다. 응답 period = 실행 시각 키
      */
     suspend fun runMonthlyGrant(now: Instant = clock.instant()): MonthlyCreditsResult {
         val database = requireDb()
-        val month = YearMonth.from(now.atZone(KST))
-        val thisPeriod = period(month)
-        val prevPeriod = period(month.minusMonths(1))
         val nowUtc = now.atOffset(ZoneOffset.UTC)
+        val paidTiers = TierLimits.TIERS.filter { TierLimits.isPaid(it) }
 
         val userIds = DatabaseFactory.dbQuery(database) {
-            ProfilesTable.select(ProfilesTable.id).orderBy(ProfilesTable.id).map { it[ProfilesTable.id] }
+            ProfilesTable.select(ProfilesTable.id).where {
+                (ProfilesTable.creditCycleNextAt lessEq nowUtc) or
+                    (ProfilesTable.creditCycleNextAt.isNull() and
+                        ((ProfilesTable.billingTier inList paidTiers) or (ProfilesTable.tierOverride inList paidTiers)))
+            }.orderBy(ProfilesTable.id).map { it[ProfilesTable.id] }
         }
         var expired = 0
         var granted = 0
         for (userId in userIds) {
-            DatabaseFactory.dbQuery(database) {
+            val outcome = DatabaseFactory.dbQuery(database) {
                 val row = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }
-                    .forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: return@dbQuery
-                fun done(reason: String, period: String): Boolean = CreditLedgerTable.selectAll().where {
-                    (CreditLedgerTable.userId eq userId) and (CreditLedgerTable.bucket eq BUCKET_MONTHLY) and
-                        (CreditLedgerTable.reason eq reason) and (CreditLedgerTable.period eq period)
-                }.limit(1).count() > 0
-
-                // 이번 달 지급이 이미 있으면 남은 월 지급분은 이번 달 것이다(같은 달 재실행) → 소멸하지 않는다
-                val remaining = row[ProfilesTable.monthlyCredits]
-                if (remaining > 0 && !done("monthly_grant", thisPeriod) && !done("monthly_expire", prevPeriod)) {
-                    applyCredit(userId, BUCKET_MONTHLY, -remaining, "monthly_expire", period = prevPeriod)
-                    expired++
-                }
-                val grant = TierLimits.of(effectiveTier(row, nowUtc)).monthlyCredits
-                if (grant > 0 && !done("monthly_grant", thisPeriod)) {
-                    applyCredit(userId, BUCKET_MONTHLY, grant, "monthly_grant", period = thisPeriod)
-                    granted++
+                    .forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: return@dbQuery CycleOutcome()
+                val tier = effectiveTier(row, nowUtc)
+                when {
+                    row[ProfilesTable.creditCycleNextAt] != null -> processDueCycle(userId, tier, now)
+                    TierLimits.isPaid(tier) -> startCreditCycle(userId, tier, now)
+                    else -> CycleOutcome()
                 }
             }
+            if (outcome.expired) expired++
+            if (outcome.granted) granted++
         }
-        log.info("monthly-credits: period={} users={} expired={} granted={}", thisPeriod, userIds.size, expired, granted)
-        return MonthlyCreditsResult(period = thisPeriod, users = userIds.size, expired = expired, granted = granted)
+        val runKey = cycleKey(now)
+        log.info("monthly-credits: period={} users={} expired={} granted={}", runKey, userIds.size, expired, granted)
+        return MonthlyCreditsResult(period = runKey, users = userIds.size, expired = expired, granted = granted)
     }
 }

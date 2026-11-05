@@ -21,14 +21,19 @@ import ulevelp.note.GeminiApiException
 import ulevelp.note.GeminiGenerateResult
 import ulevelp.service.*
 import ulevelp.support.*
+import org.jetbrains.exposed.sql.update
+import java.time.Duration
 import java.time.Instant
-import java.time.YearMonth
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.UUID
 import kotlin.test.*
 
 /**
- * M1-3b — 크레딧 서버: 무료 403·사전 402, 예약→정산·실패 반환, `/credits*`, 월 지급 cron
- * (개발산출물/결과/M1-1_스키마설계.md §3·§5-4·§5-6, 결과/M1-3a_크레딧수치.md §6). 테스트마다 "원장 합계 = 잔액"
+ * M1-3b — 크레딧 서버: 무료 403·사전 402, 예약→정산·실패 반환, `/credits*`
+ * (개발산출물/결과/M1-1_스키마설계.md §3·§5-4·§5-6, 결과/M1-3a_크레딧수치.md §6).
+ * M1-3d — 크레딧 주기: 유료 전환 즉시 지급 + 30일 충전, Pro → Pro+ 차액, 무료 전환 시 주기 끝 소멸(결과/M1-3d_크레딧주기.md).
+ * 테스트마다 "원장 합계 = 잔액"
  */
 class CreditApiTest {
 
@@ -353,6 +358,8 @@ class CreditApiTest {
         )
 
         val (id, token) = client.newUser("pro_plus")
+        val cycleNext = Instant.parse("2026-12-06T05:03:20Z")
+        setCycleColumns(id, cycleNext, "pro_plus")
         TestCredits.grant(db, id, 7, BUCKET_MONTHLY)
         TestCredits.grant(db, id, 20)
         TestCredits.grant(db, id, 1)
@@ -361,9 +368,12 @@ class CreditApiTest {
         assertEquals(21, sum["purchased"]!!.jsonPrimitive.int)
         assertEquals(28, sum["total"]!!.jsonPrimitive.int)
         assertEquals(350, sum["monthlyGrant"]!!.jsonPrimitive.int)
-        val next = Instant.parse(sum["nextGrantAt"]!!.jsonPrimitive.content)
-        val expectedNext = YearMonth.now(CreditService.KST).plusMonths(1).atDay(1).atStartOfDay(CreditService.KST).toInstant()
-        assertEquals(expectedNext, next, "다음 달 1일 0시 KST")
+        assertEquals(cycleNext, Instant.parse(sum["nextGrantAt"]!!.jsonPrimitive.content), "다음 충전 = credit_cycle_next_at")
+
+        // 무료로 내려간 계정은 주기가 남아 있어도 다음 지급 없음(주기 끝에 소멸만)
+        setCycleColumns(freeId, cycleNext, "pro")
+        val freeInCycle = json(client.get("/api/v1/credits") { header(HttpHeaders.Authorization, "Bearer $freeToken") }.bodyAsText())
+        assertTrue(freeInCycle["nextGrantAt"] is JsonNull)
 
         val p1 = json(client.get("/api/v1/credits/ledger?limit=2") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText())
         val rows1 = p1["rows"]!!.jsonArray
@@ -429,30 +439,66 @@ class CreditApiTest {
         assertStandardError(unavailable.bodyAsText(), 503, "YOUTUBE_UNAVAILABLE")
     }
 
-    // ---------------- 월 지급 cron ----------------
+    // ---------------- 크레딧 주기 (M1-3d) ----------------
+
+    /** 2026-11-06 14:03:20 KST — 주기 키 "2026-11-06T14:03" */
+    private val t0: Instant = ZonedDateTime.of(2026, 11, 6, 14, 3, 20, 0, CreditService.KST).toInstant()
+    private fun at(days: Long, seconds: Long = 0): Instant = t0.plus(Duration.ofDays(days)).plusSeconds(seconds)
+    private val actor = UUID(0, 1)
+
+    private suspend fun setTier(userId: UUID, tier: String?, now: Instant, until: Instant? = null): AdminUserDto =
+        AdminService(db).setTierOverride(actor, userId, tier, until?.atOffset(ZoneOffset.UTC), "주기 시험", now.atOffset(ZoneOffset.UTC))
+
+    private fun setCycleColumns(userId: UUID, next: Instant?, tier: String?) = transaction(db) {
+        ProfilesTable.update({ ProfilesTable.id eq userId }) {
+            it[creditCycleNextAt] = next?.atOffset(ZoneOffset.UTC)
+            it[creditCycleTier] = tier
+        }
+    }
+
+    /** (다음 충전 시각, 주기 티어) */
+    private fun cycle(userId: UUID): Pair<Instant?, String?> = transaction(db) {
+        val row = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.single()
+        row[ProfilesTable.creditCycleNextAt]?.toInstant() to row[ProfilesTable.creditCycleTier]
+    }
+
+    /** 월 지급 버킷의 주기 행 (reason, period, delta) */
+    private fun cycleRows(userId: UUID): List<Triple<String, String?, Int>> = transaction(db) {
+        CreditLedgerTable.selectAll().where { CreditLedgerTable.userId eq userId }.orderBy(CreditLedgerTable.id)
+            .filter { it[CreditLedgerTable.reason].startsWith("monthly_") }
+            .map { Triple(it[CreditLedgerTable.reason], it[CreditLedgerTable.period], it[CreditLedgerTable.delta]) }
+    }
 
     @Test
-    fun `C1 monthly-credits - OIDC 없으면 401, 유료만 지급, 다시 돌려도 한 번`() = testApplication {
+    fun `C1 monthly-credits - OIDC 없으면 401, 주기 없는 유료 계정은 그 실행 시각에 주기 시작, 다시 돌려도 한 번`() = testApplication {
         app()
         assertEquals(HttpStatusCode.Unauthorized, client.post("/internal/cron/monthly-credits").status)
         val bad = client.post("/internal/cron/monthly-credits") { header(HttpHeaders.Authorization, "Bearer ${TestCronJwt.token(aud = "https://wrong")}") }
         assertEquals(HttpStatusCode.Unauthorized, bad.status)
 
+        // DB로 바로 유료가 된 계정(V7 배포 시점 유료 계정과 같은 상태 — 주기 없음)
         val (freeId, _) = client.newUser()
-        val (proId, _) = client.newUser("pro")
+        val (proId, proToken) = client.newUser("pro")
         val (plusId, _) = client.newUser("pro_plus")
         TestCredits.grant(db, proId, 3) // 구매분은 소멸·지급과 무관
 
+        val before = Instant.now()
         val r1 = client.post("/internal/cron/monthly-credits") { header(HttpHeaders.Authorization, "Bearer ${TestCronJwt.token()}") }
         assertEquals(HttpStatusCode.OK, r1.status, r1.bodyAsText())
-        val period = CreditService.period(YearMonth.now(CreditService.KST))
-        assertEquals(buildJsonObject { put("period", period); put("users", 3); put("expired", 0); put("granted", 2) }, json(r1.bodyAsText()))
+        val body1 = json(r1.bodyAsText())
+        assertTrue(Regex("""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}""").matches(body1["period"]!!.jsonPrimitive.content), "period = 실행 시각 키")
+        assertEquals(listOf(2, 0, 2), listOf("users", "expired", "granted").map { body1[it]!!.jsonPrimitive.int }, "무료 계정은 대상 아님")
         assertEquals(0 to 0, TestCredits.balances(db, freeId))
         assertEquals(170 to 3, TestCredits.balances(db, proId))
         assertEquals(350 to 0, TestCredits.balances(db, plusId))
+        val (proNext, proTier) = cycle(proId)
+        assertEquals("pro", proTier)
+        assertTrue(!proNext!!.isBefore(before.plus(CREDIT_CYCLE).minusSeconds(1)) && !proNext.isAfter(Instant.now().plus(CREDIT_CYCLE)), "다음 = 실행 시각 + 30일")
+        val sum = json(client.get("/api/v1/credits") { header(HttpHeaders.Authorization, "Bearer $proToken") }.bodyAsText())
+        assertEquals(proNext, Instant.parse(sum["nextGrantAt"]!!.jsonPrimitive.content))
 
         val r2 = client.post("/internal/cron/monthly-credits") { header(HttpHeaders.Authorization, "Bearer ${TestCronJwt.token()}") }
-        assertEquals(buildJsonObject { put("period", period); put("users", 3); put("expired", 0); put("granted", 0) }, json(r2.bodyAsText()))
+        assertEquals(listOf(0, 0, 0), listOf("users", "expired", "granted").map { json(r2.bodyAsText())[it]!!.jsonPrimitive.int })
         assertEquals(170 to 3, TestCredits.balances(db, proId))
         transaction(db) {
             assertEquals(2, CreditLedgerTable.selectAll().where { CreditLedgerTable.reason eq "monthly_grant" }.count())
@@ -461,43 +507,178 @@ class CreditApiTest {
     }
 
     @Test
-    fun `C2 다음 달 - 남은 월 지급분 소멸 후 지급, 무료가 된 계정은 소멸만, 재시도 중복 없음`() = testApplication {
+    fun `C2 유료 전환 즉시 지급 - 30일 경계 전 그대로, 30일에 소멸 후 충전, 재실행 중복 없음, cron이 늦어도 경계 그대로`() = testApplication {
         app()
-        val (proId, _) = client.newUser("pro")
-        val (downId, _) = client.newUser("pro")
+        val (id, _) = client.newUser()
         val service = CreditService(db, duration)
-        val nov = YearMonth.of(2026, 11)
-        val novStart = nov.atDay(1).atStartOfDay(CreditService.KST).toInstant()
-        val decStart = nov.plusMonths(1).atDay(1).atStartOfDay(CreditService.KST).toInstant()
 
-        assertEquals(MonthlyCreditsResult("2026-11", 2, 0, 2), service.runMonthlyGrant(novStart))
-        TestCredits.grant(db, proId, 40) // 구매분
-        TestTier.set(db, downId, null)   // 다운그레이드 → 다음 지급 없음
+        val dto = setTier(id, "pro", t0)
+        assertEquals(170, dto.credits.monthly, "전환 즉시 지급")
+        assertEquals(at(30) to "pro", cycle(id))
+        TestCredits.grant(db, id, 40)              // 구매분
+        TestCredits.grant(db, id, -20, BUCKET_MONTHLY) // 쓴 셈(150 남음)
 
-        // 30일 23:59:59 KST는 아직 11월 → 중복 없음
-        assertEquals(MonthlyCreditsResult("2026-11", 2, 0, 0), service.runMonthlyGrant(decStart.minusSeconds(1)))
+        // 29일 23:59:59 — 아직 주기 안
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30, -1)), 0, 0, 0), service.runMonthlyGrant(at(30, -1)))
+        assertEquals(150 to 40, TestCredits.balances(db, id))
 
-        val dec = service.runMonthlyGrant(decStart)
-        assertEquals(MonthlyCreditsResult("2026-12", 2, 2, 1), dec)
-        assertEquals(170 to 40, TestCredits.balances(db, proId))
-        assertEquals(0 to 0, TestCredits.balances(db, downId))
-        assertEquals(MonthlyCreditsResult("2026-12", 2, 0, 0), service.runMonthlyGrant(decStart.plusSeconds(3600)))
+        // 정확히 30일 = 720시간
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30)), 1, 1, 1), service.runMonthlyGrant(at(30)))
+        assertEquals(170 to 40, TestCredits.balances(db, id))
+        assertEquals(at(60) to "pro", cycle(id))
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30, 3600)), 0, 0, 0), service.runMonthlyGrant(at(30, 3600)), "재실행")
 
-        transaction(db) {
-            val rows = CreditLedgerTable.selectAll().where { CreditLedgerTable.userId eq proId }.orderBy(CreditLedgerTable.id).map {
-                Triple(it[CreditLedgerTable.reason], it[CreditLedgerTable.period], it[CreditLedgerTable.delta])
-            }
-            assertEquals(
-                listOf(
-                    Triple("monthly_grant", "2026-11", 170),
-                    Triple("admin_adjust", null, 40),
-                    Triple("monthly_expire", "2026-11", -170),
-                    Triple("monthly_grant", "2026-12", 170)
-                ),
-                rows
-            )
+        // cron이 5시간 늦어도 다음 경계는 t0 + 90일(밀림 없음)
+        assertEquals(MonthlyCreditsResult(cycleKey(at(60, 5 * 3600)), 1, 1, 1), service.runMonthlyGrant(at(60, 5 * 3600)))
+        assertEquals(at(90) to "pro", cycle(id))
+
+        assertEquals(
+            listOf(
+                Triple("monthly_grant", "2026-11-06T14:03", 170),
+                Triple("monthly_expire", "2026-11-06T14:03", -150),
+                Triple("monthly_grant", "2026-12-06T14:03", 170),
+                Triple("monthly_expire", "2026-12-06T14:03", -170),
+                Triple("monthly_grant", "2027-01-05T14:03", 170)
+            ),
+            cycleRows(id)
+        )
+        assertEquals(170 to 40, TestCredits.balances(db, id))
+        TestCredits.assertInvariant(db, id)
+    }
+
+    @Test
+    fun `C3 Pro → Pro+ 차액만 즉시·주기 유지, 내렸다 다시 올려도 한 번, 충전 시각 지난 뒤 업그레이드는 충전 먼저`() = testApplication {
+        app()
+        val (id, _) = client.newUser()
+        val service = CreditService(db, duration)
+        setTier(id, "pro", t0)
+        TestCredits.grant(db, id, -100, BUCKET_MONTHLY) // 70 남음
+
+        assertEquals(250, setTier(id, "pro_plus", at(10)).credits.monthly, "70 + 차액 180")
+        assertEquals(at(30) to "pro_plus", cycle(id), "주기 그대로")
+        assertEquals(250, setTier(id, "pro", at(11)).credits.monthly, "내려도 회수 없음")
+        assertEquals(at(30) to "pro_plus", cycle(id), "주기 티어는 높은 쪽을 기억")
+        assertEquals(250, setTier(id, "pro_plus", at(12)).credits.monthly, "같은 주기에 차액은 한 번")
+
+        // 29일에 Pro로 내리고, 30일 10분(충전 시각이 지났지만 cron은 아직)에 다시 Pro+
+        setTier(id, "pro", at(29))
+        val up = setTier(id, "pro_plus", at(30, 600))
+        // 바꾸기 전 티어(pro)로 30일 충전(소멸 250 → 170) → 그 주기에서 차액 180
+        assertEquals(350, up.credits.monthly)
+        assertEquals(at(60) to "pro_plus", cycle(id))
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30, 3600)), 0, 0, 0), service.runMonthlyGrant(at(30, 3600)))
+
+        assertEquals(
+            listOf(
+                Triple("monthly_grant", "2026-11-06T14:03", 170),
+                Triple("monthly_topup", "2026-11-06T14:03", 180),
+                Triple("monthly_expire", "2026-11-06T14:03", -250),
+                Triple("monthly_grant", "2026-12-06T14:03", 170),
+                Triple("monthly_topup", "2026-12-06T14:03", 180)
+            ),
+            cycleRows(id)
+        )
+        // 무료 → Pro+ 는 바로 350
+        val (direct, _) = client.newUser()
+        assertEquals(350, setTier(direct, "pro_plus", t0).credits.monthly)
+        TestCredits.assertInvariant(db, id)
+        TestCredits.assertInvariant(db, direct)
+    }
+
+    @Test
+    fun `C4 유료 → 무료 - 남은 월 지급분은 주기 끝까지, 끝에 소멸·충전 없음·주기 종료, override 기한 만료도 같다`() = testApplication {
+        app()
+        val (id, token) = client.newUser()
+        val service = CreditService(db, duration)
+        setTier(id, "pro", t0)
+        TestCredits.grant(db, id, 40)
+
+        val down = setTier(id, null, at(5))
+        assertEquals("free", down.tier)
+        assertEquals(170, down.credits.monthly, "전환 때 소멸하지 않는다")
+        assertEquals(at(30) to "pro", cycle(id))
+        assertTrue(json(client.get("/api/v1/credits") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText())["nextGrantAt"] is JsonNull)
+
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30, -1)), 0, 0, 0), service.runMonthlyGrant(at(30, -1)))
+        assertEquals(170 to 40, TestCredits.balances(db, id))
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30)), 1, 1, 0), service.runMonthlyGrant(at(30)))
+        assertEquals(0 to 40, TestCredits.balances(db, id), "구매분은 남는다")
+        assertEquals(null to null, cycle(id), "주기 종료")
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30, 3600)), 0, 0, 0), service.runMonthlyGrant(at(30, 3600)), "무료·주기 없음은 대상 아님")
+        assertEquals(
+            listOf(Triple("monthly_grant", "2026-11-06T14:03", 170), Triple("monthly_expire", "2026-11-06T14:03", -170)),
+            cycleRows(id)
+        )
+
+        // override 기한(10일)이 지나고 tier-expire cron이 아직이어도 충전 시각의 실제 티어(free)로 판정
+        val (temp, _) = client.newUser()
+        setTier(temp, "pro_plus", t0, until = at(10))
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30)), 1, 1, 0), service.runMonthlyGrant(at(30)))
+        assertEquals(0 to 0, TestCredits.balances(db, temp))
+        assertEquals(null to null, cycle(temp))
+        TestCredits.assertInvariant(db, id)
+        TestCredits.assertInvariant(db, temp)
+    }
+
+    @Test
+    fun `C5 주기 안 재가입은 새 주기, 같은 분 재가입은 추가 지급 없음`() = testApplication {
+        app()
+        val (id, _) = client.newUser()
+        val service = CreditService(db, duration)
+        setTier(id, "pro", t0)
+        TestCredits.grant(db, id, -30, BUCKET_MONTHLY) // 140 남음
+        setTier(id, null, at(5))
+        val again = setTier(id, "pro", at(10))
+        assertEquals(170, again.credits.monthly, "앞 주기 남은 140 소멸 → 새 주기 170")
+        assertEquals(at(40) to "pro", cycle(id))
+        assertEquals(MonthlyCreditsResult(cycleKey(at(30)), 0, 0, 0), service.runMonthlyGrant(at(30)), "앞 주기 경계는 지나간 일")
+        assertEquals(
+            listOf(
+                Triple("monthly_grant", "2026-11-06T14:03", 170),
+                Triple("monthly_expire", "2026-11-06T14:03", -140),
+                Triple("monthly_grant", "2026-11-16T14:03", 170)
+            ),
+            cycleRows(id)
+        )
+
+        // 같은 분(14:03:20 → :30 → :40) 해지·재가입 — 지급 키가 같으므로 새로 주지 않는다
+        val (same, _) = client.newUser()
+        setTier(same, "pro", t0)
+        setTier(same, null, t0.plusSeconds(10))
+        assertEquals(170, setTier(same, "pro", t0.plusSeconds(20)).credits.monthly)
+        assertEquals(at(30) to "pro", cycle(same))
+        assertEquals(1, cycleRows(same).size)
+        TestCredits.assertInvariant(db, id)
+        TestCredits.assertInvariant(db, same)
+    }
+
+    @Test
+    fun `C6 관리 API로 pro 지정하면 응답에 즉시 지급, credits nextGrantAt = 지금 + 30일`() = testApplication {
+        app()
+        val (ownerId, ownerToken) = client.newUser()
+        TestTier.setRole(db, ownerId, "owner")
+        val (id, token) = client.newUser()
+        val before = Instant.now()
+        val res = client.put("/api/v1/admin/users/$id/tier-override") {
+            header(HttpHeaders.Authorization, "Bearer $ownerToken")
+            contentType(ContentType.Application.Json)
+            setBody("""{"tier":"pro","reason":"주기 시험"}""")
         }
-        TestCredits.assertInvariant(db, proId)
-        TestCredits.assertInvariant(db, downId)
+        assertEquals(HttpStatusCode.OK, res.status, res.bodyAsText())
+        assertEquals(buildJsonObject { put("monthly", 170); put("purchased", 0) }, json(res.bodyAsText())["credits"])
+        val sum = json(client.get("/api/v1/credits") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText())
+        val next = Instant.parse(sum["nextGrantAt"]!!.jsonPrimitive.content)
+        assertTrue(!next.isBefore(before.plus(CREDIT_CYCLE).minusSeconds(1)) && !next.isAfter(Instant.now().plus(CREDIT_CYCLE)))
+        assertEquals(170, sum["monthlyGrant"]!!.jsonPrimitive.int)
+
+        // 잘못된 입력은 지급 없이 400
+        val bad = client.put("/api/v1/admin/users/$ownerId/tier-override") {
+            header(HttpHeaders.Authorization, "Bearer $ownerToken")
+            contentType(ContentType.Application.Json)
+            setBody("""{"tier":"gold","reason":"x"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, bad.status)
+        assertEquals(0 to 0, TestCredits.balances(db, ownerId))
+        TestCredits.assertInvariant(db, id)
     }
 }

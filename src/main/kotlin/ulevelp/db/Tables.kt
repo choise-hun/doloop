@@ -41,6 +41,9 @@ object ProfilesTable : Table("profiles") {
     val tierOverrideUntil = timestampWithTimeZone("tier_override_until").nullable()
     val monthlyCredits = integer("monthly_credits").default(0)
     val purchasedCredits = integer("purchased_credits").default(0)
+    // V7 크레딧 주기 (M1-3d): 다음 충전 시각·이번 주기에 지급한 티어. 둘 다 NULL = 주기 없음
+    val creditCycleNextAt = timestampWithTimeZone("credit_cycle_next_at").nullable()
+    val creditCycleTier = text("credit_cycle_tier").nullable()
     val locale = text("locale").nullable()
     val isCreator = bool("is_creator").default(false)
     val creatorBadge = text("creator_badge").nullable()

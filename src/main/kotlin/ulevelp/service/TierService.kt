@@ -29,7 +29,7 @@ data class TierLimits(
     val drive: Boolean,
     val ai: Boolean,
     val communityWrite: Boolean,
-    /** 매월 1일 지급 크레딧(Q4·Q5, `결과/M1-3a_크레딧수치.md` §5) */
+    /** 30일 주기 월 지급 크레딧(Q4, `결과/M1-3a_크레딧수치.md` §5, 주기는 M1-3d) */
     val monthlyCredits: Int = 0
 ) {
     companion object {

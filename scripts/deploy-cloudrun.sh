@@ -171,7 +171,7 @@ else
 fi
 gcloud scheduler jobs "${TIER_JOB_VERB}" http "${TIER_JOB_NAME}"   --project="${GCP_PROJECT_ID}"   --location="${GCP_REGION}"   --schedule="5 0 * * *"   --time-zone="Asia/Seoul"   --uri="${TIER_CRON_URI}"   --http-method=POST   --oidc-service-account-email="${CRON_SA_EMAIL}"   --oidc-token-audience="${FINAL_CRON_AUDIENCE}"
 
-# 6. Cloud Scheduler 'ulevelp-monthly-credits' — 매월 1일 00:00 KST, 월 지급 크레딧 소멸 → 유료 티어 지급 (M1-3b, Q5)
+# 6. Cloud Scheduler 'ulevelp-monthly-credits' — 매시 정각, 충전 시각이 지난 계정의 월 지급분 소멸 → 유료면 30일 주기 충전 (M1-3d)
 CREDIT_JOB_NAME="ulevelp-monthly-credits"
 CREDIT_CRON_URI="${SERVICE_URL}/internal/cron/monthly-credits"
 echo "==> [6/6] Cloud Scheduler 크론 '${CREDIT_JOB_NAME}' 구성 (URI: ${CREDIT_CRON_URI})"
@@ -183,7 +183,7 @@ fi
 gcloud scheduler jobs "${CREDIT_JOB_VERB}" http "${CREDIT_JOB_NAME}" \
   --project="${GCP_PROJECT_ID}" \
   --location="${GCP_REGION}" \
-  --schedule="0 0 1 * *" \
+  --schedule="0 * * * *" \
   --time-zone="Asia/Seoul" \
   --uri="${CREDIT_CRON_URI}" \
   --http-method=POST \
