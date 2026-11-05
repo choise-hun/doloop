@@ -62,6 +62,42 @@ function collectGapProblems(scale) {
   return out;
 }
 
+// 버튼·필 글자가 한 줄인지(FT-4). 390 안쪽 폭(약 270px)에서 긴 문구가 두 줄 필이 되는 것을 손으로 재지 않게 한다.
+// 판정: 지금 높이 > 줄바꿈을 막았을 때 높이 + 1px 이면 두 줄. 글자 크기·패딩·이모지와 상관없이 같은 식으로 잰다
+function collectWrappedPills() {
+  const out = [];
+  for (const el of document.querySelectorAll('main button, main a.pillBtn, main a.ghostBtn')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0 || !(el.textContent || '').trim()) continue;
+    const before = el.style.whiteSpace;
+    el.style.whiteSpace = 'nowrap';
+    const oneLine = el.getBoundingClientRect().height;
+    el.style.whiteSpace = before;
+    if (r.height > oneLine + 1) {
+      out.push(`${el.id ? '#' + el.id : el.tagName.toLowerCase()} "${el.textContent.trim()}" 두 줄(높이 ${Math.round(r.height)}px > 한 줄 ${Math.round(oneLine)}px, 폭 ${Math.round(r.width)}px)`);
+    }
+  }
+  return out;
+}
+
+for (const state of ['guest', 'user']) {
+  for (const width of [390, 768, 1280]) {
+    test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await mockApp(page, STATES[state]);
+      await page.goto('/settings.html', { waitUntil: 'load' });
+      test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+      if (state === 'user') await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+      else await page.locator('#accGuest').waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      // 접힌 details(고급 설정·계정 삭제 등)를 모두 펼쳐 안쪽 버튼도 잰다
+      await page.evaluate(() => document.querySelectorAll('main details').forEach((d) => (d.open = true)));
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(collectWrappedPills)).toEqual([]);
+    });
+  }
+}
+
 for (const width of WIDTHS) {
   test(`FT settings user ${width}px 본문 간격 스케일·일정함(고급 설정 펼침 포함)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
