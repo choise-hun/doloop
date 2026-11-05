@@ -92,4 +92,41 @@ class GeminiClientErrorTest {
         assertEquals("PROVIDER_KEY_INVALID", ex.code)
         assertTrue(ex.message.startsWith("PROVIDER_KEY_INVALID:"), ex.message)
     }
+
+    /** GA-2: 요청 본문 `video_metadata` — 옵션 없음(기본 fps) / fps + 구간 offset / fps만 */
+    @Test
+    fun ga2_videoMetadata_fpsAndOffsets() {
+        val bodies = java.util.concurrent.CopyOnWriteArrayList<JsonObject>()
+        val ok = buildJsonObject {
+            putJsonArray("candidates") {
+                addJsonObject { putJsonObject("content") { putJsonArray("parts") { addJsonObject { put("text", "{}") } } } }
+            }
+        }.toString().toByteArray()
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        server.createContext("/models/gemini-flash-latest:generateContent") { exchange ->
+            bodies.add(Json.parseToJsonElement(exchange.requestBody.readBytes().toString(Charsets.UTF_8)).jsonObject)
+            exchange.sendResponseHeaders(200, ok.size.toLong())
+            exchange.responseBody.write(ok)
+            exchange.responseBody.close()
+        }
+        server.start()
+        try {
+            val client = HttpGeminiClient(baseUrl = "http://127.0.0.1:${server.address.port}", frameFps = 0.2, retryDelayBaseMs = 1L)
+            runBlocking {
+                client.call()
+                client.generateNoteAnalysis("key", "gemini-flash-latest", "https://youtu.be/oWQZopUx0fA", "prompt", buildJsonObject {},
+                    GeminiVideoOptions(fps = 3.0, startSec = 40, endSec = 80))
+                client.generateNoteAnalysis("key", "gemini-flash-latest", "https://youtu.be/oWQZopUx0fA", "prompt", buildJsonObject {},
+                    GeminiVideoOptions(fps = 1.0))
+            }
+        } finally {
+            server.stop(0)
+        }
+        val metas = bodies.map {
+            it["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["video_metadata"]!!.jsonObject
+        }
+        assertEquals(buildJsonObject { put("fps", 0.2) }, metas[0])
+        assertEquals(buildJsonObject { put("fps", 3.0); put("start_offset", "40s"); put("end_offset", "80s") }, metas[1])
+        assertEquals(buildJsonObject { put("fps", 1.0) }, metas[2])
+    }
 }

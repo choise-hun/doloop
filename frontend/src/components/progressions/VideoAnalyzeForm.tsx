@@ -1,8 +1,11 @@
 // CH-5: 코드 진행 영상 — URL + 메모 → POST /progressions/analyze (작업 큐, 결과는 목록 맨 위 작업 줄에서)
+// GA-2: 구간(시작~끝) + 코드 진행 변화 속도(느림·보통·빠름 → 초당 캡처량). 개발산출물/진행_분석설정.md §3-2
 import React, { useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { apiClient } from '../../lib/apiClient';
 import { thumb, videoIdFrom } from '../../lib/security';
+import { PACES, PACE_LABEL, checkRange } from './model.mts';
+import type { Pace } from './model.mts';
 import styles from './Progressions.module.css';
 
 export interface VideoAnalyzeFormProps {
@@ -15,6 +18,9 @@ export interface VideoAnalyzeFormProps {
 export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMissing }: VideoAnalyzeFormProps): React.ReactElement {
   const [url, setUrl] = useState('');
   const [memo, setMemo] = useState('');
+  const [startText, setStartText] = useState('');
+  const [endText, setEndText] = useState('');
+  const [pace, setPace] = useState<Pace>('normal');
   const [msg, setMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
   const [sending, setSending] = useState(false);
   const vid = videoIdFrom(url);
@@ -25,13 +31,27 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
       setMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
       return;
     }
+    const range = checkRange(startText, endText);
+    if (range.error) {
+      setMsg({ text: range.error, kind: 'err' });
+      return;
+    }
     setSending(true);
     setMsg({ text: '분석 요청을 보내는 중...', kind: '' });
     try {
-      const r = await apiClient.progressions.analyze({ url: `https://www.youtube.com/watch?v=${vid}`, memo: memo.trim() });
+      const r = await apiClient.progressions.analyze({
+        url: `https://www.youtube.com/watch?v=${vid}`,
+        memo: memo.trim(),
+        startSec: range.startSec,
+        endSec: range.endSec,
+        pace,
+      });
       setMsg({ text: '분석을 요청했어요. 보통 1~3분 뒤 목록 맨 위에 진행이 생겨요. 학습 노트도 같이 남습니다.', kind: 'ok' });
       setUrl('');
       setMemo('');
+      setStartText('');
+      setEndText('');
+      setPace('normal');
       onRequested(r.jobId);
     } catch (err: any) {
       if (err && (err.code === 'NO_KEY' || err.status === 412)) onKeyMissing();
@@ -74,6 +94,53 @@ export function VideoAnalyzeForm({ hasKey, onOpenKeyModal, onRequested, onKeyMis
           <span className="hint">영상을 확인했어요</span>
         </div>
       )}
+      <div className={styles.grid2}>
+        <label className={styles.field}>
+          <span className={styles.lab}>
+            시작 <span className="hint">(선택)</span>
+          </span>
+          <input
+            className="inpField"
+            id="progVideoStart"
+            type="text"
+            inputMode="numeric"
+            value={startText}
+            placeholder="1:20 또는 80"
+            autoComplete="off"
+            onChange={(e) => setStartText(e.target.value)}
+          />
+        </label>
+        <label className={styles.field}>
+          <span className={styles.lab}>
+            끝 <span className="hint">(선택)</span>
+          </span>
+          <input
+            className="inpField"
+            id="progVideoEnd"
+            type="text"
+            inputMode="numeric"
+            value={endText}
+            placeholder="비우면 영상 끝까지"
+            autoComplete="off"
+            onChange={(e) => setEndText(e.target.value)}
+          />
+        </label>
+      </div>
+      <div className={styles.field}>
+        <span className={styles.lab} id="progVideoPaceLab">
+          코드 진행 변화
+        </span>
+        <div className={styles.segment} role="group" aria-labelledby="progVideoPaceLab" id="progVideoPace">
+          {PACES.map((p) => (
+            <button key={p} type="button" data-pace={p} aria-pressed={pace === p} onClick={() => setPace(p)}>
+              {PACE_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <span className="hint">
+          코드가 짧은 시간 안에 많이 바뀐다면 빠름을 권장해요. 빠름은 분석량이 많아 구간을 짧게 잡는 게 좋아요.
+        </span>
+      </div>
       <label className={styles.field}>
         <span className={styles.lab}>
           메모 <span className="hint">(선택)</span>

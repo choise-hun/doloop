@@ -25,13 +25,24 @@ data class GeminiGenerateResult(
     val usageSummary: String
 )
 
+/**
+ * 영상 입력 옵션(GA-2, `진행_분석설정.md` §3-2): `video_metadata`의 `fps`·`start_offset`·`end_offset`.
+ * null 필드는 보내지 않는다(fps가 null이면 클라이언트 기본 `GEMINI_FRAME_FPS`).
+ */
+data class GeminiVideoOptions(
+    val fps: Double? = null,
+    val startSec: Int? = null,
+    val endSec: Int? = null
+)
+
 interface GeminiClient {
     suspend fun generateNoteAnalysis(
         apiKey: String,
         model: String,
         youtubeUrl: String,
         prompt: String,
-        responseJsonSchema: JsonObject
+        responseJsonSchema: JsonObject,
+        videoOptions: GeminiVideoOptions? = null
     ): GeminiGenerateResult
 }
 
@@ -50,7 +61,8 @@ class HttpGeminiClient(
         model: String,
         youtubeUrl: String,
         prompt: String,
-        responseJsonSchema: JsonObject
+        responseJsonSchema: JsonObject,
+        videoOptions: GeminiVideoOptions?
     ): GeminiGenerateResult = withContext(Dispatchers.IO) {
         val requestUri = URI("$baseUrl/models/$model:generateContent")
 
@@ -63,7 +75,9 @@ class HttpGeminiClient(
                                 put("file_uri", youtubeUrl)
                             }
                             putJsonObject("video_metadata") {
-                                put("fps", frameFps)
+                                put("fps", videoOptions?.fps ?: frameFps)
+                                videoOptions?.startSec?.let { put("start_offset", "${it}s") }
+                                videoOptions?.endSec?.let { put("end_offset", "${it}s") }
                             }
                         }
                         addJsonObject {

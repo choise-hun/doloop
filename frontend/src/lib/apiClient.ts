@@ -163,6 +163,10 @@ export interface AnalysisJobDto {
   status: 'queued' | 'running' | 'done' | 'failed' | string;
   error?: string | null;
   noteId?: string | null;
+  /** 코드 진행 영상 작업의 분석 구간(초)·속도 (GA-2). 노트 작업은 null */
+  startSec?: number | null;
+  endSec?: number | null;
+  pace?: 'slow' | 'normal' | 'fast' | string | null;
   createdAt: string;
   startedAt?: string | null;
   finishedAt?: string | null;
@@ -983,12 +987,22 @@ async function removeProgression(progressionId: string): Promise<{ ok: boolean }
   return { ok: true };
 }
 
-async function analyzeProgression(input: { url: string; memo?: string }): Promise<{ jobId: string; status: string }> {
+async function analyzeProgression(input: {
+  url: string;
+  memo?: string;
+  startSec?: number | null;
+  endSec?: number | null;
+  pace?: 'slow' | 'normal' | 'fast';
+}): Promise<{ jobId: string; status: string }> {
   requireLogin();
   try {
+    const body: Record<string, unknown> = { url: input?.url, memo: input?.memo };
+    if (typeof input?.startSec === 'number') body.startSec = input.startSec;
+    if (typeof input?.endSec === 'number') body.endSec = input.endSec;
+    if (input?.pace) body.pace = input.pace;
     const r = await getAuthRef().apiFetch('/api/v1/progressions/analyze', {
       method: 'POST',
-      body: JSON.stringify({ url: input?.url, memo: input?.memo }),
+      body: JSON.stringify(body),
     });
     return { jobId: r.jobId, status: r.status };
   } catch (err: any) {

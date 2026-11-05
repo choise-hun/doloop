@@ -13,7 +13,7 @@ import { ReadingGuide } from '../components/progressions/ReadingGuide';
 import { TastePanel } from '../components/progressions/TastePanel';
 import { hasSequence } from '../lib/chords/stats.mts';
 import pStyles from '../components/progressions/Progressions.module.css';
-import { emptyForm, filterScope, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
+import { emptyForm, filterScope, jobOptionsLabel, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions } from '../components/progressions/model.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
@@ -201,7 +201,8 @@ export function ProgressionsPage(): React.ReactElement {
 
   const jobLine = (j: AnalysisJobDto): React.ReactNode => {
     const vid = videoIdFrom(j.url || '');
-    const label = vid ? `youtu.be/${vid}` : j.url;
+    const opts = jobOptionsLabel(j);
+    const label = (vid ? `youtu.be/${vid}` : j.url) + (opts ? ` · ${opts}` : '');
     if (isActive(j)) return <>{j.status === 'queued' ? '대기 중' : '분석 중'} · {label}</>;
     if (j.status === 'failed') {
       const why = describeJobError(j.error);

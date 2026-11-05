@@ -564,7 +564,7 @@
 ```
 
 ### 8.2 분석 작업 상태 조회
-- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 10개 필드 — `kind`는 `note`(8.1 노트 분석) | `progression`(8.5 코드 진행 영상 분석). 두 종류가 한 목록에 섞여 나온다). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
+- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 13개 필드 — `kind`는 `note`(8.1 노트 분석) | `progression`(8.5 코드 진행 영상 분석). 두 종류가 한 목록에 섞여 나온다. `startSec`·`endSec`·`pace`는 코드 진행 영상 작업의 분석 구간·속도, 노트 작업은 `null`). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
 - **Response (`200 OK` - 단건 예시):**
 ```json
 {
@@ -672,7 +672,8 @@
   - `kind`를 `reference`로 바꾸려면 `route=manual`이어야 함(아니면 `400` "영상에서 온 진행은 레퍼런스로 바꿀 수 없습니다.")
 - **`DELETE /api/v1/progressions/{id}`** → `200 { "ok": true }`. 노트에서 온 행을 지워도 노트 토글은 켠 채로 둔다.
 - 없는 행·남의 행·비 UUID 경로 `404 NOT_FOUND`, 토큰 없음 `401 UNAUTHORIZED`. 모든 응답 `Cache-Control: no-store`.
-- **`POST /api/v1/progressions/analyze`** `{ "url": "유튜브 주소(≤500)", "memo": "선택(≤2000)" }` → `202 { "jobId": "uuid", "status": "queued" }` — 코드 진행 영상 분석
+- **`POST /api/v1/progressions/analyze`** `{ "url": "유튜브 주소(≤500)", "memo": "선택(≤2000)", "startSec": 선택 정수, "endSec": 선택 정수, "pace": "선택 slow|normal|fast" }` → `202 { "jobId": "uuid", "status": "queued" }` — 코드 진행 영상 분석
+  - 구간·속도(GA-2): `startSec`·`endSec`는 정수 초 0~86400, `endSec`는 `startSec`(없으면 0)보다 1초 이상 커야 한다. `pace`는 `slow`·`normal`·`fast`(없으면 `normal`). 어기면 `400 INVALID_INPUT`. Gemini `video_metadata`에 `fps`(slow 0.5 · normal 1 · fast 3)와 구간 `start_offset`·`end_offset`(`"40s"`)을 넣는다. 노트 분석(8.1)은 이 필드를 받지 않고 `GEMINI_FRAME_FPS`(기본 0.2)
   - 검증·제한은 8.1과 같다(유튜브 URL 아니면 `400`, Gemini 키 없음 `412 NO_KEY`, 동시 1건·UTC 하루 20건 `429 RATE_LIMITED` — **노트 분석과 합산**, 디스패치 실패 `502`). 태그는 서버가 `["화성"]`로 정한다(본문 `tags` 없음)
   - `analysis_jobs.kind = 'progression'`. 진행 전용 프롬프트(공통 스키마 + 화성 확장판: 진행에 `song`·`artist`·`start`·`end`, `key`는 `F Major`·`A min` 형식, 코드 심볼은 화면 표기 그대로)로 Gemini를 부른다. 일반 노트(8.1)의 프롬프트·스키마는 그대로
   - 상태 조회는 8.2(`/notes/jobs`·`/notes/jobs/{id}`), `kind = "progression"`

@@ -1243,4 +1243,72 @@ class NoteApiTest {
         }.bodyAsText()).jsonObject["progressions"]!!.jsonArray
         assertEquals(0, after.size)
     }
+
+    /** GA-2: 구간·속도 선택 필드 → 작업 DTO → Gemini 영상 옵션(`진행_분석설정.md` §3-2) */
+    @Test
+    fun n19_progressionAnalyze_rangeAndPace_toJobAndGeminiOptions() = testApplication {
+        seedGeminiKey(userA)
+        fakeGeminiClient.handler = { _, _, _, _, _ -> GeminiGenerateResult(progressionAnalysis(), "{}") }
+        configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
+        val auth: HttpRequestBuilder.() -> Unit = { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+
+        // 400: 끝 ≤ 시작 · 범위 밖 · 문자열 초 · 소수 · 모르는 속도 · 끝 0초 — 작업은 만들어지지 않음
+        for (bad in listOf(
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":80,"endSec":80}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":-1}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","endSec":86401}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":"80"}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":1.5}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","pace":"turbo"}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ","endSec":0}"""
+        )) {
+            val res = postProgressionAnalyze(client, tokenA, bad)
+            assertEquals(HttpStatusCode.BadRequest, res.status, bad)
+            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+        }
+        assertEquals(0, fakeDispatcher.dispatched.size)
+
+        // 정상: 구간 + 빠름 → 작업 DTO에 그대로, Gemini fps 3 + 구간
+        val res = postProgressionAnalyze(client, tokenA, """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":40,"endSec":80,"pace":"fast"}""")
+        assertEquals(HttpStatusCode.Accepted, res.status, res.bodyAsText())
+        val jobId = Json.parseToJsonElement(res.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+        val queued = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$jobId", auth).bodyAsText()).jsonObject
+        assertEquals(40, queued["startSec"]!!.jsonPrimitive.int)
+        assertEquals(80, queued["endSec"]!!.jsonPrimitive.int)
+        assertEquals("fast", queued["pace"]!!.jsonPrimitive.content)
+        newNoteService().executeJob(UUID.fromString(jobId))
+        assertEquals(GeminiVideoOptions(fps = 3.0, startSec = 40, endSec = 80), fakeGeminiClient.videoOptionsCalls.last())
+
+        // 선택 필드 없음 → pace normal(fps 1), 구간 null
+        val res2 = postProgressionAnalyze(client, tokenA, """{"url":"https://youtu.be/dQw4w9WgXcQ"}""")
+        assertEquals(HttpStatusCode.Accepted, res2.status, res2.bodyAsText())
+        val jobId2 = Json.parseToJsonElement(res2.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+        val job2 = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$jobId2", auth).bodyAsText()).jsonObject
+        assertEquals("normal", job2["pace"]!!.jsonPrimitive.content)
+        assertEquals(JsonNull, job2["startSec"] ?: JsonNull)
+        assertEquals(JsonNull, job2["endSec"] ?: JsonNull)
+        newNoteService().executeJob(UUID.fromString(jobId2))
+        assertEquals(GeminiVideoOptions(fps = 1.0), fakeGeminiClient.videoOptionsCalls.last())
+
+        // 시작만(끝 없음) + 느림
+        val res3 = postProgressionAnalyze(client, tokenA, """{"url":"https://youtu.be/dQw4w9WgXcQ","startSec":95,"pace":"slow"}""")
+        assertEquals(HttpStatusCode.Accepted, res3.status, res3.bodyAsText())
+        val jobId3 = Json.parseToJsonElement(res3.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+        newNoteService().executeJob(UUID.fromString(jobId3))
+        assertEquals(GeminiVideoOptions(fps = 0.5, startSec = 95), fakeGeminiClient.videoOptionsCalls.last())
+
+        // 노트 분석(회귀): 옵션 필드는 무시 → 작업 DTO 구간·속도 null, Gemini 옵션 없음
+        val noteRes = client.post("/api/v1/notes/analyze") {
+            auth()
+            header(HttpHeaders.ContentType, "application/json")
+            setBody("""{"url":"https://youtu.be/dQw4w9WgXcQ","tags":["화성"],"startSec":10,"pace":"fast"}""")
+        }
+        assertEquals(HttpStatusCode.Accepted, noteRes.status, noteRes.bodyAsText())
+        val noteJobId = Json.parseToJsonElement(noteRes.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+        val noteJob = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$noteJobId", auth).bodyAsText()).jsonObject
+        assertEquals(JsonNull, noteJob["pace"] ?: JsonNull)
+        assertEquals(JsonNull, noteJob["startSec"] ?: JsonNull)
+        newNoteService().executeJob(UUID.fromString(noteJobId))
+        assertNull(fakeGeminiClient.videoOptionsCalls.last())
+    }
 }

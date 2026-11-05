@@ -4,6 +4,8 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import ulevelp.api.*
@@ -53,13 +55,15 @@ fun Route.registerProgressionRoutes(
             val body = call.receiveJsonObject()
             val url = body.requireString("url", 500)
             val memo = body.optString("memo", 2000) ?: ""
+            val options = parseAnalyzeOptions(body)
             val response = noteService.requestAnalyze(
                 userId = user.id,
                 rawUrl = url,
                 rawTags = GeminiSchemas.PROGRESSION_TAGS,
                 memo = memo,
                 dispatcher = analyzeJobDispatcher,
-                kind = NoteService.JOB_KIND_PROGRESSION
+                kind = NoteService.JOB_KIND_PROGRESSION,
+                options = options
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.Accepted, response)
@@ -82,4 +86,24 @@ fun Route.registerProgressionRoutes(
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
     }
+}
+
+/** 분석 구간·속도 선택 필드(GA-2, `진행_분석설정.md` §3-2). 잘못되면 400 INVALID_INPUT */
+internal fun parseAnalyzeOptions(body: JsonObject): AnalysisJobOptions {
+    val startSec = optSec(body, "startSec")
+    val endSec = optSec(body, "endSec")
+    if (endSec != null && endSec <= (startSec ?: 0)) {
+        throw InvalidInputException("endSec는 startSec보다 1초 이상 커야 합니다.")
+    }
+    val pace = body.optString("pace", 20) ?: NoteService.PACE_NORMAL
+    if (pace !in NoteService.PACE_FPS) {
+        throw InvalidInputException("pace는 slow·normal·fast 중 하나여야 합니다.")
+    }
+    return AnalysisJobOptions(startSec = startSec, endSec = endSec, pace = pace)
+}
+
+private fun optSec(body: JsonObject, name: String): Int? {
+    val element = body[name]
+    if (element == null || element is JsonNull) return null
+    return body.requireInt(name, 0, 86400)
 }
