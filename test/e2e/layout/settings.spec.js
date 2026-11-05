@@ -1,67 +1,24 @@
-// 설정 화면 간격 검사: 세로로 쌓인 형제 사이 간격이 간격 스케일(섹션 16 · 패널 12 · 라벨 6) 안이고 상자마다 일정
-// React 화면 전용(legacy 모드는 skip)
+// 설정 화면 정렬 검사 (FT-2): 공통 검사 G0~G8 + 옛 settings-spacing.spec.js 간격 검사(본문 섹션 세로 간격 6·12·16, 상자마다 일정)
+// 규격: 개발산출물/프론트_정렬규격.md · 점검 기록: 개발산출물/결과/FT-2_전화면점검.md
 'use strict';
 const { test, expect } = require('@playwright/test');
+const { layoutSuite } = require('../support/layout-check');
+const { mockApp, STATES } = require('../support/mock-app');
 
+layoutSuite({
+  name: 'settings',
+  path: '/settings.html',
+  states: ['guest', 'user'],
+  ready: async (page, state) => {
+    if (state === 'user') await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+    else await page.locator('#accGuest').waitFor();
+  },
+  dark: 'user',
+});
+
+// 옛 settings-spacing.spec.js에서 옮김(판정 함수 그대로, 가짜 인증만 mockApp으로)
 const WIDTHS = [1280, 390];
 const SCALE = [6, 12, 16];
-
-function json(route, body) {
-  return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body) });
-}
-
-// 가짜 인증·API 모킹 (home-align.spec.js setupLoggedIn에서 설정 화면에 필요한 부분만 옮김)
-async function setupLoggedIn(page) {
-  await page.route(
-    (url) => url.pathname.endsWith('.html') || url.pathname === '/',
-    async (route) => {
-      const response = await route.fetch();
-      const text = await response.text();
-      const body = text.replace(/\sintegrity="[^"]*"/g, '');
-      await route.fulfill({
-        response,
-        body,
-        headers: { ...response.headers(), 'content-length': String(Buffer.byteLength(body)) },
-      });
-    }
-  );
-
-  await page.route(/https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@.*/, async (route) => {
-    const stub = `
-      window.supabase = {
-        createClient: function() {
-          const fakeSession = { access_token: 'fake-jwt-token', user: { id: '00000000-0000-4000-8000-000000000001', email: 'a@example.com', user_metadata: {} } };
-          return {
-            auth: {
-              getSession: async function() { return { data: { session: fakeSession }, error: null }; },
-              onAuthStateChange: function() { return { data: { subscription: { unsubscribe: function() {} } } }; },
-              signInWithOAuth: async function() { return { error: null }; },
-              signOut: async function() { return { error: null }; }
-            }
-          };
-        }
-      };
-    `;
-    await route.fulfill({ status: 200, contentType: 'application/javascript', body: stub });
-  });
-
-  // 나중에 등록한 route가 먼저 매칭된다: 모르는 API는 빈 객체
-  await page.route((url) => url.pathname.startsWith('/api/v1/'), (route) => json(route, {}));
-  await page.route((url) => url.pathname.startsWith('/api/v1/me'), (route) =>
-    json(route, {
-      id: '00000000-0000-4000-8000-000000000001',
-      email: 'a@example.com',
-      displayName: 'Tester',
-      role: 'user',
-      storageProvider: 'supabase',
-      driveFolderId: null,
-      takeUsedBytes: 0,
-      takeQuotaBytes: 209715200,
-      migratedLocalAt: '2026-10-30T00:00:00Z',
-      keys: { notion: null, gemini: null },
-    })
-  );
-}
 
 // 브라우저 안에서 도는 검사. 실패 문구 배열을 돌려준다
 function collectGapProblems(scale) {
@@ -106,9 +63,9 @@ function collectGapProblems(scale) {
 }
 
 for (const width of WIDTHS) {
-  test(`S 로그인 ${width}px 설정 화면 간격 스케일·일정함`, async ({ page }) => {
+  test(`FT settings user ${width}px 본문 간격 스케일·일정함(고급 설정 펼침 포함)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await setupLoggedIn(page);
+    await mockApp(page, STATES.user);
     await page.goto('/settings.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
     await expect(page.locator('#accEmail')).toHaveText('a@example.com');
