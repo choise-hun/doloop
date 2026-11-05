@@ -93,4 +93,4 @@ npm test                       → 394 중 392 pass, 2 fail — CH-2c 정석폼 
 
 ## 6. PR
 
-- PR #(작성 중) `fix/ft-3-settings-privacy` → `main`
+- PR #74 `fix/ft-3-settings-privacy` → `main` — CI 통과(Node 22·24, Kotlin, Docker smoke, E2E spa·legacy 전부 pass, run 41982289732)
