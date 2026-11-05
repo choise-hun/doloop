@@ -150,6 +150,12 @@
   cursor: pointer;
 }
 
+/* 폼 그리드 안 재생 버튼: 칸을 채우지 않고 입력칸 아랫선에 맞춤(FT-3-chords, 재해석 탭) */
+.controls > .playbtn {
+  align-self: end;
+  justify-self: start;
+}
+
 .playbtn[aria-pressed="true"] {
   background: var(--ink);
   color: var(--surface);
@@ -382,6 +388,13 @@
   gap: 6px;
 }
 
+/* 5도권 단계 버튼 — public/styles.css .step 이식(FT-3-chords) */
+.ccStep { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: var(--radius-pill); padding: 5px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.25; min-width: 0; }
+.ccStep b { font-size: 12px; }
+.ccStep span { font-size: 11px; color: var(--muted); }
+.ccStepCur { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.ccStepBad { opacity: .55; text-decoration: line-through; }
+
 .riGrid {
   display: grid;
   grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
@@ -404,6 +417,8 @@
 
 .dsStepCard {
   margin: 0;
+  font: inherit;
+  color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -414,6 +429,9 @@
   cursor: pointer;
   text-align: left;
 }
+
+.dsStepCard span,
+.dsStepCard small { color: var(--muted); }
 
 .dsStepCardSel {
   border-color: var(--accent);
@@ -426,14 +444,15 @@
 }
 
 /* 전역 SVG 다이어그램 및 범례 스타일 격리 보장 (RZ-2 단독 빌드 호환) */
-:global(.legend .g) { background: var(--guide); }
-:global(.legend .r) { background: var(--root); }
-:global(.legend .o) { background: var(--other); border: 1px solid var(--other-line); }
-:global(.legend .m) { border: 2px dashed var(--moved); }
-:global(.legend .n) { background: var(--now); box-shadow: 0 0 0 2px var(--now-ring); }
-:global(.legend .ctxk) { background: var(--surface); border: 1px solid var(--other-line); }
-:global(.legend .blkk) { border-radius: var(--radius-card); border: 2px solid var(--accent); background: transparent; width: 14px; }
-:global(.legend .lowest-k) { background: var(--root); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--orange-terra); }
+/* 범례 색 — .legend는 모듈 클래스라 :global(.legend …)로는 맞지 않았음(FT-3-chords) */
+.legend :global(.g) { background: var(--guide); }
+.legend :global(.r) { background: var(--root); }
+.legend :global(.o) { background: var(--other); border: 1px solid var(--other-line); }
+.legend :global(.m) { border: 2px dashed var(--moved); }
+.legend :global(.n) { background: var(--now); box-shadow: 0 0 0 2px var(--now-ring); }
+.legend :global(.ctxk) { background: var(--surface); border: 1px solid var(--other-line); }
+.legend :global(.blkk) { border-radius: var(--radius-card); border: 2px solid var(--accent); background: transparent; width: 14px; }
+.legend :global(.lowest-k) { background: var(--root); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--orange-terra); }
 
 :global(.scn) {
   display: inline-flex;
@@ -524,6 +543,13 @@
 :global(svg .nd.now text) { fill: var(--now-ink); }
 
 :global(svg.cb) { display: block; }
+/* 칸이 다이어그램(고정 110px)보다 좁아지면 비율 유지하며 줄인다 — FT-2 F1 */
+.cell :global(svg.cb) { max-width: 100%; height: auto; }
+/* 칸 캡션 — public/styles.css .cell figcaption 이식(FT-3-chords, SPA에서 누락돼 이름·프렛이 붙어 보였음) */
+.cell figcaption { display: flex; flex-direction: column; align-items: center; gap: 0; text-align: center; }
+.cell figcaption b { font-size: 13px; }
+.cell figcaption span { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.cell figcaption em { font-style: normal; font-size: 11px; color: var(--muted); max-width: 120px; }
 :global(svg.cb .fl) { stroke: var(--muted); stroke-width: 1; }
 :global(svg.cb .nut) { stroke: var(--ink); stroke-width: 3; }
 :global(svg.cb .st) { stroke: var(--muted); stroke-width: 1; }

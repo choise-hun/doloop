@@ -1957,7 +1957,7 @@ export function ChordsPage(): React.ReactElement {
               <button
                 key={i}
                 type="button"
-                className={`step ${i === ccIdx ? 'cur' : ''} ${!s.q ? 'bad' : ''}`}
+                className={`${styles.ccStep} ${i === ccIdx ? styles.ccStepCur : ''} ${!s.q ? styles.ccStepBad : ''}`}
                 onClick={() => {
                   setCcIdx(i);
                   ccStepSound(i);
@@ -2402,6 +2402,7 @@ export function ChordsPage(): React.ReactElement {
                   {k.paths[0].chords.map((c: any, ci: number) => (
                     <figure
                       key={ci}
+                      data-align-group={`tf-${k.key}:top,height`}
                       className={`${styles.cell} ${tfKey === k.key && tfC === ci ? styles.dsStepCardSel : ''}`}
                       onClick={() => {
                         setTfKey(k.key);
