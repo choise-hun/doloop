@@ -281,6 +281,53 @@ export function formatSec(sec: number | null): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
+// ── 코드 진행 영상 분석 구간·속도 (GA-2, 개발산출물/진행_분석설정.md §3-2) ─────
+
+export const MAX_SEC = 86400;
+export type Pace = 'slow' | 'normal' | 'fast';
+export const PACES: Pace[] = ['slow', 'normal', 'fast'];
+export const PACE_LABEL: Record<Pace, string> = { slow: '느림', normal: '보통', fast: '빠름' };
+
+/**
+ * 시간 입력 → 초. `80`·`1:20`·`1:02:03`. 빈 칸은 null(전체), 형식·범위가 틀리면 undefined.
+ * 분·초 칸(첫 칸 제외)은 0~59, 결과는 0~86400.
+ */
+export function parseTimeInput(text: string): number | null | undefined {
+  const t = String(text ?? '').trim();
+  if (!t) return null;
+  if (!/^\d{1,5}(:\d{1,2}){0,2}$/.test(t)) return undefined;
+  const parts = t.split(':').map(Number);
+  if (parts.slice(1).some((n) => n > 59)) return undefined;
+  const sec = parts.reduce((acc, n) => acc * 60 + n, 0);
+  return sec <= MAX_SEC ? sec : undefined;
+}
+
+export type RangeCheck = { startSec: number | null; endSec: number | null; error: string };
+
+/** 시작·끝 칸 → 초 + 오류 문구(없으면 ''). 서버 검증(§3-2)과 같은 규칙 */
+export function checkRange(startText: string, endText: string): RangeCheck {
+  const s = parseTimeInput(startText);
+  const e = parseTimeInput(endText);
+  if (s === undefined || e === undefined) {
+    return { startSec: null, endSec: null, error: '시간은 1:20 또는 80처럼 적어 주세요(최대 24시간).' };
+  }
+  if (e !== null && e <= (s ?? 0)) {
+    return { startSec: s, endSec: e, error: '끝 시간은 시작보다 1초 이상 뒤여야 해요.' };
+  }
+  return { startSec: s, endSec: e, error: '' };
+}
+
+/** 작업 줄 표시: `0:40–1:20 · 빠름`. 구간·속도 정보가 없으면 '' */
+export function jobOptionsLabel(j: { startSec?: number | null; endSec?: number | null; pace?: string | null }): string {
+  const has = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
+  let range = '';
+  if (has(j.startSec) || has(j.endSec)) {
+    range = `${has(j.startSec) ? formatSec(j.startSec) : '0:00'}–${has(j.endSec) ? formatSec(j.endSec) : '끝'}`;
+  }
+  const pace = j.pace && (PACES as string[]).includes(j.pace) ? PACE_LABEL[j.pace as Pace] : '';
+  return [range, pace].filter(Boolean).join(' · ');
+}
+
 // ── 비로그인 시드 (설계 §8: DEFAULT_REFERENCE/ARCHIVE_PROGRESSIONS) ─────
 
 export type SeedItem = { id: string; category: 'REFERENCE' | 'ARCHIVE'; chordsText: string; title: string; keyLabel: string };

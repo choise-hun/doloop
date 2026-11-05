@@ -154,6 +154,10 @@ object AnalysisJobsTable : Table("analysis_jobs") {
     val error = text("error").nullable()
     val noteId = uuid("note_id").references(NotesTable.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val kind = text("kind").default("note")
+    /** V4: 코드 진행 영상 분석 구간·속도 (노트 분석은 NULL) */
+    val startSec = integer("start_sec").nullable()
+    val endSec = integer("end_sec").nullable()
+    val pace = text("pace").nullable()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val startedAt = timestampWithTimeZone("started_at").nullable()
     val finishedAt = timestampWithTimeZone("finished_at").nullable()

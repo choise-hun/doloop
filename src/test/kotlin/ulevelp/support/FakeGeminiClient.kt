@@ -4,6 +4,7 @@ import kotlinx.serialization.json.*
 import ulevelp.note.AnalyzeJobDispatcher
 import ulevelp.note.GeminiClient
 import ulevelp.note.GeminiGenerateResult
+import ulevelp.note.GeminiVideoOptions
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -11,15 +12,19 @@ class FakeGeminiClient : GeminiClient {
     val calls = CopyOnWriteArrayList<Triple<String, String, String>>()
     var handler: (suspend (apiKey: String, model: String, youtubeUrl: String, prompt: String, schema: JsonObject) -> GeminiGenerateResult)? = null
     var defaultResult: GeminiGenerateResult? = null
+    /** 호출마다 받은 영상 옵션(GA-2). null이면 옵션 없이 호출됨 */
+    val videoOptionsCalls = CopyOnWriteArrayList<GeminiVideoOptions?>()
 
     override suspend fun generateNoteAnalysis(
         apiKey: String,
         model: String,
         youtubeUrl: String,
         prompt: String,
-        responseJsonSchema: JsonObject
+        responseJsonSchema: JsonObject,
+        videoOptions: GeminiVideoOptions?
     ): GeminiGenerateResult {
         calls.add(Triple(apiKey, model, youtubeUrl))
+        videoOptionsCalls.add(videoOptions)
         val customHandler = handler
         if (customHandler != null) {
             return customHandler(apiKey, model, youtubeUrl, prompt, responseJsonSchema)

@@ -25,13 +25,24 @@ data class GeminiGenerateResult(
     val usageSummary: String
 )
 
+/**
+ * 영상 입력 옵션(GA-2, `진행_분석설정.md` §3-2): `video_metadata`의 `fps`·`start_offset`·`end_offset`.
+ * null 필드는 보내지 않는다(fps가 null이면 클라이언트 기본 `GEMINI_FRAME_FPS`).
+ */
+data class GeminiVideoOptions(
+    val fps: Double? = null,
+    val startSec: Int? = null,
+    val endSec: Int? = null
+)
+
 interface GeminiClient {
     suspend fun generateNoteAnalysis(
         apiKey: String,
         model: String,
         youtubeUrl: String,
         prompt: String,
-        responseJsonSchema: JsonObject
+        responseJsonSchema: JsonObject,
+        videoOptions: GeminiVideoOptions? = null
     ): GeminiGenerateResult
 }
 
@@ -50,7 +61,8 @@ class HttpGeminiClient(
         model: String,
         youtubeUrl: String,
         prompt: String,
-        responseJsonSchema: JsonObject
+        responseJsonSchema: JsonObject,
+        videoOptions: GeminiVideoOptions?
     ): GeminiGenerateResult = withContext(Dispatchers.IO) {
         val requestUri = URI("$baseUrl/models/$model:generateContent")
 
@@ -63,7 +75,9 @@ class HttpGeminiClient(
                                 put("file_uri", youtubeUrl)
                             }
                             putJsonObject("video_metadata") {
-                                put("fps", frameFps)
+                                put("fps", videoOptions?.fps ?: frameFps)
+                                videoOptions?.startSec?.let { put("start_offset", "${it}s") }
+                                videoOptions?.endSec?.let { put("end_offset", "${it}s") }
                             }
                         }
                         addJsonObject {
@@ -102,7 +116,7 @@ class HttpGeminiClient(
                     delay(retryDelayBaseMs * attempt)
                     continue
                 } else {
-                    throw GeminiApiException(500, "GEMINI_API_ERROR", "Gemini 분석 호출에 실패했습니다: ${e.message}")
+                    throw GeminiApiException(500, CODE_API_ERROR, "$CODE_API_ERROR: Gemini 분석 호출에 실패했습니다: ${e.message}")
                 }
             }
 
@@ -114,9 +128,16 @@ class HttpGeminiClient(
                 if (attempt < maxAttempts) {
                     delay(retryDelayBaseMs * attempt)
                     continue
+                } else if (status == 429) {
+                    throw failure(status, CODE_RATE_LIMIT, "Gemini 호출 한도를 넘었습니다", body)
                 } else {
-                    throw GeminiApiException(status, "GEMINI_API_ERROR", "Gemini 분석 호출에 실패했습니다 (HTTP $status).")
+                    throw failure(status, CODE_OVERLOADED, "Gemini 서버가 일시적으로 응답하지 못했습니다", body)
                 }
+            }
+
+            if (status == 402) {
+                logger.warn("Gemini 결제/크레딧 오류 HTTP 402: {}", body.take(200))
+                throw failure(status, CODE_BILLING, "Gemini 크레딧이 부족합니다", body)
             }
 
             if (status in setOf(401, 403) || (status == 400 && body.contains("API_KEY_INVALID"))) {
@@ -130,19 +151,38 @@ class HttpGeminiClient(
 
             if (status == 400) {
                 logger.warn("Gemini 일반 400 오류: {}", body.take(200))
-                throw GeminiApiException(400, "GEMINI_API_ERROR", "Gemini 분석 호출에 실패했습니다 (HTTP 400).")
+                throw failure(400, CODE_API_ERROR, "Gemini 분석 호출에 실패했습니다", body)
             }
 
             if (status != 200) {
                 logger.warn("Gemini 비정상 응답 HTTP {}: {}", status, body.take(200))
-                throw GeminiApiException(status, "GEMINI_API_ERROR", "Gemini 분석 호출에 실패했습니다 (HTTP $status).")
+                throw failure(status, CODE_API_ERROR, "Gemini 분석 호출에 실패했습니다", body)
             }
 
             // 200 OK 파싱
             return@withContext parseGeminiResponse(body)
         }
 
-        throw GeminiApiException(500, "GEMINI_API_ERROR", "Gemini 분석 호출에 실패했습니다.")
+        throw GeminiApiException(500, CODE_API_ERROR, "$CODE_API_ERROR: Gemini 분석 호출에 실패했습니다.")
+    }
+
+    /**
+     * 실패 원인 코드를 `error` 문자열 앞에 붙인다(`<코드>: 문장 (HTTP n) — Google 문구`).
+     * 화면은 앞의 코드로 원인·안내를 고른다(`frontend/src/lib/jobError.ts`, 진행_분석설정.md §3-1).
+     */
+    private fun failure(status: Int, code: String, sentence: String, body: String): GeminiApiException {
+        val googleMessage = runCatching {
+            Json.parseToJsonElement(body).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+        }.getOrNull()?.trim()?.take(200)
+        val tail = if (googleMessage.isNullOrEmpty()) "" else " — $googleMessage"
+        return GeminiApiException(status, code, "$code: $sentence (HTTP $status).$tail")
+    }
+
+    companion object {
+        const val CODE_BILLING = "GEMINI_BILLING"
+        const val CODE_RATE_LIMIT = "GEMINI_RATE_LIMIT"
+        const val CODE_OVERLOADED = "GEMINI_OVERLOADED"
+        const val CODE_API_ERROR = "GEMINI_API_ERROR"
     }
 
     private fun parseGeminiResponse(body: String): GeminiGenerateResult {

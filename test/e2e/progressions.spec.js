@@ -67,7 +67,7 @@ const AI_ROW = row({
 });
 
 // docs/03-api-spec.md 8.5 규칙만큼만 흉내 내는 가짜 저장소
-function fakeStore(initial = []) {
+function fakeStore(initial = [], opts = {}) {
   let seq = 0;
   const items = initial.map((x) => ({ ...x }));
   const calls = [];
@@ -92,12 +92,15 @@ function fakeStore(initial = []) {
         return json(route, { progression: r }, 201);
       }
       if (p === '/api/v1/progressions/analyze' && method === 'POST') {
-        jobs.push({ id: '00000000-0000-4000-8000-0000000000j1', kind: 'progression', url: body.url, tags: ['화성'], status: 'queued', error: null, noteId: null, createdAt: new Date().toISOString() });
+        jobs.push({ id: '00000000-0000-4000-8000-0000000000j1', kind: 'progression', url: body.url, tags: ['화성'], status: 'queued', error: null, noteId: null, startSec: body.startSec ?? null, endSec: body.endSec ?? null, pace: body.pace ?? 'normal', createdAt: new Date().toISOString() });
         return json(route, { jobId: jobs[0].id, status: 'queued' }, 202);
       }
       if (p === '/api/v1/notes/jobs' && method === 'GET') {
         // 두 번째 조회부터 완료 + 진행 2개 생성
-        if (jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'done') {
+        if (opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'failed') {
+          jobs[0].status = 'failed';
+          jobs[0].error = opts.failWith;
+        } else if (!opts.failWith && jobs.length && jobPolls++ >= 1 && jobs[0].status !== 'done') {
           jobs[0].status = 'done';
           jobs[0].noteId = '00000000-0000-4000-8000-0000000000n2';
           items.unshift(
@@ -329,7 +332,7 @@ test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개
   await page.locator('#progVideoSubmit').click();
   await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요');
   const req = store.calls.find((c) => c.path === '/api/v1/progressions/analyze');
-  expect(req.body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '후렴 위주' });
+  expect(req.body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '후렴 위주', pace: 'normal' });
   await expect(page.locator('#progScope [data-scope="analysis"]')).toHaveAttribute('aria-pressed', 'true');
   // 노트 작업(kind=note)은 이 화면에 안 나온다
   await expect(page.locator('#progJobs li')).toHaveCount(1);
@@ -337,6 +340,55 @@ test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개
   await expect(page.locator('#progJobs li')).toContainText('2개 수집', { timeout: 12000 });
   await expect(page.locator('#progJobs li a')).toHaveAttribute('href', 'note.html?id=00000000-0000-4000-8000-0000000000n2');
   await expect(rows(page)).toHaveCount(2);
+});
+
+test('P5b 분석 실패: 원인 코드별 제목·안내를 보여 준다(GA-1)', async ({ page }) => {
+  const store = fakeStore([], { failWith: 'GEMINI_BILLING: Gemini 크레딧이 부족합니다 (HTTP 402). — Your prepayment credits are depleted.' });
+  await setupLoggedIn(page, store, { gemini: true });
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progTab-video').click();
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  await page.locator('#progVideoSubmit').click();
+  const li = page.locator('#progJobs li');
+  await expect(li).toContainText('크레딧 부족', { timeout: 12000 });
+  await expect(li).toContainText('AI Studio에서 결제');
+  await expect(li.locator('[data-error-code]')).toHaveAttribute('data-error-code', 'GEMINI_BILLING');
+  await expect(li).not.toContainText('분석 실패');
+});
+
+test('P5c 구간 + 코드 진행 변화 속도: 잘못된 구간은 막고, 요청 본문·작업 줄에 반영(GA-2)', async ({ page }) => {
+  const store = fakeStore();
+  await setupLoggedIn(page, store, { gemini: true });
+  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progTab-video').click();
+  // 기본: 보통
+  await expect(page.locator('#progVideoPace [data-pace="normal"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#progVideoPace button')).toHaveText(['느림', '보통', '빠름']);
+  await expect(page.getByText('코드가 짧은 시간 안에 많이 바뀐다면 빠름을 권장해요')).toBeVisible();
+
+  await page.locator('#progVideoUrl').fill('https://youtu.be/jNQXAC9IVRw');
+  // 잘못된 입력: 끝 ≤ 시작, 형식 오류 → 요청 안 보냄
+  await page.locator('#progVideoStart').fill('1:20');
+  await page.locator('#progVideoEnd').fill('80');
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toHaveText('끝 시간은 시작보다 1초 이상 뒤여야 해요.');
+  await page.locator('#progVideoEnd').fill('1:99');
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toContainText('1:20 또는 80');
+  expect(store.calls.some((c) => c.path === '/api/v1/progressions/analyze')).toBe(false);
+
+  await page.locator('#progVideoStart').fill('0:40');
+  await page.locator('#progVideoEnd').fill('80');
+  await page.locator('#progVideoPace [data-pace="fast"]').click();
+  await expect(page.locator('#progVideoPace [data-pace="fast"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#progVideoPace [data-pace="normal"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#progVideoSubmit').click();
+  await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요');
+  const req = store.calls.find((c) => c.path === '/api/v1/progressions/analyze');
+  expect(req.body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '', startSec: 40, endSec: 80, pace: 'fast' });
+  await expect(page.locator('#progJobs li')).toContainText('0:40–1:20 · 빠름');
 });
 
 test('P6 키 없음: 영상 탭에 키 안내, 요청 버튼 잠김', async ({ page }) => {

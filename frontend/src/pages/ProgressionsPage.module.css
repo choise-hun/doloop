@@ -188,6 +188,14 @@
   color: var(--bad);
 }
 
+/* GA-1: 실패 원인 안내 */
+.jobHint {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .seedNote {
   margin: 0;
   font-size: 13px;

@@ -23,6 +23,7 @@ import ulevelp.db.ProfilesTable
 import ulevelp.note.AnalyzeJobDispatcher
 import ulevelp.note.GeminiClient
 import ulevelp.note.GeminiSchemas
+import ulevelp.note.GeminiVideoOptions
 import ulevelp.note.GuitarSvgRenderer
 import ulevelp.note.HarmonyChordDto
 import ulevelp.note.KeyboardSvgRenderer
@@ -44,6 +45,14 @@ data class AnalyzeJobCreateResponse(
     val status: String = "queued"
 )
 
+/** 코드 진행 영상 분석 옵션(GA-2, `진행_분석설정.md` §3-2). 검증은 라우트에서 끝난 값 */
+data class AnalysisJobOptions(
+    val startSec: Int? = null,
+    val endSec: Int? = null,
+    /** `slow` | `normal` | `fast` */
+    val pace: String = NoteService.PACE_NORMAL
+)
+
 @Serializable
 data class AnalysisJobDto(
     val id: String,
@@ -54,6 +63,10 @@ data class AnalysisJobDto(
     val status: String,
     val error: String? = null,
     val noteId: String? = null,
+    /** 분석 구간(초)·속도 — 코드 진행 영상 작업만, 없으면 null (GA-2) */
+    val startSec: Int? = null,
+    val endSec: Int? = null,
+    val pace: String? = null,
     val createdAt: String,
     val startedAt: String? = null,
     val finishedAt: String? = null
@@ -133,6 +146,10 @@ class NoteService(
         const val JOB_KIND_NOTE = "note"
         const val JOB_KIND_PROGRESSION = "progression"
         val JOB_KINDS = setOf(JOB_KIND_NOTE, JOB_KIND_PROGRESSION)
+
+        /** 코드 진행 변화 속도 → Gemini 초당 캡처량 (`진행_분석설정.md` §3-2) */
+        const val PACE_NORMAL = "normal"
+        val PACE_FPS: Map<String, Double> = mapOf("slow" to 0.5, PACE_NORMAL to 1.0, "fast" to 3.0)
     }
 
     private fun requireDb(): Database =
@@ -154,9 +171,11 @@ class NoteService(
         rawTags: List<String>,
         memo: String,
         dispatcher: AnalyzeJobDispatcher,
-        kind: String = JOB_KIND_NOTE
+        kind: String = JOB_KIND_NOTE,
+        options: AnalysisJobOptions? = null
     ): AnalyzeJobCreateResponse {
         require(kind in JOB_KINDS) { "unknown job kind: $kind" }
+        require(options == null || options.pace in PACE_FPS) { "unknown pace: ${options?.pace}" }
         val database = requireDb()
 
         val videoId = ExportImportService.extractVideoId(rawUrl)
@@ -234,6 +253,11 @@ class NoteService(
                 it[tags] = orderedTags
                 it[AnalysisJobsTable.memo] = memo
                 it[AnalysisJobsTable.kind] = kind
+                if (options != null) {
+                    it[AnalysisJobsTable.startSec] = options.startSec
+                    it[AnalysisJobsTable.endSec] = options.endSec
+                    it[AnalysisJobsTable.pace] = options.pace
+                }
                 it[status] = "queued"
                 it[createdAt] = nowUtc
             }
@@ -292,6 +316,14 @@ class NoteService(
         val tags = jobRow[AnalysisJobsTable.tags]
         val memo = jobRow[AnalysisJobsTable.memo]
         val isProgression = jobRow[AnalysisJobsTable.kind] == JOB_KIND_PROGRESSION
+        // 코드 진행 영상: 속도별 fps + 구간. 노트 분석은 null(클라이언트 기본 fps)
+        val videoOptions = if (isProgression) {
+            GeminiVideoOptions(
+                fps = PACE_FPS[jobRow[AnalysisJobsTable.pace] ?: PACE_NORMAL] ?: PACE_FPS.getValue(PACE_NORMAL),
+                startSec = jobRow[AnalysisJobsTable.startSec],
+                endSec = jobRow[AnalysisJobsTable.endSec]
+            )
+        } else null
 
         // 2. 트랜잭션 밖에서 외부 호출 (최대 jobTimeoutMs)
         try {
@@ -309,8 +341,15 @@ class NoteService(
                 } else {
                     GeminiSchemas.buildPrompt(tags, memo)
                 }
-                val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema)
+                val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema, videoOptions)
                 val analysis = result.analysis
+                // GA-3 실측용: 속도·구간별 토큰 사용량(usageMetadata, 한 줄 JSON)
+                logger.info(
+                    "Gemini 분석 완료 jobId={} kind={} pace={} range={}~{} fps={} usage={}",
+                    jobId, jobRow[AnalysisJobsTable.kind], jobRow[AnalysisJobsTable.pace] ?: "-",
+                    videoOptions?.startSec ?: "-", videoOptions?.endSec ?: "-",
+                    videoOptions?.fps ?: "default", result.usageSummary.ifBlank { "-" }
+                )
 
                 val headline = analysis["summary"]?.jsonObject?.get("headline")?.jsonPrimitive?.contentOrNull?.take(500) ?: ""
                 val points = analysis["summary"]?.jsonObject?.get("points")?.jsonArray?.mapNotNull {
@@ -595,6 +634,9 @@ class NoteService(
         status = row[AnalysisJobsTable.status],
         error = row[AnalysisJobsTable.error],
         noteId = row[AnalysisJobsTable.noteId]?.toString(),
+        startSec = row[AnalysisJobsTable.startSec],
+        endSec = row[AnalysisJobsTable.endSec],
+        pace = row[AnalysisJobsTable.pace],
         createdAt = formatTimestampNotNull(row[AnalysisJobsTable.createdAt]),
         startedAt = formatTimestamp(row[AnalysisJobsTable.startedAt]),
         finishedAt = formatTimestamp(row[AnalysisJobsTable.finishedAt])
