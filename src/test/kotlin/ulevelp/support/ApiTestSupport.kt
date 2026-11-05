@@ -17,6 +17,10 @@ import ulevelp.service.IntegrationCheckClient
 import ulevelp.service.NotionCheckResponse
 import ulevelp.service.VideoMeta
 import ulevelp.service.VideoMetaClient
+import ulevelp.service.PlaylistClient
+import ulevelp.service.YoutubePlaylist
+import ulevelp.service.YoutubeDataPlaylistClient
+import ulevelp.api.ApiException
 import ulevelp.storage.StorageClient
 import java.math.BigInteger
 import java.security.KeyPair
@@ -229,6 +233,21 @@ class FakeVideoMetaClient(
     }
 }
 
+/** 가짜 YouTube 재생목록. [playlists]에 없는 id는 404, [error]가 있으면 그 예외 */
+class FakePlaylistClient(
+    val playlists: MutableMap<String, YoutubePlaylist> = mutableMapOf(),
+    @Volatile var error: ApiException? = null
+) : PlaylistClient {
+    val calls = CopyOnWriteArrayList<Pair<String, Int>>()
+
+    override suspend fun fetch(playlistId: String, maxItems: Int): YoutubePlaylist {
+        calls.add(playlistId to maxItems)
+        error?.let { throw it }
+        val p = playlists[playlistId] ?: throw YoutubeDataPlaylistClient.playlistNotFound()
+        return p.copy(items = p.items.take(maxItems))
+    }
+}
+
 object TestCrypto {
     val keyBytes = ByteArray(32) { (it + 1).toByte() }
     val service = CryptoService(keyBytes)
@@ -279,6 +298,7 @@ class FakeIntegrationCheckClient : IntegrationCheckClient {
 fun ApplicationTestBuilder.configureApiTestApp(
     dbConfig: DatabaseConfig,
     videoMetaClient: VideoMetaClient = FakeVideoMetaClient(),
+    playlistClient: PlaylistClient = FakePlaylistClient(),
     storageClient: StorageClient? = null,
     cryptoService: CryptoService? = TestCrypto.service,
     integrationCheckClient: IntegrationCheckClient = FakeIntegrationCheckClient(),
@@ -293,6 +313,7 @@ fun ApplicationTestBuilder.configureApiTestApp(
             authConfig = TestJwt.authConfig,
             allowedOrigins = listOf("http://localhost:3000"),
             videoMetaClient = videoMetaClient,
+            playlistClient = playlistClient,
             publicAppUrl = "https://choise-hun.github.io/ULevelP/",
             storageClient = storageClient,
             cryptoService = cryptoService,

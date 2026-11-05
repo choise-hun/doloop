@@ -67,6 +67,9 @@ import ulevelp.service.StorageTrashService
 import ulevelp.service.TakeService
 import ulevelp.service.SessionService
 import ulevelp.service.VideoMetaClient
+import ulevelp.service.PlaylistClient
+import ulevelp.service.PlaylistImportService
+import ulevelp.service.YoutubeDataPlaylistClient
 import ulevelp.service.YoutubeOEmbedClient
 import ulevelp.storage.StorageClient
 import ulevelp.storage.SupabaseStorageClient
@@ -136,6 +139,7 @@ fun Application.module(
     authConfig: SupabaseAuthConfig? = SupabaseAuthConfig.fromEnvOrNull(),
     allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS")),
     videoMetaClient: VideoMetaClient = YoutubeOEmbedClient(),
+    playlistClient: PlaylistClient = YoutubeDataPlaylistClient(),
     publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL")),
     storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull(),
     cryptoService: CryptoService? = CryptoService.fromEnvOrNull(),
@@ -181,6 +185,7 @@ fun Application.module(
     val adminService = AdminService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
+    val playlistImportService = PlaylistImportService(db, playlistClient)
     val progressionService = ProgressionService(db)
     val practiceService = PracticeService(db)
     val storageTrashService = StorageTrashService(db, storageClient)
@@ -317,7 +322,7 @@ fun Application.module(
 
         route("/api/v1") {
             registerMeRoutes(jwtVerifier, profileService)
-            registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
+            registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService)
             registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)

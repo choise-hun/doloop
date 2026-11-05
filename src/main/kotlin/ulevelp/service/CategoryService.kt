@@ -65,17 +65,6 @@ class CategoryService(private val db: Database?) {
         loadAll(userId).firstOrNull { it.id == categoryId.toString() }
             ?: throw NotFoundException("분류를 찾을 수 없습니다.")
 
-    private fun Transaction.ensureNameFree(userId: UUID, name: String, exceptId: UUID? = null) {
-        val query = CategoriesTable.selectAll()
-            .where { (CategoriesTable.userId eq userId) and (CategoriesTable.name.lowerCase() eq name.lowercase()) }
-        if (exceptId != null) {
-            query.andWhere { CategoriesTable.id neq exceptId }
-        }
-        if (query.count() > 0L) {
-            throw ConflictException("같은 이름의 분류가 이미 있습니다.")
-        }
-    }
-
     suspend fun list(userId: UUID): List<CategoryDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) { loadAll(userId) }
@@ -86,21 +75,7 @@ class CategoryService(private val db: Database?) {
         return DatabaseFactory.dbQuery(database) {
             // 티어 한도(M1-1 §1-2: 무료 2·Pro 7·Pro+ 10). 프로필 잠금으로 동시 생성도 한도를 넘지 않는다
             requireCategorySlot(tierContext(userId, lock = true))
-            ensureNameFree(userId, name)
-
-            val maxExpr = CategoriesTable.sortOrder.max()
-            val nextOrder = (CategoriesTable.select(maxExpr)
-                .where { CategoriesTable.userId eq userId }
-                .singleOrNull()?.get(maxExpr) ?: -1) + 1
-
-            val newId = UUID.randomUUID()
-            CategoriesTable.insert {
-                it[id] = newId
-                it[CategoriesTable.userId] = userId
-                it[CategoriesTable.name] = name
-                it[sortOrder] = nextOrder
-            }
-            loadOne(userId, newId)
+            loadOne(userId, insertCategory(userId, name))
         }
     }
 
@@ -159,6 +134,35 @@ class CategoryService(private val db: Database?) {
         const val MAX_CATEGORIES = 50
         const val MAX_NAME_LENGTH = 20
         const val MAX_PER_SONG = 10
+
+        fun Transaction.ensureNameFree(userId: UUID, name: String, exceptId: UUID? = null) {
+            val query = CategoriesTable.selectAll()
+                .where { (CategoriesTable.userId eq userId) and (CategoriesTable.name.lowerCase() eq name.lowercase()) }
+            if (exceptId != null) {
+                query.andWhere { CategoriesTable.id neq exceptId }
+            }
+            if (query.count() > 0L) {
+                throw ConflictException("같은 이름의 분류가 이미 있습니다.")
+            }
+        }
+
+        /** 맨 뒤 순서로 분류 하나 추가(이름 중복 409). 한도 검사는 부르는 쪽이 먼저 한다(requireCategorySlot) */
+        fun Transaction.insertCategory(userId: UUID, name: String): UUID {
+            ensureNameFree(userId, name)
+            val maxExpr = CategoriesTable.sortOrder.max()
+            val nextOrder = (CategoriesTable.select(maxExpr)
+                .where { CategoriesTable.userId eq userId }
+                .singleOrNull()?.get(maxExpr) ?: -1) + 1
+
+            val newId = UUID.randomUUID()
+            CategoriesTable.insert {
+                it[id] = newId
+                it[CategoriesTable.userId] = userId
+                it[CategoriesTable.name] = name
+                it[sortOrder] = nextOrder
+            }
+            return newId
+        }
 
         /** 곡별 분류 id 목록 (분류 순서대로). songIds가 null이면 사용자 곡 전부 */
         fun Transaction.categoryIdsBySong(userId: UUID, songIds: List<UUID>? = null): Map<UUID, List<String>> {
