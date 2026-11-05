@@ -343,6 +343,13 @@ class NoteService(
                 }
                 val result = geminiClient.generateNoteAnalysis(gemini.apiKey, gemini.model, url, prompt, schema, videoOptions)
                 val analysis = result.analysis
+                // GA-3 실측용: 속도·구간별 토큰 사용량(usageMetadata, 한 줄 JSON)
+                logger.info(
+                    "Gemini 분석 완료 jobId={} kind={} pace={} range={}~{} fps={} usage={}",
+                    jobId, jobRow[AnalysisJobsTable.kind], jobRow[AnalysisJobsTable.pace] ?: "-",
+                    videoOptions?.startSec ?: "-", videoOptions?.endSec ?: "-",
+                    videoOptions?.fps ?: "default", result.usageSummary.ifBlank { "-" }
+                )
 
                 val headline = analysis["summary"]?.jsonObject?.get("headline")?.jsonPrimitive?.contentOrNull?.take(500) ?: ""
                 val points = analysis["summary"]?.jsonObject?.get("points")?.jsonArray?.mapNotNull {
