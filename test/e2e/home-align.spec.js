@@ -1,6 +1,6 @@
 // 홈 화면 정렬 검사 (H-1): 4개 폭 × 3개 상태에서 카드 넘침·처짐·말줄임·높이 맞춤·버튼 줄·파란색 0건
-// 설계: 개발산출물/진행_홈정렬.md §3. React 화면 전용(legacy 모드는 skip)
-// H5는 G-1에서 BETTER 세부 섹션 버튼 + VAULT 카드 아랫선 기준으로 바뀜(개발산출물/진행_홈메뉴장르.md)
+// 설계: 개발산출물/완료/진행_홈정렬.md §3. React 화면 전용(legacy 모드는 skip)
+// H5는 G-1에서 BETTER 세부 섹션 버튼 + VAULT 카드 아랫선 기준으로 바뀜(개발산출물/완료/진행_홈메뉴장르.md)
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');

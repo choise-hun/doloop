@@ -1,4 +1,4 @@
-// GA-1: 분석 작업 실패 문자열 → 화면 문구(frontend/src/lib/jobError.mts). 규칙: 개발산출물/진행_분석설정.md §3-1
+// GA-1: 분석 작업 실패 문자열 → 화면 문구(frontend/src/lib/jobError.mts). 규칙: 개발산출물/완료/진행_분석설정.md §3-1
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 
