@@ -49,13 +49,14 @@ fun Route.registerProgressionRoutes(
             call.respond(HttpStatusCode.Created, ProgressionEnvelope(progression = created))
         }
 
-        // 노트 분석과 같은 검증·제한(동시 1건·하루 20건 합산). 상태 조회는 /notes/jobs/{id}
+        // 노트 분석과 같은 검증·제한(동시 1건·하루 20건 합산) + 24시간 중복 409(GA-4, force로 건너뜀). 상태 조회는 /notes/jobs/{id}
         post("/analyze") {
             val user = call.requireAuthUser()
             val body = call.receiveJsonObject()
             val url = body.requireString("url", 500)
             val memo = body.optString("memo", 2000) ?: ""
             val options = parseAnalyzeOptions(body)
+            val force = body.optBoolean("force", false) // GA-4: 같은 분석을 일부러 다시 할 때
             val response = noteService.requestAnalyze(
                 userId = user.id,
                 rawUrl = url,
@@ -63,7 +64,8 @@ fun Route.registerProgressionRoutes(
                 memo = memo,
                 dispatcher = analyzeJobDispatcher,
                 kind = NoteService.JOB_KIND_PROGRESSION,
-                options = options
+                options = options,
+                force = force
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.Accepted, response)
