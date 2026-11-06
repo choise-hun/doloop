@@ -384,9 +384,12 @@ test('CM-11 내 공유: Pro·이름 있음, 분류 2개 중 하나 공개 PUT �
   const pubSwitch = page.locator('[data-share-public="cat-2"]');
   const autoSwitch = page.locator('[data-share-autosync="cat-2"]');
   await expect(pubSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect(autoSwitch).toBeDisabled();
+  expect(putBodies).toHaveLength(0);
 
   await pubSwitch.click();
   await expect(pubSwitch).toHaveAttribute('aria-checked', 'true');
+  await expect(autoSwitch).toBeEnabled();
   expect(putBodies[0]).toEqual({
     catId: 'cat-2',
     body: { isPublic: true, title: '블루스' },

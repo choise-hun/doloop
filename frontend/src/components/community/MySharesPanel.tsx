@@ -125,6 +125,7 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
   }
 
   async function toggleAutoSync(row: ShareRowState) {
+    if (!row.share?.isPublic) return;
     setErr(null);
     if (!me?.limits?.communityWrite) {
       setErr({ key: 'community.err.upgrade' });
@@ -135,32 +136,16 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
     busy.current.add(key);
 
     const prevShare = row.share;
-    const prevAuto = Boolean(prevShare?.autoSync && me?.shareAutosync !== false);
+    const prevAuto = Boolean(prevShare.autoSync && me?.shareAutosync !== false);
     const nextAuto = !prevAuto;
-    const titleVal = (row.titleInput || row.cat.name).trim() || row.cat.name;
 
-    const optShare: ShareSummaryDto = prevShare
-      ? { ...prevShare, isPublic: true, autoSync: nextAuto, title: titleVal }
-      : {
-          folderId: `opt-${row.cat.id}`,
-          categoryId: row.cat.id,
-          title: titleVal,
-          isPublic: true,
-          autoSync: nextAuto,
-          hidden: false,
-          itemCount: row.cat.songCount ?? 0,
-          likeCount: 0,
-          cloneCount: 0,
-          publishedAt: null,
-          publicName: me?.publicName ?? null,
-        };
+    const optShare: ShareSummaryDto = { ...prevShare, autoSync: nextAuto };
     patchRow(row.cat.id, { share: optShare });
 
     try {
       const res = await apiClient.categories.setShare(row.cat.id, {
-        isPublic: prevShare?.isPublic ?? true,
+        isPublic: true,
         autoSync: nextAuto,
-        title: titleVal,
       });
       patchRow(row.cat.id, { share: res.share });
     } catch (e) {
@@ -256,6 +241,7 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
                   type="button"
                   role="switch"
                   aria-checked={isAutoSync}
+                  disabled={!isPublic}
                   data-share-autosync={row.cat.id}
                   className={styles.switchBtn}
                   onClick={() => void toggleAutoSync(row)}
