@@ -1,6 +1,7 @@
 // M2-1b: 노트 화면의 순수 계산(경과 시간·진행 단계 문구). React 없음 — node 테스트 test/m21b_note_form.test.js
-// 명세 개발산출물/명세/M2-1b_구현명세.md §4-2
+// 명세 개발산출물/명세/M2-1b_구현명세.md §4-2 · M2-1c 구간·재시도(결과/M2-1c_구간재시도.md)
 import { t } from './i18n.mts';
+import { formatSec, parseTimeInput } from '../components/progressions/model.mts';
 
 /** URL 입력이 멈춘 뒤 예상 크레딧을 묻기까지 기다리는 시간 */
 export const ESTIMATE_DEBOUNCE_MS = 600;
@@ -51,4 +52,63 @@ export function jobStage(job: JobTimes, nowMs: number): JobStageView | null {
     return { stage: 'slow', label: t('notes.job.running', { elapsed }), hint: t('notes.job.slowHint') };
   }
   return { stage: 'running', label: t('notes.job.running', { elapsed }), hint: t('notes.job.runningHint') };
+}
+
+// ── M2-1c: 분석 구간 · 실패 작업 재시도 ─────────────────────────
+
+export type NoteRangeError = '' | 'format' | 'order';
+
+export interface NoteRange {
+  startSec: number | null;
+  endSec: number | null;
+  error: NoteRangeError;
+}
+
+/** 시작·끝 칸 → 초. 규칙은 코드 진행 분석 checkRange(GA-2)·서버 parseAnalyzeOptions와 같다(0~86400, 끝 > 시작). 빈 칸 = null */
+export function checkNoteRange(startText: string, endText: string): NoteRange {
+  const s = parseTimeInput(startText);
+  const e = parseTimeInput(endText);
+  if (s === undefined || e === undefined) return { startSec: null, endSec: null, error: 'format' };
+  if (e !== null && e <= (s ?? 0)) return { startSec: s, endSec: e, error: 'order' };
+  return { startSec: s, endSec: e, error: '' };
+}
+
+/** 요청·예상 본문에 붙일 구간 — 값이 있는 필드만(구간 없는 요청은 M2-1s 전과 바이트 단위로 같다, S-D4) */
+export function rangeBody(r: NoteRange): { startSec?: number; endSec?: number } {
+  const out: { startSec?: number; endSec?: number } = {};
+  if (typeof r.startSec === 'number') out.startSec = r.startSec;
+  if (typeof r.endSec === 'number') out.endSec = r.endSec;
+  return out;
+}
+
+/** 재시도로 폼에 다시 채울 작업 필드(apiClient AnalysisJobDto의 일부) */
+export interface RetryJob {
+  url?: string | null;
+  tags?: unknown;
+  memo?: string | null;
+  startSec?: number | null;
+  endSec?: number | null;
+}
+
+export interface RetryDraft {
+  url: string;
+  tags: string[];
+  memo: string;
+  startText: string;
+  endText: string;
+}
+
+const secText = (v: unknown): string => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? formatSec(Math.floor(v)) : '');
+
+/** 실패 작업 → 폼 값. 태그는 폼에 있는 것만 폼 순서로(하나도 없으면 기본 태그), 초는 m:ss 칸 글자로 */
+export function retryDraft(job: RetryJob, formTags: ReadonlyArray<string>, defaultTags: ReadonlyArray<string>): RetryDraft {
+  const jobTags = Array.isArray(job.tags) ? job.tags.filter((x): x is string => typeof x === 'string') : [];
+  const tags = formTags.filter((x) => jobTags.includes(x));
+  return {
+    url: typeof job.url === 'string' ? job.url : '',
+    tags: tags.length > 0 ? tags : [...defaultTags],
+    memo: typeof job.memo === 'string' ? job.memo : '',
+    startText: secText(job.startSec),
+    endText: secText(job.endSec),
+  };
 }
