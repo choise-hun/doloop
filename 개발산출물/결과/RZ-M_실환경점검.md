@@ -3,7 +3,7 @@
 - **수행일:** 2026-11-03
 - **근거:** `명세/RZ-M_점검항목.md`
 - **배포:** main `0520915`(PR #45·#46 머지) → 이미지 `asia-northeast3-docker.pkg.dev/ulevelp/ulevelp/server:0520915`(digest `sha256:088617a5…eebc5`) → revision **`ulevelp-00004-9hc`** (이전 `ulevelp-00003-5g8`, 이미지 `e296817`)
-- **상태:** 항목 1~5·9 **통과**. 항목 6·7(브라우저·아이패드)·8(롤백) **사용자 수행 대기**
+- **상태:** **완료 2026-11-06** — 항목 1~5·9 통과(2026-11-03), 6·6-1·7·8 사용자 점검 통과(2026-11-06, 아래 §사용자 점검). 6의 ⑤ 노션은 기능 폐기로 제외
 
 ## 항목별 결과
 
@@ -14,10 +14,10 @@
 | 3 | React 서빙·헤더 | `/api/health` → `{"ok":true}`, `/`의 `id="root"` **1**(배포 전 0), `notes.html` 헤더 `x-frame-options: DENY`·`cache-control: no-cache`·`content-security-policy: frame-ancestors 'none'`, `/unknown.html` → 404 | 통과 |
 | 4 | CORS (R-2) | `POST /api/v1/songs`: 같은 출처 **401**(배포 전 403), `choise-hun.github.io` 401, `evil.example.com` 403, evil + `X-Forwarded-Host: evil.example.com` 403 | 통과 |
 | 5 | 크론 | `gcloud scheduler jobs run` 14:42:52Z → `/internal/cron/notion-push` 200(`ulevelp-00004-9hc`), 이후 1분 주기 14:43:01Z 200 | 통과 |
-| 6 | M-KZ4 데스크톱 전 흐름 | — | **사용자 수행 대기** |
-| 6-1 | Drive 미연결 1곡 제한 | — | **사용자 수행 대기** |
-| 7 | M-KZ5 아이패드 Safari | — | **사용자 수행 대기** |
-| 8·8-1 | 롤백 `ULP_UI=legacy` → `spa` | 이번 세션에서 실행이 권한 거부(자동 모드 분류기)로 막힘. 운영은 `ulevelp-00004-9hc`, `id="root"` 1 그대로 확인 | **사용자 수행 대기** |
+| 6 | M-KZ4 데스크톱 전 흐름 | 사용자 확인: 로그인·곡 추가·구간/속도·녹음 저장·기록 재생·Gemini 노트 정상. ⑤ 노션 push는 **제외**(2026-11-05 노션 연동 폐기, `결과/CH-7_노션폐기.md`) | 통과 |
+| 6-1 | Drive 미연결 1곡 제한 | 사용자 확인 통과. 단 이 규칙(RN-D3)은 M1-2a에서 티어 규칙(무료 2곡·5MB, `403 FREE_TAKE_SONG_LIMIT_EXCEEDED`)으로 바뀜 → 아래 **발견 2** | 통과(규칙 변경 기록) |
+| 7 | M-KZ5 아이패드 Safari | 사용자 확인 통과 | 통과 |
+| 8·8-1 | 롤백 `ULP_UI=legacy` → `spa` | 사용자 수행·확인. 2026-11-06 운영 조회: revision `ulevelp-00011-xxp`, `/` `id="root"` **1**(spa로 돌아와 있음) | 통과 |
 | 9 | ERROR 로그 | 점검 중 ERROR 2건. 아래 **발견 1** — 이번 배포 때문이 아니다(배포 전 revision에도 같은 예외) | 통과(기존 문제 기록) |
 
 ### 명령 출력 (항목 2~4, `rzm_check.sh`)
@@ -64,3 +64,14 @@ curl -fsS https://ulevelp-d5ympfsmfq-du.a.run.app/ | grep -c 'id="root"'     # �
 - `docker buildx build --builder default` → `ERROR: use docker --context=default buildx …`. `--builder`를 빼고 해결
 - zsh에서 `G="--region … --project …"; gcloud … $G`는 단어 분리가 안 돼 `unrecognized arguments`. bash 배열로 실행
 - 자동 배포는 여전히 꺼져 있다(Variables 0개) → 배포는 로컬 경로만 가능. WIF 구성은 별도 step
+
+## 사용자 점검 (2026-11-06)
+
+- 사용자가 6·6-1·7·8을 직접 점검하고 "확인 완료"로 알림. 노션(6 ⑤, R1-A1의 "노션 행 링크 확인")은 기능 폐기로 제외
+- 에이전트 확인(같은 날): `/api/health` `{"ok":true}`, `/` `id="root"` 1, revision `ulevelp-00011-xxp`(이미지 `server:cb64405`)
+
+## 발견 2 — 연습 화면의 녹음 한도 처리가 옛 규칙 그대로
+
+- **문제:** M1-2a 뒤 서버는 무료 녹음 곡 초과를 `403 FREE_TAKE_SONG_LIMIT_EXCEEDED`로 돌려주는데(`TierService.kt` `requireTakeSongs`), 연습 화면은 옛 `409 SINGLE_SONG_TAKE_LIMIT`·`RECENT_SONG_ONLY`만 잡는다(`PracticePage.tsx` `uploadTakeNow`). 그래서 무료 계정이 3번째 곡을 녹음하면 교체 모달 없이 서버 문장만 뜬다. 모달 문구도 "Drive 연결"을 권하는데 Drive는 이제 유료 전용(`403 TIER_UPGRADE_REQUIRED`)
+- **왜 점검에서 안 보였나:** 점검 계정이 owner(pro)라 곡 수 제한이 없다
+- **추천:** 연습 화면 녹음 작업과 같이 고친다 — `명세/SR-1_구현명세.md` §4. 서버의 `replaceOldSongTakes`는 지금도 동작(`TakeService.kt` `checkUploadLimits`)
