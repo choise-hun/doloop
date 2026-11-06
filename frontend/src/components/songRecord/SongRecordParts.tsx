@@ -354,12 +354,14 @@ export interface SessionTimelineProps {
   sessions: SongSessionDto[];
   idPrefix?: string;
   initialLimit?: number;
+  loading?: boolean;
 }
 
 export function SessionTimeline({
   sessions,
   idPrefix = '',
   initialLimit,
+  loading = false,
 }: SessionTimelineProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
 
@@ -376,7 +378,9 @@ export function SessionTimeline({
 
   return (
     <div id={tlId}>
-      {sessions.length === 0 ? (
+      {loading ? (
+        <p className={`empty ${styles.empty}`}>불러오는 중…</p>
+      ) : sessions.length === 0 ? (
         <p className={`empty ${styles.empty}`}>아직 연습 세션 기록이 없어요.</p>
       ) : (
         <>

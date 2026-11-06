@@ -31,15 +31,15 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| `frontend/src/components/songRecord/SongRecordParts.tsx` (신규) | `LogPage.tsx`에서 `TakeItemRow`, `fmtTakeMeta`, `sortAbTakes`, `fmtDuration`, `AbCompare`(`handlePlayAbSlot`·오디오 ref·비동기 레이스 방어 토큰 포함), `SessionTimeline`(`initialLimit` + `더 보기` 지원) 분리 및 `idPrefix` prop 지원 |
+| `frontend/src/components/songRecord/SongRecordParts.tsx` (신규) | `LogPage.tsx`에서 `TakeItemRow`, `fmtTakeMeta`, `sortAbTakes`, `fmtDuration`, `AbCompare`(`handlePlayAbSlot`·오디오 ref·비동기 레이스 방어 토큰 포함), `SessionTimeline`(`initialLimit` + `더 보기` + `loading` 로딩 상태 지원) 분리 및 `idPrefix` prop 지원 |
 | `frontend/src/components/songRecord/SongRecordParts.module.css` (신규) | `LogPage.module.css`의 녹음 행·타임라인·A/B 비교 슬롯 규칙 이관 및 연습 화면 `#songRecord` 2열 그리드(`.srWrap`, `.srHeadRow`, `.srCols`) 정의 |
-| `frontend/src/components/songRecord/SongRecordPanel.tsx` (신규) | 연습 화면 하단 `#songRecord` 본문 컴포넌트: 비로그인/미등록 곡 1줄 안내, 머리줄(`이 곡의 연습 기록` + 누적 시간·최근 연습일 + `기록에서 자세히 →`), 녹음(`#srTakes` + `#srAbPanel`), 연습 세션(`#srTimeline`, 처음 5개 + `더 보기`), 오류 시 `기록을 불러오지 못했어요` + `다시 시도`, 곡 전환 레이스 방어(`reqSeqRef`) |
+| `frontend/src/components/songRecord/SongRecordPanel.tsx` (신규) | 연습 화면 하단 `#songRecord` 본문 컴포넌트: 비로그인/미등록 곡 1줄 안내, 머리줄(`이 곡의 연습 기록` + 누적 시간·최근 연습일 + `기록에서 자세히 →`), 녹음(`#srTakes` + `#srAbPanel`), 연습 세션(`#srTimeline`, 처음 5개 + `더 보기`), 미수신 대기(`detailData === null`) 시 "불러오는 중…" 표시 및 빈 상태 문구 플리커링 방어, 오류 시 `기록을 불러오지 못했어요` + `다시 시도`, 곡 전환 레이스 방어(`reqSeqRef`) |
 | `frontend/src/pages/LogPage.tsx` | 곡 상세의 녹음·A/B 비교·타임라인을 `SongRecordParts` 컴포넌트로 교체(`idPrefix=""`), DOM id·클래스·동작 100% 유지 |
 | `frontend/src/pages/LogPage.module.css` | `SongRecordParts.module.css`로 옮긴 전용 규칙(`.takeRow`, `.takeMeta`, `.takeAudio`, `.tlRow`, `.tlMeta`, `.tlBar`, `.tlMemo`, `.abSlots`, `.abSlot`, `.checkLabel`) 제거 |
 | `frontend/src/pages/PracticePage.tsx` | `.pp-main` 아래 `<section id="songRecord"><SongRecordPanel ... /></section>` 추가, 녹음 업로드·진행 저장 성공 시 `srReloadKey` +1, `403 FREE_TAKE_SONG_LIMIT_EXCEEDED` 수신 시 `#takeLimitModal` 오픈(`detail.limit` 표시, 무료 플랜 시 Drive 연결 버튼 숨김, `다른 곡 녹음 지우고 이 곡 녹음 저장` 클릭 시 확인창 후 `replaceOldSongTakes: true` 재업로드), 구 409 분기 제거 |
 | `frontend/src/pages/PracticePage.module.css` | `.songRecord` 바깥 여백(`padding-top: 10px`) 추가 |
 | `test/e2e/layout/practice.spec.js` | `userData` + `songDetail`(녹음 2개·세션 6개) 및 `userEmpty` 상태 추가, `#songRecord` 대기 및 배치 약속 검증 |
-| `test/e2e/practice-record.spec.js` (신규) | SR1-1 ~ SR1-6 E2E 동작 검증 |
+| `test/e2e/practice-record.spec.js` (신규) | SR1-1 ~ SR1-7 E2E 동작 및 로딩 플리커링 방어 회귀 검증 |
 
 ---
 
@@ -79,28 +79,39 @@ $ npm test
 ℹ tests 409 / pass 407 / fail 2 (Windows CRLF 줄바꿈 차이로 인한 기존 ch2c1·ch2c3 2건 — 인수인계 메모 §5와 동일)
 ```
 
-### 4-2. Playwright E2E (SR1-1~6 + layout/practice + layout/log + xss)
+### 4-2. Playwright E2E (SR1-1~7 + layout/practice + layout/log + xss)
 
 `test/r3_practice_log.test.js`, `test/e2e/xss.spec.js`, `test/e2e/layout/log.spec.js` 모두 **수정 없이** 통과 확인:
 
 ```text
 $ ULP_UI=spa npx playwright test test/e2e/practice-record.spec.js
-  ok 1 › SR1-1·SR1-2: userData + 곡 상세(녹음 2·세션 6) 위치·내용·더 보기·기록 링크 검증 (828ms)
+  ok 1 › SR1-1·SR1-2: userData + 곡 상세(녹음 2·세션 6) 위치·내용·더 보기·기록 링크 검증 (824ms)
   ok 2 › SR1-3: guest 비로그인 시 한 줄 안내만 보이고 #srTakes 없음, 빈 화면(#emptyState)에서는 #songRecord 없음 (1.0s)
-  ok 3 › SR1-4: 곡 전환 비동기 레이스 — 첫 곡 응답이 늦게 도착해도 둘째 곡 기록만 보임 (765ms)
-  ok 4 › SR1-5: 무료 녹음 한도 초과(403 FREE_TAKE_SONG_LIMIT_EXCEEDED) 모달·Drive 버튼 숨김·확인창 후 replaceOldSongTakes 재업로드 (860ms)
-  ok 5 › SR1-6: 곡 상세 500 오류 시 영역 안 오류 문구 + 다시 시도, 플레이어는 그대로 (655ms)
-  5 passed (5.6s)
+  ok 3 › SR1-4: 곡 전환 비동기 레이스 — 첫 곡 응답이 늦게 도착해도 둘째 곡 기록만 보임 (852ms)
+  ok 4 › SR1-5: 무료 녹음 한도 초과(403 FREE_TAKE_SONG_LIMIT_EXCEEDED) 모달·Drive 버튼 숨김·확인창 후 replaceOldSongTakes 재업로드 (893ms)
+  ok 5 › SR1-6: 곡 상세 500 오류 시 영역 안 오류 문구 + 다시 시도, 플레이어는 그대로 (746ms)
+  ok 6 › SR1-7 (회귀): 곡 상세 응답 대기 중에는 "불러오는 중…" 표시 및 빈 상태 문구 미노출, 응답 완료 후 빈 상태 표시 (734ms)
+  6 passed (6.6s)
 
 $ ULP_UI=spa LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/practice.spec.js
-  21 passed (17.4s) — practice-empty(4) + guest(4) + guestLocal(4) + userData(4+다크1) + userEmpty(4)
+  21 passed (16.6s) — practice-empty(4) + guest(4) + guestLocal(4) + userData(4+다크1) + userEmpty(4)
 
 $ ULP_UI=spa npx playwright test test/e2e/layout/log.spec.js
   13 passed
 
 $ ULP_UI=spa npx playwright test test/e2e/xss.spec.js
-  12 passed (9.8s)
+  12 passed (19.5s)
 ```
+
+---
+
+## 5. 코드 리뷰 피드백 반영 (PR #100)
+
+- **리뷰 지적:** 응답 전 `detailData === null`일 때 빈 배열(`[]`)로 평가되어 "아직 녹음이 없어요" 및 "아직 연습 세션 기록이 없어요."가 깜빡이며 노출되는 문제.
+- **반영 내용:**
+  - `SongRecordPanel.tsx`: `notLoaded = detailData === null` 조건을 도입하여, 응답 수신 전에는 `srTakes`에 `<p className="empty">불러오는 중…</p>`를 표시하고 `summaryMeta`도 "불러오는 중…"으로 표시.
+  - `SongRecordParts.tsx`: `SessionTimeline`에 `loading?: boolean` prop을 추가하여, `loading`일 때 `#srTimeline` 안에 `<p className="empty">불러오는 중…</p>`를 표시.
+  - `test/e2e/practice-record.spec.js`: 회귀 테스트 `SR1-7` 추가 (곡 상세 지연 중 "불러오는 중…" 확인 및 빈 상태 문구 미노출, 응답 완료 후 빈 상태 문구 확인).
 
 ---
 

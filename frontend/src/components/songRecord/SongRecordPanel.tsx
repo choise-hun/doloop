@@ -28,7 +28,6 @@ export function SongRecordPanel({
 
   const [detailData, setDetailData] = useState<SongDetailResponse | null>(null);
   const [loadErr, setLoadErr] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [abSelected, setAbSelected] = useState<string[]>([]);
 
   // 비동기 요청 레이스 컨디션 방어 (docs/rules/frontend-state.md §1)
@@ -39,7 +38,6 @@ export function SongRecordPanel({
     if (!uid || !apiClient.isLoggedIn()) return;
     const mySeq = ++reqSeqRef.current;
     setLoadErr(false);
-    setLoading(true);
     try {
       const data = await apiClient.songs.get(targetSongId);
       if (mySeq !== reqSeqRef.current || auth.getUser()?.id !== uid) return;
@@ -48,10 +46,6 @@ export function SongRecordPanel({
     } catch {
       if (mySeq !== reqSeqRef.current || auth.getUser()?.id !== uid) return;
       setLoadErr(true);
-    } finally {
-      if (mySeq === reqSeqRef.current) {
-        setLoading(false);
-      }
     }
   };
 
@@ -63,7 +57,6 @@ export function SongRecordPanel({
       reqSeqRef.current++;
       setDetailData(null);
       setLoadErr(false);
-      setLoading(false);
       setAbSelected([]);
       return;
     }
@@ -86,6 +79,7 @@ export function SongRecordPanel({
     );
   }
 
+  const notLoaded = detailData === null;
   const detailSong = detailData?.song || null;
   const takes = detailData?.takes || [];
   const sessions = detailData?.sessions || [];
@@ -103,7 +97,7 @@ export function SongRecordPanel({
     ? `누적 ${fmtDuration(detailSong.totalSeconds)}${
         detailSong.lastDate ? ` · 최근 연습 ${detailSong.lastDate}` : ' · 연습 기록 없음'
       }`
-    : loading
+    : notLoaded
       ? '불러오는 중…'
       : '';
 
@@ -142,7 +136,9 @@ export function SongRecordPanel({
               </h3>
             </div>
             <div id="srTakes" className={styles.takesList}>
-              {takes.length === 0 ? (
+              {notLoaded ? (
+                <p className={`empty ${styles.empty}`}>불러오는 중…</p>
+              ) : takes.length === 0 ? (
                 <p className={`empty ${styles.empty}`}>아직 녹음이 없어요</p>
               ) : (
                 takes.map((t) => (
@@ -178,7 +174,7 @@ export function SongRecordPanel({
                 연습 세션
               </h3>
             </div>
-            <SessionTimeline sessions={sessions} idPrefix="sr" initialLimit={5} />
+            <SessionTimeline sessions={sessions} loading={notLoaded} idPrefix="sr" initialLimit={5} />
           </div>
         </div>
       )}

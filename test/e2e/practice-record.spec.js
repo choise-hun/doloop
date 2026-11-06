@@ -381,3 +381,56 @@ test('SR1-6: 곡 상세 500 오류 시 영역 안 오류 문구 + 다시 시도,
   await retryBtn.click();
   await expect(page.locator('#srTakes .take-row')).toHaveCount(2);
 });
+
+test('SR1-7 (회귀): 곡 상세 응답 대기 중에는 "불러오는 중…" 표시 및 빈 상태 문구 미노출, 응답 완료 후 빈 상태 표시', async ({ page }) => {
+  let resolveDetail;
+  const detailPromise = new Promise((resolve) => {
+    resolveDetail = resolve;
+  });
+
+  const EMPTY_DETAIL = {
+    song: { id: SONG_1.id, videoId: 'jNQXAC9IVRw', title: '현재 곡', totalSeconds: 0, lastDate: null },
+    takes: [],
+    sessions: [],
+  };
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...STATES.userData,
+    songs: [SONG_1],
+    routes: [
+      [
+        (url) => url.pathname === `/api/v1/songs/${SONG_1.id}`,
+        async (route) => {
+          await detailPromise;
+          return json(route, EMPTY_DETAIL);
+        },
+      ],
+    ],
+  });
+
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  // 응답 도착 전: #songRecord는 표시되고, #srTakes와 #srTimeline에는 "불러오는 중…"이 표시되며 빈 상태 문구는 없어야 함
+  const songRecord = page.locator('#songRecord');
+  await expect(songRecord).toBeVisible();
+
+  const srTakes = page.locator('#srTakes');
+  await expect(srTakes).toContainText('불러오는 중…');
+  await expect(srTakes).not.toContainText('아직 녹음이 없어요');
+
+  const srTimeline = page.locator('#srTimeline');
+  await expect(srTimeline).toContainText('불러오는 중…');
+  await expect(srTimeline).not.toContainText('아직 연습 세션 기록이 없어요.');
+
+  // 응답 지연 해제
+  resolveDetail();
+
+  // 응답 도착 후: "불러오는 중…"은 사라지고 빈 상태 문구가 정상 표시됨
+  await expect(srTakes).toContainText('아직 녹음이 없어요');
+  await expect(srTakes).not.toContainText('불러오는 중…');
+
+  await expect(srTimeline).toContainText('아직 연습 세션 기록이 없어요.');
+  await expect(srTimeline).not.toContainText('불러오는 중…');
+});
