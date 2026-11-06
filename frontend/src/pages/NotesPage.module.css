@@ -12,8 +12,23 @@
   font-size: clamp(36px, 7vw, 56px);
   line-height: 1;
   letter-spacing: -0.02em;
-  margin: 12px 0 0;
+  margin: 0;
   text-transform: uppercase;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* M2-1a: 분석 요청 버튼 아래 BETA 안내(늘 보임) */
+.betaNotice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .pageSub {

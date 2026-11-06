@@ -315,6 +315,14 @@
   color: var(--muted);
 }
 
+/* M2-1a: 분석 요청 버튼 아래 BETA 안내(늘 보임) */
+.betaNotice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .keyGate {
   display: flex;
   flex-wrap: wrap;

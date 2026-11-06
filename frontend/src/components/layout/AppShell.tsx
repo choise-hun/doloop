@@ -3,6 +3,7 @@ import styles from './AppShell.module.css';
 import { useAuth, auth } from '../../lib/auth';
 import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
 import { t, type I18nKey } from '../../lib/i18n.mts';
+import { BetaBadge } from '../common/BetaBadge';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'chords' | 'notes' | 'settings' | 'privacy';
@@ -89,7 +90,14 @@ export function AppShell({
                 className={`${styles.navItem} ${styles.navMainItem}`}
                 aria-current={activeNav === item.key ? 'page' : undefined}
               >
-                {t(item.labelKey)}
+                {item.key === 'notes' ? (
+                  <>
+                    <span>{t(item.labelKey)}</span>
+                    <BetaBadge />
+                  </>
+                ) : (
+                  t(item.labelKey)
+                )}
               </a>
             ) : (
               <span

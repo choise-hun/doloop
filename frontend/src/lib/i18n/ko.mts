@@ -44,4 +44,8 @@ export const KO = {
   'analyze.unavailable': 'AI 분석을 잠시 쓸 수 없어요. 잠시 뒤 다시 시도해 주세요.',
   'analyze.videoNotFound': '영상을 찾을 수 없어요. 공개 또는 일부 공개 영상인지 확인해 주세요.',
   'analyze.requestFailed': '요청 실패',
+  // M2-1a — AI 기능 BETA 표시 (BetaBadge·NotesPage·VideoAnalyzeForm)
+  'beta.label': 'BETA',
+  'beta.notice':
+    'AI 분석(Beta)은 영상의 음향·화질에 따라 일부 코드나 보이싱이 실제 연주와 다를 수 있어요. 분석 결과는 나만 보는 학습 참고용으로 보관돼요.',
 } as const;

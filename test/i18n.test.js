@@ -78,7 +78,20 @@ test('I0-5 AppShell·jobError 소스에 한글 문자열이 남지 않음(주석
 });
 
 test('I0-6 사전의 모든 키가 소스 어딘가에서 쓰인다', () => {
-  const src = ['frontend/src/components/layout/AppShell.tsx', 'frontend/src/lib/jobError.mts'].map(read).join('\n');
+  // M2-1a: L0 뒤 화면들도 t()를 쓴다 → frontend/src 전체(사전 폴더 lib/i18n 제외)를 본다
+  const files = [];
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(__dirname, '..', rel), { withFileTypes: true })) {
+      const child = `${rel}/${e.name}`;
+      if (e.isDirectory()) {
+        if (child !== 'frontend/src/lib/i18n') walk(child);
+      } else if (/\.(tsx|ts|mts)$/.test(e.name)) {
+        files.push(child);
+      }
+    }
+  };
+  walk('frontend/src');
+  const src = files.map(read).join('\n');
   const unused = Object.keys(KO).filter((k) => !src.includes(`'${k}'`));
   assert.deepEqual(unused, []);
 });

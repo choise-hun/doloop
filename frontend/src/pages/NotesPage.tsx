@@ -6,6 +6,8 @@ import { auth, canUseAi, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, NoteSummaryDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import { describeAnalyzeRequestError, describeJobError } from '../lib/jobError.mts';
+import { t } from '../lib/i18n.mts';
+import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './NotesPage.module.css';
 
 export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
@@ -188,7 +190,12 @@ export function NotesPage(): React.ReactElement {
   return (
     <AppShell variant="narrow" activeNav="notes">
       <div className={styles.headerBlock}>
-        <h1 className={`page-title ${styles.pageTitle}`}>Notes</h1>
+        <div className={styles.titleRow}>
+          <h1 className={`page-title ${styles.pageTitle}`} data-align-group="notesTitle:center-y">
+            Notes
+          </h1>
+          <BetaBadge alignGroup="notesTitle:center-y" />
+        </div>
         <p className={`page-sub ${styles.pageSub}`}>
           유튜브 링크와 태그를 넣으면 AI가 영상을 분석해서 학습 노트를 생성해요. 보통 1~3분 걸려요.{' '}
           <SafeLink id="notionLink" href={notionLinkUrl} external hidden={!notionLinkUrl}>
@@ -271,6 +278,9 @@ export function NotesPage(): React.ReactElement {
             분석 요청
           </button>
         </div>
+        <p className={styles.betaNotice} id="notesBetaNotice">
+          {t('beta.notice')}
+        </p>
         <p className={`msg${formMsg.kind ? ' ' + formMsg.kind : ''}`} id="msg" role="status">
           {formMsg.text}
         </p>
