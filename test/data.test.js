@@ -245,7 +245,7 @@ test('D3 keepalive 오류: fetch 실패 시 404 NOT_FOUND 에러 객체 reject',
   });
 
   await assert.rejects(
-    async () => env.ULData.saveProgress({ songId: 's', date: '2026-10-30' }, { keepalive: true }),
+    () => env.ULData.saveProgress({ songId: 's', date: '2026-10-30' }, { keepalive: true }),
     (err) => {
       assert.equal(err.status, 404);
       assert.equal(err.code, 'NOT_FOUND');

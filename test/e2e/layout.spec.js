@@ -21,7 +21,8 @@ for (const width of [390, 768, 1280]) {
     const over = [];
     for (const p of PAGES) {
       await page.goto(p, { waitUntil: 'load' });
-      await page.waitForTimeout(300);
+      await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       const px = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       if (px > 0) over.push(`${p} +${px}px`);
     }

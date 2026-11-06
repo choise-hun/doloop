@@ -407,7 +407,7 @@ async function openState(page, { path: url, state, width, ready, mock }) {
   if ((await page.locator('#root').count()) === 0) return false;
   if (ready) await ready(page, typeof state === 'string' ? state : state.name);
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(200);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   return true;
 }
 

@@ -373,9 +373,9 @@ test('E7 대조군(검출기 작동 확인)', async ({ page }) => {
   expect(count).toBeGreaterThan(0);
 
   // CSP 위반 최소 2건(인라인 이벤트 핸들러 + 인라인 스타일) 확인
-  await page.waitForTimeout(200);
-  const violations = await page.evaluate(() => window.__cspViolations);
-  expect(violations.length).toBeGreaterThanOrEqual(2);
+  await expect
+    .poll(() => page.evaluate(() => window.__cspViolations.length))
+    .toBeGreaterThanOrEqual(2);
 });
 
 test('E8 설정 화면(settings.html) 노션 백업 ZIP 미리보기 XSS 검사', async ({ page }) => {
