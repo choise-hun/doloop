@@ -10,14 +10,14 @@
 | # | 답 | 반영 |
 | --- | --- | --- |
 | N1 공개 폴더 이름 | 자유 입력 + 금칙어 + 신고·owner 숨김 | `PUT /categories/{id}/share` `title?`(없으면 지금 공개 제목 → 분류 이름). 1~20자(복제하면 분류 이름이 되므로 분류 이름 한도와 같게). 금칙어면 400 `BANNED_WORD` `detail{field:"title"}`. **분류 이름을 바꿔도 공개 제목은 안 바뀐다** — 그래서 개인 분류 이름 변경은 금칙어 검사를 받지 않는다 |
-| N2 공개 이름 | 본인 닉네임은 자유, 커뮤니티 이름은 고정 = 처음 게시 때 `display_name` 복사 | `profiles.public_name`(V8). 첫 게시 때 닉네임을 금칙어 검사 뒤 복사, 그 뒤로 본인은 못 바꾼다. owner가 `DELETE /admin/users/{id}/public-name`으로 NULL로 만들면 다음 게시 때 그때 닉네임을 다시 복사. 공개 응답에는 `display_name`·이메일이 나오지 않고 `publicName`만 나간다 |
+| N2 공개 이름 | **확정(2026-11-06, D1 답)**: 커뮤니티를 처음 쓸 때 직접 정하고, **7일에 한 번** 바꿀 수 있다(불변은 사용성 급락). **중복 금지 + 띄어쓰기 금지**(사칭 방지 — `존메이어` / `존 메이어`) | `profiles.public_name`·`public_name_key`·`public_name_changed_at`(V8). `PUT /community/me/public-name`. 2~20자, 공백 400, 금칙어 400, 중복 409 `PUBLIC_NAME_TAKEN` — 키 = NFKC·소문자·글자와 숫자만이라 `존.메이어`·`존_메이어`·`JohnMayer`/`john.mayer`도 같은 이름. 7일 안 재변경 409 `PUBLIC_NAME_CHANGE_TOO_SOON{nextChangeAt}`. 이름이 없으면 게시만 409 `PUBLIC_NAME_REQUIRED`(열람·좋아요·팔로우·신고는 내 이름이 보이지 않아 없어도 됨). `display_name`(닉네임)과 별개 — 공개 응답에는 `display_name`·이메일이 나오지 않는다. owner 초기화 = NULL + 7일 제한 해제 |
 | N3 공개본 곡 제목 | YouTube 원래 제목 | `shared_folder_items`에 `title`·`artist` 열이 **없다**. 전역 캐시 `video_titles(video_id, title, author, fetched_at)`를 조인한다. **아티스트도 사용자가 고칠 수 있는 글자라 YouTube 채널명(`author`)을 쓴다** |
 
 ### 1-1. 이 step에서 정한 것 (사용자 확인 필요 표시 ★)
 
 | # | 결정 | 이유 |
 | --- | --- | --- |
-| ★D1 | **첫 게시 때 공개 이름 확인**: `PUT …/share` 입력 `publicName`이 지금 닉네임과 같아야 한다. 없거나 다르면 409 `PUBLIC_NAME_CONFIRM_REQUIRED` `detail{displayName}` | 가입 때 `display_name`이 **Google 실명(`full_name`) 또는 이메일 앞부분**으로 자동 채워진다(`SupabaseJwtVerifier` `displayNameHint`). 확인 없이 복사하면 모르는 사이 실명·이메일 아이디가 바꿀 수 없게 공개된다. 화면(M2-2)은 409의 `detail.displayName`을 "이 이름으로 공개되고 바꿀 수 없습니다"로 보여 준 뒤 같은 값을 보내면 된다. **새 에러 코드라 이 결정이 맞는지 확인 부탁** |
+| D1 | ~~첫 게시 때 `display_name` 복사 + 확인 값~~ → **사용자 결정(2026-11-06): 커뮤니티 처음 쓸 때 이름을 직접 정함, 7일에 한 번 변경, 중복·띄어쓰기 금지**(위 N2 줄) | 발견한 문제: 가입 때 `display_name`이 Google 실명(`full_name`)·이메일 앞부분으로 자동 채워진다(`SupabaseJwtVerifier` `displayNameHint`) → 복사 방식은 실명이 모르는 사이 공개될 위험. 직접 정하기로 사라짐 |
 | D2 | 자동 연동은 "그 사용자의 자동 연동 공개본 전부"를 같은 트랜잭션에서 다시 맞춘다(`SharedFolderSync.resyncCategories(tx, userId, null)`) | 복사하는 것이 `video_id`·구간·배속·순서뿐이라 바뀐 분류를 계산하는 것보다 놓칠 위험이 적다. 분류는 많아야 10개. 자동 연동 공개본이 없으면 쿼리 1번으로 끝난다 |
 | D3 | 자동 연동의 `published_at`은 곡이 들고 나거나 구간·배속이 바뀐 때만 갱신(순서만 바뀐 때는 아님). 게시·다시 게시는 늘 갱신 | 연습할 때마다 마지막 연습일로 순서가 바뀌어 "최근" 정렬이 흔들리지 않게 |
 | D4 | `CategoryService`는 고치지 않았다 | 이름 변경은 공개 제목에 안 들어가고(N1), 삭제는 FK CASCADE가 공개본을 지운다(A9) |
@@ -50,8 +50,9 @@
 | 경로 | 누가 | 입력 → 응답 | 오류 |
 | --- | --- | --- | --- |
 | `GET /categories/{id}/share` | 소유자 | → `{share: ShareSummary \| null}` | 남의 분류 404 |
-| `PUT /categories/{id}/share` | 공개 = 유료, 비공개 = 모두 | `{isPublic, autoSync?, title?, publicName?(첫 게시 확인)}` → `{share}`. ShareSummary = `{folderId, categoryId, title, isPublic, autoSync, hidden, itemCount, likeCount, cloneCount, publishedAt, publicName}` | 무료 공개 403 `TIER_UPGRADE_REQUIRED{feature:"community"}`, 금칙어 400 `BANNED_WORD{field:"title"\|"displayName"}`, 닉네임 없음 409 `DISPLAY_NAME_REQUIRED`, 확인 없음·다름 409 `PUBLIC_NAME_CONFIRM_REQUIRED{displayName}`, 설정 꺼짐 409 `SHARE_AUTOSYNC_OFF`, 공개한 적 없는데 비공개 404, `isPublic` 없음·제목 21자 400 |
+| `PUT /categories/{id}/share` | 공개 = 유료, 비공개 = 모두 | `{isPublic, autoSync?, title?}` → `{share}`. ShareSummary = `{folderId, categoryId, title, isPublic, autoSync, hidden, itemCount, likeCount, cloneCount, publishedAt, publicName}` | 무료 공개 403 `TIER_UPGRADE_REQUIRED{feature:"community"}`, 금칙어 400 `BANNED_WORD{field:"title"}`, 커뮤니티 이름 없음 409 `PUBLIC_NAME_REQUIRED`, 설정 꺼짐 409 `SHARE_AUTOSYNC_OFF`, 공개한 적 없는데 비공개 404, `isPublic` 없음·제목 21자 400 |
 | `POST /categories/{id}/share/republish` | 유료 | `{title?}` → `{share}` | 공개본 없음 404 |
+| `PUT /community/me/public-name` | 모두 | `{publicName}` → `{publicName, changedAt, nextChangeAt}` (같은 이름이면 그대로 200) | 공백·길이(2~20)·글자 없음 400, 금칙어 400 `BANNED_WORD{field:"publicName"}`, 중복 409 `PUBLIC_NAME_TAKEN`, 7일 안 409 `PUBLIC_NAME_CHANGE_TOO_SOON{nextChangeAt}` |
 | `GET /community/folders?sort=recent\|clones\|likes&cursor=` | 모두 | → `{folders:[PublicFolderSummary], next}` (20개씩, `next` = 다음 `cursor`). Summary = `{id, title, owner{id, publicName, isCreator, creatorBadge}, itemCount, coverVideoId, likeCount, likedByMe, cloneCount, autoSync, publishedAt}` | sort 틀림 400 |
 | `GET /community/folders/{id}` | 모두 | → `{folder, items:[{videoId, position, title, artist, a, b, rate}]}` (title·artist = YouTube, 못 받았으면 null) | 비공개·숨김·무료 소유자 404 |
 | `PUT·DELETE /community/folders/{id}/like` | 모두 | → `{liked, likeCount}` (멱등) | 자기 폴더 400 |
@@ -67,23 +68,25 @@
 | `DELETE /admin/users/{userId}/public-name` | owner | `{reason}` → `{userId, publicName:null}` | |
 
 - 공개 경로가 읽는 것: `shared_folders`·`shared_folder_items`·`video_titles`·`profiles`의 `public_name`·크리에이터 열·`follows`·`folder_likes`. `songs`(사용자 제목·메모)·`notes`·`progressions`·`takes`·`display_name`·이메일은 공개 경로에서 읽지 않는다(복제는 내 `songs`에 쓰기만)
-- 새 에러 코드: `BANNED_WORD`(400), `PUBLIC_NAME_CONFIRM_REQUIRED`(409). 나머지는 M1-1 §6 그대로
+- 새 에러 코드: `BANNED_WORD`(400), `PUBLIC_NAME_REQUIRED`·`PUBLIC_NAME_TAKEN`·`PUBLIC_NAME_CHANGE_TOO_SOON`(409). M1-1 §6의 `DISPLAY_NAME_REQUIRED`는 `PUBLIC_NAME_REQUIRED`로 바뀜. 나머지는 그대로
+- `/me`에 `publicName`·`publicNameNextChangeAt`(null = 지금 바로 바꿀 수 있음)
 
 ## 4. 테스트
 
 ### 실행 결과 (로컬 win, Testcontainers `postgres:16-alpine`)
 
 ```
-./gradlew clean test --rerun-tasks        BUILD SUCCESSFUL in 1m 18s
-  전체 276 tests, 실패 0, 오류 0, 건너뜀 0   (M1-3d 267 + 새 9)
-  ulevelp.community.CommunityApiTest           tests="9" failures="0"
+./gradlew clean test --rerun-tasks        BUILD SUCCESSFUL in 1m 14s   (D1 답 반영 뒤, 2026-11-06)
+  전체 277 tests, 실패 0, 오류 0              (M1-3d 267 + 새 10)
+  ulevelp.community.CommunityApiTest           tests="10" failures="0"
   ulevelp.db.DatabaseMigrationAndIntegrityTest tests="7" failures="0"  (Flyway 버전 8, 테이블 23)
 ```
 - `npm test`는 로컬에서 돌리지 않음(화면 변경 없음, win CRLF 함정 — CI에서 확인)
 
-- 새 `community/CommunityApiTest.kt` 9개:
-  - G1 공개본에 YouTube 제목·채널, 사용자 제목·메모·이메일·`displayName` 키 없음(상세·목록), 닉네임을 바꿔도 공개 이름 고정, 토큰 없음 401
-  - G2 무료 403, 금칙어 400(`씨 발.연습`·`F.u.C.k`, 닉네임 `병 신`), `Bass class 색소폰` 통과, 닉네임 없음 409, 첫 게시 확인 없음·다름 409(가입 힌트 = 이메일 앞부분 확인), 남의 분류 404, 입력 400
+- 새 `community/CommunityApiTest.kt` 10개:
+  - G1 공개본에 YouTube 제목·채널, 사용자 제목·메모·이메일·닉네임(`display_name` 값·키) 없음(상세·목록), 토큰 없음 401
+  - G2 무료 403, 금칙어 400(`씨 발.연습`·`F.u.C.k`), `Bass class 색소폰` 통과, 커뮤니티 이름 없이 게시 409 → 정하면 200, 남의 분류 404, 입력 400
+  - G2b 커뮤니티 이름: 띄어쓰기(공백·탭)·1자·21자·`__` 400, 금칙어 400, 처음은 바로 됨, `존메이어` 뒤 `존.메이어`·`존_메이어`·`존-메이어` 409 TAKEN, `JohnMayer` ↔ `john.MAYER` 409, 같은 이름 200, 7일 − 1시간 409 / 7일 200, 옛 이름은 다른 사람이 쓸 수 있음, `/me` `publicNameNextChangeAt`
   - G3 설정 꺼짐 409·무료 켜기 403, 자동 연동: 곡 추가·연습 저장(a·b·rate)·곡 삭제가 바로 반영, 설정 끄면 중단(공개본 남음), 다시 게시로 반영
   - G3b 재생목록 가져오기 → 자동 연동 + YouTube 제목 캐시
   - G4 비공개 404, 소유자 무료면 정리 전에도 숨김, 관리 API 다운그레이드 → 비공개·자동 연동 정지, 분류 삭제 → 공개본 삭제
@@ -98,7 +101,7 @@
 
 - 4b: 운영자 폴더(`kind` curated·monthly_pick)는 `shared_folders` 그대로, 항목 제목은 `video_titles`(운영자 설명은 `note_i18n`). `PATCH /admin/shared-folders/{id}`의 `titleI18n`·`descriptionI18n`·`isPublic`·`sortOrder`는 `AdminService.setFolderHidden` 옆에 `TODO(stub)`. 공개 목록·상세는 지금 `kind='user'`만 본다(`CommunityService.visibleUserFolders`) — 4b가 운영자 폴더 상세를 열 때 넓힌다. 학습 기록 공개 이름도 `public_name`(앱 명세 §2.2 고침)
 - 4b `/curation/home` `following` = `follows` + 위 공개 조건 재사용
-- 화면: 첫 공개 버튼 → 409 `PUBLIC_NAME_CONFIRM_REQUIRED`면 확인 모달("커뮤니티 이름: {detail.displayName} — 바꿀 수 없음") → 같은 값을 `publicName`으로 다시 보냄. `BANNED_WORD`의 `detail.field`로 제목/닉네임 칸 표시. 항목 `title`이 null이면 "제목 불러오는 중" 대신 영상 ID 기반 썸네일만
+- 화면: 커뮤니티에 처음 들어올 때 `/me.publicName`이 null이면 "커뮤니티 이름 정하기"(띄어쓰기 불가·7일에 한 번 변경 안내) → `PUT /community/me/public-name`. 게시 409 `PUBLIC_NAME_REQUIRED`도 같은 화면으로. 설정의 이름 변경 칸은 `publicNameNextChangeAt`이 있으면 그 날짜까지 잠금. `BANNED_WORD`의 `detail.field`로 제목/이름 칸 표시. 항목 `title`이 null이면 "제목 불러오는 중" 대신 영상 ID 기반 썸네일만
 - PR #82(M1-3e)가 머지되면 `effectiveTier`가 유예를 반영하므로 공개 목록의 "유료 소유자"도 유예 끝까지 유지된다(코드 변경 없음)
 
 ## 6. PR·CI
