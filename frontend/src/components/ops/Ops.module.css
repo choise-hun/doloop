@@ -30,3 +30,177 @@
 .userInfo b {
   font-size: 15px;
 }
+
+/* ---- M2-4b 큐레이션·이달의 곡 ---- */
+.h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 종류 + 달 — 좁으면 줄바꿈 */
+.pairRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pairRow > * {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.folderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.folderRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.folderRow[aria-current='true'] .folderInfo b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.folderInfo {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.folderInfo b {
+  font-size: 14px;
+}
+.folderInfo span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 줄 안의 작은 버튼(편집·빼기) */
+.smallBtn {
+  padding: 0 16px;
+  flex: none;
+}
+
+.edHead {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.narrowInp {
+  max-width: 160px;
+}
+
+/* 곡 줄: 좁은 폭 = [썸네일 · 제목] / [시작 · 끝 · 배속 · 빼기] / [설명], 넓은 폭(1024~) = [썸네일 · 제목 · 구간·배속·빼기] / [설명] */
+.itemList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-areas:
+    'thumb title'
+    'ctrls ctrls'
+    'note note';
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.thumb {
+  grid-area: thumb;
+  align-self: start;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--surface2);
+  border-radius: var(--radius-card);
+}
+
+.itemTitle {
+  grid-area: title;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.itemTitle b {
+  font-size: 14px;
+}
+.itemTitle span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.itemCtrls {
+  grid-area: ctrls;
+  align-self: end;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* 좁은 폭: 시작·끝·배속 칸이 남은 폭을 나눠 갖는다. 넓은 폭: 고정 폭 */
+.itemCtrls > label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.timeInp,
+.rateInp {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.itemNote {
+  grid-area: note;
+}
+
+@media (max-width: 719px) {
+  .folderRow {
+    align-items: flex-start;
+  }
+}
+
+@media (min-width: 1024px) {
+  .itemCtrls > label {
+    flex: none;
+  }
+  .timeInp {
+    width: 72px;
+  }
+  .rateInp {
+    width: 60px;
+  }
+  .item {
+    grid-template-columns: 112px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'thumb title ctrls'
+      'thumb note note';
+  }
+}
