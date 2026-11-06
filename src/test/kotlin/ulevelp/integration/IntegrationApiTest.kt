@@ -490,11 +490,11 @@ class IntegrationApiTest {
     }
 
     @Test
-    fun `K10 appId 격리 (ulevelp vs guitar-practice)`() = testApp { client ->
+    fun `K10 ulevelp 외 appId(guitar-practice)는 400이고 아무것도 저장되지 않는다`() = testApp { client ->
         val rawToken = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
         val dbId = "959cbe517e224419b48ca3313895a427"
 
-        // A가 appId="guitar-practice"로 등록
+        // A가 appId="guitar-practice"로 등록 시도 -> 400
         val putResp = client.put("/api/v1/integrations/notion") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
             header(HttpHeaders.ContentType, "application/json")
@@ -505,9 +505,9 @@ class IntegrationApiTest {
                 put("sessionsDb", dbId)
             }.toString())
         }
-        assertEquals(HttpStatusCode.OK, putResp.status)
+        assertStandardError(putResp.bodyAsText(), 400, "INVALID_INPUT")
 
-        // ① GET /api/v1/integrations?appId=ulevelp -> 빈 배열 []
+        // ① GET /api/v1/integrations?appId=ulevelp -> 빈 배열 [] (사전 차단이라 행이 생기지 않음)
         val r1 = client.get("/api/v1/integrations?appId=ulevelp") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
         }
@@ -515,13 +515,11 @@ class IntegrationApiTest {
         val j1 = Json.parseToJsonElement(r1.bodyAsText()).jsonObject
         assertEquals(0, j1["integrations"]?.jsonArray?.size)
 
-        // ② GET /api/v1/integrations?appId=guitar-practice -> 1개 반환
+        // ② GET /api/v1/integrations?appId=guitar-practice -> 400
         val r2 = client.get("/api/v1/integrations?appId=guitar-practice") {
             header(HttpHeaders.Authorization, "Bearer $tokenA")
         }
-        assertEquals(HttpStatusCode.OK, r2.status)
-        val j2 = Json.parseToJsonElement(r2.bodyAsText()).jsonObject
-        assertEquals(1, j2["integrations"]?.jsonArray?.size)
+        assertStandardError(r2.bodyAsText(), 400, "INVALID_INPUT")
     }
 
     @Test
