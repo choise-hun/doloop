@@ -399,6 +399,29 @@ export function ChordsPage(): React.ReactElement {
     }));
   }, [toneNotes, toneIdx, toneOrderList]);
 
+  // tone 탭 지판 가로 스크롤 상자 ref
+  const toneScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'tone') return;
+
+    function adjustToneScroll() {
+      const el = toneScrollRef.current;
+      if (!el) return;
+      if (el.scrollWidth <= el.clientWidth) return;
+      const frets = toneNotes.map((n: any) => n.f).filter((f: any) => typeof f === 'number');
+      const minFret = frets.length > 0 ? Math.min(...frets) : 0;
+      const targetFret = Math.max(0, minFret - 1);
+      // FretboardSvg 기하: L = 30, showOpen = true, xL = 56, fretW = 44
+      const targetX = targetFret === 0 ? 0 : 56 + (targetFret - 1) * 44;
+      el.scrollLeft = Math.min(targetX, Math.max(0, el.scrollWidth - el.clientWidth));
+    }
+
+    adjustToneScroll();
+    const rafId = requestAnimationFrame(adjustToneScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [activeTab, toneNotes]);
+
   function toggleTonePlay() {
     if (tonePlaying) {
       stopAllTransports();
@@ -1524,7 +1547,7 @@ export function ChordsPage(): React.ReactElement {
             {CT.NAMES[toneRoot]}
             {CT.QBY[toneQ]?.name} · {START_PAT[toneStart]?.label}
           </h3>
-          <div className={styles.scroll}>
+          <div ref={toneScrollRef} className={styles.scroll}>
             <div id="tone-board">
               <FretboardSvg
                 from={0}
