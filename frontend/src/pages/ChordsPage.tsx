@@ -1071,12 +1071,12 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           {/* CAGED 4대 이정표 요약 및 31스텝 시퀀스 바 */}
+          {scActiveBlockObj && (
+            <div className={styles.seqSummary}>
+              {scMilestoneSummary.summaryText}
+            </div>
+          )}
           <div id="sc-seq" className={styles.seq} aria-label="CAGED 블럭 연주 시퀀스">
-            {scActiveBlockObj && (
-              <div className={styles.seqSummary}>
-                {scMilestoneSummary.summaryText}
-              </div>
-            )}
             {scSeqNotes.map((n, i) => {
               const isNow = !!scNow && scNow.s === n.s && scNow.f === n.f;
               return (
