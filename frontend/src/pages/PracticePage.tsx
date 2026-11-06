@@ -7,8 +7,10 @@ import { SongRecordPanel } from '../components/songRecord/SongRecordPanel';
 import { auth, useAuth } from '../lib/auth';
 import { apiClient, CategoryDto, SongDto, TakeDto } from '../lib/apiClient';
 import { takeOpenCategory } from '../lib/categories';
+import { playlistUrlFrom } from '../lib/community.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
+import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import styles from './PracticePage.module.css';
 
 export const RATES: ReadonlyArray<number> = [0.25, 0.5, 0.75, 1];
@@ -1323,8 +1325,17 @@ export function PracticePage(): React.ReactElement {
     );
   };
 
+  const [importModalUrl, setImportModalUrl] = useState<string | null>(null);
+
   const handleUrlSubmit = (rawVal: string, clearFn: () => void) => (e: React.FormEvent) => {
     e.preventDefault();
+    const plUrl = playlistUrlFrom(rawVal);
+    if (plUrl) {
+      clearFn();
+      closeDrawer();
+      setImportModalUrl(plUrl);
+      return;
+    }
     const id = videoIdFrom(rawVal);
     if (!id) {
       setSyncMsg({ text: '유튜브 링크를 읽지 못했어요', err: true });
@@ -1923,6 +1934,16 @@ export function PracticePage(): React.ReactElement {
           </div>
         </div>
       </div>
+
+      <PlaylistImportModal
+        url={importModalUrl}
+        me={authState.me}
+        onClose={() => setImportModalUrl(null)}
+        onImported={() => setSongsList(null)}
+        onOnlyThis={(vid) => {
+          void openSongById(vid);
+        }}
+      />
     </AppShell>
   );
 }
