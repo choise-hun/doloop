@@ -56,8 +56,10 @@ data class MeResponseDto(
     val creatorBio: String,
     val shareAutosync: Boolean,
     val sharePracticeLog: Boolean,
-    // 커뮤니티 공개 이름(N2, M1-4a) — 처음 게시 때 displayName을 복사해 고정. null = 아직 게시 안 함
-    val publicName: String? = null
+    // 커뮤니티 이름(N2, M1-4a) — 커뮤니티 처음 쓸 때 직접 정함. null = 아직 안 정함
+    val publicName: String? = null,
+    // 다음에 이름을 바꿀 수 있는 시각(7일에 한 번). null = 지금 바로 된다
+    val publicNameNextChangeAt: String? = null
 )
 
 class ProfileService(private val db: Database?) {
@@ -414,7 +416,10 @@ class ProfileService(private val db: Database?) {
             creatorBio = row[ProfilesTable.creatorBio],
             shareAutosync = row[ProfilesTable.shareAutosync],
             sharePracticeLog = row[ProfilesTable.sharePracticeLog],
-            publicName = row[ProfilesTable.publicName]
+            publicName = row[ProfilesTable.publicName],
+            publicNameNextChangeAt = nextPublicNameChangeAt(
+                row[ProfilesTable.publicName], row[ProfilesTable.publicNameChangedAt], OffsetDateTime.now(ZoneOffset.UTC)
+            )?.let { formatTimestamp(it) }
         )
     }
 }

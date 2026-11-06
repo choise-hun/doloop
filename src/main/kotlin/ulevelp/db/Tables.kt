@@ -50,8 +50,10 @@ object ProfilesTable : Table("profiles") {
     val creatorBio = text("creator_bio").default("")
     val shareAutosync = bool("share_autosync").default(false)
     val sharePracticeLog = bool("share_practice_log").default(false)
-    // V8 커뮤니티 공개 이름(N2): 처음 게시 때 display_name을 복사·고정. NULL = 아직 게시한 적 없음(또는 owner 초기화)
+    // V8 커뮤니티 공개 이름(N2): 커뮤니티 처음 쓸 때 직접 정함, 7일에 한 번 변경. NULL = 아직 안 정함(또는 owner 초기화)
     val publicName = text("public_name").nullable()
+    val publicNameKey = text("public_name_key").nullable()
+    val publicNameChangedAt = timestampWithTimeZone("public_name_changed_at").nullable()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 

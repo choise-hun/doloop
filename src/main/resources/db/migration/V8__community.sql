@@ -2,14 +2,19 @@
 -- M1-4a: 커뮤니티 테이블 (개발산출물/결과/M1-1_스키마설계.md §2-2 초안 + N1~N3 결정, 진행_티어크레딧.md §2·§3-2).
 -- 원칙: 사용자가 쓴 글자는 금칙어 검사를 거친 공개 제목(N1)·공개 이름(N2)만 공개한다.
 --  N1: shared_folders.title = 게시·다시 게시 때 입력(기본 분류 이름), 금칙어 검사. 분류 이름을 바꿔도 따라가지 않는다
---  N2: profiles.public_name = 처음 게시 때 display_name을 금칙어 검사 뒤 복사, 본인은 못 바꿈(owner만 NULL로 초기화)
+--  N2(2026-11-06 확정): profiles.public_name = 커뮤니티 처음 쓸 때 직접 정함(display_name과 별개), 7일에 한 번 변경,
+--      띄어쓰기 금지·중복 금지(정규화 키 public_name_key — 존메이어/존.메이어/존_메이어는 같은 이름), owner는 NULL로 초기화
 --  N3: 공개본 곡 제목·아티스트는 YouTube 원래 값 → 항목에 title·artist 열이 없고 전역 캐시 video_titles를 조인한다
 
 -- ============================================================
 -- profiles.public_name (N2)
 -- ============================================================
 ALTER TABLE profiles
-  ADD COLUMN public_name TEXT CHECK (public_name IS NULL OR char_length(btrim(public_name)) BETWEEN 1 AND 100);
+  ADD COLUMN public_name            TEXT CHECK (public_name IS NULL OR (char_length(public_name) BETWEEN 2 AND 20 AND public_name !~ '\s')),
+  ADD COLUMN public_name_key        TEXT,         -- 중복 검사 키(NFKC·소문자·글자와 숫자만, 서비스 코드가 계산)
+  ADD COLUMN public_name_changed_at TIMESTAMPTZ,  -- 마지막으로 정한 시각. 다음 변경은 + 7일부터
+  ADD CONSTRAINT profiles_public_name_key_check CHECK ((public_name IS NULL) = (public_name_key IS NULL));
+CREATE UNIQUE INDEX profiles_public_name_key_uq ON profiles (public_name_key) WHERE public_name_key IS NOT NULL;
 
 -- ============================================================
 -- video_titles (N3 — YouTube가 준 제목·채널명 캐시. 사용자 입력이 아니다)

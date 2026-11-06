@@ -10,6 +10,7 @@ import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -61,6 +62,7 @@ class CommunityApiTest {
 
         private const val SECRET_MEMO = "비밀메모-절대공개금지"
         private const val USER_TITLE = "내가붙인제목"
+        private const val PRIVATE_NICK = "비공개닉네임"
     }
 
     @BeforeEach
@@ -75,15 +77,21 @@ class CommunityApiTest {
     private fun json(res: String): JsonObject = Json.parseToJsonElement(res).jsonObject
     private fun vid(i: Int) = "vid" + i.toString().padStart(8, '0')
 
-    private class U(val id: UUID, val token: String, val displayName: String?)
+    private class U(val id: UUID, val token: String, val name: String?)
 
-    private suspend fun HttpClient.newUser(tier: String? = "pro", displayName: String? = "기타맨"): U {
+    /** [name] = 커뮤니티 이름(기본: 겹치지 않는 자동 값, null = 안 정함). 닉네임은 늘 PRIVATE_NICK(공개되면 안 됨) */
+    private suspend fun HttpClient.newUser(tier: String? = "pro", name: String? = ""): U {
         val id = UUID.randomUUID()
         val token = TestJwt.token(id, email = "u$id@example.com")
         assertEquals(HttpStatusCode.OK, get("/api/v1/me") { auth(token) }.status)
         if (tier != null) TestTier.set(db, id, tier)
-        if (displayName != null) patchMe(token, """{"displayName":"$displayName"}""")
-        return U(id, token, displayName)
+        patchMe(token, """{"displayName":"$PRIVATE_NICK"}""")
+        val finalName = if (name == "") "u" + id.toString().take(8) else name
+        if (finalName != null) {
+            val r = setName(token, finalName)
+            assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+        }
+        return U(id, token, finalName)
     }
 
     private fun HttpRequestBuilder.auth(token: String?) {
@@ -99,6 +107,9 @@ class CommunityApiTest {
                 setBody(body)
             }
         }
+
+    private suspend fun HttpClient.setName(token: String, name: String): HttpResponse =
+        send(HttpMethod.Put, "/api/v1/community/me/public-name", token, """{"publicName":"$name"}""")
 
     private suspend fun HttpClient.patchMe(token: String, body: String): HttpResponse {
         val res = send(HttpMethod.Patch, "/api/v1/me", token, body)
@@ -126,7 +137,8 @@ class CommunityApiTest {
         send(HttpMethod.Put, "/api/v1/categories/$categoryId/share", token, body)
 
     /** 분류 하나 + 곡 [songs]개를 만들어 공개 → folderId */
-    private fun firstPublish(owner: U, extra: String = "") = """{"isPublic":true,"publicName":"${owner.displayName}"$extra}"""
+    @Suppress("UNUSED_PARAMETER")
+    private fun firstPublish(owner: U, extra: String = "") = """{"isPublic":true$extra}"""
 
     private suspend fun HttpClient.publishedFolder(owner: U, name: String = "네오소울", songs: IntRange = 1..2, body: String = firstPublish(owner)): Pair<String, String> {
         val cat = addCategory(owner.token, name)
@@ -157,6 +169,7 @@ class CommunityApiTest {
         assertFalse(body.contains(SECRET_MEMO), "메모가 공개됨: $body")
         assertFalse(body.contains("@example.com"), "이메일이 공개됨: $body")
         assertFalse(body.contains("\"displayName\""), "display_name 키가 공개됨: $body")
+        assertFalse(body.contains(PRIVATE_NICK), "닉네임(display_name)이 공개됨: $body")
         assertFalse(body.contains("\"memo\""), "memo 키가 공개됨: $body")
         for (e in extra) assertFalse(body.contains(e), "'$e'가 공개됨: $body")
     }
@@ -166,8 +179,8 @@ class CommunityApiTest {
     @Test
     fun `G1 게시 - 공개본은 YouTube 제목·공개 이름만, 사용자 제목·메모·이메일 없음, 공개 이름은 고정`() = testApplication {
         configureApiTestApp(dbConfig, videoMetaClient = FakeVideoMetaClient())
-        val a = client.newUser(displayName = "기타맨")
-        val viewer = client.newUser(tier = null, displayName = "구경꾼")
+        val a = client.newUser(name = "기타맨")
+        val viewer = client.newUser(tier = null, name = "구경꾼")
         val (cat, folderId) = client.publishedFolder(a)
 
         val mine = json(client.send(HttpMethod.Get, "/api/v1/categories/$cat/share", a.token).bodyAsText())["share"]!!.jsonObject
@@ -191,7 +204,7 @@ class CommunityApiTest {
         // 목록 응답도 같은 원칙
         assertNoPrivateText(client.send(HttpMethod.Get, "/api/v1/community/folders", viewer.token).bodyAsText())
 
-        // N2: 닉네임을 바꿔도 공개 이름은 그대로
+        // N2: 닉네임(display_name)은 커뮤니티 이름과 별개 — 바꿔도 공개 응답은 그대로
         assertEquals(HttpStatusCode.OK, client.patchMe(a.token, """{"displayName":"새닉네임"}""").status)
         val after = client.detail(viewer.token, folderId).bodyAsText()
         assertTrue(after.contains("기타맨"))
@@ -222,14 +235,10 @@ class CommunityApiTest {
         // 음악 용어는 통과(오탐 방지): bass, class, 색소폰
         assertFalse(BannedWords.contains("Bass class 색소폰 입문"))
 
-        // 닉네임 없음 409 / 닉네임 금칙어 400(field displayName)
-        val noName = client.newUser(displayName = "")
+        // 커뮤니티 이름 없이 게시 409
+        val noName = client.newUser(name = null)
         val c2 = client.addCategory(noName.token, "연습")
-        assertStandardError(client.share(noName.token, c2, """{"isPublic":true}""").bodyAsText(), 409, "DISPLAY_NAME_REQUIRED")
-        client.patchMe(noName.token, """{"displayName":"병 신"}""")
-        val r4 = client.share(noName.token, c2, """{"isPublic":true}""")
-        assertEquals("displayName", assertStandardError(r4.bodyAsText(), 400, "BANNED_WORD")["detail"]!!.jsonObject["field"]!!.jsonPrimitive.content)
-        transaction(db) { assertNull(ProfilesTable.selectAll().where { ProfilesTable.id eq noName.id }.single()[ProfilesTable.publicName]) }
+        assertStandardError(client.share(noName.token, c2, """{"isPublic":true}""").bodyAsText(), 409, "PUBLIC_NAME_REQUIRED")
 
         // 남의 분류 404, isPublic 없음 400, 제목 21자 400, 공개한 적 없는데 비공개 404
         assertStandardError(client.share(pro.token, freeCat, """{"isPublic":true}""").bodyAsText(), 404, "NOT_FOUND")
@@ -238,15 +247,58 @@ class CommunityApiTest {
         assertStandardError(client.share(pro.token, cat, """{"isPublic":false}""").bodyAsText(), 404, "NOT_FOUND")
         assertTrue(transaction(db) { SharedFoldersTable.selectAll().count() } == 0L)
 
-        // 첫 게시: 공개 이름 확인 없음·다름 → 409, detail에 지금 닉네임(가입 때 Google 이름·이메일 앞부분이 자동으로 들어가 있다)
-        val auto = client.newUser(displayName = null)
-        val c3 = client.addCategory(auto.token, "연습")
-        val r5 = assertStandardError(client.share(auto.token, c3, """{"isPublic":true}""").bodyAsText(), 409, "PUBLIC_NAME_CONFIRM_REQUIRED")
-        val hinted = r5["detail"]!!.jsonObject["displayName"]!!.jsonPrimitive.content
-        assertEquals("u${auto.id}", hinted) // 테스트 JWT 이메일 앞부분
-        assertStandardError(client.share(auto.token, c3, """{"isPublic":true,"publicName":"다른이름"}""").bodyAsText(), 409, "PUBLIC_NAME_CONFIRM_REQUIRED")
-        assertTrue(transaction(db) { SharedFoldersTable.selectAll().count() } == 0L)
-        assertEquals(HttpStatusCode.OK, client.share(auto.token, c3, """{"isPublic":true,"publicName":"$hinted"}""").status)
+        assertEquals(HttpStatusCode.OK, client.setName(noName.token, "새로정함").status)
+        assertEquals(HttpStatusCode.OK, client.share(noName.token, c2, """{"isPublic":true}""").status)
+    }
+
+    @Test
+    fun `G2b 커뮤니티 이름 - 띄어쓰기 금지, 정규화 중복 금지, 금칙어, 7일에 한 번`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val x = client.newUser(tier = null, name = null)
+        val y = client.newUser(tier = null, name = null)
+
+        // 띄어쓰기·길이·글자 없음 400, 금칙어 400(field publicName)
+        assertStandardError(client.setName(x.token, "존 메이어").bodyAsText(), 400, "INVALID_INPUT")
+        assertStandardError(client.setName(x.token, "존\t메이어").bodyAsText(), 400, "INVALID_INPUT")
+        assertStandardError(client.setName(x.token, "존").bodyAsText(), 400, "INVALID_INPUT")
+        assertStandardError(client.setName(x.token, "가".repeat(21)).bodyAsText(), 400, "INVALID_INPUT")
+        assertStandardError(client.setName(x.token, "__").bodyAsText(), 400, "INVALID_INPUT")
+        val banned = assertStandardError(client.setName(x.token, "병신123").bodyAsText(), 400, "BANNED_WORD")
+        assertEquals("publicName", banned["detail"]!!.jsonObject["field"]!!.jsonPrimitive.content)
+
+        // 처음 정하기는 바로 된다
+        val first = client.setName(x.token, "존메이어")
+        assertEquals(HttpStatusCode.OK, first.status, first.bodyAsText())
+        assertTrue(json(first.bodyAsText())["nextChangeAt"] !is JsonNull)
+        // 기호·대소문자만 다른 이름은 같은 이름(사칭 방지)
+        for (dup in listOf("존메이어", "존.메이어", "존_메이어", "존-메이어")) {
+            assertStandardError(client.setName(y.token, dup).bodyAsText(), 409, "PUBLIC_NAME_TAKEN")
+        }
+        assertEquals(HttpStatusCode.OK, client.setName(y.token, "JohnMayer").status)
+        assertStandardError(client.setName(x.token, "johnmayer").bodyAsText(), 409, "PUBLIC_NAME_CHANGE_TOO_SOON")
+        val x2 = client.newUser(tier = null, name = null)
+        assertStandardError(client.setName(x2.token, "john.MAYER").bodyAsText(), 409, "PUBLIC_NAME_TAKEN")
+
+        // 7일에 한 번: 같은 이름은 그대로 200, 6일 23시간 뒤 409(nextChangeAt), 7일 뒤 200
+        assertEquals(HttpStatusCode.OK, client.setName(x.token, "존메이어").status)
+        val soon = assertStandardError(client.setName(x.token, "존메이어2").bodyAsText(), 409, "PUBLIC_NAME_CHANGE_TOO_SOON")
+        assertTrue(soon["detail"]!!.jsonObject["nextChangeAt"]!!.jsonPrimitive.content.isNotBlank())
+        fun agedBy(hours: Long) = transaction(db) {
+            ProfilesTable.update({ ProfilesTable.id eq x.id }) {
+                it[publicNameChangedAt] = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).minusHours(hours)
+            }
+        }
+        agedBy(7 * 24 - 1)
+        assertStandardError(client.setName(x.token, "존메이어2").bodyAsText(), 409, "PUBLIC_NAME_CHANGE_TOO_SOON")
+        agedBy(7 * 24)
+        val changed = client.setName(x.token, "존메이어2")
+        assertEquals(HttpStatusCode.OK, changed.status, changed.bodyAsText())
+        // 옛 이름은 풀려서 다른 사람이 쓸 수 있다
+        assertEquals(HttpStatusCode.OK, client.setName(x2.token, "존메이어").status)
+        val me = json(client.send(HttpMethod.Get, "/api/v1/me", x.token).bodyAsText())
+        assertEquals("존메이어2", me["publicName"]!!.jsonPrimitive.content)
+        assertTrue(me["publicNameNextChangeAt"] !is JsonNull)
+        assertStandardError(client.send(HttpMethod.Put, "/api/v1/community/me/public-name", x.token, """{}""").bodyAsText(), 400, "INVALID_INPUT")
     }
 
     @Test
@@ -343,7 +395,7 @@ class CommunityApiTest {
         TestTier.set(db, a.id, "pro")
 
         // owner가 override 해제 → 실제 티어 free → 같은 트랜잭션에서 비공개·자동 연동 정지(Q8)
-        val owner = client.newUser(tier = null, displayName = "운영자")
+        val owner = client.newUser(tier = null, name = "운영자")
         TestTier.setRole(db, owner.id, "owner")
         val res = client.send(HttpMethod.Put, "/api/v1/admin/users/${a.id}/tier-override", owner.token,
             """{"tier":null,"until":null,"reason":"다운그레이드 시험"}""")
@@ -392,7 +444,7 @@ class CommunityApiTest {
         configureApiTestApp(dbConfig)
         val a = client.newUser()
         val (_, folderId) = client.publishedFolder(a, songs = 1..3)
-        val b = client.newUser(displayName = "복제자")
+        val b = client.newUser(name = "복제자")
         client.addSong(b.token, 2)                 // 이미 있는 곡
         client.addCategory(b.token, "네오소울")     // 이름 겹침
 
@@ -427,9 +479,9 @@ class CommunityApiTest {
     @Test
     fun `G7 팔로우·사용자 페이지 - 무료도 팔로우, 멱등, 자기 400, 게시 안 한 사람 404, 이메일·닉네임 없음`() = testApplication {
         configureApiTestApp(dbConfig)
-        val a = client.newUser(displayName = "기타맨")
+        val a = client.newUser(name = "기타맨")
         client.publishedFolder(a)
-        val viewer = client.newUser(tier = null, displayName = "구경꾼")
+        val viewer = client.newUser(tier = null, name = null)
 
         repeat(2) {
             val r = client.send(HttpMethod.Put, "/api/v1/community/follows/${a.id}", viewer.token)
@@ -452,7 +504,7 @@ class CommunityApiTest {
         assertFalse(pj.containsKey("email"))
 
         assertStandardError(client.send(HttpMethod.Put, "/api/v1/community/follows/${viewer.id}", viewer.token).bodyAsText(), 400, "INVALID_INPUT")
-        // 게시한 적 없는 사람(공개 이름 없음) 404
+        // 커뮤니티 이름이 없는 사람 404
         assertStandardError(client.send(HttpMethod.Put, "/api/v1/community/follows/${viewer.id}", a.token).bodyAsText(), 404, "NOT_FOUND")
         assertStandardError(client.send(HttpMethod.Get, "/api/v1/community/users/${viewer.id}", a.token).bodyAsText(), 404, "NOT_FOUND")
 
@@ -463,10 +515,10 @@ class CommunityApiTest {
     @Test
     fun `G8 신고·owner 처리 - 중복 409, owner 숨김·처리·공개 이름 초기화, 감사 행`() = testApplication {
         configureApiTestApp(dbConfig)
-        val a = client.newUser(displayName = "기타맨")
+        val a = client.newUser(name = "기타맨")
         val (cat, folderId) = client.publishedFolder(a)
         val viewer = client.newUser(tier = null)
-        val owner = client.newUser(tier = null, displayName = "운영자")
+        val owner = client.newUser(tier = null, name = "운영자")
         TestTier.setRole(db, owner.id, "owner")
 
         val r1 = client.send(HttpMethod.Post, "/api/v1/community/folders/$folderId/reports", viewer.token, """{"reason":"spam","detail":"광고 같아요"}""")
@@ -496,13 +548,13 @@ class CommunityApiTest {
         assertStandardError(client.send(HttpMethod.Patch, "/api/v1/admin/reports/$reportId", owner.token, """{"status":"dismissed","reason":"x"}""").bodyAsText(), 409, "CONFLICT")
         assertStandardError(client.send(HttpMethod.Patch, "/api/v1/admin/reports/$reportId", owner.token, """{"status":"open","reason":"x"}""").bodyAsText(), 400, "INVALID_INPUT")
 
-        // 공개 이름 초기화 → 사용자 페이지 404 → 다음 게시 때 그때 닉네임으로
+        // 공개 이름 초기화 → 사용자 페이지 404 → 게시 409 → 새 이름 정하면 다시 게시
         val reset = client.send(HttpMethod.Delete, "/api/v1/admin/users/${a.id}/public-name", owner.token, """{"reason":"부적절한 이름"}""")
         assertEquals(HttpStatusCode.OK, reset.status, reset.bodyAsText())
         assertStandardError(client.send(HttpMethod.Get, "/api/v1/community/users/${a.id}", viewer.token).bodyAsText(), 404, "NOT_FOUND")
-        client.patchMe(a.token, """{"displayName":"새이름"}""")
-        assertStandardError(client.share(a.token, cat, """{"isPublic":true}""").bodyAsText(), 409, "PUBLIC_NAME_CONFIRM_REQUIRED")
-        val again = client.share(a.token, cat, """{"isPublic":true,"publicName":"새이름"}""")
+        assertStandardError(client.share(a.token, cat, """{"isPublic":true}""").bodyAsText(), 409, "PUBLIC_NAME_REQUIRED")
+        assertEquals(HttpStatusCode.OK, client.setName(a.token, "새이름").status) // 초기화하면 7일 제한도 풀린다
+        val again = client.share(a.token, cat, """{"isPublic":true}""")
         assertEquals("새이름", json(again.bodyAsText())["share"]!!.jsonObject["publicName"]!!.jsonPrimitive.content)
 
         val actions = json(client.send(HttpMethod.Get, "/api/v1/admin/audit?targetUserId=${a.id}", owner.token).bodyAsText())["rows"]!!.jsonArray

@@ -128,6 +128,21 @@ data class PublicUserPageResponse(
 @Serializable
 data class FolderReportResponse(val reportId: Long)
 
+/** 커뮤니티 이름(N2). nextChangeAt = 다음에 바꿀 수 있는 시각(지금 바로 되면 null) */
+@Serializable
+data class PublicNameResponse(val publicName: String?, val changedAt: String?, val nextChangeAt: String?)
+
+const val PUBLIC_NAME_MIN = 2
+const val PUBLIC_NAME_MAX = 20
+const val PUBLIC_NAME_CHANGE_DAYS = 7L
+
+/** 다음 변경 가능 시각. 이름이 없거나(처음·초기화 뒤) 7일이 지났으면 null */
+fun nextPublicNameChangeAt(name: String?, changedAt: OffsetDateTime?, now: OffsetDateTime): OffsetDateTime? {
+    if (name == null || changedAt == null) return null
+    val next = changedAt.plusDays(PUBLIC_NAME_CHANGE_DAYS)
+    return if (now.isBefore(next)) next else null
+}
+
 /**
  * 공유·커뮤니티 (개발산출물/결과/M1-1_스키마설계.md §5-5, M1-4a).
  * 공개 경로가 읽는 것: `shared_folders`·`shared_folder_items`·`video_titles`·`profiles`의 공개 열
@@ -163,10 +178,8 @@ class CommunityService(
 
     /**
      * `PUT /categories/{id}/share` `{isPublic, autoSync?, title?}`.
-     * 공개: 유료만. 처음 공개(또는 비공개 → 공개, 자동 연동 새로 켬)면 복사. 첫 게시 때 공개 이름을 고정(N2).
+     * 공개: 유료만, 커뮤니티 이름이 있어야 한다(409 `PUBLIC_NAME_REQUIRED`). 처음 공개(또는 비공개 → 공개, 자동 연동 새로 켬)면 복사.
      * 제목(N1)은 입력 → 없으면 지금 공개 제목 → 없으면 분류 이름. 금칙어면 400 `BANNED_WORD`.
-     * 첫 게시(공개 이름 없음)는 [confirmPublicName]이 지금 닉네임과 같아야 한다 — 가입 때 닉네임이 Google 이름·이메일
-     * 앞부분으로 자동 채워져서, 모르고 실명이 고정 공개되는 것을 막는다(409 `PUBLIC_NAME_CONFIRM_REQUIRED` `detail{displayName}`).
      * 비공개: 티어 무관, 행·좋아요는 남는다
      */
     suspend fun share(
@@ -174,8 +187,7 @@ class CommunityService(
         categoryId: UUID,
         isPublic: Boolean,
         autoSync: Boolean?,
-        title: String?,
-        confirmPublicName: String? = null
+        title: String?
     ): ShareSummaryDto {
         val database = requireDb()
         val summary = DatabaseFactory.dbQuery(database) {
@@ -203,7 +215,7 @@ class CommunityService(
             if (wantAutoSync && !profile[ProfilesTable.shareAutosync]) {
                 throw ConflictException("설정에서 '연습 리스트 공유 자동 연동'을 먼저 켜야 합니다.", "SHARE_AUTOSYNC_OFF")
             }
-            ensurePublicName(userId, profile, confirmPublicName)
+            requirePublicName(profile)
 
             val folderId = existing?.get(SharedFoldersTable.id) ?: (SharedFoldersTable.insert {
                 it[kind] = KIND_USER
@@ -257,28 +269,68 @@ class CommunityService(
         return t
     }
 
+    /** 공개 이름(N2)이 정해져 있어야 게시할 수 있다. 없으면 409 `PUBLIC_NAME_REQUIRED` */
+    private fun requirePublicName(profile: ResultRow): String =
+        profile[ProfilesTable.publicName]
+            ?: throw ConflictException("커뮤니티 이름을 먼저 정해 주세요.", "PUBLIC_NAME_REQUIRED")
+
     /**
-     * 공개 이름(N2): 없으면 지금 display_name을 금칙어 검사·본인 확인 뒤 복사·고정.
-     * 비어 있으면 409 `DISPLAY_NAME_REQUIRED`, 확인 값이 다르면 409 `PUBLIC_NAME_CONFIRM_REQUIRED`
+     * `PUT /community/me/public-name` `{publicName}` — 커뮤니티 이름(N2 확정 2026-11-06).
+     * 2~20자, 띄어쓰기 금지, 금칙어 400, 중복 409 `PUBLIC_NAME_TAKEN`(정규화 키 — 존메이어·존.메이어·존_메이어는 같은 이름),
+     * 7일에 한 번(409 `PUBLIC_NAME_CHANGE_TOO_SOON` `detail{nextChangeAt}`). 처음 정할 때·owner 초기화 뒤는 바로 된다.
+     * 지금 이름과 같으면 아무것도 바꾸지 않는다(변경 시각도 그대로)
      */
-    private fun Transaction.ensurePublicName(userId: UUID, profile: ResultRow, confirm: String?): String {
-        profile[ProfilesTable.publicName]?.let { return it }
-        val name = profile[ProfilesTable.displayName].trim()
-        if (name.isEmpty()) {
-            throw ConflictException("공개하기 전에 닉네임을 정해 주세요. 처음 공개할 때의 닉네임이 커뮤니티 이름으로 고정됩니다.", "DISPLAY_NAME_REQUIRED")
+    suspend fun setPublicName(userId: UUID, raw: String, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): PublicNameResponse {
+        val name = raw.trim()
+        if (name.any { it.isWhitespace() }) throw InvalidInputException("커뮤니티 이름에는 띄어쓰기를 쓸 수 없습니다.")
+        if (name.length !in PUBLIC_NAME_MIN..PUBLIC_NAME_MAX) {
+            throw InvalidInputException("커뮤니티 이름은 ${PUBLIC_NAME_MIN}~${PUBLIC_NAME_MAX}자여야 합니다.")
         }
-        BannedWords.require("displayName", name)
-        if (confirm?.trim() != name) {
-            throw ApiException(
-                status = HttpStatusCode.Conflict,
-                code = "PUBLIC_NAME_CONFIRM_REQUIRED",
-                message = "처음 공개하면 지금 닉네임이 커뮤니티 이름으로 고정되고 바꿀 수 없습니다. 이 이름으로 공개할지 확인해 주세요.",
-                detail = buildJsonObject { put("displayName", name) }
-            )
+        val key = BannedWords.normalize(name)
+        if (key.length < PUBLIC_NAME_MIN) throw InvalidInputException("커뮤니티 이름에는 글자나 숫자가 ${PUBLIC_NAME_MIN}자 이상 있어야 합니다.")
+        BannedWords.require("publicName", name)
+        return DatabaseFactory.dbQuery(requireDb()) {
+            val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }
+                .forUpdate(ForUpdateOption.ForUpdate).single()
+            val current = profile[ProfilesTable.publicName]
+            val changedAt = profile[ProfilesTable.publicNameChangedAt]
+            if (current == name) return@dbQuery publicNameResponse(current, changedAt, now)
+            if (current != null && changedAt != null && now.isBefore(changedAt.plusDays(PUBLIC_NAME_CHANGE_DAYS))) {
+                throw ApiException(
+                    status = HttpStatusCode.Conflict,
+                    code = "PUBLIC_NAME_CHANGE_TOO_SOON",
+                    message = "커뮤니티 이름은 ${PUBLIC_NAME_CHANGE_DAYS}일에 한 번 바꿀 수 있습니다.",
+                    detail = buildJsonObject { put("nextChangeAt", ts(changedAt.plusDays(PUBLIC_NAME_CHANGE_DAYS))) }
+                )
+            }
+            val taken = ProfilesTable.selectAll()
+                .where { (ProfilesTable.publicNameKey eq key) and (ProfilesTable.id neq userId) }
+                .count() > 0L
+            if (taken) throw nameTaken()
+            try {
+                ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                    it[publicName] = name
+                    it[publicNameKey] = key
+                    it[publicNameChangedAt] = now
+                }
+            } catch (e: ExposedSQLException) {
+                if (e.sqlState == "23505") throw nameTaken()
+                throw e
+            }
+            publicNameResponse(name, now, now)
         }
-        ProfilesTable.update({ ProfilesTable.id eq userId }) { it[publicName] = name }
-        return name
     }
+
+    private fun nameTaken() = ConflictException(
+        "이미 쓰고 있는 커뮤니티 이름입니다. 띄어쓰기·기호·대소문자만 다른 이름도 같은 이름으로 봅니다.",
+        "PUBLIC_NAME_TAKEN"
+    )
+
+    private fun publicNameResponse(name: String?, changedAt: OffsetDateTime?, now: OffsetDateTime) = PublicNameResponse(
+        publicName = name,
+        changedAt = changedAt?.let { ts(it) },
+        nextChangeAt = nextPublicNameChangeAt(name, changedAt, now)?.let { ts(it) }
+    )
 
     private fun Transaction.requireOwnCategory(userId: UUID, categoryId: UUID): ResultRow =
         CategoriesTable.selectAll()

@@ -45,8 +45,7 @@ fun Route.registerCategoryShareRoutes(communityService: CommunityService) {
             val isPublic = body.optBooleanOrNull("isPublic") ?: throw InvalidInputException("isPublic 값이 필요합니다.")
             val autoSync = body.optBooleanOrNull("autoSync")
             val title = body.optString("title", CommunityService.MAX_TITLE_LENGTH)
-            val confirmPublicName = body.optString("publicName", 100) // 첫 게시 때 공개 이름 확인(지금 닉네임과 같아야 함)
-            val share = communityService.share(user.id, categoryId, isPublic, autoSync, title, confirmPublicName)
+            val share = communityService.share(user.id, categoryId, isPublic, autoSync, title)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, ulevelp.service.ShareEnvelope(share))
         }
@@ -73,6 +72,14 @@ fun Route.registerCommunityRoutes(
         install(SupabaseAuthPlugin) {
             this.jwtVerifier = jwtVerifier
             this.profileService = profileService
+        }
+
+        put("/me/public-name") {
+            val user = call.requireAuthUser()
+            val body = call.receiveJsonObject()
+            val name = body.requireString("publicName", 100)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, communityService.setPublicName(user.id, name))
         }
 
         get("/folders") {

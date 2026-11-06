@@ -432,11 +432,15 @@ class AdminService(private val db: Database?) {
         }
     }
 
-    /** `DELETE /admin/users/{userId}/public-name` `{reason}` — 공개 이름 NULL(N2). 다음 게시 때 그때 닉네임을 다시 복사 */
+    /** `DELETE /admin/users/{userId}/public-name` `{reason}` — 커뮤니티 이름 NULL(N2). 사용자는 바로 새 이름을 정할 수 있다 */
     suspend fun resetPublicName(actorId: UUID, userId: UUID, reason: String): AdminPublicNameResponse =
         DatabaseFactory.dbQuery(requireDb()) {
             val before = loadUserRow(userId, lock = true)
-            ProfilesTable.update({ ProfilesTable.id eq userId }) { it[publicName] = null }
+            ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                it[publicName] = null
+                it[publicNameKey] = null
+                it[publicNameChangedAt] = null // 7일 제한도 풀어 바로 새 이름을 정할 수 있게
+            }
             audit(
                 actorId, "public_name_reset", userId,
                 buildJsonObject { put("publicName", before[ProfilesTable.publicName]) },
