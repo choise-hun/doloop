@@ -1,6 +1,8 @@
 package ulevelp.auth
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -121,14 +123,14 @@ class HttpJwksProvider(
 
             lastAttemptAt = nowInside
 
-            runCatching {
+            try {
                 val body = withContext(Dispatchers.IO) {
                     val req = HttpRequest.newBuilder(jwksUri)
                         .timeout(Duration.ofSeconds(5))
                         .header("Accept", "application/json")
                         .GET()
                         .build()
-                    val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                    val res = httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString()).await()
                     if (res.statusCode() in 200..299) res.body() else null
                 }
                 if (body != null) {
@@ -139,7 +141,9 @@ class HttpJwksProvider(
                 } else {
                     cachedKeys[kid]
                 }
-            }.getOrElse {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
                 cachedKeys[kid]
             }
         }

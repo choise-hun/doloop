@@ -2,6 +2,7 @@ package ulevelp.storage
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -99,7 +100,7 @@ class SupabaseStorageClient(
 
         return withContext(Dispatchers.IO) {
             try {
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray())
+                val response = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).await()
                 val statusCode = response.statusCode()
                 if (statusCode in 200..299) {
                     response.body() ?: byteArrayOf()
@@ -124,7 +125,7 @@ class SupabaseStorageClient(
     private suspend fun executeRequest(action: String, request: HttpRequest): String {
         return withContext(Dispatchers.IO) {
             try {
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+                val response = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
                 val statusCode = response.statusCode()
                 val responseBody = response.body() ?: ""
 

@@ -2,6 +2,7 @@ package ulevelp.service
 
 import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
@@ -90,7 +91,7 @@ class YoutubeDataPlaylistClient(
             .GET()
             .build()
         val response = try {
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
         } catch (e: java.io.IOException) {
             logger.warn("YouTube {} 호출 실패: {}", resource, e.message)
             throw youtubeApiError()

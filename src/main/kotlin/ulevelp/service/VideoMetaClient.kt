@@ -2,6 +2,7 @@ package ulevelp.service
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -40,7 +41,7 @@ class YoutubeOEmbedClient(
                 .GET()
                 .build()
 
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+            val response = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
             if (response.statusCode() != 200) {
                 logger.warn("oEmbed 조회 실패 videoId={}: HTTP status {}", videoId, response.statusCode())
                 return@withContext null

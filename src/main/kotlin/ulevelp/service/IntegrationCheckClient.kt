@@ -3,6 +3,7 @@ package ulevelp.service
 import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -81,7 +82,7 @@ class HttpIntegrationCheckClient(
     ): NotionCheckResponse = withContext(Dispatchers.IO) {
         val baseUri = notionBaseUrl.trimEnd('/')
 
-        fun fetchDatabase(dbId: String, dbRole: String, requiredProps: List<String>): Pair<String, JsonObject> {
+        suspend fun fetchDatabase(dbId: String, dbRole: String, requiredProps: List<String>): Pair<String, JsonObject> {
             val req = HttpRequest.newBuilder()
                 .uri(URI("$baseUri/databases/$dbId"))
                 .header("Authorization", "Bearer $token")
@@ -92,7 +93,7 @@ class HttpIntegrationCheckClient(
                 .build()
 
             val resp = try {
-                httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -171,7 +172,7 @@ class HttpIntegrationCheckClient(
                 .GET()
                 .build()
 
-            val userResp = httpClient.send(userReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+            val userResp = httpClient.sendAsync(userReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).await()
             if (userResp.statusCode() == 200) {
                 val userJson = Json.parseToJsonElement(userResp.body()).jsonObject
                 val botObj = userJson["bot"] as? JsonObject

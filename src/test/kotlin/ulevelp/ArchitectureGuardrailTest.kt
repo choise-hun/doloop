@@ -1,0 +1,73 @@
+package ulevelp
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import kotlin.io.path.extension
+import kotlin.io.path.invariantSeparatorsPathString
+import kotlin.io.path.readText
+import kotlin.test.Test
+import kotlin.test.fail
+
+class ArchitectureGuardrailTest {
+
+    private val mainKotlinDir: Path = Paths.get("src/main/kotlin")
+
+    private fun allKotlinFiles(): List<Path> {
+        if (!Files.exists(mainKotlinDir)) return emptyList()
+        return Files.walk(mainKotlinDir).use { stream ->
+            stream.filter { Files.isRegularFile(it) && it.extension == "kt" }.toList()
+        }
+    }
+
+    @Test
+    fun `Exposed newSuspendedTransaction에 디스패처를 직접 인자로 전달하지 않는다 (PR 12)`() {
+        val forbiddenRegex = Regex("""newSuspendedTransaction\s*\(\s*Dispatchers\.""")
+        val violations = mutableListOf<String>()
+
+        for (file in allKotlinFiles()) {
+            val content = file.readText()
+            forbiddenRegex.findAll(content).forEach { match ->
+                val line = content.take(match.range.first).count { it == '\n' } + 1
+                violations.add("${file.invariantSeparatorsPathString}:$line -> withContext(Dispatchers.IO) { newSuspendedTransaction(db = db) { ... } } 패턴을 사용하세요.")
+            }
+        }
+
+        if (violations.isNotEmpty()) {
+            fail("잘못된 newSuspendedTransaction 디스패처 전달 감지:\n" + violations.joinToString("\n"))
+        }
+    }
+
+    @Test
+    fun `코루틴 내에서 HttpClient의 블로킹 send 호출을 금지한다 (PR 27)`() {
+        val forbiddenRegex = Regex("""\bhttpClient\s*\.\s*send\s*\(""")
+        val violations = mutableListOf<String>()
+
+        for (file in allKotlinFiles()) {
+            val content = file.readText()
+            forbiddenRegex.findAll(content).forEach { match ->
+                val line = content.take(match.range.first).count { it == '\n' } + 1
+                violations.add("${file.invariantSeparatorsPathString}:$line -> 블로킹 send() 대신 sendAsync(...).await()를 사용하세요.")
+            }
+        }
+
+        if (violations.isNotEmpty()) {
+            fail("HttpClient 블로킹 send() 호출 감지:\n" + violations.joinToString("\n"))
+        }
+    }
+
+    @Test
+    fun `타 앱 데이터(guitar-practice) 폴백 참조를 금지한다 (PR 8)`() {
+        val violations = mutableListOf<String>()
+        for (file in allKotlinFiles()) {
+            val content = file.readText()
+            if (content.contains("guitar-practice")) {
+                violations.add("${file.invariantSeparatorsPathString} -> 조회는 app_id = 'ulevelp'로만 한정해야 합니다.")
+            }
+        }
+        if (violations.isNotEmpty()) {
+            fail("타 앱 식별자(guitar-practice) 참조 감지:\n" + violations.joinToString("\n"))
+        }
+    }
+}
+
