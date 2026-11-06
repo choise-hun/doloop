@@ -399,52 +399,28 @@ export function ChordsPage(): React.ReactElement {
     }));
   }, [toneNotes, toneIdx, toneOrderList]);
 
-  // tone 탭 지판 가로 스크롤 상자 ref 및 사용자 수동 스크롤 추적
+  // tone 탭 지판 가로 스크롤 상자 ref
   const toneScrollRef = useRef<HTMLDivElement | null>(null);
-  const toneUserScrolledRef = useRef<boolean>(false);
-  const toneUserInteractingRef = useRef<boolean>(false);
-  const prevToneNotesRef = useRef<any>(null);
 
   useEffect(() => {
-    if (prevToneNotesRef.current !== toneNotes) {
-      prevToneNotesRef.current = toneNotes;
-      toneUserScrolledRef.current = false;
-      toneUserInteractingRef.current = false;
-    }
-
     if (activeTab !== 'tone') return;
 
     function adjustToneScroll() {
       const el = toneScrollRef.current;
-      if (!el || toneUserScrolledRef.current) return;
-      if (el.scrollWidth > el.clientWidth) {
-        const frets = toneNotes.map((n: any) => n.f).filter((f: any) => typeof f === 'number');
-        const minFret = frets.length > 0 ? Math.min(...frets) : 0;
-        const targetFret = Math.max(0, minFret - 1);
-        // FretboardSvg 기하: L = 30, showOpen = true, xL = 56, fretW = 44
-        const targetX = targetFret === 0 ? 0 : 56 + (targetFret - 1) * 44;
-        const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-        const nextScroll = Math.min(targetX, maxScroll);
-        if (el.scrollLeft !== nextScroll) {
-          el.scrollLeft = nextScroll;
-        }
-      }
+      if (!el) return;
+      if (el.scrollWidth <= el.clientWidth) return;
+      const frets = toneNotes.map((n: any) => n.f).filter((f: any) => typeof f === 'number');
+      const minFret = frets.length > 0 ? Math.min(...frets) : 0;
+      const targetFret = Math.max(0, minFret - 1);
+      // FretboardSvg 기하: L = 30, showOpen = true, xL = 56, fretW = 44
+      const targetX = targetFret === 0 ? 0 : 56 + (targetFret - 1) * 44;
+      el.scrollLeft = Math.min(targetX, Math.max(0, el.scrollWidth - el.clientWidth));
     }
 
     adjustToneScroll();
     const rafId = requestAnimationFrame(adjustToneScroll);
     return () => cancelAnimationFrame(rafId);
   }, [activeTab, toneNotes]);
-
-  function handleToneScrollContainerInteraction() {
-    toneUserInteractingRef.current = true;
-  }
-
-  function handleToneScroll() {
-    if (toneUserInteractingRef.current) {
-      toneUserScrolledRef.current = true;
-    }
-  }
 
   function toggleTonePlay() {
     if (tonePlaying) {
@@ -1571,15 +1547,7 @@ export function ChordsPage(): React.ReactElement {
             {CT.NAMES[toneRoot]}
             {CT.QBY[toneQ]?.name} · {START_PAT[toneStart]?.label}
           </h3>
-          <div
-            ref={toneScrollRef}
-            className={styles.scroll}
-            onPointerDown={handleToneScrollContainerInteraction}
-            onTouchStart={handleToneScrollContainerInteraction}
-            onWheel={handleToneScrollContainerInteraction}
-            onKeyDown={handleToneScrollContainerInteraction}
-            onScroll={handleToneScroll}
-          >
+          <div ref={toneScrollRef} className={styles.scroll}>
             <div id="tone-board">
               <FretboardSvg
                 from={0}

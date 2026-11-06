@@ -52,33 +52,40 @@ test('J2-2: 1280폭에서는 지판이 넘치지 않아 scrollLeft === 0', async
   expect(scrollLeft).toBe(0);
 });
 
-test('J2-3: 사용자가 직접 스크롤한 뒤에는 같은 toneNotes에서 다시 움직이지 않는다', async ({ page }) => {
+test('J2-3: 탭을 떠났다 돌아와도 표시 음이 보인다', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await mockApp(page, STATES.guest);
   await page.goto('/chords.html#tone', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
   await page.locator('#pane-tone').waitFor();
-  const scrollBox = page.locator('#tone-board').locator('..');
+  const box = page.locator('#tone-board').locator('..');
 
-  await expect.poll(async () => {
-    return await scrollBox.evaluate((el) => el.scrollLeft);
-  }).toBeGreaterThan(0);
+  await expect.poll(() => box.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
 
-  // 사용자 제스처 이벤트(wheel) 후 수동 스크롤
-  await scrollBox.dispatchEvent('wheel');
-  await scrollBox.evaluate((el) => {
-    el.scrollLeft = 0;
+  // 다른 탭으로 갔다가 돌아온다
+  await page.locator('#tab-matrix').click();
+  await page.locator('#tab-tone').click();
+
+  // 복귀 후에도 poll로 대기 (rAF 때문에 즉시 단언 금지)
+  await expect.poll(() => box.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+
+  const visible = await page.evaluate(() => {
+    const board = document.getElementById('tone-board');
+    if (!board) return 0;
+    const scroll = board.parentElement;
+    if (!scroll) return 0;
+    const scrollRect = scroll.getBoundingClientRect();
+    const dots = board.querySelectorAll('g.nd');
+    let count = 0;
+    for (const dot of dots) {
+      const r = dot.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      if (cx >= scrollRect.left && cx <= scrollRect.right) {
+        count++;
+      }
+    }
+    return count;
   });
-  await scrollBox.dispatchEvent('scroll');
-
-  // 리렌더링 유발 (tonePlay 클릭)
-  await page.locator('#tone-play').click();
-
-  // 사용자 조작 후에는 scrollLeft가 0으로 유지됨
-  const scrollLeftAfter = await scrollBox.evaluate((el) => el.scrollLeft);
-  expect(scrollLeftAfter).toBe(0);
-
-  // 정리를 위해 다시 클릭하여 정지
-  await page.locator('#tone-play').click();
+  expect(visible).toBeGreaterThan(0);
 });
