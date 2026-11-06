@@ -199,7 +199,7 @@ describe('CH-5-5: 목록·링크·시드', () => {
 
 describe('CH-5-6: 메뉴·라우트·API 연결', () => {
   test('CHORDS 메뉴가 progressions.html로 켜졌고 라우트가 있다', () => {
-    assert.match(read('frontend/src/components/layout/AppShell.tsx'), /key: 'chords', label: 'CHORDS', href: 'progressions\.html'/);
+    assert.match(read('frontend/src/components/layout/AppShell.tsx'), /key: 'chords', labelKey: 'nav\.chords', href: 'progressions\.html'/);
     assert.match(read('frontend/src/App.tsx'), /path="\/progressions\.html" element={<ProgressionsPage \/>}/);
   });
   test('apiClient가 설계 §3 경로를 쓴다', () => {
