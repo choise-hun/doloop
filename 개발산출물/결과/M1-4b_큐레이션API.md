@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-06 (win)
 - 입력: `결과/M1-4a_공유API.md` §5, `결과/M1-1_스키마설계.md` §5-2·§5-5, `진행_티어크레딧.md` §3-3(바꿀 파일 + E1~E9)
-- 브랜치: `feat/m1-4b-curation` (main `c7fa827`에서) — PR·CI는 §6
+- 브랜치: `feat/m1-4b-curation` (main `c7fa827`에서) — **PR #87** → main, CI 전부 통과(run 42153609457)
 - 상태: **코드·테스트 완료**. 화면은 M2-2. **마이그레이션 없음**(V8 그대로, 테이블 23·Flyway 8)
 
 ## 1. 사용자 승인(2026-11-06)과 반영
@@ -113,4 +113,6 @@
 
 ## 6. PR·CI
 
-(PR 번호·CI 결과는 올린 뒤 적는다)
+- **PR #87** `feat/m1-4b-curation` → main. 처음 push 때 main(#85 두 줄 병행)과 인수인계 메모가 충돌해 CI가 아예 돌지 않음 → origin/main 병합(`1b41da6`, 메모는 두 줄 병행 내용 + M1 완료로 합침)
+- CI run **42153609457** 전부 통과: Kotlin test (JDK 21), Node 22·24, E2E spa·legacy, Docker build & smoke, CI ok
+- 머지 뒤 배포: 마이그레이션 없음(Flyway v8 그대로)
