@@ -3,9 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
 import { auth, canUseAi, useAuth } from '../lib/auth';
-import { AnalysisJobDto, apiClient, NoteSummaryDto } from '../lib/apiClient';
+import { AnalysisJobDto, apiClient, CreditEstimateDto, NoteSummaryDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import { describeAnalyzeRequestError, describeJobError } from '../lib/jobError.mts';
+import { ESTIMATE_DEBOUNCE_MS, jobStage } from '../lib/noteForm.mts';
 import { t } from '../lib/i18n.mts';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './NotesPage.module.css';
@@ -21,6 +22,15 @@ export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
 ];
 
 export const NOTE_FILTER_TAGS: ReadonlyArray<string> = ['', ...NOTE_FORM_TAGS];
+
+/** M2-1b: 첫 진입 때 골라 둔 태그(앱 명세 §3.1-2 "기본 화성") */
+const DEFAULT_FORM_TAGS: ReadonlyArray<string> = ['화성'];
+
+type EstimateState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ok'; estimated: number; reserve: number }
+  | { kind: 'error' };
 
 function formatAgo(iso?: string | null): string {
   if (!iso) return '';
@@ -40,10 +50,12 @@ export function NotesPage(): React.ReactElement {
   const activeUid = authState.user?.id ?? null;
 
   const [urlVal, setUrlVal] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => [...DEFAULT_FORM_TAGS]);
   const [memoVal, setMemoVal] = useState('');
+  const [optOpen, setOptOpen] = useState(false); // M2-1b: 메모 옵션 접기(처음엔 접힘)
   const [formMsg, setFormMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false); // state 반영 전 같은 순간의 두 번째 제출 막기(VideoAnalyzeForm GA-4와 같은 방식)
 
   const [jobs, setJobs] = useState<AnalysisJobDto[]>([]);
   const [notes, setNotes] = useState<NoteSummaryDto[]>([]);
@@ -62,6 +74,55 @@ export function NotesPage(): React.ReactElement {
   const tierBlocked = loggedIn && Boolean(authState.me) && !canUseAi(authState.me);
   const pickedVideoId = videoIdFrom(urlVal);
   const notionLinkUrl = safeUrl(raw.get('ulp:notion-notes'));
+
+  // M2-1b: 예상 크레딧은 /me를 받았고 AI를 쓸 수 있을 때만 묻는다. 잔액 = 월 지급 + 구매
+  const aiReady = loggedIn && Boolean(authState.me) && canUseAi(authState.me);
+  const balance = authState.me?.credits ? authState.me.credits.monthly + authState.me.credits.purchased : null;
+
+  // M2-1b: 예상 크레딧 — URL이 멈추면 ESTIMATE_DEBOUNCE_MS 뒤 한 번만 묻는다. 늦게 온 응답·다른 계정 응답은 버린다(docs/rules/frontend-state.md §1)
+  const [estimate, setEstimate] = useState<EstimateState>({ kind: 'idle' });
+  const estimateSeqRef = useRef(0);
+  const estimateCacheRef = useRef<Map<string, CreditEstimateDto>>(new Map());
+
+  useEffect(() => {
+    const mySeq = ++estimateSeqRef.current; // 이전 요청 무효화
+    const vid = pickedVideoId;
+    const uid = activeUid;
+    if (!vid || !uid || !aiReady) {
+      setEstimate({ kind: 'idle' });
+      return;
+    }
+    const cacheKey = `${uid}|${vid}`;
+    const cached = estimateCacheRef.current.get(cacheKey);
+    if (cached) {
+      setEstimate({ kind: 'ok', estimated: cached.estimatedCredits, reserve: cached.reserveCredits });
+      return;
+    }
+    setEstimate({ kind: 'loading' });
+    const timer = setTimeout(async () => {
+      try {
+        const r = await apiClient.credits.estimate({ kind: 'note', url: `https://www.youtube.com/watch?v=${vid}` });
+        if (mySeq !== estimateSeqRef.current || auth.getUser()?.id !== uid) return; // 무효화된 응답 버림
+        if (!r || !Number.isFinite(r.estimatedCredits) || !Number.isFinite(r.reserveCredits)) throw new Error('bad estimate');
+        estimateCacheRef.current.set(cacheKey, r);
+        setEstimate({ kind: 'ok', estimated: r.estimatedCredits, reserve: r.reserveCredits });
+      } catch {
+        if (mySeq !== estimateSeqRef.current || auth.getUser()?.id !== uid) return;
+        setEstimate({ kind: 'error' }); // 배지만 바꾼다. 요청 버튼은 막지 않는다(서버가 판단)
+      }
+    }, ESTIMATE_DEBOUNCE_MS);
+    return () => clearTimeout(timer); // 입력이 또 바뀌면 아직 안 보낸 요청 취소
+  }, [pickedVideoId, aiReady, activeUid]);
+
+  // M2-1b: 진행 중 작업의 경과 시간 — 진행 중 작업이 있을 때만 1초마다 다시 그린다
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const hasActiveJob = jobs.some((j) => j && (j.status === 'queued' || j.status === 'running'));
+  useEffect(() => {
+    if (!hasActiveJob) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasActiveJob]);
 
   // 초기 URL 파라미터(?url=...) 복원
   useEffect(() => {
@@ -144,6 +205,7 @@ export function NotesPage(): React.ReactElement {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     if (!pickedVideoId) {
       setFormMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
       return;
@@ -161,6 +223,7 @@ export function NotesPage(): React.ReactElement {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setFormMsg({ text: '분석 요청을 보내는 중...', kind: '' });
     try {
@@ -174,10 +237,13 @@ export function NotesPage(): React.ReactElement {
       setFormMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤에 정리가 완료돼요.`, kind: 'ok' });
       setUrlVal('');
       setMemoVal('');
+      setOptOpen(false);
+      void auth.fetchMe(); // 예약으로 줄어든 잔액을 다시 받는다
       void refreshJobsAndNotes(activeUid);
     } catch (err: any) {
       setFormMsg({ text: describeAnalyzeRequestError(err), kind: 'err' });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -255,29 +321,65 @@ export function NotesPage(): React.ReactElement {
           <span className="hint">고른 태그에 맞춰 정리 항목이 달라져요. 여러 개 골라도 됩니다.</span>
         </div>
 
-        <label className={styles.field}>
-          <span className={styles.lab}>
-            메모 <span className="hint">(선택)</span>
-          </span>
-          <textarea
-            className="inpField"
-            id="memo"
-            placeholder="예: 3:20부터 나오는 보이싱 위주로"
-            value={memoVal}
-            onChange={(e) => setMemoVal(e.target.value)}
-          />
-        </label>
+        <div className={styles.optBlock}>
+          <button
+            type="button"
+            className={`ghostBtn ${styles.optToggle}`}
+            id="noteOptToggle"
+            aria-expanded={optOpen}
+            aria-controls="noteOptPanel"
+            onClick={() => setOptOpen((v) => !v)}
+          >
+            {optOpen ? t('notes.opt.close') : memoVal.trim() ? t('notes.opt.openFilled') : t('notes.opt.open')}
+          </button>
+          <div id="noteOptPanel" className={styles.optPanel} hidden={!optOpen}>
+            <label className={styles.field}>
+              <span className={styles.lab}>
+                메모 <span className="hint">(선택)</span>
+              </span>
+              <textarea
+                className="inpField"
+                id="memo"
+                placeholder="예: 3:20부터 나오는 보이싱 위주로"
+                value={memoVal}
+                onChange={(e) => setMemoVal(e.target.value)}
+              />
+            </label>
+          </div>
+        </div>
 
-        <div>
+        <div className={styles.submitRow}>
           <button
             className="pillBtn"
             id="submit"
             type="submit"
+            data-align-group="submitRow:center-y"
             disabled={submitting || keyGateVisible}
           >
             분석 요청
           </button>
+          {estimate.kind !== 'idle' && (
+            <span
+              className={styles.estimate}
+              id="noteEstimate"
+              data-estimate={estimate.kind}
+              data-align-group="submitRow:center-y"
+              aria-live="polite"
+            >
+              {estimate.kind === 'loading'
+                ? t('notes.estimate.loading')
+                : estimate.kind === 'ok'
+                  ? t('notes.estimate.ok', { n: estimate.estimated, balance: balance ?? 0 })
+                  : t('notes.estimate.error')}
+            </span>
+          )}
         </div>
+        {estimate.kind === 'ok' && balance !== null && balance < estimate.reserve && (
+          <p className={styles.creditWarn} id="noteCreditWarn">
+            {t('notes.estimate.low', { reserve: estimate.reserve, balance })}{' '}
+            <SafeLink href="settings.html#credits">{t('notes.estimate.creditsLink')}</SafeLink>
+          </p>
+        )}
         <p className={styles.betaNotice} id="notesBetaNotice">
           {t('beta.notice')}
         </p>
@@ -296,6 +398,7 @@ export function NotesPage(): React.ReactElement {
             const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.join(', ') : '(태그 없음)';
             const timeStr = formatAgo(job.createdAt);
             const why = job.status === 'failed' ? describeJobError(job.error) : null;
+            const stage = jobStage(job, nowMs); // 대기·분석 중이면 경과 시간 배지·안내, 끝났으면 null
             return (
               <li key={job.id} className={`run ${styles.runItem}`}>
                 {vid ? (
@@ -313,6 +416,11 @@ export function NotesPage(): React.ReactElement {
                   {why && (
                     <div className={styles.runHint} data-error-code={why.code} title={why.detail || undefined}>
                       {why.hint}
+                    </div>
+                  )}
+                  {stage && (
+                    <div className={styles.runHint} data-job-stage={stage.stage}>
+                      {stage.hint}
                     </div>
                   )}
                 </div>
@@ -334,15 +442,13 @@ export function NotesPage(): React.ReactElement {
                           : ''
                     }`}
                   >
-                    {job.status === 'queued'
-                      ? '대기 중'
-                      : job.status === 'running'
-                        ? '분석 중'
-                        : job.status === 'done'
-                          ? '완료'
-                          : why
-                            ? why.title
-                            : '실패'}
+                    {stage
+                      ? stage.label
+                      : job.status === 'done'
+                        ? '완료'
+                        : why
+                          ? why.title
+                          : '실패'}
                   </span>
                 </div>
               </li>

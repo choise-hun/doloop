@@ -293,3 +293,45 @@
   color: var(--bad);
   overflow-wrap: anywhere;
 }
+
+/* M2-1b: 메모 옵션(접힘) · 요청 줄 · 예상 크레딧 */
+.optBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.optPanel {
+  align-self: stretch;
+}
+
+.optToggle {
+  font-size: 14px;
+}
+
+.submitRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.estimate {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.estimate[data-estimate="loading"],
+.estimate[data-estimate="error"] {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.creditWarn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
