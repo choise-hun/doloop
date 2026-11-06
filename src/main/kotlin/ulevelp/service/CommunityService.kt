@@ -7,6 +7,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.exposed.exceptions.ExposedSQLException
@@ -22,9 +24,12 @@ import ulevelp.api.InvalidInputException
 import ulevelp.api.NotFoundException
 import ulevelp.db.*
 import ulevelp.service.CategoryService.Companion.insertCategory
+import ulevelp.service.SharedFolderSync.KIND_CURATED
+import ulevelp.service.SharedFolderSync.KIND_MONTHLY_PICK
 import ulevelp.service.SharedFolderSync.KIND_USER
 import ulevelp.service.SharedFolderSync.copyCategory
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -59,13 +64,25 @@ data class PublicOwnerDto(
     val creatorBadge: String?
 )
 
+/**
+ * 공개 폴더 카드(플레이리스트 카드처럼 — 표지 = 앞 곡 썸네일, 부제 = 아티스트 몇 명). M1-4b E2:
+ * `kind` user·curated·monthly_pick, 운영자 폴더는 `owner` null·`titleI18n`·`descriptionI18n`(화면이 `titleI18n[locale] ?: title`),
+ * `month`는 monthly_pick만(`YYYY-MM`). `coverVideoIds` = 앞 4곡(썸네일은 화면이 videoId로 만든다),
+ * `artists` = 앞 곡들의 YouTube 채널명(겹침 없이 3개까지, 아직 못 받은 곡은 빠짐)
+ */
 @Serializable
 data class PublicFolderSummaryDto(
     val id: String,
+    val kind: String,
     val title: String,
-    val owner: PublicOwnerDto,
+    val titleI18n: JsonObject,
+    val descriptionI18n: JsonObject,
+    val month: String?,
+    val owner: PublicOwnerDto?,
     val itemCount: Int,
     val coverVideoId: String?,
+    val coverVideoIds: List<String>,
+    val artists: List<String>,
     val likeCount: Int,
     val likedByMe: Boolean,
     val cloneCount: Int,
@@ -76,7 +93,7 @@ data class PublicFolderSummaryDto(
 @Serializable
 data class PublicFolderListResponse(val folders: List<PublicFolderSummaryDto>, val next: String?)
 
-/** 제목·아티스트는 YouTube 원래 값(N3, `video_titles`). 아직 못 받았으면 null */
+/** 제목·아티스트는 YouTube 원래 값(N3, `video_titles`). 아직 못 받았으면 null. `noteI18n` = 운영자 곡 설명(user 폴더는 `{}`) */
 @Serializable
 data class PublicFolderItemDto(
     val videoId: String,
@@ -85,7 +102,8 @@ data class PublicFolderItemDto(
     val artist: String?,
     val a: Double?,
     val b: Double?,
-    val rate: Double
+    val rate: Double,
+    val noteI18n: JsonObject
 )
 
 @Serializable
@@ -112,7 +130,7 @@ data class PublicUserSummaryDto(
 @Serializable
 data class FollowListResponse(val users: List<PublicUserSummaryDto>)
 
-/** 학습 기록(`practiceLog`)은 M1-4b */
+/** `practiceLog` = 학습 기록 공유에 동의한 유료 사용자만(아니면 null, M1-4b) */
 @Serializable
 data class PublicUserPageResponse(
     val id: String,
@@ -122,8 +140,39 @@ data class PublicUserPageResponse(
     val creatorBio: String,
     val followerCount: Long,
     val followingByMe: Boolean,
-    val folders: List<PublicFolderSummaryDto>
+    val folders: List<PublicFolderSummaryDto>,
+    val practiceLog: PracticeLogDto?
 )
+
+/** 이달의 곡 — 홈에서 곡 5개를 바로 보이므로 항목까지 */
+@Serializable
+data class MonthlyPickDto(val folder: PublicFolderSummaryDto, val items: List<PublicFolderItemDto>)
+
+/** `GET /curation/home` — 화면의 가로 줄(선반) 넷. 각 줄 최대 [CurationPolicy.SECTION_MAX]개 */
+@Serializable
+data class CurationHomeResponse(
+    val curated: List<PublicFolderSummaryDto>,
+    val monthlyPick: MonthlyPickDto?,
+    val showcase: List<PublicFolderSummaryDto>,
+    val following: List<PublicFolderSummaryDto>
+)
+
+/**
+ * 홈 큐레이션 수치 — 화면을 보며 바꿀 값은 여기만 고친다(M1-4b E5·E9, 사용자 2026-11-06 "20개, 비율은 조절하기 편하게").
+ * 쇼케이스 = 크리에이터 폴더 최대 [SHOWCASE_CREATOR_MAX]칸 + 나머지 칸은 팔로워 상위 사용자 폴더.
+ * 한쪽이 모자라면 다른 쪽이 남은 칸을 채운다
+ */
+object CurationPolicy {
+    const val SECTION_MAX = 20              // curated·following 줄 카드 수
+    const val SHOWCASE_TOTAL = 20           // 쇼케이스 카드 수
+    const val SHOWCASE_CREATOR_MAX = 10     // 그중 크리에이터 몫 최대(나머지 = 인기 사용자 몫)
+    const val SHOWCASE_POPULAR_USERS = 10   // 팔로워 상위 몇 명을 인기 사용자 후보로
+    const val SHOWCASE_MIN_FOLLOWERS = 1    // 인기 사용자 후보의 최소 팔로워 수
+    const val SHOWCASE_PER_USER_MAX = 3     // 한 사람이 차지할 수 있는 최대 칸(0 = 제한 없음)
+    const val COVER_COUNT = 4               // 카드 표지 썸네일 수
+    const val ARTIST_COUNT = 3              // 카드 부제 아티스트 수
+    const val ARTIST_SCAN = 10              // 아티스트를 찾을 앞 곡 수
+}
 
 @Serializable
 data class FolderReportResponse(val reportId: Long)
@@ -160,6 +209,10 @@ class CommunityService(
         const val MAX_TITLE_FETCH = 60           // 한 요청에서 oEmbed로 받을 제목 수 상한
         val SORTS = setOf("recent", "clones", "likes")
         val REPORT_REASONS = setOf("spam", "inappropriate", "copyright", "other")
+
+        val EMPTY_OBJECT = JsonObject(emptyMap())
+        val MONTH_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
+        val KST: ZoneId = ZoneId.of("Asia/Seoul")
 
         private fun ts(dt: OffsetDateTime): String = DateTimeFormatter.ISO_INSTANT.format(dt.toInstant())
     }
@@ -233,7 +286,7 @@ class CommunityService(
             if (needCopy) copyCategory(folderId, userId, categoryId, markPublished = true)
             shareSummary(loadFolder(folderId))
         }
-        fillTitlesForFolder(database, UUID.fromString(summary.folderId))
+        fillTitlesForFolder(UUID.fromString(summary.folderId))
         return summary
     }
 
@@ -256,7 +309,7 @@ class CommunityService(
             copyCategory(folderId, userId, categoryId, markPublished = true)
             shareSummary(loadFolder(folderId))
         }
-        fillTitlesForFolder(database, UUID.fromString(summary.folderId))
+        fillTitlesForFolder(UUID.fromString(summary.folderId))
         return summary
     }
 
@@ -374,13 +427,22 @@ class CommunityService(
             .toSet()
     }
 
-    /** 보이는 user 폴더 하나 — 비공개·숨김·없음·무료 소유자는 404 */
-    private fun Transaction.requireVisibleUserFolder(folderId: UUID): ResultRow {
+    /** 공개 운영자 폴더(curated·monthly_pick) 조건: 공개 · 숨김 아님 (M1-4b) */
+    private fun visibleOperatorFolders(kind: String): Op<Boolean> =
+        (SharedFoldersTable.kind eq kind) and (SharedFoldersTable.isPublic eq true) and SharedFoldersTable.hiddenAt.isNull()
+
+    /**
+     * 보이는 폴더 하나 — user(공개·숨김 아님·소유자 유료) 또는 운영자 폴더(공개·숨김 아님).
+     * 비공개·숨김·없음·무료 소유자는 404 (M1-4b: 상세·좋아요·복제가 운영자 폴더도 받는다)
+     */
+    private fun Transaction.requireVisibleFolder(folderId: UUID): ResultRow {
         val row = SharedFoldersTable.selectAll()
-            .where { (SharedFoldersTable.id eq folderId) and visibleUserFolders() }
+            .where { (SharedFoldersTable.id eq folderId) and (SharedFoldersTable.isPublic eq true) and SharedFoldersTable.hiddenAt.isNull() }
             .singleOrNull() ?: throw NotFoundException("공개 폴더를 찾을 수 없습니다.")
-        if (row[SharedFoldersTable.ownerId]!! !in paidOwners(listOf(row[SharedFoldersTable.ownerId]!!))) {
-            throw NotFoundException("공개 폴더를 찾을 수 없습니다.")
+        val ownerId = row[SharedFoldersTable.ownerId]
+        if (row[SharedFoldersTable.kind] == KIND_USER) {
+            val owner = ownerId ?: throw NotFoundException("공개 폴더를 찾을 수 없습니다.")
+            if (owner !in paidOwners(listOf(owner))) throw NotFoundException("공개 폴더를 찾을 수 없습니다.")
         }
         return row
     }
@@ -399,9 +461,16 @@ class CommunityService(
         if (rows.isEmpty()) return emptyList()
         val folderIds = rows.map { it[SharedFoldersTable.id] }
         val counts = itemCounts(folderIds)
-        val covers = SharedFolderItemsTable.select(SharedFolderItemsTable.folderId, SharedFolderItemsTable.videoId)
-            .where { (SharedFolderItemsTable.folderId inList folderIds) and (SharedFolderItemsTable.position eq 0) }
-            .associate { it[SharedFolderItemsTable.folderId] to it[SharedFolderItemsTable.videoId] }
+        // 앞 곡들(위치는 0부터 연속) — 표지 썸네일·부제 아티스트
+        val heads = SharedFolderItemsTable
+            .join(VideoTitlesTable, JoinType.LEFT, SharedFolderItemsTable.videoId, VideoTitlesTable.videoId)
+            .select(SharedFolderItemsTable.folderId, SharedFolderItemsTable.videoId, SharedFolderItemsTable.position, VideoTitlesTable.author)
+            .where {
+                (SharedFolderItemsTable.folderId inList folderIds) and
+                    (SharedFolderItemsTable.position less maxOf(CurationPolicy.COVER_COUNT, CurationPolicy.ARTIST_SCAN))
+            }
+            .orderBy(SharedFolderItemsTable.position to SortOrder.ASC)
+            .groupBy({ it[SharedFolderItemsTable.folderId] }) { it }
         val liked = FolderLikesTable.select(FolderLikesTable.folderId)
             .where { (FolderLikesTable.userId eq viewerId) and (FolderLikesTable.folderId inList folderIds) }
             .map { it[FolderLikesTable.folderId] }
@@ -409,13 +478,25 @@ class CommunityService(
         val owners = publicOwners(rows.mapNotNull { it[SharedFoldersTable.ownerId] })
         return rows.map { row ->
             val id = row[SharedFoldersTable.id]
-            val ownerId = row[SharedFoldersTable.ownerId]!!
+            val ownerId = row[SharedFoldersTable.ownerId]
+            val head = heads[id].orEmpty()
+            val covers = head.take(CurationPolicy.COVER_COUNT).map { it[SharedFolderItemsTable.videoId] }
+            val isUser = row[SharedFoldersTable.kind] == KIND_USER
             PublicFolderSummaryDto(
                 id = id.toString(),
+                kind = row[SharedFoldersTable.kind],
                 title = row[SharedFoldersTable.title],
-                owner = owners[ownerId] ?: PublicOwnerDto(ownerId.toString(), null, false, null),
+                titleI18n = if (isUser) EMPTY_OBJECT else row[SharedFoldersTable.titleI18n].asObject(),
+                descriptionI18n = if (isUser) EMPTY_OBJECT else row[SharedFoldersTable.descriptionI18n].asObject(),
+                month = row[SharedFoldersTable.month]?.let { MONTH_FORMAT.format(it) },
+                owner = ownerId?.let { owners[it] ?: PublicOwnerDto(it.toString(), null, false, null) },
                 itemCount = counts[id] ?: 0,
-                coverVideoId = covers[id],
+                coverVideoId = covers.firstOrNull(),
+                coverVideoIds = covers,
+                artists = head.take(CurationPolicy.ARTIST_SCAN)
+                    .mapNotNull { it.getOrNull(VideoTitlesTable.author)?.trim()?.takeIf { a -> a.isNotEmpty() } }
+                    .distinct()
+                    .take(CurationPolicy.ARTIST_COUNT),
                 likeCount = row[SharedFoldersTable.likeCount],
                 likedByMe = id in liked,
                 cloneCount = row[SharedFoldersTable.cloneCount],
@@ -466,10 +547,10 @@ class CommunityService(
     /** `GET /community/folders/{id}` — 비공개·숨김은 404 */
     suspend fun getFolder(viewerId: UUID, folderId: UUID): PublicFolderDetailResponse {
         val database = requireDb()
-        DatabaseFactory.dbQuery(database) { requireVisibleUserFolder(folderId) }
-        fillTitlesForFolder(database, folderId)
+        DatabaseFactory.dbQuery(database) { requireVisibleFolder(folderId) }
+        fillTitlesForFolder(folderId)
         return DatabaseFactory.dbQuery(database) {
-            val row = requireVisibleUserFolder(folderId)
+            val row = requireVisibleFolder(folderId)
             PublicFolderDetailResponse(
                 folder = publicSummaries(listOf(row), viewerId).single(),
                 items = publicItems(folderId)
@@ -477,30 +558,118 @@ class CommunityService(
         }
     }
 
-    private fun Transaction.publicItems(folderId: UUID): List<PublicFolderItemDto> =
-        SharedFolderItemsTable
-            .join(VideoTitlesTable, JoinType.LEFT, SharedFolderItemsTable.videoId, VideoTitlesTable.videoId)
-            .select(
-                SharedFolderItemsTable.videoId, SharedFolderItemsTable.position, SharedFolderItemsTable.a,
-                SharedFolderItemsTable.b, SharedFolderItemsTable.rate, VideoTitlesTable.title, VideoTitlesTable.author
-            )
-            .where { SharedFolderItemsTable.folderId eq folderId }
-            .orderBy(SharedFolderItemsTable.position to SortOrder.ASC)
-            .map {
-                PublicFolderItemDto(
-                    videoId = it[SharedFolderItemsTable.videoId],
-                    position = it[SharedFolderItemsTable.position],
-                    title = it.getOrNull(VideoTitlesTable.title),
-                    artist = it.getOrNull(VideoTitlesTable.author),
-                    a = it[SharedFolderItemsTable.a]?.toDouble(),
-                    b = it[SharedFolderItemsTable.b]?.toDouble(),
-                    rate = it[SharedFolderItemsTable.rate].toDouble()
+    private fun Transaction.publicItems(folderId: UUID): List<PublicFolderItemDto> = publicFolderItems(folderId)
+
+    // ================= 홈 큐레이션 (M1-4b, 설계 §5-5) =================
+
+    /**
+     * `GET /curation/home` — 무료도 열람(Q10). 줄 넷: 운영자 큐레이션(`sort_order` → 만든 순), 이달의 곡(E4),
+     * 쇼케이스(E5, [CurationPolicy]), 팔로잉(내가 팔로우한 사람의 공개 user 폴더 최근 순)
+     */
+    suspend fun curationHome(viewerId: UUID, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): CurationHomeResponse {
+        val database = requireDb()
+        val pickId = DatabaseFactory.dbQuery(database) { monthlyPickRow(now)?.get(SharedFoldersTable.id) }
+        if (pickId != null) fillTitlesForFolder(pickId)
+        return DatabaseFactory.dbQuery(database) {
+            val curated = SharedFoldersTable.selectAll()
+                .where { visibleOperatorFolders(KIND_CURATED) }
+                .orderBy(
+                    SharedFoldersTable.sortOrder to SortOrder.ASC,
+                    SharedFoldersTable.createdAt to SortOrder.ASC,
+                    SharedFoldersTable.id to SortOrder.ASC
                 )
+                .limit(CurationPolicy.SECTION_MAX)
+                .toList()
+            val pick = monthlyPickRow(now)
+            CurationHomeResponse(
+                curated = publicSummaries(curated, viewerId),
+                monthlyPick = pick?.let {
+                    MonthlyPickDto(publicSummaries(listOf(it), viewerId).single(), publicItems(it[SharedFoldersTable.id]))
+                },
+                showcase = publicSummaries(showcaseRows(), viewerId),
+                following = publicSummaries(followingRows(viewerId), viewerId)
+            )
+        }
+    }
+
+    /** 이달의 곡(E4): KST 이번 달 공개본, 없으면 가장 최근 지난 달 것. 앞으로 올 달은 미리 만들어도 안 보인다 */
+    private fun Transaction.monthlyPickRow(now: OffsetDateTime): ResultRow? {
+        val thisMonth = now.atZoneSameInstant(KST).toLocalDate().withDayOfMonth(1)
+        return SharedFoldersTable.selectAll()
+            .where { visibleOperatorFolders(KIND_MONTHLY_PICK) and (SharedFoldersTable.month lessEq thisMonth) }
+            .orderBy(SharedFoldersTable.month to SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+    }
+
+    /** 팔로우한 사람(유료)의 공개 user 폴더, 최근 게시 순 */
+    private fun Transaction.followingRows(viewerId: UUID): List<ResultRow> {
+        val followees = FollowsTable.select(FollowsTable.followeeId)
+            .where { FollowsTable.followerId eq viewerId }
+            .map { it[FollowsTable.followeeId] }
+        val paid = paidOwners(followees)
+        if (paid.isEmpty()) return emptyList()
+        return SharedFoldersTable.selectAll()
+            .where { visibleUserFolders() and (SharedFoldersTable.ownerId inList paid) }
+            .orderBy(SharedFoldersTable.publishedAt to SortOrder.DESC_NULLS_LAST, SharedFoldersTable.id to SortOrder.ASC)
+            .limit(CurationPolicy.SECTION_MAX)
+            .toList()
+    }
+
+    /**
+     * 쇼케이스(E5): 크리에이터 전원 + 팔로워 상위 사용자(크리에이터 아님)의 **자동 연동** 공개 user 폴더.
+     * 소유자 = 커뮤니티 이름 있음·실제 티어 유료. 크리에이터 몫 먼저, 각 몫 안에서 팔로워 수 → 최근 게시.
+     * 칸 나눔·한 사람 최대 칸은 [CurationPolicy]
+     */
+    private fun Transaction.showcaseRows(): List<ResultRow> {
+        val creators = ProfilesTable.select(ProfilesTable.id)
+            .where { (ProfilesTable.isCreator eq true) and ProfilesTable.publicName.isNotNull() }
+            .map { it[ProfilesTable.id] }
+        val followerExpr = FollowsTable.followerId.count()
+        // 무료·폴더 없는 사람을 걸러도 N명이 남도록 넉넉히 읽는다
+        val popularCandidates = FollowsTable
+            .join(ProfilesTable, JoinType.INNER, FollowsTable.followeeId, ProfilesTable.id)
+            .select(FollowsTable.followeeId, followerExpr)
+            .where { (ProfilesTable.isCreator eq false) and ProfilesTable.publicName.isNotNull() }
+            .groupBy(FollowsTable.followeeId)
+            .having { followerExpr greaterEq CurationPolicy.SHOWCASE_MIN_FOLLOWERS.toLong() }
+            .orderBy(followerExpr to SortOrder.DESC, FollowsTable.followeeId to SortOrder.ASC)
+            .limit(CurationPolicy.SHOWCASE_POPULAR_USERS * 5)
+            .associate { it[FollowsTable.followeeId] to it[followerExpr] }
+
+        val paid = paidOwners(creators + popularCandidates.keys)
+        if (paid.isEmpty()) return emptyList()
+        val byOwner = SharedFoldersTable.selectAll()
+            .where { visibleUserFolders() and (SharedFoldersTable.autoSync eq true) and (SharedFoldersTable.ownerId inList paid) }
+            .orderBy(SharedFoldersTable.publishedAt to SortOrder.DESC_NULLS_LAST, SharedFoldersTable.id to SortOrder.ASC)
+            .toList()
+            .groupBy { it[SharedFoldersTable.ownerId]!! }
+        val creatorFollowers = if (creators.isEmpty()) emptyMap() else
+            FollowsTable.select(FollowsTable.followeeId, followerExpr)
+                .where { FollowsTable.followeeId inList creators }
+                .groupBy(FollowsTable.followeeId)
+                .associate { it[FollowsTable.followeeId] to it[followerExpr] }
+
+        fun rowsOf(owners: List<UUID>, followers: Map<UUID, Long>): List<ResultRow> = owners
+            .filter { it in byOwner }
+            .sortedWith(compareByDescending<UUID> { followers[it] ?: 0L }.thenBy { it.toString() })
+            .flatMap { owner ->
+                val rows = byOwner.getValue(owner)
+                if (CurationPolicy.SHOWCASE_PER_USER_MAX > 0) rows.take(CurationPolicy.SHOWCASE_PER_USER_MAX) else rows
             }
 
+        val creatorRows = rowsOf(creators.filter { it in paid }, creatorFollowers)
+        val popularOwners = popularCandidates.keys.filter { it in paid && it in byOwner }.take(CurationPolicy.SHOWCASE_POPULAR_USERS)
+        val popularRows = rowsOf(popularOwners, popularCandidates)
+        val popularTake = popularRows.take(
+            CurationPolicy.SHOWCASE_TOTAL - minOf(creatorRows.size, CurationPolicy.SHOWCASE_CREATOR_MAX)
+        )
+        return creatorRows.take(CurationPolicy.SHOWCASE_TOTAL - popularTake.size) + popularTake
+    }
+
     /** 공개본 항목 중 `video_titles`에 없는 영상의 YouTube 제목을 받아 둔다(트랜잭션 밖, N3). 실패는 건너뜀 */
-    private suspend fun fillTitlesForFolder(database: Database, folderId: UUID) {
-        val missing = DatabaseFactory.dbQuery(database) {
+    suspend fun fillTitlesForFolder(folderId: UUID) {
+        val missing = DatabaseFactory.dbQuery(requireDb()) {
             SharedFolderItemsTable
                 .join(VideoTitlesTable, JoinType.LEFT, SharedFolderItemsTable.videoId, VideoTitlesTable.videoId)
                 .select(SharedFolderItemsTable.videoId)
@@ -509,6 +678,24 @@ class CommunityService(
                 .limit(MAX_TITLE_FETCH)
                 .map { it[SharedFolderItemsTable.videoId] }
         }
+        fetchTitles(missing)
+    }
+
+    /** 영상 목록 중 `video_titles`에 없는 것만 받아 둔다(학습 기록의 오늘 곡도 쓴다) */
+    suspend fun fillTitles(videoIds: Collection<String>) {
+        if (videoIds.isEmpty()) return
+        val wanted = videoIds.distinct()
+        val known = DatabaseFactory.dbQuery(requireDb()) {
+            VideoTitlesTable.select(VideoTitlesTable.videoId)
+                .where { VideoTitlesTable.videoId inList wanted }
+                .map { it[VideoTitlesTable.videoId] }
+                .toSet()
+        }
+        fetchTitles(wanted.filter { it !in known }.take(MAX_TITLE_FETCH))
+    }
+
+    private suspend fun fetchTitles(missing: List<String>) {
+        val database = requireDb()
         if (missing.isEmpty()) return
         val fetched = coroutineScope {
             val sem = Semaphore(8)
@@ -529,7 +716,7 @@ class CommunityService(
     /** `PUT|DELETE /community/folders/{id}/like` — 멱등. 자기 폴더 400 */
     suspend fun setLike(viewerId: UUID, folderId: UUID, liked: Boolean): FolderLikeResponse =
         DatabaseFactory.dbQuery(requireDb()) {
-            val row = requireVisibleUserFolder(folderId)
+            val row = requireVisibleFolder(folderId)
             if (row[SharedFoldersTable.ownerId] == viewerId) {
                 throw InvalidInputException("내 폴더에는 좋아요를 누를 수 없습니다.")
             }
@@ -567,14 +754,14 @@ class CommunityService(
         val database = requireDb()
         DatabaseFactory.dbQuery(database) {
             requireCommunityWrite(tierContext(userId))
-            val row = requireVisibleUserFolder(folderId)
+            val row = requireVisibleFolder(folderId)
             if (row[SharedFoldersTable.ownerId] == userId) throw InvalidInputException("내 폴더는 복제할 수 없습니다.")
         }
-        fillTitlesForFolder(database, folderId)
+        fillTitlesForFolder(folderId)
         return DatabaseFactory.dbQuery(database) {
             val ctx = tierContext(userId, lock = true)
             requireCommunityWrite(ctx)
-            val folder = requireVisibleUserFolder(folderId)
+            val folder = requireVisibleFolder(folderId)
             if (folder[SharedFoldersTable.ownerId] == userId) throw InvalidInputException("내 폴더는 복제할 수 없습니다.")
             requireCategorySlot(ctx)
             val categoryId = insertCategory(userId, freeCategoryName(userId, folder[SharedFoldersTable.title]))
@@ -724,7 +911,8 @@ class CommunityService(
             followingByMe = FollowsTable.selectAll()
                 .where { (FollowsTable.followerId eq viewerId) and (FollowsTable.followeeId eq targetId) }
                 .count() > 0L,
-            folders = publicSummaries(folders, viewerId)
+            folders = publicSummaries(folders, viewerId),
+            practiceLog = null // 라우트가 PracticeLogService로 채운다(동의한 유료만)
         )
     }
 
@@ -733,7 +921,8 @@ class CommunityService(
     /** `POST /community/folders/{id}/reports` `{reason, detail?}` — detail은 owner만 본다. 열린 신고 중복 409 */
     suspend fun report(viewerId: UUID, folderId: UUID, reason: String, detail: String): FolderReportResponse =
         DatabaseFactory.dbQuery(requireDb()) {
-            val row = requireVisibleUserFolder(folderId)
+            val row = requireVisibleFolder(folderId)
+            if (row[SharedFoldersTable.kind] != KIND_USER) throw InvalidInputException("운영자 폴더는 신고할 수 없습니다.")
             if (row[SharedFoldersTable.ownerId] == viewerId) throw InvalidInputException("내 폴더는 신고할 수 없습니다.")
             val open = FolderReportsTable.selectAll()
                 .where {
@@ -756,3 +945,30 @@ class CommunityService(
             FolderReportResponse(id)
         }
 }
+
+/** 운영자 폴더 JSON 열 → 객체(형식이 틀리면 빈 객체) */
+internal fun JsonElement.asObject(): JsonObject = this as? JsonObject ?: CommunityService.EMPTY_OBJECT
+
+/** 공개본 항목(위치 순). 제목·아티스트 = `video_titles`(YouTube 값), 운영자 곡 설명 `noteI18n`. 관리 API도 쓴다 */
+internal fun Transaction.publicFolderItems(folderId: UUID): List<PublicFolderItemDto> =
+        SharedFolderItemsTable
+            .join(VideoTitlesTable, JoinType.LEFT, SharedFolderItemsTable.videoId, VideoTitlesTable.videoId)
+            .select(
+                SharedFolderItemsTable.videoId, SharedFolderItemsTable.position, SharedFolderItemsTable.a,
+                SharedFolderItemsTable.b, SharedFolderItemsTable.rate, SharedFolderItemsTable.noteI18n,
+                VideoTitlesTable.title, VideoTitlesTable.author
+            )
+            .where { SharedFolderItemsTable.folderId eq folderId }
+            .orderBy(SharedFolderItemsTable.position to SortOrder.ASC)
+            .map {
+                PublicFolderItemDto(
+                    videoId = it[SharedFolderItemsTable.videoId],
+                    position = it[SharedFolderItemsTable.position],
+                    title = it.getOrNull(VideoTitlesTable.title),
+                    artist = it.getOrNull(VideoTitlesTable.author),
+                    a = it[SharedFolderItemsTable.a]?.toDouble(),
+                    b = it[SharedFolderItemsTable.b]?.toDouble(),
+                    rate = it[SharedFolderItemsTable.rate].toDouble(),
+                    noteI18n = it[SharedFolderItemsTable.noteI18n].asObject()
+                )
+            }

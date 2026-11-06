@@ -108,4 +108,5 @@
 ## 6. PR·CI
 
 - **PR #83** `feat/m1-4a-community` → main. CI run 42142956837 전부 통과: Kotlin test (JDK 21), Node 22·24, E2E spa·legacy, Docker build & smoke, CI ok
+- main(#82) 병합 뒤 마지막 CI run **42147429858** 전부 통과(head `61ccb70`). **2026-11-06 머지**(main `c7fa827`)
 - 머지 뒤 배포: Cloud Run 로그 `now at version v8` 확인 → 이 절에 적는다

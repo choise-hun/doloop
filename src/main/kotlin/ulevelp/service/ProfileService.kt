@@ -228,9 +228,27 @@ class ProfileService(private val db: Database?) {
             null
         }
 
+        // 설정 "학습 기록 공유"(M1-4b E7). 켜기는 유료 + 커뮤니티 이름 필요(기록에 이름이 보인다), 끄기는 누구나
+        val newSharePracticeLog: Boolean? = if (body.containsKey("sharePracticeLog")) {
+            val elem = body["sharePracticeLog"]
+            if (elem !is JsonPrimitive || elem.isString || elem.booleanOrNull == null) {
+                throw InvalidInputException("sharePracticeLog는 불리언이어야 합니다.")
+            }
+            elem.boolean
+        } else {
+            null
+        }
+
         return DatabaseFactory.dbQuery(database) {
             if (newShareAutosync == true) {
                 requireCommunityWrite(tierContext(userId))
+            }
+            if (newSharePracticeLog == true) {
+                requireCommunityWrite(tierContext(userId))
+                val hasPublicName = ProfilesTable.select(ProfilesTable.publicName)
+                    .where { ProfilesTable.id eq userId }
+                    .singleOrNull()?.get(ProfilesTable.publicName) != null
+                if (!hasPublicName) throw ConflictException("커뮤니티 이름을 먼저 정해 주세요.", "PUBLIC_NAME_REQUIRED")
             }
             if (newShareAutosync == false) {
                 SharedFoldersTable.update({ SharedFoldersTable.ownerId eq userId }) {
@@ -252,10 +270,15 @@ class ProfileService(private val db: Database?) {
                 }
             }
 
-            if (hasDisplayName || hasStorageProvider || hasDriveFolderId || hasMigratedLocalAt || newShareAutosync != null) {
+            if (hasDisplayName || hasStorageProvider || hasDriveFolderId || hasMigratedLocalAt || newShareAutosync != null ||
+                newSharePracticeLog != null
+            ) {
                 ProfilesTable.update({ ProfilesTable.id eq userId }) {
                     if (newShareAutosync != null) {
                         it[shareAutosync] = newShareAutosync
+                    }
+                    if (newSharePracticeLog != null) {
+                        it[sharePracticeLog] = newSharePracticeLog
                     }
                     if (hasDisplayName && newDisplayName != null) {
                         it[displayName] = newDisplayName

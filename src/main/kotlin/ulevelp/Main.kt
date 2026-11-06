@@ -38,6 +38,7 @@ import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
 import ulevelp.routes.registerAdminRoutes
 import ulevelp.routes.registerCommunityRoutes
+import ulevelp.routes.registerCurationRoutes
 import ulevelp.routes.registerCategoryRoutes
 import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerCreditRoutes
@@ -56,6 +57,7 @@ import ulevelp.security.CryptoService
 import ulevelp.service.AdminService
 import ulevelp.service.CategoryService
 import ulevelp.service.CommunityService
+import ulevelp.service.PracticeLogService
 import ulevelp.service.CreditService
 import ulevelp.service.VideoDurationClient
 import ulevelp.service.YoutubeDataVideoClient
@@ -196,6 +198,7 @@ fun Application.module(
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
     val communityService = CommunityService(db, videoMetaClient)
+    val practiceLogService = PracticeLogService(db, communityService)
     val playlistImportService = PlaylistImportService(db, playlistClient)
     val progressionService = ProgressionService(db)
     val practiceService = PracticeService(db)
@@ -339,7 +342,8 @@ fun Application.module(
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService, communityService)
-            registerCommunityRoutes(jwtVerifier, profileService, communityService)
+            registerCommunityRoutes(jwtVerifier, profileService, communityService, practiceLogService)
+            registerCurationRoutes(jwtVerifier, profileService, communityService)
             registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
@@ -348,7 +352,7 @@ fun Application.module(
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
             registerNoteRoutes(jwtVerifier, profileService, noteService, effectiveDispatcher)
-            registerAdminRoutes(jwtVerifier, profileService, adminService)
+            registerAdminRoutes(jwtVerifier, profileService, adminService, communityService)
             registerCreditRoutes(jwtVerifier, profileService, creditService)
 
             route("{...}") {

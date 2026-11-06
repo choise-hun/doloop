@@ -240,7 +240,7 @@ fun Transaction.refundCredits(jobId: UUID) {
     AnalysisJobsTable.update({ AnalysisJobsTable.id eq jobId }) { it[chargedCredits] = 0 }
 }
 
-// ---------- 크레딧 주기 (M1-3d, 진행_티어크레딧.md §3-1) ----------
+// ---------- 크레딧 주기 (M1-3d, 개발산출물/완료/진행_티어크레딧.md §3-1) ----------
 // 유료 전환 시점에 즉시 지급하고 그 시점부터 30일(720시간)마다 충전한다. Pro → Pro+는 차액만 즉시(주기 유지),
 // 유료 → 무료는 남은 월 지급분을 주기 끝까지 두고 끝에 소멸(충전 없음). 원장 period = 주기 시작 시각 키(KST 분 단위)
 
