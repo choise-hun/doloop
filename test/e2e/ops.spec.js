@@ -39,7 +39,7 @@ test('M2-4a 비 owner: 운영 섹션 없음 + /admin 요청 0건', async ({ page
     if (isAdmin(new URL(req.url()))) adminCalls.push(req.url());
   });
   await open(page, STATES.user);
-  await page.waitForTimeout(300);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await expect(page.locator('#ops')).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText('owner 전용');
   expect(adminCalls).toEqual([]);
