@@ -37,6 +37,7 @@ import ulevelp.notion.NotionSyncService
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
 import ulevelp.routes.registerAdminRoutes
+import ulevelp.routes.registerCommunityRoutes
 import ulevelp.routes.registerCategoryRoutes
 import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerCreditRoutes
@@ -54,6 +55,7 @@ import ulevelp.routes.registerTakeRoutes
 import ulevelp.security.CryptoService
 import ulevelp.service.AdminService
 import ulevelp.service.CategoryService
+import ulevelp.service.CommunityService
 import ulevelp.service.CreditService
 import ulevelp.service.VideoDurationClient
 import ulevelp.service.YoutubeDataVideoClient
@@ -193,6 +195,7 @@ fun Application.module(
     val creditService = CreditService(db, videoDurationClient)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val categoryService = CategoryService(db)
+    val communityService = CommunityService(db, videoMetaClient)
     val playlistImportService = PlaylistImportService(db, playlistClient)
     val progressionService = ProgressionService(db)
     val practiceService = PracticeService(db)
@@ -335,7 +338,8 @@ fun Application.module(
         route("/api/v1") {
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService)
-            registerCategoryRoutes(jwtVerifier, profileService, categoryService)
+            registerCategoryRoutes(jwtVerifier, profileService, categoryService, communityService)
+            registerCommunityRoutes(jwtVerifier, profileService, communityService)
             registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)

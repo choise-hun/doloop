@@ -945,6 +945,7 @@ class ExportImportService(
                     }
                 }
             }
+            SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 바뀐 곡의 구간·배속·순서
         }
 
         // 트랜잭션 밖: 녹음 파일 반영

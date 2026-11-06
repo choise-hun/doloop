@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.slf4j.LoggerFactory
 import ulevelp.api.ApiException
 import ulevelp.api.NotFoundException
+import ulevelp.service.SharedFolderSync
 import ulevelp.db.*
 import ulevelp.service.requireSongSlots
 import ulevelp.service.tierContext
@@ -318,6 +319,7 @@ class NotionSyncService(
                     )
                 )
             }
+            SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 바뀐 곡의 구간·배속·순서
         }
 
         // 5. 녹음 파일 이관 (storageClient != null 일 때 — 다운로드 전 중복 필터)
@@ -736,6 +738,7 @@ class NotionSyncService(
                 it[NotionSyncTable.lastError] = null
                 it[NotionSyncTable.updatedAt] = nowUtc
             }
+            SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 노션에서 바뀐 곡
         }
 
         return NotionPullResponse(

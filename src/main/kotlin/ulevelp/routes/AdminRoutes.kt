@@ -131,6 +131,56 @@ fun Route.registerAdminRoutes(
             call.respond(HttpStatusCode.OK, dto)
         }
 
+        // ---- 커뮤니티 (M1-4a) ----
+        get("/reports") {
+            val status = call.request.queryParameters["status"] ?: "open"
+            if (status !in AdminService.REPORT_STATUSES) throw InvalidInputException("status는 open·resolved·dismissed 중 하나여야 합니다.")
+            val limit = call.request.queryParameters["limit"]?.let {
+                it.toIntOrNull()?.takeIf { n -> n in 1..AdminService.MAX_AUDIT_LIMIT }
+                    ?: throw InvalidInputException("limit은 1~${AdminService.MAX_AUDIT_LIMIT}이어야 합니다.")
+            } ?: 50
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, adminService.listReports(status, limit))
+        }
+
+        patch("/reports/{reportId}") {
+            val actor = call.requireAuthUser()
+            val reportId = call.parameters["reportId"]?.toLongOrNull()?.takeIf { it > 0 }
+                ?: throw ulevelp.api.NotFoundException()
+            val body = call.receiveJsonObject()
+            val status = (body["status"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                ?: throw InvalidInputException("status 값이 필요합니다.")
+            val reason = adminService.validateReason((body["reason"] as? JsonPrimitive)?.takeIf { it.isString }?.content)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, adminService.resolveReport(actor.id, reportId, status, reason))
+        }
+
+        patch("/shared-folders/{folderId}") {
+            val actor = call.requireAuthUser()
+            val folderId = parsePathUuid(call.parameters["folderId"])
+            val body = call.receiveJsonObject()
+            val hidden = (body["hidden"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+                ?: throw InvalidInputException("hidden 불리언이 필요합니다(M1-4a는 숨김만 바꿀 수 있습니다).")
+            val hiddenReason = when (val r = body["hiddenReason"]) {
+                null, is JsonNull -> null
+                is JsonPrimitive -> r.takeIf { it.isString }?.content?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: throw InvalidInputException("hiddenReason은 문자열이어야 합니다.")
+                else -> throw InvalidInputException("hiddenReason은 문자열이어야 합니다.")
+            }
+            val reason = adminService.validateReason((body["reason"] as? JsonPrimitive)?.takeIf { it.isString }?.content)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, adminService.setFolderHidden(actor.id, folderId, hidden, hiddenReason, reason))
+        }
+
+        delete("/users/{userId}/public-name") {
+            val actor = call.requireAuthUser()
+            val userId = parsePathUuid(call.parameters["userId"])
+            val body = call.receiveJsonObject()
+            val reason = adminService.validateReason((body["reason"] as? JsonPrimitive)?.takeIf { it.isString }?.content)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, adminService.resetPublicName(actor.id, userId, reason))
+        }
+
         get("/audit") {
             val target = call.request.queryParameters["targetUserId"]?.let { parsePathUuid(it) }
             val limit = call.request.queryParameters["limit"]?.let {
