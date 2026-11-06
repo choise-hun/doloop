@@ -304,6 +304,35 @@
 
 .optPanel {
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* display: flex가 hidden 속성을 덮지 않게 */
+.optPanel[hidden] {
+  display: none;
+}
+
+/* M2-1c: 분석 구간 — 시작·끝 두 칸은 모든 폭에서 나란히(값이 짧다) */
+.rangeRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rangeErr {
+  font-size: 13px;
+  color: var(--bad);
+}
+
+/* M2-1c: 실패 작업 재시도 — 줄 그리드 2열~끝(390에서도 한 줄) */
+.retryBtn {
+  grid-column: 2 / -1;
+  justify-self: start;
+  font-size: 14px;
+  min-height: 44px;
+  padding: 0 20px;
 }
 
 .optToggle {

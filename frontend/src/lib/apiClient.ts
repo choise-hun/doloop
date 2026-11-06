@@ -932,16 +932,22 @@ async function refreshMeAfterAnalyzeError(err: any): Promise<void> {
   }
 }
 
-async function noteAnalyze(input: { url: string; tags: string[]; memo?: string }): Promise<{ jobId: string; status: string; reservedCredits?: number }> {
+/** M2-1c: startSec·endSec는 숫자일 때만 보낸다(구간 없는 요청 본문은 전과 같음 — 결과/M2-1s_노트구간서버.md §2) */
+async function noteAnalyze(input: {
+  url: string;
+  tags: string[];
+  memo?: string;
+  startSec?: number | null;
+  endSec?: number | null;
+}): Promise<{ jobId: string; status: string; reservedCredits?: number }> {
   requireLogin();
   try {
+    const body: Record<string, unknown> = { url: input?.url, tags: input?.tags, memo: input?.memo };
+    if (typeof input?.startSec === 'number') body.startSec = input.startSec;
+    if (typeof input?.endSec === 'number') body.endSec = input.endSec;
     const r = await getAuthRef().apiFetch('/api/v1/notes/analyze', {
       method: 'POST',
-      body: JSON.stringify({
-        url: input?.url,
-        tags: input?.tags,
-        memo: input?.memo,
-      }),
+      body: JSON.stringify(body),
     });
     return { jobId: r.jobId, status: r.status, reservedCredits: r.reservedCredits };
   } catch (err: any) {
@@ -955,7 +961,7 @@ async function creditsSummary(): Promise<CreditsSummaryDto> {
   return await getAuthRef().apiFetch('/api/v1/credits');
 }
 
-/** M2-1b: 분석 전 예상 크레딧. 노트(kind 'note')는 서버가 구간·속도를 무시한다(CreditRoutes.kt estimate) */
+/** M2-1b: 분석 전 예상 크레딧. 노트(kind 'note')도 구간을 반영한다(M2-1s), 속도는 코드 진행만 */
 async function estimateCredits(input: {
   kind: 'note' | 'progression';
   url: string;

@@ -57,7 +57,7 @@ test('N2 메모 옵션: 펼치면 메모, 접어도 입력은 남고 "입력함"
   await page.locator('#memo').fill('3:20 보이싱');
   await page.locator('#noteOptToggle').click();
   await expect(page.locator('#memo')).toBeHidden();
-  await expect(page.locator('#noteOptToggle')).toHaveText('+ 메모 옵션 (입력함)');
+  await expect(page.locator('#noteOptToggle')).toHaveText('+ 구간 · 메모 옵션 (입력함)');
   await page.locator('#noteOptToggle').click();
   await expect(page.locator('#memo')).toHaveValue('3:20 보이싱');
 });

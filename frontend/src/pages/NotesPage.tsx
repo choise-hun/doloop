@@ -6,7 +6,8 @@ import { auth, canUseAi, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, CreditEstimateDto, NoteSummaryDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import { describeAnalyzeRequestError, describeJobError } from '../lib/jobError.mts';
-import { ESTIMATE_DEBOUNCE_MS, jobStage } from '../lib/noteForm.mts';
+import { checkNoteRange, ESTIMATE_DEBOUNCE_MS, jobStage, rangeBody, retryDraft } from '../lib/noteForm.mts';
+import type { NoteRangeError } from '../lib/noteForm.mts';
 import { t } from '../lib/i18n.mts';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './NotesPage.module.css';
@@ -25,6 +26,10 @@ export const NOTE_FILTER_TAGS: ReadonlyArray<string> = ['', ...NOTE_FORM_TAGS];
 
 /** M2-1b: 첫 진입 때 골라 둔 태그(앱 명세 §3.1-2 "기본 화성") */
 const DEFAULT_FORM_TAGS: ReadonlyArray<string> = ['화성'];
+
+/** M2-1c: 구간 오류 → 문구 키 */
+const RANGE_ERROR_KEY = { format: 'notes.range.errFormat', order: 'notes.range.errOrder' } as const;
+const rangeErrorText = (e: NoteRangeError): string => (e ? t(RANGE_ERROR_KEY[e]) : '');
 
 type EstimateState =
   | { kind: 'idle' }
@@ -52,7 +57,14 @@ export function NotesPage(): React.ReactElement {
   const [urlVal, setUrlVal] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>(() => [...DEFAULT_FORM_TAGS]);
   const [memoVal, setMemoVal] = useState('');
-  const [optOpen, setOptOpen] = useState(false); // M2-1b: 메모 옵션 접기(처음엔 접힘)
+  const [optOpen, setOptOpen] = useState(false); // M2-1b: 구간·메모 옵션 접기(처음엔 접힘)
+  // M2-1c: 분석 구간(시작~끝) 칸 글자. 초·오류는 렌더 때 계산(docs/rules/frontend-state.md §2)
+  const [startText, setStartText] = useState('');
+  const [endText, setEndText] = useState('');
+  const range = checkNoteRange(startText, endText);
+  const optFilled = Boolean(memoVal.trim() || startText.trim() || endText.trim());
+  const startInputRef = useRef<HTMLInputElement>(null);
+  const [focusStartTick, setFocusStartTick] = useState(0); // 재시도 뒤 패널이 열린 다음 시작 칸으로
   const [formMsg, setFormMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false); // state 반영 전 같은 순간의 두 번째 제출 막기(VideoAnalyzeForm GA-4와 같은 방식)
@@ -84,15 +96,20 @@ export function NotesPage(): React.ReactElement {
   const estimateSeqRef = useRef(0);
   const estimateCacheRef = useRef<Map<string, CreditEstimateDto>>(new Map());
 
+  // M2-1c: 구간도 반영 — 잘못된 구간이면 묻지 않는다(칸 아래 안내가 대신). 캐시 키 = 계정·영상·구간
+  const estStart = range.error ? null : range.startSec;
+  const estEnd = range.error ? null : range.endSec;
+  const rangeInvalid = Boolean(range.error);
   useEffect(() => {
     const mySeq = ++estimateSeqRef.current; // 이전 요청 무효화
     const vid = pickedVideoId;
     const uid = activeUid;
-    if (!vid || !uid || !aiReady) {
+    if (!vid || !uid || !aiReady || rangeInvalid) {
       setEstimate({ kind: 'idle' });
       return;
     }
-    const cacheKey = `${uid}|${vid}`;
+    const span = rangeBody({ startSec: estStart, endSec: estEnd, error: '' });
+    const cacheKey = `${uid}|${vid}|${estStart ?? ''}|${estEnd ?? ''}`;
     const cached = estimateCacheRef.current.get(cacheKey);
     if (cached) {
       setEstimate({ kind: 'ok', estimated: cached.estimatedCredits, reserve: cached.reserveCredits });
@@ -101,7 +118,7 @@ export function NotesPage(): React.ReactElement {
     setEstimate({ kind: 'loading' });
     const timer = setTimeout(async () => {
       try {
-        const r = await apiClient.credits.estimate({ kind: 'note', url: `https://www.youtube.com/watch?v=${vid}` });
+        const r = await apiClient.credits.estimate({ kind: 'note', url: `https://www.youtube.com/watch?v=${vid}`, ...span });
         if (mySeq !== estimateSeqRef.current || auth.getUser()?.id !== uid) return; // 무효화된 응답 버림
         if (!r || !Number.isFinite(r.estimatedCredits) || !Number.isFinite(r.reserveCredits)) throw new Error('bad estimate');
         estimateCacheRef.current.set(cacheKey, r);
@@ -112,7 +129,7 @@ export function NotesPage(): React.ReactElement {
       }
     }, ESTIMATE_DEBOUNCE_MS);
     return () => clearTimeout(timer); // 입력이 또 바뀌면 아직 안 보낸 요청 취소
-  }, [pickedVideoId, aiReady, activeUid]);
+  }, [pickedVideoId, aiReady, activeUid, estStart, estEnd, rangeInvalid]);
 
   // M2-1b: 진행 중 작업의 경과 시간 — 진행 중 작업이 있을 때만 1초마다 다시 그린다
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -210,6 +227,11 @@ export function NotesPage(): React.ReactElement {
       setFormMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
       return;
     }
+    if (range.error) {
+      setOptOpen(true); // 접혀 있어도 고칠 칸을 보여 준다
+      setFormMsg({ text: rangeErrorText(range.error), kind: 'err' });
+      return;
+    }
     if (selectedTags.length === 0) {
       setFormMsg({ text: '태그를 하나 이상 골라주세요.', kind: 'err' });
       return;
@@ -232,11 +254,14 @@ export function NotesPage(): React.ReactElement {
         url: `https://www.youtube.com/watch?v=${pickedVideoId}`,
         tags: orderedTags,
         memo: memoVal.trim(),
+        ...rangeBody(range),
       });
       const reserved = typeof r.reservedCredits === 'number' ? ` (${r.reservedCredits}크레딧 예약 — 실제 사용량만 빠져요)` : '';
       setFormMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤에 정리가 완료돼요.`, kind: 'ok' });
       setUrlVal('');
       setMemoVal('');
+      setStartText('');
+      setEndText('');
       setOptOpen(false);
       void auth.fetchMe(); // 예약으로 줄어든 잔액을 다시 받는다
       void refreshJobsAndNotes(activeUid);
@@ -247,6 +272,24 @@ export function NotesPage(): React.ReactElement {
       setSubmitting(false);
     }
   };
+
+  // M2-1c: 실패 작업 원탭 재시도 — 링크·태그·메모·구간을 폼에 채우고 시작 칸으로 간다.
+  // 요청은 보내지 않는다(같은 구간이면 같은 이유로 다시 실패하고 크레딧을 또 예약한다). 사용자가 고친 뒤 분석 요청
+  const handleRetry = (job: AnalysisJobDto) => {
+    if (submittingRef.current) return;
+    const d = retryDraft(job, NOTE_FORM_TAGS, DEFAULT_FORM_TAGS);
+    setUrlVal(d.url);
+    setSelectedTags(d.tags);
+    setMemoVal(d.memo);
+    setStartText(d.startText);
+    setEndText(d.endText);
+    setOptOpen(true);
+    setFormMsg({ text: t('notes.retry.filled'), kind: '' });
+    setFocusStartTick((n) => n + 1);
+  };
+  useEffect(() => {
+    if (focusStartTick > 0) startInputRef.current?.focus(); // 패널이 열린 렌더 뒤 — 포커스가 폼까지 스크롤한다
+  }, [focusStartTick]);
 
   const keyGateVisible = !loggedIn || tierBlocked;
   const keyGateText = !loggedIn
@@ -330,9 +373,57 @@ export function NotesPage(): React.ReactElement {
             aria-controls="noteOptPanel"
             onClick={() => setOptOpen((v) => !v)}
           >
-            {optOpen ? t('notes.opt.close') : memoVal.trim() ? t('notes.opt.openFilled') : t('notes.opt.open')}
+            {optOpen ? t('notes.opt.close') : optFilled ? t('notes.opt.openFilled') : t('notes.opt.open')}
           </button>
           <div id="noteOptPanel" className={styles.optPanel} hidden={!optOpen}>
+            <div className={styles.field}>
+              <div className={styles.rangeRow}>
+                <label className={styles.field}>
+                  <span className={styles.lab}>
+                    {t('notes.range.start')} <span className="hint">{t('notes.range.optional')}</span>
+                  </span>
+                  <input
+                    ref={startInputRef}
+                    className="inpField"
+                    id="noteStart"
+                    type="text"
+                    placeholder={t('notes.range.startPh')}
+                    autoComplete="off"
+                    value={startText}
+                    aria-invalid={range.error ? true : undefined}
+                    aria-describedby="noteRangeHelp"
+                    data-align-group="noteRange:top,height@390"
+                    onChange={(e) => setStartText(e.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.lab}>
+                    {t('notes.range.end')} <span className="hint">{t('notes.range.optional')}</span>
+                  </span>
+                  <input
+                    className="inpField"
+                    id="noteEnd"
+                    type="text"
+                    placeholder={t('notes.range.endPh')}
+                    autoComplete="off"
+                    value={endText}
+                    aria-invalid={range.error ? true : undefined}
+                    aria-describedby="noteRangeHelp"
+                    data-align-group="noteRange:top,height@390"
+                    onChange={(e) => setEndText(e.target.value)}
+                  />
+                </label>
+              </div>
+              <span id="noteRangeHelp">
+                {range.error ? (
+                  <span className={styles.rangeErr} id="noteRangeErr">
+                    {rangeErrorText(range.error)}
+                  </span>
+                ) : (
+                  <span className="hint">{t('notes.range.hint')}</span>
+                )}
+              </span>
+            </div>
             <label className={styles.field}>
               <span className={styles.lab}>
                 메모 <span className="hint">(선택)</span>
@@ -399,6 +490,7 @@ export function NotesPage(): React.ReactElement {
             const timeStr = formatAgo(job.createdAt);
             const why = job.status === 'failed' ? describeJobError(job.error) : null;
             const stage = jobStage(job, nowMs); // 대기·분석 중이면 경과 시간 배지·안내, 끝났으면 null
+            const canRetry = job.status === 'failed' && job.kind !== 'progression'; // 코드 진행 작업은 CHORDS 폼에서
             return (
               <li key={job.id} className={`run ${styles.runItem}`}>
                 {vid ? (
@@ -408,9 +500,9 @@ export function NotesPage(): React.ReactElement {
                 ) : (
                   <span />
                 )}
-                <div>
+                <div data-align-group={canRetry ? 'jobRetry:left' : undefined}>
                   <div className={`t ${styles.runTitle}`}>{tagStr}</div>
-                  <div className={`sub ${styles.runSub}`}>
+                  <div className={`sub ${styles.runSub}`} data-layout-ignore="G3: 작업 줄 URL은 한 줄 말줄임(줄 높이 고정)">
                     {(timeStr ? `${timeStr} · ` : '') + (job.url || '')}
                   </div>
                   {why && (
@@ -451,6 +543,18 @@ export function NotesPage(): React.ReactElement {
                           : '실패'}
                   </span>
                 </div>
+                {canRetry && (
+                  <button
+                    type="button"
+                    className={`ghostBtn ${styles.retryBtn}`}
+                    data-job-retry={job.id}
+                    data-align-group="jobRetry:left"
+                    disabled={submitting}
+                    onClick={() => handleRetry(job)}
+                  >
+                    {why?.code === 'GEMINI_MAX_TOKENS' ? t('notes.retry.shorten') : t('notes.retry.again')}
+                  </button>
+                )}
               </li>
             );
           })

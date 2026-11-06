@@ -49,9 +49,9 @@ export const KO = {
   'beta.notice':
     'AI 분석(Beta)은 영상의 음향·화질에 따라 일부 코드나 보이싱이 실제 연주와 다를 수 있어요. 분석 결과는 나만 보는 학습 참고용으로 보관돼요.',
   // M2-1b — 노트 요청 폼·작업 진행 (NotesPage·noteForm.mts)
-  'notes.opt.open': '+ 메모 옵션',
-  'notes.opt.openFilled': '+ 메모 옵션 (입력함)',
-  'notes.opt.close': '− 메모 옵션 접기',
+  'notes.opt.open': '+ 구간 · 메모 옵션',
+  'notes.opt.openFilled': '+ 구간 · 메모 옵션 (입력함)',
+  'notes.opt.close': '− 구간 · 메모 옵션 접기',
   'notes.estimate.loading': '예상 크레딧 계산 중…',
   'notes.estimate.ok': '예상 {n}크레딧 · 남은 {balance}',
   'notes.estimate.error': '예상 크레딧을 계산하지 못했어요',
@@ -62,6 +62,18 @@ export const KO = {
   'notes.job.queuedHint': '곧 시작해요. 이 화면을 닫아도 분석은 계속돼요.',
   'notes.job.runningHint': '영상을 보고 노트를 정리하는 중이에요. 보통 1~3분 걸려요.',
   'notes.job.slowHint': '평소보다 오래 걸리고 있어요. 이 화면을 닫아도 분석은 계속돼요.',
+  // M2-1c — 분석 구간·실패 작업 재시도 (NotesPage)
+  'notes.range.start': '시작',
+  'notes.range.end': '끝',
+  'notes.range.optional': '(선택)',
+  'notes.range.startPh': '1:20 또는 80',
+  'notes.range.endPh': '비우면 영상 끝까지',
+  'notes.range.hint': '구간을 정하면 그 부분만 분석해서 크레딧이 줄어요.',
+  'notes.range.errFormat': '시간은 1:20 또는 80처럼 적어 주세요(최대 24시간).',
+  'notes.range.errOrder': '끝 시간은 시작보다 1초 이상 뒤여야 해요.',
+  'notes.retry.shorten': '구간 줄여서 다시 시도',
+  'notes.retry.again': '다시 시도',
+  'notes.retry.filled': '실패한 요청을 폼에 다시 채웠어요. 구간을 고친 뒤 분석 요청을 눌러 주세요.',
   // NoteDetailPage — M2-1d
   'note.openPlayer': '▶ 이 영상 플레이어로 열기',
   'note.copyMd': '마크다운 복사',
