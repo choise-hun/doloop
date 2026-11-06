@@ -31,6 +31,7 @@ import {
 } from '../components/chords/ChordDiagrams';
 import { ProgressionPlayTab } from '../components/chords/ProgressionPlayTab';
 import { isProgHash } from '../components/progressions/model.mts';
+import { REINT_PRESETS, DEFAULT_REINT_PRESET_ID } from '../lib/chords/reintPresets.mts';
 import styles from './ChordsPage.module.css';
 
 export type ChordTabId = 'scale' | 'tone' | 'matrix' | 'circle' | 'reint' | 'tf' | 'ds' | 'prog';
@@ -89,14 +90,6 @@ const RULE: Record<string, string> = {
   m7b5: '5도도 반음 내림',
   dim7: '7도를 한 번 더 내림 (bb7)',
 };
-
-const PRESETS = [
-  { id: 'p1', label: '모양 1', frets: [-1, -1, 4, 2, 2, 4] },
-  { id: 'p2', label: '모양 2 (4도 쌓기)', frets: [-1, -1, 7, 7, 8, 8] },
-  { id: 'p3', label: '모양 3', frets: [-1, -1, 5, 6, 6, 6] },
-  { id: 'p4', label: '모양 4', frets: [-1, -1, 7, 8, 9, 9] },
-  { id: 'p5', label: '모양 5 (m6 폼)', frets: [-1, -1, 2, 3, 3, 3] },
-];
 
 const ROMAN: Record<'major' | 'minor', string[]> = {
   major: ['ii', 'V', 'I'],
@@ -624,8 +617,8 @@ export function ChordsPage(): React.ReactElement {
   }
 
   // ================= 5. 코드 재해석 상태 =================
-  const [riFrets, setRiFrets] = useState<number[]>([-1, -1, 4, 2, 2, 4]);
-  const [riPreset, setRiPreset] = useState<string>('p1');
+  const [riFrets, setRiFrets] = useState<number[]>(() => [...REINT_PRESETS[0].frets]);
+  const [riPreset, setRiPreset] = useState<string>(DEFAULT_REINT_PRESET_ID);
   const [riPick, setRiPick] = useState<number | null>(0);
   const [riKey, setRiKey] = useState<number>(0);
   const [riBpm, setRiBpm] = useState<number>(90);
@@ -686,7 +679,7 @@ export function ChordsPage(): React.ReactElement {
   }, [riNotes, riKey, riInterpretList]);
 
   function startNewQuiz() {
-    const p = PRESETS[Math.floor(Math.random() * PRESETS.length)];
+    const p = REINT_PRESETS[Math.floor(Math.random() * REINT_PRESETS.length)];
     const shift = Math.floor(Math.random() * 7) - 3;
     let notes = p.frets
       .map((f, s) => (f < 0 ? null : { s, f, pitch: CT.OPEN[s] + f }))
@@ -1985,11 +1978,12 @@ export function ChordsPage(): React.ReactElement {
           <div className={styles.field}>
             <span className={styles.lab}>프리셋 폼</span>
             <div id="ri-presets" className={styles.chips}>
-              {PRESETS.map((p) => (
+              {REINT_PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   className={styles.chip}
+                  title={p.hint}
                   aria-pressed={riPreset === p.id}
                   onClick={() => {
                     setRiPreset(p.id);
