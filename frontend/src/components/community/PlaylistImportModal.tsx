@@ -113,9 +113,10 @@ export function PlaylistImportModal({
     setErr(null);
     const my = pvSeq.current;
     try {
+      const name = categoryName.trim();   // 비우면 서버 기본 이름(재생목록 제목 앞 20자) — 빈 문자열은 400
       const r = await apiClient.songs.importPlaylist(
         choice === 'new'
-          ? { url, newCategory: true, categoryName: categoryName.trim() }
+          ? name ? { url, newCategory: true, categoryName: name } : { url, newCategory: true }
           : { url, categoryId },
       );
       if (my !== pvSeq.current) return;

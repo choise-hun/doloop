@@ -39,6 +39,7 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
       .then(async (cats) => {
         if (my !== seq.current || uid !== (auth.getMe()?.id ?? null)) return;
         const list = Array.isArray(cats) ? cats : [];
+        let shareErr: unknown = null;
         const loaded = await Promise.all(
           list.map(async (cat) => {
             try {
@@ -48,13 +49,15 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
                 share: sh?.share ?? null,
                 titleInput: sh?.share?.title || cat.name,
               };
-            } catch {
+            } catch (e) {
+              shareErr = e;   // 행은 비공개로 보이지만 사실이 아닐 수 있다 → 경고 줄
               return { cat, share: null, titleInput: cat.name };
             }
           }),
         );
         if (my !== seq.current || uid !== (auth.getMe()?.id ?? null)) return;
         setRows(loaded);
+        if (shareErr) setErr(communityErrorKey(shareErr));
       })
       .catch((e) => {
         if (my === seq.current) setErr(communityErrorKey(e));
@@ -233,7 +236,7 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
                   className={styles.shareTitleInput}
                   aria-label={t('community.shareTitle')}
                   value={row.titleInput}
-                  maxLength={80}
+                  maxLength={20}
                   onChange={(e) => patchRow(row.cat.id, { titleInput: e.target.value })}
                 />
               </div>

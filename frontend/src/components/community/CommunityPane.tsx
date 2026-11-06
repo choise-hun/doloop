@@ -24,6 +24,7 @@ export function CommunityPane({ me }: CommunityPaneProps) {
 
   const [recentFolders, setRecentFolders] = useState<PublicFolderDto[]>([]);
   const [recentNext, setRecentNext] = useState<string | null>(null);
+  const [recentErr, setRecentErr] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
 
   const [logs, setLogs] = useState<PracticeLogDto[] | null>(null);
   const [logsNext, setLogsNext] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export function CommunityPane({ me }: CommunityPaneProps) {
     const uid = me?.id ?? null;
     setRecentFolders([]);
     setRecentNext(null);
+    setRecentErr(null);
     if (!uid) return;
     apiClient.community
       .folders('recent')
@@ -47,10 +49,11 @@ export function CommunityPane({ me }: CommunityPaneProps) {
         setRecentFolders(Array.isArray(res?.folders) ? res.folders : []);
         setRecentNext(typeof res?.next === 'string' ? res.next : null);
       })
-      .catch(() => {
+      .catch((e) => {
         if (my !== recentSeq.current) return;
         setRecentFolders([]);
         setRecentNext(null);
+        setRecentErr(communityErrorKey(e));
       });
   }, [me?.id]);
 
@@ -86,7 +89,9 @@ export function CommunityPane({ me }: CommunityPaneProps) {
         setRecentFolders((prev) => [...prev, ...more]);
         setRecentNext(typeof res?.next === 'string' ? res.next : null);
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (my === recentSeq.current) setRecentErr(communityErrorKey(e));
+      });
   }
 
   function loadMoreLogs() {
@@ -151,6 +156,11 @@ export function CommunityPane({ me }: CommunityPaneProps) {
 
       {chip === 'all' ? (
         <>
+          {recentErr ? (
+            <p id="recentErrMsg" role="alert" className="msg err">
+              {t(recentErr.key as any, recentErr.vars)}
+            </p>
+          ) : null}
           <CurationRows
             variant="community"
             me={me}
