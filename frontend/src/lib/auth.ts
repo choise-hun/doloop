@@ -37,7 +37,7 @@ export interface TierLimitsDto {
   communityWrite: boolean;
 }
 
-/** AI 영상 분석(노트·코드 진행)을 요청할 수 있는 계정인지 — 서버 /me limits.ai(무료 false) */
+/** AI 영상 분석(노트·코드 진행)을 요청할 수 있는 계정인지 — 서버 /me limits.ai(무료 false, 유료 → 무료 유예 중은 true — M1-3e) */
 export function canUseAi(me: MeProfile | null | undefined): boolean {
   return Boolean(me && me.limits && me.limits.ai);
 }

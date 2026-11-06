@@ -190,7 +190,7 @@ class AdminService(private val db: Database?) {
             if (TierLimits.isPaid(beforeTier) && !TierLimits.isPaid(afterTier)) {
                 downgradeCleanup(userId)
             }
-            // 무료 → 유료 즉시 지급 + 30일 주기, Pro → Pro+ 차액. 유료 → 무료는 주기 끝까지 유지(M1-3d)
+            // 무료 → 유료 즉시 지급 + 30일 주기, Pro → Pro+ 차액. 유료 → 무료는 주기 끝까지 유예(M1-3e: afterTier가 유료로 남아 정리도 주기 끝)
             onTierChange(userId, beforeTier, afterTier, now.toInstant())
             audit(actorId, "tier_override", userId, tierJson(beforeRow), tierJson(afterRow), reason)
             toDto(loadUserRow(userId))

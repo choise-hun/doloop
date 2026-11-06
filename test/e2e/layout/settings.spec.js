@@ -22,24 +22,36 @@ const CREDITS_ROUTE = [
     }),
 ];
 const USER_PRO = { ...STATES.user, me: PRO_ME, routes: [CREDITS_ROUTE] };
-const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO };
+// M1-3e: 유료 → 무료 전환 뒤 주기가 남은 유예 계정 — /me tier는 pro, /credits는 다음 지급 없이 monthlyExpiresAt
+const GRACE_CREDITS_ROUTE = [
+  (url) => url.pathname === '/api/v1/credits',
+  (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify({ monthly: 152, purchased: 40, total: 192, monthlyGrant: 0, nextGrantAt: null, monthlyExpiresAt: '2026-11-30T15:00:00Z' }),
+    }),
+];
+const USER_GRACE = { ...STATES.user, me: PRO_ME, routes: [GRACE_CREDITS_ROUTE] };
+const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO, userGrace: USER_GRACE };
 
 async function settingsReady(page, state) {
   if (state === 'guest') await page.locator('#accGuest').waitFor();
   else await expect(page.locator('#accEmail')).toHaveText('a@example.com');
   if (state === 'userPro') await expect(page.locator('#creditNext')).toContainText('170');
+  if (state === 'userGrace') await expect(page.locator('#creditExpire')).toContainText('무료');
 }
 
 layoutSuite({
   name: 'settings',
   path: '/settings.html',
-  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }],
+  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }],
   ready: settingsReady,
   dark: 'userPro',
 });
 
 // M1-3c: Gemini 키 칸·키 발급 모달이 없고, 크레딧 칸이 티어별 문구를 보인다
-for (const state of ['guest', 'user', 'userPro']) {
+for (const state of ['guest', 'user', 'userPro', 'userGrace']) {
   test(`M1-3c settings ${state} 크레딧 칸(Gemini 키 칸 없음)`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockApp(page, SETTINGS_STATES[state]);
@@ -58,6 +70,12 @@ for (const state of ['guest', 'user', 'userPro']) {
     } else if (state === 'user') {
       await expect(page.locator('#creditTier')).toHaveText('무료');
       await expect(page.locator('#creditMsg')).toContainText('Pro 플랜부터');
+    } else if (state === 'userGrace') {
+      // 2026-11-30T15:00Z = 12월 1일 0시(KST). 다음 지급 줄 대신 유예 끝 안내
+      await expect(page.locator('#creditTier')).toHaveText('Pro');
+      await expect(page.locator('#creditTotal')).toHaveText('192');
+      await expect(page.locator('#creditNext')).toHaveCount(0);
+      await expect(page.locator('#creditExpire')).toHaveText('12월 1일에 무료 플랜으로 바뀌어요 · 남은 월 지급 152크레딧은 그때 사라져요');
     } else {
       await expect(page.locator('#creditTier')).toHaveText('Pro');
       await expect(page.locator('#creditTotal')).toHaveText('192');
@@ -132,7 +150,7 @@ function collectWrappedPills() {
   return out;
 }
 
-for (const state of ['guest', 'user', 'userPro']) {
+for (const state of ['guest', 'user', 'userPro', 'userGrace']) {
   for (const width of [390, 768, 1280]) {
     test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
