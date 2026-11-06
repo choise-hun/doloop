@@ -19,6 +19,7 @@ import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, Progressio
 import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '../lib/progressions';
 import { videoIdFrom } from '../lib/security';
 import { describeJobError } from '../lib/jobError.mts';
+import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './ProgressionsPage.module.css';
 
 const SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
@@ -273,6 +274,7 @@ export function ProgressionsPage(): React.ReactElement {
                     onClick={() => setAddTab(t)}
                   >
                     {label}
+                    {t === 'video' && <BetaBadge />}
                   </button>
                 ))}
               </div>

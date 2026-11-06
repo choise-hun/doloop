@@ -6,6 +6,7 @@ import React, { useRef, useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { apiClient } from '../../lib/apiClient';
 import { describeAnalyzeRequestError } from '../../lib/jobError.mts';
+import { t } from '../../lib/i18n.mts';
 import { thumb, videoIdFrom } from '../../lib/security';
 import { PACES, PACE_LABEL, checkRange } from './model.mts';
 import type { Pace } from './model.mts';
@@ -180,6 +181,9 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
           {busy ? '분석 중…' : confirmDup ? '다시 분석' : '분석 요청'}
         </button>
       </div>
+      <p className={styles.betaNotice} id="progBetaNotice">
+        {t('beta.notice')}
+      </p>
       <p className={`msg${msg.kind ? ' ' + msg.kind : ''}`} role="status" id="progVideoMsg">
         {msg.text}
       </p>
