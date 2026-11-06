@@ -2,6 +2,7 @@ package ulevelp.notion
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
@@ -134,7 +135,7 @@ class HttpNotionClient(
             .build()
 
         val response = withContext(Dispatchers.IO) {
-            httpClient.send(req, HttpResponse.BodyHandlers.ofByteArray())
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofByteArray()).await()
         }
 
         if (response.statusCode() !in 200..299) {
@@ -178,7 +179,7 @@ class HttpNotionClient(
             }
 
             val response = withContext(Dispatchers.IO) {
-                httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString())
+                httpClient.sendAsync(reqBuilder.build(), HttpResponse.BodyHandlers.ofString()).await()
             }
 
             val status = response.statusCode()
@@ -241,7 +242,7 @@ class HttpNotionClient(
                 .build()
 
             val response = withContext(Dispatchers.IO) {
-                httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString()).await()
             }
 
             val status = response.statusCode()
