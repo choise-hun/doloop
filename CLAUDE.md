@@ -6,6 +6,12 @@
 - 메뉴얼(바꾸려면 먼저 물어볼 것): DB 스키마, API 경로·응답 필드, 함수 시그니처, export 이름, 파일 경로
 - 자유: UI 배치·스타일·문구, 내부 변수명, 리팩터링(동작이 같을 때)
 
+## 도메인별 필수 규칙 (docs/rules/)
+코드를 작성하거나 수정하기 전에 작업 도메인에 해당하는 규칙 파일을 확인하고, 그 안에 정의된 검증된 코드 템플릿(Positive Pattern)을 준수한다:
+- Kotlin/Ktor 백엔드 및 DB: `docs/rules/backend-kotlin.md` (Exposed 트랜잭션, 코루틴 취소 전파, 비동기 HttpClient, 보상 트랜잭션 등)
+- 프론트엔드(React `frontend/src/` 및 UI): `docs/rules/frontend-state.md` (비동기 레이스 방어, 렌더 타임 정규화, 미디어 초기화 등)
+- 테스트·보안·인프라: `docs/rules/testing-security.md` (단언 왜곡 금지, SSRF/CSP, 결정적 이벤트 대기 등)
+
 ## 작업 방식
 - 파일 3개 이상 변경 또는 스키마/API 변경이면, 코드 전에 "바꿀 파일 + 이유" 목록만 먼저 내고 대기.
   진행 파일에 이미 승인된 단계는 그 목록을 승인으로 본다
