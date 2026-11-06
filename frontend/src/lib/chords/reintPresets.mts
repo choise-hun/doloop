@@ -9,7 +9,7 @@ export interface ReintPreset {
 }
 
 export const REINT_PRESETS: ReadonlyArray<ReintPreset> = [
-  { id: 'drop2', label: 'Drop 2 · maj7', hint: 'Gmaj7 — 1·3·5·7에서 위에서 둘째 음을 한 옥타브 내림', frets: [-1, -1, 5, 4, 3, 2] },
+  { id: 'drop2', label: 'Drop 2 · maj7', hint: 'Gmaj7 — 1·3·5·7에서 위에서 둘째 음을 한 옥타브 내림', frets: [-1, -1, 5, 7, 7, 7] },
   { id: 'quartal', label: 'Quartal · 4도 쌓기', hint: 'A–D–G–C 완전4도 쌓기 — D7sus4·Am7(11)', frets: [-1, -1, 7, 7, 8, 8] },
   { id: 'rootless9', label: 'Rootless 9 · 3-7-9-5', hint: 'Eb7(9) 근음 없는 보이싱 — 아래부터 3·b7·9·5', frets: [-1, -1, 5, 6, 6, 6] },
   { id: 'rootless13', label: 'Rootless 13 · 7-3-13-9', hint: 'B7(9,13) 근음 없는 보이싱 — 아래부터 b7·3·13·9', frets: [-1, -1, 7, 8, 9, 9] },
