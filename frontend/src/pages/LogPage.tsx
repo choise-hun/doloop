@@ -19,6 +19,8 @@ import {
   TakeDto,
 } from '../lib/apiClient';
 import { safeUrl } from '../lib/security';
+import { t } from '../lib/i18n.mts';
+import { CommunityPane } from '../components/community/CommunityPane';
 import styles from './LogPage.module.css';
 
 export { fmtDuration, fmtTakeMeta };
@@ -252,9 +254,12 @@ export function LogPage(): React.ReactElement {
   const isGuest = !activeUid || !apiClient.isLoggedIn();
 
   // 라우트 상태 (탭 vs 곡 상세)
-  const [activeTab, setActiveTab] = useState<'log' | 'songs'>(() =>
-    typeof window !== 'undefined' && window.location.hash === '#songs' ? 'songs' : 'log'
-  );
+  const [activeTab, setActiveTab] = useState<'log' | 'songs' | 'community'>(() => {
+    if (typeof window === 'undefined') return 'log';
+    if (window.location.hash === '#songs') return 'songs';
+    if (window.location.hash === '#community') return 'community';
+    return 'log';
+  });
   const [detailSongId, setDetailSongId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('song');
@@ -363,10 +368,20 @@ export function LogPage(): React.ReactElement {
       const q = new URLSearchParams(window.location.search);
       const nextSongId = q.get('song');
       setDetailSongId(nextSongId);
-      setActiveTab(window.location.hash === '#songs' ? 'songs' : 'log');
+      setActiveTab(
+        window.location.hash === '#songs'
+          ? 'songs'
+          : window.location.hash === '#community'
+          ? 'community'
+          : 'log'
+      );
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('hashchange', onPopState);
+    };
   }, []);
 
   // 계정 전환 또는 뷰 전환 시 데이터 로드
@@ -379,6 +394,8 @@ export function LogPage(): React.ReactElement {
       void loadSongDetailView(activeUid, detailSongId);
     } else if (activeTab === 'songs') {
       void loadSongsView(activeUid, songFilter);
+    } else if (activeTab === 'community') {
+      setMsg({ text: '', kind: '' });
     } else {
       void loadLogView(activeUid);
     }
@@ -455,6 +472,20 @@ export function LogPage(): React.ReactElement {
               }}
             >
               곡
+            </button>
+            <button
+              type="button"
+              className={`tab ${styles.tab}`}
+              role="tab"
+              id="tab-community"
+              aria-selected={activeTab === 'community'}
+              onClick={() => {
+                setDetailSongId(null);
+                setActiveTab('community');
+                window.history.pushState(null, '', 'log.html#community');
+              }}
+            >
+              {t('community.tab')}
             </button>
           </nav>
         </header>
@@ -637,6 +668,19 @@ export function LogPage(): React.ReactElement {
               ))
             )}
           </div>
+        </section>
+
+        {/* 2-b. 커뮤니티 탭 패널 (M2-23 D3) */}
+        <section
+          id="pane-community"
+          role="tabpanel"
+          aria-labelledby="tab-community"
+          className={styles.logContainer}
+          hidden={isGuest || Boolean(detailSongId) || activeTab !== 'community'}
+        >
+          {activeTab === 'community' && !isGuest && !detailSongId ? (
+            <CommunityPane me={authState.me} />
+          ) : null}
         </section>
 
         {/* 3. 곡 상세 패널 (FR-LIB-2, FR-LIB-3) */}

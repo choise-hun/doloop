@@ -4,6 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES } = require('../support/mock-app');
+const { COMMUNITY_FREE_ME, COMMUNITY_PRO_ME, communityRoutes } = require('../support/community-fixtures');
 
 // M1-3c: 유료(Pro) 계정 — /me 티어·잔액 + GET /credits(다음 지급). 무료는 STATES.user(DEFAULT_ME = free)
 const PRO_ME = {
@@ -96,6 +97,8 @@ const OWNER_FOLDERS_ROUTE = [
     }),
 ];
 const USER_OWNER_DATA = { ...STATES.user, me: { role: 'owner' }, routes: [OWNER_FOLDERS_ROUTE] };
+const COMMUNITY_FREE = { ...STATES.user, me: COMMUNITY_FREE_ME, routes: communityRoutes() };
+const COMMUNITY_PRO = { ...STATES.user, me: COMMUNITY_PRO_ME, routes: [CREDITS_ROUTE, ...communityRoutes()] };
 const SETTINGS_STATES = {
   guest: STATES.guest,
   user: STATES.user,
@@ -103,13 +106,18 @@ const SETTINGS_STATES = {
   userGrace: USER_GRACE,
   userOwner: USER_OWNER,
   userOwnerData: USER_OWNER_DATA,
+  communityFree: COMMUNITY_FREE,
+  communityPro: COMMUNITY_PRO,
 };
 
 async function settingsReady(page, state) {
   if (state === 'guest') await page.locator('#accGuest').waitFor();
   else await expect(page.locator('#accEmail')).toHaveText('a@example.com');
-  if (state === 'userPro') await expect(page.locator('#creditNext')).toContainText('170');
+  if (state === 'userPro' || state === 'communityPro') await expect(page.locator('#creditNext')).toContainText('170');
   if (state === 'userGrace') await expect(page.locator('#creditExpire')).toContainText('무료');
+  if (state === 'communityFree' || state === 'communityPro') {
+    await page.locator('#community').waitFor();
+  }
   if (state === 'userOwner') {
     await page.locator('#hOps').click();
     await page.locator('#opsEmail').fill('creator.with.a.very.long.address@example.com');
@@ -126,7 +134,16 @@ async function settingsReady(page, state) {
 layoutSuite({
   name: 'settings',
   path: '/settings.html',
-  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }, { name: 'userOwner', mock: USER_OWNER }, { name: 'userOwnerData', mock: USER_OWNER_DATA }],
+  states: [
+    'guest',
+    'user',
+    { name: 'userPro', mock: USER_PRO },
+    { name: 'userGrace', mock: USER_GRACE },
+    { name: 'userOwner', mock: USER_OWNER },
+    { name: 'userOwnerData', mock: USER_OWNER_DATA },
+    { name: 'communityFree', mock: COMMUNITY_FREE },
+    { name: 'communityPro', mock: COMMUNITY_PRO },
+  ],
   ready: settingsReady,
   dark: 'userPro',
 });
@@ -231,7 +248,7 @@ function collectWrappedPills() {
   return out;
 }
 
-for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner', 'userOwnerData']) {
+for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner', 'userOwnerData', 'communityFree', 'communityPro']) {
   for (const width of [390, 768, 1280]) {
     test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -268,8 +285,8 @@ for (const width of WIDTHS) {
   });
 }
 
-// M2-4a·M2-4b: 운영 섹션(펼침·크리에이터 폼·폴더 편집)도 설정 간격 스케일 6·12·16
-for (const [state, width] of ['userOwner', 'userOwnerData'].flatMap((st) => WIDTHS.map((w) => [st, w]))) {
+// M2-4a·M2-4b·M2-23: 운영·커뮤니티 섹션도 설정 간격 스케일 6·12·16
+for (const [state, width] of ['userOwner', 'userOwnerData', 'communityFree', 'communityPro'].flatMap((st) => WIDTHS.map((w) => [st, w]))) {
   test(`FT settings ${state} ${width}px 운영 섹션 간격 스케일·일정함`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mockApp(page, SETTINGS_STATES[state]);
