@@ -168,7 +168,7 @@ export function SettingsPage(): React.ReactElement {
     void loadSyncStatusForUid(activeUid);
   }, [activeUid]);
 
-  // 유료 계정만 다음 지급 정보를 받는다(무료는 월 지급 0)
+  // 유료 계정(유예 중 포함 — /me tier가 유료)만 다음 지급·유예 끝 정보를 받는다
   const meTier = authState.me ? authState.me.tier || 'free' : '';
   useEffect(() => {
     if (!activeUid || !meTier || meTier === 'free') return;
@@ -188,12 +188,23 @@ export function SettingsPage(): React.ReactElement {
 
   const aiAllowed = canUseAi(authState.me);
   const meCredits = (authState.me && authState.me.credits) || { monthly: 0, purchased: 0 };
-  const nextGrantText = (() => {
-    if (!creditSummary || !creditSummary.nextGrantAt || !(creditSummary.monthlyGrant > 0)) return '';
-    const d = new Date(creditSummary.nextGrantAt);
+  const kstDay = (iso: string | null | undefined): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    const day = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(d);
-    return `다음 지급 ${day} · ${creditSummary.monthlyGrant}크레딧`;
+    return new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(d);
+  };
+  const nextGrantText = (() => {
+    if (!creditSummary || !(creditSummary.monthlyGrant > 0)) return '';
+    const day = kstDay(creditSummary.nextGrantAt);
+    return day ? `다음 지급 ${day} · ${creditSummary.monthlyGrant}크레딧` : '';
+  })();
+  // M1-3e 유예: 무료로 바꿨어도 주기 끝까지 Pro — 끝나는 날과 그때 사라질 월 지급분
+  const graceText = (() => {
+    const day = kstDay(creditSummary?.monthlyExpiresAt);
+    if (!day) return '';
+    const left = meCredits.monthly > 0 ? ` · 남은 월 지급 ${meCredits.monthly}크레딧은 그때 사라져요` : '';
+    return `${day}에 무료 플랜으로 바뀌어요${left}`;
   })();
 
   // 프로필 및 쿼터 계산
@@ -553,6 +564,11 @@ export function SettingsPage(): React.ReactElement {
               {nextGrantText && (
                 <p className="hint" id="creditNext">
                   {nextGrantText}
+                </p>
+              )}
+              {graceText && (
+                <p className="hint" id="creditExpire">
+                  {graceText}
                 </p>
               )}
             </>

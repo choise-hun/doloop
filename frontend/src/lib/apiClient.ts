@@ -140,13 +140,17 @@ export interface SaveNotionInput {
   notesDb?: string | null;
 }
 
-/** GET /api/v1/credits (M1-3b) — nextGrantAt: 다음 월 지급 시각(ISO), 월 지급 0이면 null */
+/**
+ * GET /api/v1/credits (M1-3b) — nextGrantAt: 다음 월 지급 시각(ISO), 다음 지급이 없으면 null.
+ * monthlyExpiresAt(M1-3e): 유료 → 무료 전환 뒤 주기가 남은 유예 계정만 — 이 시각에 무료가 되고 남은 월 지급분이 소멸
+ */
 export interface CreditsSummaryDto {
   monthly: number;
   purchased: number;
   total: number;
   monthlyGrant: number;
   nextGrantAt: string | null;
+  monthlyExpiresAt?: string | null;
 }
 
 export interface NotionSyncStatusDto {

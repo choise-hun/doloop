@@ -21,7 +21,9 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import ulevelp.db.*
+import ulevelp.service.processDueCycle
 import ulevelp.support.*
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -427,9 +429,11 @@ class TierQuotaAdminApiTest {
         val missing = client.putOverride(ownerToken, UUID.randomUUID(), """{"tier":"pro","reason":"x"}""")
         assertEquals(HttpStatusCode.NotFound, missing.status)
 
-        // 해제 → free
+        // 해제 → 크레딧 주기 끝까지 유예(M1-3e)로 pro, 주기가 끝나면 free
         val clear = client.putOverride(ownerToken, targetId, """{"tier":null,"until":null,"reason":"해제"}""")
         assertEquals(HttpStatusCode.OK, clear.status)
+        assertEquals("pro", client.me(targetToken)["tier"]!!.jsonPrimitive.content)
+        endCreditCycle(targetId)
         assertEquals("free", client.me(targetToken)["tier"]!!.jsonPrimitive.content)
 
         val audit = client.get("/api/v1/admin/audit?targetUserId=$targetId") { header(HttpHeaders.Authorization, "Bearer $ownerToken") }
@@ -441,11 +445,18 @@ class TierQuotaAdminApiTest {
         assertEquals("해제", last["reason"]!!.jsonPrimitive.content)
         assertEquals(ownerId.toString(), last["actorId"]!!.jsonPrimitive.content)
         assertEquals("pro", last["before"]!!.jsonObject["tier"]!!.jsonPrimitive.content)
-        assertEquals("free", last["after"]!!.jsonObject["tier"]!!.jsonPrimitive.content)
+        assertEquals("pro", last["after"]!!.jsonObject["tier"]!!.jsonPrimitive.content, "해제 직후는 유예 중")
+    }
+
+    /** 크레딧 주기 끝(M1-3e 유예 끝)을 지금으로 당기고 monthly-credits가 하는 처리를 한다 */
+    private fun endCreditCycle(userId: UUID) = transaction(db) {
+        val now = Instant.now()
+        ProfilesTable.update({ ProfilesTable.id eq userId }) { it[creditCycleNextAt] = now.minusSeconds(1).atOffset(ZoneOffset.UTC) }
+        processDueCycle(userId, "free", now)
     }
 
     @Test
-    fun `A3 다운그레이드 정리 - 학습 기록 공유 끄기·저장소 서버로, 데이터는 유지`() = testApplication {
+    fun `A3 다운그레이드 정리 - 무료 전환 뒤 크레딧 주기 끝에 학습 기록 공유 끄기·저장소 서버로, 데이터는 유지`() = testApplication {
         configureApiTestApp(dbConfig)
         val (ownerId, ownerToken) = client.newUser()
         TestTier.setRole(db, ownerId, "owner")
@@ -460,6 +471,13 @@ class TierQuotaAdminApiTest {
         }
 
         assertEquals(HttpStatusCode.OK, client.putOverride(ownerToken, targetId, """{"tier":"free","reason":"강등 시험"}""").status)
+        // 주기 끝까지는 유료와 같다(M1-3e) — 정리 없음, 추가 가능
+        val grace = client.me(targetToken)
+        assertEquals("pro", grace["tier"]!!.jsonPrimitive.content)
+        assertEquals(true, grace["sharePracticeLog"]!!.jsonPrimitive.boolean)
+        assertEquals("drive", grace["storageProvider"]!!.jsonPrimitive.content)
+
+        endCreditCycle(targetId)
         val me = client.me(targetToken)
         assertEquals("free", me["tier"]!!.jsonPrimitive.content)
         assertEquals(false, me["sharePracticeLog"]!!.jsonPrimitive.boolean)

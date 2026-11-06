@@ -78,6 +78,7 @@
 ```
 ./gradlew clean test --rerun-tasks        BUILD SUCCESSFUL in 1m 14s   (D1 답 반영 뒤, 2026-11-06)
   전체 277 tests, 실패 0, 오류 0              (M1-3d 267 + 새 10)
+  main(#82 M1-3e) 병합 뒤 다시: 전체 278 tests, 실패 0
   ulevelp.community.CommunityApiTest           tests="10" failures="0"
   ulevelp.db.DatabaseMigrationAndIntegrityTest tests="7" failures="0"  (Flyway 버전 8, 테이블 23)
 ```

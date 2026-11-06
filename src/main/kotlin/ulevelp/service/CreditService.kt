@@ -71,10 +71,12 @@ data class CreditsSummaryResponse(
     val monthly: Int,
     val purchased: Int,
     val total: Int,
-    /** 실제 티어의 월 지급량(free 0) */
+    /** 다음 충전 때 받을 월 지급량 = 기준 티어(유예 미반영)의 월 지급량. free·유예 중이면 0 */
     val monthlyGrant: Int,
-    /** 다음 충전 시각(유료 전환 시점 + 30일 주기, M1-3d). 무료·주기 없음이면 null */
-    val nextGrantAt: String? = null
+    /** 다음 충전 시각(유료 전환 시점 + 30일 주기, M1-3d). 무료·유예 중·주기 없음이면 null */
+    val nextGrantAt: String? = null,
+    /** 유예 끝 시각(M1-3e) — 유료 → 무료 전환 뒤 주기가 남아 있을 때. 이 시각에 무료가 되고 남은 월 지급분이 소멸. 아니면 null */
+    val monthlyExpiresAt: String? = null
 )
 
 @Serializable
@@ -299,7 +301,9 @@ fun Transaction.processDueCycle(userId: UUID, tier: String, now: Instant): Cycle
     if (next.isAfter(now)) return CycleOutcome()
     val expired = expireMonthly(userId, row.monthly, cycleKey(next.minus(CREDIT_CYCLE)))
     if (!TierLimits.isPaid(tier)) {
+        // 유예 끝(M1-3e): 주기 종료 + 미뤄 둔 다운그레이드 정리
         setCycle(userId, null, null)
+        downgradeCleanup(userId)
         return CycleOutcome(expired = expired)
     }
     var start = next
@@ -400,7 +404,8 @@ class CreditService(
         val row = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.singleOrNull()
             ?: throw ulevelp.api.NotFoundException("사용자 프로필을 찾을 수 없습니다.")
         val now = clock.instant()
-        val grant = TierLimits.of(effectiveTier(row, now.atOffset(ZoneOffset.UTC))).monthlyCredits
+        val nowUtc = now.atOffset(ZoneOffset.UTC)
+        val grant = TierLimits.of(baseTier(row, nowUtc)).monthlyCredits
         val monthly = row[ProfilesTable.monthlyCredits]
         val purchased = row[ProfilesTable.purchasedCredits]
         val nextGrant = row[ProfilesTable.creditCycleNextAt]?.toInstant()
@@ -409,7 +414,8 @@ class CreditService(
             purchased = purchased,
             total = monthly + purchased,
             monthlyGrant = grant,
-            nextGrantAt = if (grant > 0 && nextGrant != null) ts(nextGrant) else null
+            nextGrantAt = if (grant > 0 && nextGrant != null) ts(nextGrant) else null,
+            monthlyExpiresAt = if (inPaidGrace(row, nowUtc) && nextGrant != null) ts(nextGrant) else null
         )
     }
 

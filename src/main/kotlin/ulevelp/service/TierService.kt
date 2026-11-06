@@ -88,8 +88,28 @@ fun TierLimits.toDto() = TierLimitsDto(songs, categories, takeBytes, takeSongs, 
 fun effectiveTier(billingTier: String, override: String?, overrideUntil: OffsetDateTime?, now: OffsetDateTime): String =
     if (override != null && (overrideUntil == null || overrideUntil.isAfter(now))) override else billingTier
 
-fun effectiveTier(row: ResultRow, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): String =
+/** 결제·override 기준 티어(유예 미반영). 다음 주기에 무엇을 지급할지 판단할 때만 쓴다 */
+fun baseTier(row: ResultRow, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): String =
     effectiveTier(row[ProfilesTable.billingTier], row[ProfilesTable.tierOverride], row[ProfilesTable.tierOverrideUntil], now)
+
+/**
+ * 유료 → 무료 유예(M1-3e): 기준 티어가 무료여도 크레딧 주기(`credit_cycle_next_at`)가 남아 있으면
+ * 그 주기의 유료 티어(`credit_cycle_tier`)를 그대로 쓴다 — 다음 충전 시각에 무료가 된다(일반 구독 해지와 같게)
+ */
+fun graceTier(base: String, cycleTier: String?, cycleNextAt: OffsetDateTime?, now: OffsetDateTime): String =
+    if (!TierLimits.isPaid(base) && cycleTier != null && TierLimits.isPaid(cycleTier) && cycleNextAt != null && cycleNextAt.isAfter(now)) {
+        cycleTier
+    } else {
+        base
+    }
+
+/** 유예 중인지 = 기준 티어는 무료인데 실제 티어는 유료 */
+fun inPaidGrace(row: ResultRow, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): Boolean =
+    !TierLimits.isPaid(baseTier(row, now)) && TierLimits.isPaid(effectiveTier(row, now))
+
+/** 실제 티어 = 기준 티어 + 유예(M1-3e). 한도·AI·`/me` tier는 모두 이 값 */
+fun effectiveTier(row: ResultRow, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)): String =
+    graceTier(baseTier(row, now), row[ProfilesTable.creditCycleTier], row[ProfilesTable.creditCycleNextAt], now)
 
 /** 한도 검사에 쓰는 사용자 티어 문맥. lock=true면 profiles 행을 FOR UPDATE로 잠가 동시 추가를 줄 세운다 */
 data class TierContext(val userId: UUID, val tier: String) {
@@ -289,7 +309,9 @@ class TierService(private val db: Database?) {
                     it[tierOverride] = null
                     it[tierOverrideUntil] = null
                 }
-                if (TierLimits.isPaid(before) && !TierLimits.isPaid(after)) {
+                // 크레딧 주기가 남아 있으면 유예(M1-3e) — 정리는 충전 시각의 monthly-credits가 한다
+                val afterEffective = graceTier(after, row[ProfilesTable.creditCycleTier], row[ProfilesTable.creditCycleNextAt], now)
+                if (TierLimits.isPaid(before) && !TierLimits.isPaid(afterEffective)) {
                     downgradeCleanup(userId)
                     downgraded++
                 }
