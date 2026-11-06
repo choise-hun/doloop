@@ -153,6 +153,12 @@ export interface CreditsSummaryDto {
   monthlyExpiresAt?: string | null;
 }
 
+/** POST /credits/estimate 응답 (M1-3b `CreditEstimateResponse`, CreditService.kt:101) — 예상 소모·요청 때 잡아 두는 예약액 */
+export interface CreditEstimateDto {
+  estimatedCredits: number;
+  reserveCredits: number;
+}
+
 export interface NotionSyncStatusDto {
   enabled: boolean;
   pending: number;
@@ -949,6 +955,21 @@ async function creditsSummary(): Promise<CreditsSummaryDto> {
   return await getAuthRef().apiFetch('/api/v1/credits');
 }
 
+/** M2-1b: 분석 전 예상 크레딧. 노트(kind 'note')는 서버가 구간·속도를 무시한다(CreditRoutes.kt estimate) */
+async function estimateCredits(input: {
+  kind: 'note' | 'progression';
+  url: string;
+  startSec?: number | null;
+  endSec?: number | null;
+  pace?: 'slow' | 'normal' | 'fast';
+}): Promise<CreditEstimateDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/credits/estimate', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 async function listNoteJobs(): Promise<AnalysisJobDto[]> {
   requireLogin();
   const r = await getAuthRef().apiFetch('/api/v1/notes/jobs');
@@ -1271,6 +1292,7 @@ export const apiClient = {
   },
   credits: {
     summary: creditsSummary,
+    estimate: estimateCredits,
   },
   notes: {
     analyze: noteAnalyze,

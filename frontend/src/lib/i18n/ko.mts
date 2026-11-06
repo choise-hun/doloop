@@ -48,4 +48,18 @@ export const KO = {
   'beta.label': 'BETA',
   'beta.notice':
     'AI 분석(Beta)은 영상의 음향·화질에 따라 일부 코드나 보이싱이 실제 연주와 다를 수 있어요. 분석 결과는 나만 보는 학습 참고용으로 보관돼요.',
+  // M2-1b — 노트 요청 폼·작업 진행 (NotesPage·noteForm.mts)
+  'notes.opt.open': '+ 메모 옵션',
+  'notes.opt.openFilled': '+ 메모 옵션 (입력함)',
+  'notes.opt.close': '− 메모 옵션 접기',
+  'notes.estimate.loading': '예상 크레딧 계산 중…',
+  'notes.estimate.ok': '예상 {n}크레딧 · 남은 {balance}',
+  'notes.estimate.error': '예상 크레딧을 계산하지 못했어요',
+  'notes.estimate.low': '남은 크레딧({balance})이 요청할 때 잡아 두는 {reserve}크레딧보다 적어 요청이 거절돼요.',
+  'notes.estimate.creditsLink': '크레딧 보기 →',
+  'notes.job.queued': '대기 중 · {elapsed}',
+  'notes.job.running': '분석 중 · {elapsed}',
+  'notes.job.queuedHint': '곧 시작해요. 이 화면을 닫아도 분석은 계속돼요.',
+  'notes.job.runningHint': '영상을 보고 노트를 정리하는 중이에요. 보통 1~3분 걸려요.',
+  'notes.job.slowHint': '평소보다 오래 걸리고 있어요. 이 화면을 닫아도 분석은 계속돼요.',
 } as const;
