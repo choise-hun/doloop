@@ -161,7 +161,7 @@ for (const state of ['guest', 'user', 'userPro', 'userGrace']) {
       await page.evaluate(() => document.fonts.ready);
       // 접힌 details(고급 설정·계정 삭제 등)를 모두 펼쳐 안쪽 버튼도 잰다
       await page.evaluate(() => document.querySelectorAll('main details').forEach((d) => (d.open = true)));
-      await page.waitForTimeout(200);
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       expect(await page.evaluate(collectWrappedPills)).toEqual([]);
     });
   }
@@ -175,7 +175,7 @@ for (const width of WIDTHS) {
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
     await expect(page.locator('#accEmail')).toHaveText('a@example.com');
     await page.evaluate(() => document.fonts.ready);
-    await page.waitForTimeout(200);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const problems = await page.evaluate(collectGapProblems, SCALE);
     expect(problems).toEqual([]);
     // 노션 연동은 고급 설정 접힘 안(계획/앱_명세.md §5) — 기본 접힘, 펼쳐도 간격 규칙 같음
