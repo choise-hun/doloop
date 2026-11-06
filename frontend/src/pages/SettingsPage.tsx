@@ -1,6 +1,7 @@
 // frontend/src/pages/SettingsPage.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
+import { OpsPanel } from '../components/ops/OpsPanel';
 import { SafeLink } from '../components/common/SafeLink';
 import { auth, canUseAi, useAuth } from '../lib/auth';
 import { apiClient, CreditsSummaryDto, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
@@ -1152,6 +1153,8 @@ export function SettingsPage(): React.ReactElement {
         </details>
       </section>
 
+      {/* 7. 운영 — owner만(M2-4, 권한 판정은 서버 /admin). 기본 접힘 */}
+      {authState.me && authState.me.role === 'owner' ? <OpsPanel /> : null}
     </AppShell>
   );
 }

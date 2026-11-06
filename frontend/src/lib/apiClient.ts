@@ -285,6 +285,99 @@ export interface LocalSongRecord {
   date: string | null;
 }
 
+// ---- owner 관리 (/admin — 서버 OwnerOnlyPlugin이 판정, 비 owner는 403). M2-4 운영 화면이 쓴다 ----
+
+/** 번역 칸 — 키는 ko·en·ja만(M1-4b E9). 빈 값은 서버가 뺀다 */
+export type I18nText = { ko?: string; en?: string; ja?: string };
+
+export interface AdminUserDto {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  tier: string;
+  billingTier: string;
+  tierOverride: string | null;
+  tierOverrideUntil: string | null;
+  credits: { monthly: number; purchased: number };
+  isCreator: boolean;
+  creatorBadge: string | null;
+  creatorBio: string;
+}
+
+/** PUT /admin/users/{id}/creator — creatorBadge: 키 없음 = 그대로, null = 지움, 문자열 1~20자. creatorBio ≤ 200 */
+export interface AdminCreatorInput {
+  isCreator: boolean;
+  creatorBadge?: string | null;
+  creatorBio?: string;
+  reason: string;
+}
+
+export type AdminFolderKind = 'curated' | 'monthly_pick';
+
+export interface AdminFolderDto {
+  id: string;
+  kind: string;
+  ownerId: string | null;
+  title: string;
+  isPublic: boolean;
+  autoSync: boolean;
+  hidden: boolean;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+  titleI18n: I18nText;
+  descriptionI18n: I18nText;
+  month: string | null;
+  sortOrder: number;
+  itemCount: number;
+  likeCount: number;
+  cloneCount: number;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminFolderItemDto {
+  videoId: string;
+  position: number;
+  title: string | null;
+  artist: string | null;
+  a: number | null;
+  b: number | null;
+  rate: number;
+  noteI18n: I18nText;
+}
+
+export interface AdminFolderDetail {
+  folder: AdminFolderDto;
+  items: AdminFolderItemDto[];
+}
+
+export interface AdminFolderCreateInput {
+  kind: AdminFolderKind;
+  titleI18n: I18nText;
+  descriptionI18n?: I18nText;
+  month?: string;
+  sortOrder?: number;
+  reason: string;
+}
+
+/** PATCH는 titleI18n·descriptionI18n을 통째로 바꾼다 — ko만 고쳐도 기존 en·ja를 같이 보낸다 */
+export interface AdminFolderPatch {
+  titleI18n?: I18nText;
+  descriptionI18n?: I18nText;
+  isPublic?: boolean;
+  sortOrder?: number;
+  reason: string;
+}
+
+export interface AdminFolderItemInput {
+  videoId: string;
+  a?: number | null;
+  b?: number | null;
+  rate?: number;
+  noteI18n?: I18nText;
+}
+
 const EXT: Record<string, string> = {
   'audio/mp4': 'm4a',
   'audio/webm': 'weba',
@@ -1068,6 +1161,60 @@ async function migrateTakeToDrive(takeId: string, driveFileId: string): Promise<
   return r && r.take ? r.take : r;
 }
 
+// owner 관리 API (계획/상용_서비스_계획.md §3-1: role은 DB에서만, 모든 쓰기에 reason 1~200자 → admin_audit)
+async function adminFindUsers(email: string): Promise<AdminUserDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/admin/users?email=' + encodeURIComponent(email.trim()));
+  return r && Array.isArray(r.users) ? r.users : [];
+}
+
+async function adminSetCreator(userId: string, input: AdminCreatorInput): Promise<AdminUserDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/admin/users/' + encodeURIComponent(userId) + '/creator', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+async function adminListFolders(kind?: AdminFolderKind): Promise<AdminFolderDetail[]> {
+  requireLogin();
+  const q = kind ? '?kind=' + encodeURIComponent(kind) : '';
+  const r = await getAuthRef().apiFetch('/api/v1/admin/shared-folders' + q);
+  return r && Array.isArray(r.folders) ? r.folders : [];
+}
+
+async function adminCreateFolder(input: AdminFolderCreateInput): Promise<AdminFolderDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/admin/shared-folders', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+async function adminUpdateFolder(folderId: string, patch: AdminFolderPatch): Promise<AdminFolderDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/admin/shared-folders/' + encodeURIComponent(folderId), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+async function adminReplaceItems(folderId: string, items: AdminFolderItemInput[], reason: string): Promise<AdminFolderDetail> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/admin/shared-folders/' + encodeURIComponent(folderId) + '/items', {
+    method: 'PUT',
+    body: JSON.stringify({ items, reason }),
+  });
+}
+
+async function adminDeleteFolder(folderId: string, reason: string): Promise<{ id: string; deleted: boolean }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/admin/shared-folders/' + encodeURIComponent(folderId), {
+    method: 'DELETE',
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export const apiClient = {
   isLoggedIn,
   getCachedKeys,
@@ -1139,6 +1286,15 @@ export const apiClient = {
     update: updateProgression,
     remove: removeProgression,
     analyze: analyzeProgression,
+  },
+  admin: {
+    findUsers: adminFindUsers,
+    setCreator: adminSetCreator,
+    listFolders: adminListFolders,
+    createFolder: adminCreateFolder,
+    updateFolder: adminUpdateFolder,
+    replaceItems: adminReplaceItems,
+    deleteFolder: adminDeleteFolder,
   },
   runLocalMigration,
   listLocalSongs,
