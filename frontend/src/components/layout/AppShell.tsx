@@ -85,7 +85,7 @@ export function AppShell({
               <a
                 key={item.key}
                 href={item.href}
-                className={styles.navItem}
+                className={`${styles.navItem} ${styles.navMainItem}`}
                 aria-current={activeNav === item.key ? 'page' : undefined}
               >
                 {item.label}
@@ -93,7 +93,7 @@ export function AppShell({
             ) : (
               <span
                 key={item.key}
-                className={`${styles.navItem} ${styles.navItemDisabled}`}
+                className={`${styles.navItem} ${styles.navItemDisabled} ${styles.navMainItem}`}
                 aria-disabled="true"
                 title="준비 중"
               >
@@ -126,6 +126,31 @@ export function AppShell({
         </span>
       </nav>
       <main className={mainClass}>{children}</main>
+      <nav className={styles.tabBar} aria-label="주요 메뉴" data-tabbar="1">
+        {MAIN_NAV.map((item) =>
+          item.href ? (
+            <a
+              key={item.key}
+              href={item.href}
+              className={styles.tabItem}
+              data-align-group="tabs:top,bottom,height"
+              aria-current={activeNav === item.key ? 'page' : undefined}
+            >
+              {item.label}
+            </a>
+          ) : (
+            <span
+              key={item.key}
+              className={`${styles.tabItem} ${styles.tabItemDisabled}`}
+              data-align-group="tabs:top,bottom,height"
+              aria-disabled="true"
+              title="준비 중"
+            >
+              {item.label}
+            </span>
+          )
+        )}
+      </nav>
       {showThemeToggle && (
         <footer className={styles.siteFoot}>
           <span className={styles.themeGroup} role="group" aria-label="화면 모드">
