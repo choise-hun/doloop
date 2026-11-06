@@ -307,12 +307,19 @@ function browserCheck(o) {
     return dx * dx + dy * dy < rad * rad;
   };
   const small = new Set(targets.filter((el) => R(el).width < 24 || R(el).height < 24));
+  // 고정 층(position: fixed 안 — 하단 탭 바 등)과 흐르는 본문은 스크롤 위치에 따라 우연히 겹친다 → 서로 비교하지 않는다.
+  // 끝까지 내렸을 때 고정 층이 마지막 내용을 가리는지는 셸 아래 여백(W-1 D7)과 스크린샷 QW로 본다
+  const fixedLayer = (el) => {
+    for (let x = el; x && x !== document.body; x = x.parentElement) if (S(x).position === 'fixed') return true;
+    return false;
+  };
   for (const el of small) {
     if (ignored(el, 'G7a')) continue;
     const r = R(el);
     const c = center(r);
     const clash = targets.find((t) => {
       if (t === el || t.contains(el) || el.contains(t)) return false;
+      if (fixedLayer(t) !== fixedLayer(el)) return false;
       if (circleHitsRect(c, R(t), 12)) return true;
       if (small.has(t)) { const [x, y] = center(R(t)); return (x - c[0]) ** 2 + (y - c[1]) ** 2 < 24 * 24; }
       return false;
