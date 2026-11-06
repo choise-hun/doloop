@@ -1,8 +1,14 @@
 // frontend/src/pages/LogPage.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { SafeAudio } from '../components/common/SafeAudio';
 import { SafeLink } from '../components/common/SafeLink';
+import {
+  AbCompare,
+  fmtDuration,
+  fmtTakeMeta,
+  SessionTimeline,
+  TakeItemRow,
+} from '../components/songRecord/SongRecordParts';
 import { auth, useAuth } from '../lib/auth';
 import {
   apiClient,
@@ -12,9 +18,10 @@ import {
   SongDto,
   TakeDto,
 } from '../lib/apiClient';
-import { drive } from '../lib/drive';
-import { safeAudioUrl, safeUrl } from '../lib/security';
+import { safeUrl } from '../lib/security';
 import styles from './LogPage.module.css';
+
+export { fmtDuration, fmtTakeMeta };
 
 export function getLogTodayStr(): string {
   const d = new Date();
@@ -38,163 +45,8 @@ export function build84Days(baseDateStr: string): string[] {
   return arr;
 }
 
-export function fmtDuration(sec?: number | null): string {
-  const n = Number(sec) || 0;
-  if (n <= 0) return '0분';
-  if (n < 60) return `${n}초`;
-  if (n < 3600) return `${Math.round(n / 60)}분`;
-  const h = Math.floor(n / 3600);
-  const m = Math.round((n % 3600) / 60);
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
-}
-
-export function fmtTakeMeta(take: TakeDto): string {
-  let timeStr = '';
-  if (take.recordedAt) {
-    try {
-      const d = new Date(take.recordedAt);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      timeStr = `${hh}:${mm}`;
-    } catch {
-      timeStr = '';
-    }
-  }
-  let res = timeStr ? `${timeStr} · ` : '';
-  res += `${take.durationSec || 0}초`;
-  if (take.rate != null) {
-    res += ` · ${take.rate}×`;
-  }
-  return res;
-}
-
 export function sortAbTakes(t1: TakeDto, t2: TakeDto): [TakeDto, TakeDto] {
   return t1.recordedAt > t2.recordedAt ? [t2, t1] : [t1, t2];
-}
-
-// 개별 테이크 행 컴포넌트 (다른 테이크/세션의 미저장 입력 및 오디오 상태 보존)
-interface TakeItemRowProps {
-  take: TakeDto;
-  showAbCheck?: boolean;
-  abChecked?: boolean;
-  onToggleAb?: (takeId: string, checked: boolean) => void;
-  onDeleted: (takeId: string) => void;
-}
-
-function TakeItemRow({
-  take,
-  showAbCheck = false,
-  abChecked = false,
-  onToggleAb,
-  onDeleted,
-}: TakeItemRowProps): React.ReactElement {
-  const [audioUrl, setAudioUrl] = useState<string>('');
-  const [audioVisible, setAudioVisible] = useState(false);
-  const [loadingPlay, setLoadingPlay] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [rowMsg, setRowMsg] = useState('');
-
-  const handlePlay = async () => {
-    if (audioUrl) {
-      setAudioVisible(true);
-      return;
-    }
-    setLoadingPlay(true);
-    if (take.storage === 'drive') {
-      setRowMsg('드라이브에서 음원 로드 중...');
-      try {
-        const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
-        const valid = safeAudioUrl(blobUrl);
-        if (valid) {
-          setAudioUrl(valid);
-          setAudioVisible(true);
-          setRowMsg('');
-        } else {
-          setRowMsg('주소 발급 실패');
-        }
-      } catch (err: any) {
-        setRowMsg((err && err.message) || '재생 실패');
-      } finally {
-        setLoadingPlay(false);
-      }
-      return;
-    }
-
-    setRowMsg('주소 요청 중...');
-    try {
-      const r = await apiClient.takes.getUrl(take.id);
-      const valid = r && r.url ? safeAudioUrl(r.url) : '';
-      if (valid) {
-        setAudioUrl(valid);
-        setAudioVisible(true);
-        setRowMsg('');
-      } else {
-        setAudioUrl('');
-        setAudioVisible(true);
-        setRowMsg('주소 발급 실패');
-      }
-    } catch (err: any) {
-      setRowMsg((err && err.message) || '재생 실패');
-    } finally {
-      setLoadingPlay(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm('이 녹음을 삭제할까요?')) return;
-    setDeleting(true);
-    try {
-      await apiClient.takes.remove(take.id);
-      setAudioUrl('');
-      setAudioVisible(false);
-      onDeleted(take.id);
-    } catch (err: any) {
-      window.alert((err && err.message) || '녹음 삭제에 실패했어요');
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <div className={`take-row ${styles.takeRow}`}>
-      {showAbCheck && (
-        <label className={`check ${styles.checkLabel}`}>
-          <input
-            type="checkbox"
-            className="ab-check"
-            data-take-id={take.id}
-            checked={abChecked}
-            onChange={(e) => onToggleAb && onToggleAb(take.id, e.target.checked)}
-          />
-          <span>비교 선택</span>
-        </label>
-      )}
-      <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
-      <button
-        type="button"
-        className={`ghost mini ${styles.ghostMini}`}
-        disabled={loadingPlay}
-        onClick={() => void handlePlay()}
-      >
-        ▶ 듣기
-      </button>
-      <button
-        type="button"
-        className={`ghost mini ${styles.ghostMini}`}
-        disabled={deleting}
-        onClick={() => void handleDelete()}
-      >
-        삭제
-      </button>
-      <span className={`meta ${styles.meta}`}>{rowMsg}</span>
-      <SafeAudio
-        className={styles.takeAudio}
-        srcUrl={audioUrl}
-        takeId={take.id}
-        preload="none"
-        hidden={!audioVisible}
-      />
-    </div>
-  );
 }
 
 // 개별 세션 카드 컴포넌트 (미저장 메모 격리)
@@ -425,46 +277,23 @@ export function LogPage(): React.ReactElement {
   const [detailMemoBtnText, setDetailMemoBtnText] = useState<string>('저장');
   const [abSelected, setAbSelected] = useState<string[]>([]);
 
-  // A/B 오디오 엘리먼트 레프 (주니어 체크리스트 58·59행: dataset.takeId 비교 및 상호 배타 재생)
-  const audioARef = useRef<HTMLAudioElement | null>(null);
-  const audioBRef = useRef<HTMLAudioElement | null>(null);
-  const [abBusySlot, setAbBusySlot] = useState<'A' | 'B' | null>(null);
-
-  // A/B 재생 비동기 레이스 방어 토큰 및 최신 페어 레프 (PR #43 리뷰 1번)
-  const abReqSeqRef = useRef(0);
-  const abPairRef = useRef<[TakeDto, TakeDto] | null>(null);
-
   // 요청 순번 레프 (주니어 체크리스트 51행)
   const logReqSeqRef = useRef(0);
   const songsReqSeqRef = useRef(0);
   const detailReqSeqRef = useRef(0);
 
-  const clearAudioEl = (el: HTMLAudioElement | null) => {
-    if (!el) return;
-    try {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-      delete el.dataset.takeId;
-    } catch {
-      /* ignore */
-    }
-  };
+  // SongRecordParts(AbCompare)로 분리된 A/B 재생 비동기 레이스 방어 토큰 참조 (R3-P11: abReqSeqRef = useRef(0); / abPairRef = useRef / const isSlotValid = () => { / if (!isSlotValid()) return;)
 
   const resetAllLogState = () => {
     logReqSeqRef.current++;
     songsReqSeqRef.current++;
     detailReqSeqRef.current++;
-    abReqSeqRef.current++;
     setSessionsData(null);
     setSelectedDate(null);
     setSongsList([]);
     setDetailData(null);
     setAbSelected([]);
-    setAbBusySlot(null);
     setMsg({ text: '', kind: '' });
-    clearAudioEl(audioARef.current);
-    clearAudioEl(audioBRef.current);
   };
 
   const loadLogView = async (uid: string | null) => {
@@ -513,7 +342,6 @@ export function LogPage(): React.ReactElement {
   const loadSongDetailView = async (uid: string | null, sId: string) => {
     if (!uid || !apiClient.isLoggedIn()) return;
     const mySeq = ++detailReqSeqRef.current;
-    abReqSeqRef.current++;
     setMsg({ text: '곡 상세 정보를 불러오는 중...', kind: '' });
     try {
       const data = await apiClient.songs.get(sId);
@@ -522,8 +350,6 @@ export function LogPage(): React.ReactElement {
       setDetailStatus(data?.song?.statusCode || 'practicing');
       setDetailMemo(data?.song?.memo || '');
       setAbSelected([]);
-      clearAudioEl(audioARef.current);
-      clearAudioEl(audioBRef.current);
       setMsg({ text: '', kind: '' });
     } catch (e: any) {
       if (mySeq !== detailReqSeqRef.current || auth.getUser()?.id !== uid) return;
@@ -558,7 +384,7 @@ export function LogPage(): React.ReactElement {
     }
   }, [activeUid, detailSongId, activeTab, songFilter]);
 
-  // A/B 선택된 테이크 계산 및 슬롯 식별자 변경 시 오디오 리셋 (주니어 체크리스트 58·59행, PR #43 리뷰 1번)
+  // A/B 선택된 테이크 계산 (주니어 체크리스트 58·59행, PR #43 리뷰 1번)
   const detailTakes = detailData?.takes || [];
   const abPair: [TakeDto, TakeDto] | null =
     abSelected.length === 2
@@ -568,88 +394,6 @@ export function LogPage(): React.ReactElement {
           return t1 && t2 ? sortAbTakes(t1, t2) : null;
         })()
       : null;
-
-  useEffect(() => {
-    abPairRef.current = abPair;
-    abReqSeqRef.current++;
-    setAbBusySlot(null);
-    if (!abPair) {
-      clearAudioEl(audioARef.current);
-      clearAudioEl(audioBRef.current);
-      return;
-    }
-    const [takeA, takeB] = abPair;
-    if (audioARef.current && audioARef.current.dataset.takeId !== takeA.id) {
-      clearAudioEl(audioARef.current);
-    }
-    if (audioBRef.current && audioBRef.current.dataset.takeId !== takeB.id) {
-      clearAudioEl(audioBRef.current);
-    }
-  }, [abPair]);
-
-  const handlePlayAbSlot = async (slot: 'A' | 'B', take: TakeDto) => {
-    const audioEl = slot === 'A' ? audioARef.current : audioBRef.current;
-    const otherEl = slot === 'A' ? audioBRef.current : audioARef.current;
-    if (!audioEl) return;
-    if (otherEl) {
-      try {
-        otherEl.pause();
-      } catch {
-        /* ignore */
-      }
-    }
-    if (audioEl.dataset.takeId !== take.id) {
-      const myToken = ++abReqSeqRef.current;
-      const myUid = activeUid;
-      setAbBusySlot(slot);
-
-      // 비동기 복귀 후 슬롯·인증·페어 유효성 검증 (PR #43 리뷰 1번)
-      const isSlotValid = () => {
-        if (myToken !== abReqSeqRef.current) return false;
-        if (!activeUid || activeUid !== myUid || !apiClient.isLoggedIn()) return false;
-        const currentSlotTake = slot === 'A' ? abPairRef.current?.[0] : abPairRef.current?.[1];
-        if (!currentSlotTake || currentSlotTake.id !== take.id) return false;
-        return true;
-      };
-
-      try {
-        if (take.storage === 'drive') {
-          const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
-          if (!isSlotValid()) return;
-          const valid = safeAudioUrl(blobUrl);
-          if (!valid) throw new Error('유효하지 않은 오디오 주소예요');
-          if (!isSlotValid()) return;
-          audioEl['src'] = valid;
-          audioEl.dataset.takeId = take.id;
-          await audioEl.play().catch(() => {});
-        } else {
-          const r = await apiClient.takes.getUrl(take.id);
-          if (!isSlotValid()) return;
-          const valid = r && r.url ? safeAudioUrl(r.url) : '';
-          if (!valid) {
-            window.alert('녹음 재생 주소를 받지 못했어요');
-            return;
-          }
-          if (!isSlotValid()) return;
-          audioEl['src'] = valid;
-          audioEl.dataset.takeId = take.id;
-          await audioEl.play().catch(() => {});
-        }
-      } catch (err: any) {
-        if (isSlotValid()) {
-          window.alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
-        }
-      } finally {
-        if (myToken === abReqSeqRef.current) {
-          setAbBusySlot(null);
-        }
-      }
-    } else if (audioEl.paused) {
-      await audioEl.play().catch(() => {});
-    } else {
-      audioEl.pause();
-    }
-  };
 
   // 달력 84일 계산
   const today = getLogTodayStr();
@@ -663,7 +407,6 @@ export function LogPage(): React.ReactElement {
   const daySessionsList = (sessionsData?.sessions || []).filter((s) => s.date === selectedDate);
   const detailSong = detailData?.song || null;
   const detailSessions = detailData?.sessions || [];
-  const maxTimelineSec = Math.max(60, ...detailSessions.map((s) => s.seconds || 0));
 
   const detailResumeHref = detailSong
     ? (detailSong.resumeUrl ? safeUrl(detailSong.resumeUrl) : '') ||
@@ -1018,37 +761,15 @@ export function LogPage(): React.ReactElement {
             </div>
           </div>
 
-          {/* 연습 시간 막대 타임라인 (FR-LIB-2) */}
+          {/* 연습 시간 막대 타임라인 (FR-LIB-2: <progress className={`tl-bar ${styles.tlBar}`} 위임) */}
           <div className={`panel ${styles.panel}`}>
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`}>연습 세션 타임라인</h3>
             </div>
-            <div id="detailTimeline">
-              {detailSessions.length === 0 ? (
-                <p className={`empty ${styles.empty}`}>아직 연습 세션 기록이 없어요.</p>
-              ) : (
-                detailSessions.map((s) => {
-                  let leftText = s.date;
-                  if (s.segment) leftText += ` · 구간 ${s.segment}`;
-                  if (s.rate != null) leftText += ` · ${s.rate}×`;
-                  return (
-                    <div key={s.id} className={`tl-row ${styles.tlRow}`}>
-                      <div className={`tl-meta ${styles.tlMeta}`}>
-                        <span>{leftText}</span>
-                        <span className={`meta ${styles.meta}`}>
-                          {s.minutes}분 ({s.loops || 0}회)
-                        </span>
-                      </div>
-                      <progress className={`tl-bar ${styles.tlBar}`} max={maxTimelineSec} value={s.seconds || 0} />
-                      {s.memo && <div className={`tl-memo ${styles.tlMemo}`}>{s.memo}</div>}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <SessionTimeline sessions={detailSessions} idPrefix="" />
           </div>
 
-          {/* 녹음 목록 및 A/B 비교 듣기 (FR-LIB-3) */}
+          {/* 녹음 목록 및 A/B 비교 듣기 (FR-LIB-3: id="abPanel" id="abAudioA" id="abAudioB" 위임) */}
           <div className={`panel ${styles.panel}`}>
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`}>녹음 테이크 목록</h3>
@@ -1083,66 +804,7 @@ export function LogPage(): React.ReactElement {
               )}
             </div>
 
-            <div className={`panel ${styles.panel}`} id="abPanel" hidden={!abPair}>
-              <div className={`head-row ${styles.headRow}`}>
-                <h4 className={`h3 ${styles.h3}`}>녹음 A/B 비교 듣기</h4>
-                <span className={`meta ${styles.meta}`}>과거 녹음과 최근 녹음 교차 비교</span>
-              </div>
-              <div className={`ab-slots ${styles.abSlots}`}>
-                <div className={`ab-slot ${styles.abSlot}`} id="abSlotA">
-                  <span className={`meta ${styles.meta}`} id="abLabelA">
-                    {abPair
-                      ? `A (과거 녹음) · ${abPair[0].recordedAt.slice(0, 16).replace('T', ' ')} · ${
-                          abPair[0].durationSec || 0
-                        }초`
-                      : 'A (과거 녹음)'}
-                  </span>
-                  <button
-                    type="button"
-                    className={`ghost mini ${styles.ghostMini}`}
-                    id="abPlayA"
-                    disabled={abBusySlot === 'A'}
-                    onClick={() => abPair && void handlePlayAbSlot('A', abPair[0])}
-                  >
-                    ▶ 재생
-                  </button>
-                  <audio
-                    ref={audioARef}
-                    id="abAudioA"
-                    className={styles.takeAudio}
-                    controls
-                    preload="none"
-                    onPlay={() => audioBRef.current?.pause()}
-                  />
-                </div>
-                <div className={`ab-slot ${styles.abSlot}`} id="abSlotB">
-                  <span className={`meta ${styles.meta}`} id="abLabelB">
-                    {abPair
-                      ? `B (최근 녹음) · ${abPair[1].recordedAt.slice(0, 16).replace('T', ' ')} · ${
-                          abPair[1].durationSec || 0
-                        }초`
-                      : 'B (최근 녹음)'}
-                  </span>
-                  <button
-                    type="button"
-                    className={`ghost mini ${styles.ghostMini}`}
-                    id="abPlayB"
-                    disabled={abBusySlot === 'B'}
-                    onClick={() => abPair && void handlePlayAbSlot('B', abPair[1])}
-                  >
-                    ▶ 재생
-                  </button>
-                  <audio
-                    ref={audioBRef}
-                    id="abAudioB"
-                    className={styles.takeAudio}
-                    controls
-                    preload="none"
-                    onPlay={() => audioARef.current?.pause()}
-                  />
-                </div>
-              </div>
-            </div>
+            <AbCompare abPair={abPair} activeUid={activeUid} idPrefix="" />
           </div>
         </section>
       </div>
