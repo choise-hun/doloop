@@ -1288,7 +1288,7 @@ class NoteApiTest {
         newNoteService().executeJob(UUID.fromString(jobId3))
         assertEquals(GeminiVideoOptions(fps = 0.5, startSec = 95), fakeGeminiClient.videoOptionsCalls.last())
 
-        // 노트 분석(회귀): 옵션 필드는 무시 → 작업 DTO 구간·속도 null, Gemini 옵션 없음
+        // 노트 분석(M2-1s): 구간은 받고 속도는 무시 → 작업 DTO 구간만, Gemini 기본 fps + 구간 (자세한 건 n21)
         val noteRes = client.post("/api/v1/notes/analyze") {
             auth()
             header(HttpHeaders.ContentType, "application/json")
@@ -1298,9 +1298,87 @@ class NoteApiTest {
         val noteJobId = Json.parseToJsonElement(noteRes.bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
         val noteJob = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$noteJobId", auth).bodyAsText()).jsonObject
         assertEquals(JsonNull, noteJob["pace"] ?: JsonNull)
-        assertEquals(JsonNull, noteJob["startSec"] ?: JsonNull)
+        assertEquals(10, noteJob["startSec"]!!.jsonPrimitive.int)
         newNoteService().executeJob(UUID.fromString(noteJobId))
+        assertEquals(GeminiVideoOptions(fps = null, startSec = 10), fakeGeminiClient.videoOptionsCalls.last())
+    }
+
+    /** M2-1s(`진행_노트구간서버.md` §2 S-D1·S-D2·S-D4·S-D5): 노트 분석 구간 · pace 무시 · 구간 없음 불변 · 작업 DTO memo */
+    @Test
+    fun n21_noteAnalyze_range_paceIgnored_noRangeUnchanged_jobMemo() = testApplication {
+        TestCredits.seedPaid(db, userA)
+        configureApiTestApp(dbConfig = dbConfig, geminiClient = fakeGeminiClient, analyzeJobDispatcher = fakeDispatcher)
+        val auth: HttpRequestBuilder.() -> Unit = { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        suspend fun postNote(body: String) = client.post("/api/v1/notes/analyze") {
+            auth()
+            header(HttpHeaders.ContentType, "application/json")
+            setBody(body)
+        }
+        suspend fun job(id: String) = Json.parseToJsonElement(client.get("/api/v1/notes/jobs/$id", auth).bodyAsText()).jsonObject
+        fun jobIdOf(text: String) = Json.parseToJsonElement(text).jsonObject["jobId"]!!.jsonPrimitive.content
+        val tags = """"tags":["화성"]"""
+
+        // 400: 진행 분석과 같은 구간 규칙(끝 ≤ 시작 · 범위 밖 · 문자열 · 소수 · 끝 0초) — 작업 없음
+        for (bad in listOf(
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":80,"endSec":80}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":90,"endSec":30}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":-1}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"endSec":86401}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":"80"}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"endSec":1.5}""",
+            """{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"endSec":0}"""
+        )) {
+            val res = postNote(bad)
+            assertEquals(HttpStatusCode.BadRequest, res.status, bad)
+            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+        }
+        val badRange = postNote("""{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":80,"endSec":80}""").bodyAsText()
+        assertEquals("endSec는 startSec보다 1초 이상 커야 합니다.", Json.parseToJsonElement(badRange).jsonObject["message"]!!.jsonPrimitive.content)
+        assertEquals(0, fakeDispatcher.dispatched.size)
+
+        // 구간 + 모르는 pace(무시, 400 아님) + 메모 → DTO 구간·memo, pace NULL, 예약은 구간 40초 기준
+        val r1 = postNote("""{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"memo":"브릿지 보이싱","startSec":40,"endSec":80,"pace":"turbo"}""")
+        assertEquals(HttpStatusCode.Accepted, r1.status, r1.bodyAsText())
+        val id1 = jobIdOf(r1.bodyAsText())
+        val reserve40 = ulevelp.service.CreditMath.reserve(NoteService.JOB_KIND_NOTE, null, 40)
+        assertEquals(reserve40, Json.parseToJsonElement(r1.bodyAsText()).jsonObject["reservedCredits"]!!.jsonPrimitive.int)
+        val j1 = job(id1)
+        assertEquals(40, j1["startSec"]!!.jsonPrimitive.int)
+        assertEquals(80, j1["endSec"]!!.jsonPrimitive.int)
+        assertEquals(JsonNull, j1["pace"] ?: JsonNull)
+        assertEquals("브릿지 보이싱", j1["memo"]!!.jsonPrimitive.content)
+        assertNull(transaction(db) { AnalysisJobsTable.selectAll().where { AnalysisJobsTable.id eq UUID.fromString(id1) }.single()[AnalysisJobsTable.pace] })
+        newNoteService().executeJob(UUID.fromString(id1))
+        assertEquals(GeminiVideoOptions(fps = null, startSec = 40, endSec = 80), fakeGeminiClient.videoOptionsCalls.last())
+
+        // 시작만 → Gemini 시작만
+        val r2 = postNote("""{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":95}""")
+        assertEquals(HttpStatusCode.Accepted, r2.status, r2.bodyAsText())
+        newNoteService().executeJob(UUID.fromString(jobIdOf(r2.bodyAsText())))
+        assertEquals(GeminiVideoOptions(fps = null, startSec = 95), fakeGeminiClient.videoOptionsCalls.last())
+
+        // 구간 없음(null 명시 포함) → 예전과 같다: 구간·속도 NULL, 예약 = 영상 길이(240초), Gemini 옵션 없음
+        val r3 = postNote("""{"url":"https://youtu.be/dQw4w9WgXcQ",$tags,"startSec":null,"endSec":null}""")
+        assertEquals(HttpStatusCode.Accepted, r3.status, r3.bodyAsText())
+        val id3 = jobIdOf(r3.bodyAsText())
+        assertEquals(
+            ulevelp.service.CreditMath.reserve(NoteService.JOB_KIND_NOTE, null, 240),
+            Json.parseToJsonElement(r3.bodyAsText()).jsonObject["reservedCredits"]!!.jsonPrimitive.int
+        )
+        val j3 = job(id3)
+        for (k in listOf("startSec", "endSec", "pace")) assertEquals(JsonNull, j3[k] ?: JsonNull, k)
+        assertEquals("", j3["memo"]!!.jsonPrimitive.content, "메모 없으면 빈 문자열")
+        newNoteService().executeJob(UUID.fromString(id3))
         assertNull(fakeGeminiClient.videoOptionsCalls.last())
+
+        // 목록에도 memo — 코드 진행 작업 포함(진행 작업도 /notes/jobs에 실린다)
+        val rp = postProgressionAnalyze(client, tokenA, """{"url":"https://youtu.be/oWQZopUx0fA","memo":"진행 메모"}""")
+        assertEquals(HttpStatusCode.Accepted, rp.status, rp.bodyAsText())
+        val list = Json.parseToJsonElement(client.get("/api/v1/notes/jobs", auth).bodyAsText()).jsonObject["jobs"]!!.jsonArray
+        val memoById = list.associate { it.jsonObject["id"]!!.jsonPrimitive.content to it.jsonObject["memo"]!!.jsonPrimitive.content }
+        assertEquals("브릿지 보이싱", memoById[id1])
+        assertEquals("", memoById[id3])
+        assertEquals("진행 메모", memoById[jobIdOf(rp.bodyAsText())])
     }
 
     /** GA-4: 같은 영상·구간·속도 코드 진행 분석은 24시간 안에 409 DUPLICATE_ANALYSIS, force면 새 작업(`진행_분석설정.md` GA-4) */

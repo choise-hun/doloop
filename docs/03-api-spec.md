@@ -547,24 +547,29 @@
 - **`POST /api/v1/notes/analyze`**
 - **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건 `retryAfter = 30`, UTC 당일 최대 20건 `429 RATE_LIMITED`)을 `profiles FOR UPDATE` 잠금 안에서 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(환경 변수 `ANALYZE_JOB_ID=<jobId>` 덮어쓰기)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`). 디스패치 호출이 실패하면 작업 상태를 즉시 `failed`로 바꾸고 `502 JOB_DISPATCH_ERROR`를 반환합니다.
 - **검증 규칙:** `url`에서 11자리 유튜브 `videoId` 추출 필수, `tags`는 `["화성", "사운드 디자인", "DAW/MIDI", "리듬", "편곡", "믹싱"]` 중 1~6개 필수, `memo`는 최대 2,000자(선택).
+- **분석 구간(선택, M2-1s):** `startSec`·`endSec`는 8.5 코드 진행 분석과 같은 규칙 — 정수 초 0~86400, `endSec`는 `startSec`(없으면 0)보다 1초 이상 커야 한다(어기면 `400 INVALID_INPUT`, 예: `"endSec는 startSec보다 1초 이상 커야 합니다."`). `null`은 없는 것과 같다. 구간이 있으면 Gemini `video_metadata`에 `start_offset`·`end_offset`만 넣고 `fps`는 기본(`GEMINI_FRAME_FPS`, 0.2). 예약 크레딧은 구간 길이로 계산(끝 없으면 영상 길이 − 시작, 시작이 영상 길이 이상이면 400).
+- **`pace`는 받지 않는다:** 본문에 있어도 무시(값 검사도 하지 않음), `analysis_jobs.pace`는 `NULL`. 구간 필드가 없는 요청은 M2-1s 이전과 같다(옵션 없음, 영상 길이로 예약).
 - **Request Body:**
 ```json
 {
   "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "tags": ["화성", "리듬"],
-  "memo": "2분 15초 세컨더리 도미넌트 보이싱 집중 분석"
+  "memo": "2분 15초 세컨더리 도미넌트 보이싱 집중 분석",
+  "startSec": 120,
+  "endSec": 180
 }
 ```
 - **Response (`202 Accepted`):**
 ```json
 {
   "jobId": "a1000000-0000-4000-8000-000000000001",
-  "status": "queued"
+  "status": "queued",
+  "reservedCredits": 9
 }
 ```
 
 ### 8.2 분석 작업 상태 조회
-- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` 13개 필드 — `kind`는 `note`(8.1 노트 분석) | `progression`(8.5 코드 진행 영상 분석). 두 종류가 한 목록에 섞여 나온다. `startSec`·`endSec`·`pace`는 코드 진행 영상 작업의 분석 구간·속도, 노트 작업은 `null`). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
+- **`GET /api/v1/notes/jobs`** (최근 20건 작업 목록, `{ "jobs": [ ... ] }`) / **`GET /api/v1/notes/jobs/{jobId}`** (단건 폴링, `AnalysisJobDto` — `kind`는 `note`(8.1 노트 분석) | `progression`(8.5 코드 진행 영상 분석). 두 종류가 한 목록에 섞여 나온다(코드 진행 작업 전용 목록 경로는 없다). `memo`는 요청 때 메모(없으면 `""`, M2-1s — 실패 작업 원탭 재시도에서 복원). `startSec`·`endSec`는 분석 구간(노트·코드 진행 모두, 없으면 `null`), `pace`는 코드 진행 작업만(노트 작업은 `null`). 크레딧 `reservedCredits`·`chargedCredits`(미정산 `null`, 실패 0)와 토큰 수 `promptTokens`·`outputTokens`·`thoughtsTokens`(완료만)도 실린다). 비동기 분석 중 Gemini API 키가 401/403이거나 응답 본문에 "API_KEY_INVALID"가 포함된 400으로 거부되면 `status = "failed"`, `error = "PROVIDER_KEY_INVALID: ..."`로 기록되며 클라이언트는 폴링 시 이를 감지해 `ulp:keys`의 `gemini` 캐시를 즉시 무효화합니다(`FR-KEY-5`). "API_KEY_INVALID"가 없는 일반 400(비공개·길이 초과 영상 등)은 `GEMINI_API_ERROR`로 기록되어 키 캐시를 유지합니다.
 - **Response (`200 OK` - 단건 예시):**
 ```json
 {
@@ -575,6 +580,15 @@
   "status": "done",
   "error": null,
   "noteId": "b1000000-0000-4000-8000-000000000001",
+  "memo": "2분 15초 세컨더리 도미넌트 보이싱 집중 분석",
+  "startSec": 120,
+  "endSec": 180,
+  "pace": null,
+  "reservedCredits": 9,
+  "chargedCredits": 4,
+  "promptTokens": 3120,
+  "outputTokens": 2100,
+  "thoughtsTokens": 0,
   "createdAt": "2026-10-30T09:10:00Z",
   "startedAt": "2026-10-30T09:10:01Z",
   "finishedAt": "2026-10-30T09:11:15Z"
@@ -673,7 +687,7 @@
 - **`DELETE /api/v1/progressions/{id}`** → `200 { "ok": true }`. 노트에서 온 행을 지워도 노트 토글은 켠 채로 둔다.
 - 없는 행·남의 행·비 UUID 경로 `404 NOT_FOUND`, 토큰 없음 `401 UNAUTHORIZED`. 모든 응답 `Cache-Control: no-store`.
 - **`POST /api/v1/progressions/analyze`** `{ "url": "유튜브 주소(≤500)", "memo": "선택(≤2000)", "startSec": 선택 정수, "endSec": 선택 정수, "pace": "선택 slow|normal|fast" }` → `202 { "jobId": "uuid", "status": "queued" }` — 코드 진행 영상 분석
-  - 구간·속도(GA-2): `startSec`·`endSec`는 정수 초 0~86400, `endSec`는 `startSec`(없으면 0)보다 1초 이상 커야 한다. `pace`는 `slow`·`normal`·`fast`(없으면 `normal`). 어기면 `400 INVALID_INPUT`. Gemini `video_metadata`에 `fps`(slow 0.5 · normal 1 · fast 3)와 구간 `start_offset`·`end_offset`(`"40s"`)을 넣는다. 노트 분석(8.1)은 이 필드를 받지 않고 `GEMINI_FRAME_FPS`(기본 0.2)
+  - 구간·속도(GA-2): `startSec`·`endSec`는 정수 초 0~86400, `endSec`는 `startSec`(없으면 0)보다 1초 이상 커야 한다. `pace`는 `slow`·`normal`·`fast`(없으면 `normal`). 어기면 `400 INVALID_INPUT`. Gemini `video_metadata`에 `fps`(slow 0.5 · normal 1 · fast 3)와 구간 `start_offset`·`end_offset`(`"40s"`)을 넣는다. 노트 분석(8.1)은 구간만 받고(`pace` 무시) `fps`는 `GEMINI_FRAME_FPS`(기본 0.2)
   - 검증·제한은 8.1과 같다(유튜브 URL 아니면 `400`, Gemini 키 없음 `412 NO_KEY`, 동시 1건·UTC 하루 20건 `429 RATE_LIMITED` — **노트 분석과 합산**, 디스패치 실패 `502`). 태그는 서버가 `["화성"]`로 정한다(본문 `tags` 없음)
   - `analysis_jobs.kind = 'progression'`. 진행 전용 프롬프트(공통 스키마 + 화성 확장판: 진행에 `song`·`artist`·`start`·`end`, `key`는 `F Major`·`A min` 형식, 코드 심볼은 화면 표기 그대로)로 Gemini를 부른다. 일반 노트(8.1)의 프롬프트·스키마는 그대로
   - 상태 조회는 8.2(`/notes/jobs`·`/notes/jobs/{id}`), `kind = "progression"`
@@ -681,6 +695,14 @@
   - 행 값: `title` = 진행 `song`(비면 영상 제목), `artist`, `part` = 진행 `name`, `channel` = 영상 채널, `key` 정규화(`C# Major`→`Db Major`, 못 읽으면 `null`), `roman` 정규화(`maj7`→`M7` 등), `startSec`·`endSec` = `start`·`end`(비면 첫 코드 `timestamp`), `evidence` = 코드 `source` 중 가장 약한 것(추정 > 말함 > 화면)
 
 ---
+
+### 8.6 예상 크레딧 (`POST /api/v1/credits/estimate`)
+- **인증 필수**(없으면 `401`). 분석 요청 전 "예상 소모 크레딧" 배지용 — 크레딧을 바꾸지 않는다.
+- **Request Body:** `{ "kind": "note" | "progression", "url": "유튜브 주소(≤500)", "startSec": 선택 정수, "endSec": 선택 정수, "pace": "선택 slow|normal|fast" }`
+  - 파싱은 분석 요청과 같다: `kind = "note"`면 8.1 규칙(구간만, `pace` 무시 — M2-1s), `kind = "progression"`이면 8.5 규칙(구간·속도, 모르는 `pace`는 400)
+  - 분석 길이(초) = `endSec − (startSec ?: 0)`, 끝이 없으면 YouTube 영상 길이 − 시작. 라이브(길이 0)·시작이 영상 길이 이상이면 `400 INVALID_INPUT`, YouTube 길이 조회 실패는 `503 YOUTUBE_UNAVAILABLE`
+  - 그 밖의 `400 INVALID_INPUT`: `kind`가 둘 다 아님, 유튜브 주소가 아님, 구간 규칙 위반
+- **Response (`200 OK`, `Cache-Control: no-store`):** `{ "estimatedCredits": 3, "reserveCredits": 9 }` — `estimatedCredits` = 예상 소모(출력 2400토큰 가정), `reserveCredits` = 요청 때 예약될 양(출력 최대 8192토큰). 산식은 `CreditMath`(`개발산출물/결과/M1-3a_크레딧수치.md` §6)
 
 ## 9. 코드 연습실 계산 API (기존 `server.js` 100% 호환)
 

@@ -39,13 +39,16 @@ fun Route.registerNoteRoutes(
                 }
             }
             val memo = body.optString("memo", 2000) ?: ""
+            // M2-1s: 분석 구간(선택). pace는 노트에서 받지 않는다(본문에 있어도 무시)
+            val options = parseNoteRangeOptions(body)
 
             val response = noteService.requestAnalyze(
                 userId = user.id,
                 rawUrl = url,
                 rawTags = rawTags,
                 memo = memo,
-                dispatcher = analyzeJobDispatcher
+                dispatcher = analyzeJobDispatcher,
+                options = options
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.Accepted, response)

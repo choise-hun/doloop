@@ -60,8 +60,8 @@ fun Route.registerCreditRoutes(
             val url = body.requireString("url", 500)
             val videoId = ExportImportService.extractVideoId(url)
                 ?: throw InvalidInputException("올바른 유튜브 영상 주소가 아닙니다.")
-            // 노트 분석은 구간·속도가 없다(분석 요청과 같게 무시)
-            val options = if (kind == NoteService.JOB_KIND_PROGRESSION) parseAnalyzeOptions(body) else null
+            // 분석 요청과 같은 파싱: 노트는 구간만(속도 무시, M2-1s S-D3), 코드 진행은 구간·속도
+            val options = if (kind == NoteService.JOB_KIND_PROGRESSION) parseAnalyzeOptions(body) else parseNoteRangeOptions(body)
             val res = creditService.estimate(kind, videoId, options)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, res)
