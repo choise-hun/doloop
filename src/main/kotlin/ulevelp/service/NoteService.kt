@@ -357,8 +357,8 @@ class NoteService(
     suspend fun executeJob(jobId: UUID) {
         val database = requireDb()
 
-        // 1. 트랜잭션 1: queued -> running 전환 및 데이터 조회
-        val jobRow = DatabaseFactory.dbQuery(database) {
+        // 1. 트랜잭션 1: queued -> running 전환 및 데이터 조회 (+ 작업 주인의 언어, L1-1 — NULL이면 ko)
+        val (jobRow, userLocale) = DatabaseFactory.dbQuery(database) {
             val updated = AnalysisJobsTable.update({ (AnalysisJobsTable.id eq jobId) and (AnalysisJobsTable.status eq "queued") }) {
                 it[status] = "running"
                 it[startedAt] = clock.instant().atOffset(ZoneOffset.UTC)
@@ -366,7 +366,12 @@ class NoteService(
             if (updated == 0) {
                 null
             } else {
-                AnalysisJobsTable.selectAll().where { AnalysisJobsTable.id eq jobId }.singleOrNull()
+                AnalysisJobsTable.selectAll().where { AnalysisJobsTable.id eq jobId }.singleOrNull()?.let { row ->
+                    val locale = ProfilesTable.select(ProfilesTable.locale)
+                        .where { ProfilesTable.id eq row[AnalysisJobsTable.userId] }
+                        .singleOrNull()?.get(ProfilesTable.locale)
+                    row to (locale ?: Locales.DEFAULT)
+                }
             }
         } ?: run {
             logger.warn("executeJob: 실행 가능한 queued 작업이 없습니다 jobId={}", jobId)
@@ -403,9 +408,9 @@ class NoteService(
                 val channel = meta?.author?.take(200) ?: ""
 
                 val (schema, prompt) = if (isProgression) {
-                    GeminiSchemas.buildProgressionPrompt(memo)
+                    GeminiSchemas.buildProgressionPrompt(memo, userLocale)
                 } else {
-                    GeminiSchemas.buildPrompt(tags, memo)
+                    GeminiSchemas.buildPrompt(tags, memo, userLocale)
                 }
                 val result = geminiClient.generateNoteAnalysis(apiKey, HttpGeminiClient.MODEL, url, prompt, schema, videoOptions)
                 val modelVersion = result.modelVersion ?: HttpGeminiClient.MODEL

@@ -410,9 +410,29 @@ object GeminiSchemas {
         return Pair(schema, guideText)
     }
 
-    fun buildPrompt(tags: List<String>, memo: String): Pair<JsonObject, String> {
+    /**
+     * 사용자 언어 지시 (L1-1). 프롬프트 맨 끝에 붙인다. ko(와 그 밖의 값)는 없음 — 기존 프롬프트와 1글자도 다르지 않다.
+     * DB CHECK·파서가 쓰는 enum(difficulty·instrument·source)과 key 형식·코드 심볼은 번역하지 않게 못박는다
+     */
+    val LANGUAGE_DIRECTIVES: Map<String, String> = mapOf(
+        "en" to "\n\nOutput language (this overrides the Korean-language rule above):\n" +
+            "- Write every descriptive text value in English, as short noun-phrase bullets, not full sentences.\n" +
+            "- Never translate these values; keep them exactly as the schema defines: difficulty (입문/중급/고급), " +
+            "instrument (건반/기타), source (말함/화면/추정), key format (\"F Major\", \"A min\"), chord symbols, " +
+            "roman numerals, note names, frets, timestamps.\n" +
+            "- Keep proper names (song titles, artists, plugin names) as shown in the video.",
+        "ja" to "\n\n出力言語（上の「韓国語で書く」規則より優先）:\n" +
+            "- 説明テキストはすべて日本語で、文ではなく短い体言止めの箇条書きで書く。\n" +
+            "- 次の値は翻訳せず、スキーマの定義どおりに書く: difficulty（입문/중급/고급）、instrument（건반/기타）、" +
+            "source（말함/화면/추정）、key の形式（\"F Major\"、\"A min\"）、コードシンボル、ローマ数字、音名、フレット、timestamp。\n" +
+            "- 曲名・アーティスト名・プラグイン名などの固有名は動画の表記のまま。"
+    )
+
+    private fun languageDirective(locale: String): String = LANGUAGE_DIRECTIVES[locale] ?: ""
+
+    fun buildPrompt(tags: List<String>, memo: String, locale: String = "ko"): Pair<JsonObject, String> {
         val (schema, guides) = build(tags)
-        return Pair(schema, fillTemplate(tags, guides, memo))
+        return Pair(schema, fillTemplate(tags, guides, memo) + languageDirective(locale))
     }
 
     private fun fillTemplate(tags: List<String>, guides: String, memo: String): String {
@@ -474,12 +494,12 @@ object GeminiSchemas {
      * 코드 진행 영상 분석 프롬프트 (CH-4, 설계 §4). 공통 스키마 + 화성 확장판, 태그별 지시는
      * [코드 진행] 지시 뒤에 기존 [화성] 지시를 그대로 붙인다. 일반 노트(`buildPrompt`)는 바뀌지 않는다
      */
-    fun buildProgressionPrompt(memo: String): Pair<JsonObject, String> {
+    fun buildProgressionPrompt(memo: String, locale: String = "ko"): Pair<JsonObject, String> {
         val props = LinkedHashMap<String, JsonObject>()
         props.putAll(commonSchemas)
         props["harmony"] = progressionHarmonySchema()
         val guides = PROGRESSION_GUIDE + "\n- [화성] " + sectionSchemas.getValue("화성").third
-        return Pair(obj(props), fillTemplate(PROGRESSION_TAGS, guides, memo))
+        return Pair(obj(props), fillTemplate(PROGRESSION_TAGS, guides, memo) + languageDirective(locale))
     }
 }
 
