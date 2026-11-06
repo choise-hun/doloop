@@ -386,6 +386,117 @@ export interface AdminFolderItemInput {
   noteI18n?: I18nText;
 }
 
+// ---- M2-23 커뮤니티 · 큐레이션 · 재생목록 가져오기 DTO (M1-2b §2 · M1-4a §3 · M1-4b §3-1) ----
+
+export interface PublicOwnerDto {
+  id: string;
+  publicName: string | null;
+  isCreator: boolean;
+  creatorBadge: string | null;
+}
+
+export interface PublicFolderDto {
+  id: string;
+  kind: string;
+  title: string;
+  titleI18n: I18nText;
+  descriptionI18n: I18nText;
+  month: string | null;
+  owner: PublicOwnerDto | null;
+  itemCount: number;
+  coverVideoId: string | null;
+  coverVideoIds: string[];
+  artists: string[];
+  likeCount: number;
+  likedByMe: boolean;
+  cloneCount: number;
+  autoSync: boolean;
+  publishedAt: string | null;
+}
+
+export interface PublicFolderItemDto {
+  videoId: string;
+  position: number;
+  title: string | null;
+  artist: string | null;
+  a: number | null;
+  b: number | null;
+  rate: number;
+  noteI18n: I18nText;
+}
+
+export interface CurationHomeDto {
+  curated: PublicFolderDto[];
+  monthlyPick: { folder: PublicFolderDto; items: PublicFolderItemDto[] } | null;
+  showcase: PublicFolderDto[];
+  following: PublicFolderDto[];
+}
+
+export interface PracticeDayDto {
+  date: string;
+  seconds: number;
+}
+
+export interface PracticeTodaySongDto {
+  videoId: string;
+  title: string | null;
+  artist: string | null;
+  seconds: number;
+  loops: number;
+}
+
+export interface PracticeLogDto {
+  user: PublicOwnerDto;
+  days: PracticeDayDto[];
+  streakDays: number;
+  thisWeekSeconds: number;
+  today: PracticeTodaySongDto[];
+}
+
+export interface CommunityUserDto {
+  id: string;
+  publicName: string | null;
+  isCreator: boolean;
+  creatorBadge: string | null;
+  creatorBio: string;
+  followerCount: number;
+  followingByMe: boolean;
+  folders: PublicFolderDto[];
+  practiceLog: PracticeLogDto | null;
+}
+
+export interface ShareSummaryDto {
+  folderId: string;
+  categoryId: string;
+  title: string;
+  isPublic: boolean;
+  autoSync: boolean;
+  hidden: boolean;
+  itemCount: number;
+  likeCount: number;
+  cloneCount: number;
+  publishedAt: string | null;
+  publicName: string | null;
+}
+
+export interface PlaylistPreviewDto {
+  playlistId: string;
+  title: string;
+  itemCount: number;
+  remainingSongSlots: number | null;
+  remainingCategorySlots: number | null;
+}
+
+export interface PlaylistImportResultDto {
+  categoryId: string;
+  categoryCreated: boolean;
+  playlistTitle: string;
+  imported: number;
+  alreadyInLibrary: number;
+  skippedLimit: number;
+  skippedUnavailable: number;
+}
+
 const EXT: Record<string, string> = {
   'audio/mp4': 'm4a',
   'audio/webm': 'weba',
@@ -1244,6 +1355,152 @@ async function adminDeleteFolder(folderId: string, reason: string): Promise<{ id
   });
 }
 
+// M2-23: 큐레이션 · 커뮤니티 · 내 분류 공유 · 재생목록 가져오기 (§3-1)
+async function curationHome(): Promise<CurationHomeDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/curation/home');
+}
+
+async function communityFolders(
+  sort: 'recent' | 'clones' | 'likes' = 'recent',
+  cursor?: string | number | null
+): Promise<{ folders: PublicFolderDto[]; next: string | null }> {
+  requireLogin();
+  const q =
+    '?sort=' +
+    encodeURIComponent(sort) +
+    (cursor !== undefined && cursor !== null && cursor !== '' ? '&cursor=' + encodeURIComponent(String(cursor)) : '');
+  const r = await getAuthRef().apiFetch('/api/v1/community/folders' + q);
+  return {
+    folders: r && Array.isArray(r.folders) ? r.folders : [],
+    next: r && typeof r.next === 'string' ? r.next : null,
+  };
+}
+
+async function communityFolder(id: string): Promise<{ folder: PublicFolderDto; items: PublicFolderItemDto[] }> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/community/folders/' + encodeURIComponent(id));
+  return {
+    folder: r?.folder,
+    items: r && Array.isArray(r.items) ? r.items : [],
+  };
+}
+
+async function communitySetLike(id: string, on: boolean): Promise<{ liked: boolean; likeCount: number }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/folders/' + encodeURIComponent(id) + '/like', {
+    method: on ? 'PUT' : 'DELETE',
+  });
+}
+
+async function communityClone(
+  id: string
+): Promise<{ categoryId: string; imported: number; alreadyInLibrary: number; skippedLimit: number }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/folders/' + encodeURIComponent(id) + '/clone', {
+    method: 'POST',
+  });
+}
+
+async function communityReport(
+  id: string,
+  reason: 'spam' | 'inappropriate' | 'copyright' | 'other',
+  detail?: string
+): Promise<{ reportId: number }> {
+  requireLogin();
+  const body: { reason: string; detail?: string } = { reason };
+  if (detail !== undefined && detail !== '') body.detail = detail;
+  return await getAuthRef().apiFetch('/api/v1/community/folders/' + encodeURIComponent(id) + '/reports', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+async function communityUser(userId: string): Promise<CommunityUserDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/users/' + encodeURIComponent(userId));
+}
+
+async function communitySetFollow(userId: string, on: boolean): Promise<{ following: boolean; followerCount: number }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/follows/' + encodeURIComponent(userId), {
+    method: on ? 'PUT' : 'DELETE',
+  });
+}
+
+async function communityLogs(
+  scope: 'all' | 'following' = 'all',
+  cursor?: string | number | null
+): Promise<{ logs: PracticeLogDto[]; next: string | null }> {
+  requireLogin();
+  const q =
+    '?scope=' +
+    encodeURIComponent(scope) +
+    (cursor !== undefined && cursor !== null && cursor !== '' ? '&cursor=' + encodeURIComponent(String(cursor)) : '');
+  const r = await getAuthRef().apiFetch('/api/v1/community/logs' + q);
+  return {
+    logs: r && Array.isArray(r.logs) ? r.logs : [],
+    next: r && typeof r.next === 'string' ? r.next : null,
+  };
+}
+
+async function communitySetPublicName(
+  name: string
+): Promise<{ publicName: string | null; changedAt: string | null; nextChangeAt: string | null }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/me/public-name', {
+    method: 'PUT',
+    body: JSON.stringify({ publicName: name }),
+  });
+}
+
+async function getCategoryShare(id: string): Promise<{ share: ShareSummaryDto | null }> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share');
+  return { share: r && r.share ? r.share : null };
+}
+
+async function setCategoryShare(
+  id: string,
+  input: { isPublic: boolean; autoSync?: boolean; title?: string }
+): Promise<{ share: ShareSummaryDto | null }> {
+  requireLogin();
+  const body: Record<string, unknown> = { isPublic: Boolean(input.isPublic) };
+  if (input.autoSync !== undefined) body.autoSync = Boolean(input.autoSync);
+  if (input.title !== undefined && input.title !== '') body.title = input.title;
+  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return { share: r && r.share ? r.share : null };
+}
+
+async function republishCategoryShare(id: string, title?: string): Promise<{ share: ShareSummaryDto | null }> {
+  requireLogin();
+  const body: Record<string, unknown> = {};
+  if (title !== undefined && title !== '') body.title = title;
+  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share/republish', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return { share: r && r.share ? r.share : null };
+}
+
+async function importPlaylistPreview(url: string): Promise<PlaylistPreviewDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/songs/import-playlist/preview?url=' + encodeURIComponent(url.trim()));
+}
+
+async function importPlaylist(
+  body: { url: string; categoryId: string } | { url: string; newCategory: true; categoryName?: string }
+): Promise<PlaylistImportResultDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/songs/import-playlist', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export const apiClient = {
   isLoggedIn,
   getCachedKeys,
@@ -1257,6 +1514,8 @@ export const apiClient = {
     get: getSong,
     update: updateSong,
     remove: removeSong,
+    importPreview: importPlaylistPreview,
+    importPlaylist,
   },
   categories: {
     list: listCategories,
@@ -1264,6 +1523,23 @@ export const apiClient = {
     update: updateCategory,
     reorder: reorderCategories,
     remove: removeCategory,
+    getShare: getCategoryShare,
+    setShare: setCategoryShare,
+    republish: republishCategoryShare,
+  },
+  curation: {
+    home: curationHome,
+  },
+  community: {
+    folders: communityFolders,
+    folder: communityFolder,
+    setLike: communitySetLike,
+    clone: communityClone,
+    report: communityReport,
+    user: communityUser,
+    setFollow: communitySetFollow,
+    logs: communityLogs,
+    setPublicName: communitySetPublicName,
   },
   sessions: {
     list: listSessions,

@@ -5,16 +5,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
+const { STATES } = require('../support/mock-app');
+const { COMMUNITY_FREE_ME, communityRoutes } = require('../support/community-fixtures');
+
+const HOME_CURATION = {
+  ...STATES.userData,
+  me: COMMUNITY_FREE_ME,
+  routes: communityRoutes(),
+};
 
 layoutSuite({
   name: 'home',
   path: '/index.html',
-  states: ['guest', 'guestLocal', 'userData'],
+  states: ['guest', 'guestLocal', 'userData', { name: 'curation', mock: HOME_CURATION }],
   ready: async (page, state) => {
     await page.locator('#weeklyStreakCard').waitFor();
-    if (state === 'userData') {
+    if (state === 'userData' || state === 'curation') {
       await expect(page.locator('#songs li a')).toHaveCount(5);
       await page.locator('#recentNoteBody').waitFor();
+    }
+    if (state === 'curation') {
+      await expect(page.locator('#discover [data-row]')).toHaveCount(4);
     }
   },
   options: { forbidColors: ['--link'] },

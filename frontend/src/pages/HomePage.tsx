@@ -18,6 +18,10 @@ import {
 import { chordLine, filterScope, KIND_LABEL, ORIGIN_LABEL, playHref, seedToDto } from '../components/progressions/model.mts';
 import { pickRandom, tasteStats } from '../lib/chords/stats.mts';
 import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categories';
+import { playlistUrlFrom } from '../lib/community.mts';
+import { t } from '../lib/i18n.mts';
+import { CurationRows } from '../components/community/CurationRows';
+import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import styles from './HomePage.module.css';
 
 // 홈 "취향 코드 진행 꺼내보기"(CH-6): 서버 진행 목록(없으면 기본 시드) + 범위 토글. 노트 화성 읽기·`편곡` 태그 규칙은 없앴다(설계 §8)
@@ -330,7 +334,10 @@ export function HomePage(): React.ReactElement {
     return () => el.removeEventListener('input', handleNativeInput);
   }, []);
   const pickedVideoId = videoIdFrom(goUrl);
-  const hasInvalidUrl = Boolean(goUrl.trim() && !pickedVideoId);
+  const pickedPlaylistUrl = playlistUrlFrom(goUrl);
+  const hasInvalidUrl = Boolean(goUrl.trim() && !pickedVideoId && !pickedPlaylistUrl);
+  const [importModalUrl, setImportModalUrl] = useState<string | null>(null);
+  const [catRefreshKey, setCatRefreshKey] = useState(0);
 
   // 2. 코드 연습실 마지막 탭
   const [lastTab] = useState<string>(() => getLastChordTab());
@@ -490,6 +497,8 @@ export function HomePage(): React.ReactElement {
     e.preventDefault();
     if (pickedVideoId) {
       window.location.href = 'practice.html?v=' + encodeURIComponent(pickedVideoId);
+    } else if (pickedPlaylistUrl) {
+      setImportModalUrl(pickedPlaylistUrl);
     }
   };
 
@@ -541,6 +550,16 @@ export function HomePage(): React.ReactElement {
               </SafeLink>
             </div>
           </div>
+          {pickedPlaylistUrl ? (
+            <button
+              type="button"
+              className="ghostBtn"
+              id="goImport"
+              onClick={() => setImportModalUrl(pickedPlaylistUrl)}
+            >
+              {t('playlist.open')}
+            </button>
+          ) : null}
           <p className={`msg${hasInvalidUrl ? ' err' : ''}`} id="goMsg" role="status">
             {hasInvalidUrl ? '유튜브 영상 링크가 아니에요' : ''}
           </p>
@@ -643,7 +662,7 @@ export function HomePage(): React.ReactElement {
               </div>
             </div>
           )}
-          <CategoryShortcuts uid={activeUid} />
+          <CategoryShortcuts key={catRefreshKey} uid={activeUid} />
         </div>
       </section>
 
@@ -931,6 +950,18 @@ export function HomePage(): React.ReactElement {
           </div>
         </section>
       </div>
+
+      <CurationRows variant="home" me={authState.me} />
+
+      <PlaylistImportModal
+        url={importModalUrl}
+        me={authState.me}
+        onClose={() => setImportModalUrl(null)}
+        onImported={() => setCatRefreshKey((k) => k + 1)}
+        onOnlyThis={(vid) => {
+          window.location.href = 'practice.html?v=' + encodeURIComponent(vid);
+        }}
+      />
 
       <SafeLink
         className={`notion-big ${styles.notionBig}`}

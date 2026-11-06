@@ -24,6 +24,13 @@ export interface MeProfile {
   tier?: 'free' | 'pro' | 'pro_plus' | string;
   limits?: TierLimitsDto;
   credits?: { monthly: number; purchased: number };
+  // M1-4a·M1-4b·M2-23: 커뮤니티·크리에이터·공유 설정
+  isCreator?: boolean;
+  creatorBadge?: string | null;
+  shareAutosync?: boolean;
+  sharePracticeLog?: boolean;
+  publicName?: string | null;
+  publicNameNextChangeAt?: string | null;
 }
 
 export interface TierLimitsDto {
@@ -47,6 +54,8 @@ export interface ProfilePatchInput {
   storageProvider?: 'supabase' | 'drive';
   driveFolderId?: string | null;
   migratedLocalAt?: string | null;
+  shareAutosync?: boolean;
+  sharePracticeLog?: boolean;
 }
 
 export interface AuthState {

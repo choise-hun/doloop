@@ -6,8 +6,12 @@ import { SafeLink } from '../components/common/SafeLink';
 import { auth, canUseAi, useAuth } from '../lib/auth';
 import { apiClient, CreditsSummaryDto, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
 import { tierLabel } from '../lib/jobError.mts';
+import { communityErrorKey } from '../lib/community.mts';
+import { t } from '../lib/i18n.mts';
 import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
+import { PublicNameForm } from '../components/community/PublicNameForm';
+import commStyles from '../components/community/Community.module.css';
 import styles from './SettingsPage.module.css';
 
 // 노션 DB 링크를 그대로 붙여넣어도 DB ID만 꺼낸다. ID는 마지막 경로 끝에 있고 ?v= 뒤는 보기 ID라 보지 않는다.
@@ -76,6 +80,59 @@ export function SettingsPage(): React.ReactElement {
 
   // AI 분석 크레딧(M1-3c): 잔액은 /me credits, 다음 지급은 GET /credits
   const [creditSummary, setCreditSummary] = useState<CreditsSummaryDto | null>(null);
+
+  // 커뮤니티 설정 스위치(M2-23 D5, S5: 낙관적 + 되돌림)
+  const [optAutosync, setOptAutosync] = useState<boolean | null>(null);
+  const [optPracticeLog, setOptPracticeLog] = useState<boolean | null>(null);
+  const [commErr, setCommErr] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
+  const commBusyRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setOptAutosync(null);
+    setOptPracticeLog(null);
+    setCommErr(null);
+  }, [authState.me?.id, authState.me?.shareAutosync, authState.me?.sharePracticeLog]);
+
+  const canCommunityWrite = Boolean(authState.me?.limits?.communityWrite);
+  const hasPublicName = Boolean(authState.me?.publicName);
+  const currentAutosync = optAutosync !== null ? optAutosync : Boolean(authState.me?.shareAutosync);
+  const currentPracticeLog = optPracticeLog !== null ? optPracticeLog : Boolean(authState.me?.sharePracticeLog);
+
+  const handleToggleAutosync = async () => {
+    if (!canCommunityWrite || commBusyRef.current.has('autosync')) return;
+    commBusyRef.current.add('autosync');
+    setCommErr(null);
+    const prev = currentAutosync;
+    const next = !prev;
+    setOptAutosync(next);
+    try {
+      const updated = await auth.updateProfile({ shareAutosync: next });
+      setOptAutosync(typeof updated?.shareAutosync === 'boolean' ? updated.shareAutosync : next);
+    } catch (e) {
+      setOptAutosync(prev);
+      setCommErr(communityErrorKey(e));
+    } finally {
+      commBusyRef.current.delete('autosync');
+    }
+  };
+
+  const handleTogglePracticeLog = async () => {
+    if (!canCommunityWrite || !hasPublicName || commBusyRef.current.has('practiceLog')) return;
+    commBusyRef.current.add('practiceLog');
+    setCommErr(null);
+    const prev = currentPracticeLog;
+    const next = !prev;
+    setOptPracticeLog(next);
+    try {
+      const updated = await auth.updateProfile({ sharePracticeLog: next });
+      setOptPracticeLog(typeof updated?.sharePracticeLog === 'boolean' ? updated.sharePracticeLog : next);
+    } catch (e) {
+      setOptPracticeLog(prev);
+      setCommErr(communityErrorKey(e));
+    } finally {
+      commBusyRef.current.delete('practiceLog');
+    }
+  };
 
   // 고급 설정(노션) 접힘: 노션 관련 해시로 들어오면 펼친다
   const [advOpen, setAdvOpen] = useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash));
@@ -576,6 +633,77 @@ export function SettingsPage(): React.ReactElement {
           )}
         </div>
       </section>
+
+      {/* 3-b. 커뮤니티 (M2-23 D5) */}
+      {signedIn ? (
+        <section
+          className={`set-sec ${styles.setSec}`}
+          data-align-group="col: left; secs: right"
+          id="community"
+          aria-labelledby="hCommunity"
+        >
+          <h2 id="hCommunity">{t('community.settingsTitle')}</h2>
+          <div className={styles.panel}>
+            <PublicNameForm
+              me={authState.me}
+              inputId="settingsPublicNameInput"
+              submitId="settingsPublicNameSave"
+            />
+          </div>
+          <div className={styles.panel}>
+            <div className={commStyles.commSwitchRow}>
+              <div className={commStyles.commRowInfo} data-align-group="commSw:center-y@481">
+                <b className={styles.lab}>{t('community.autosyncSetting')}</b>
+                <p>{t('community.autosyncHint')}</p>
+              </div>
+              <button
+                type="button"
+                id="commAutosync"
+                role="switch"
+                aria-checked={currentAutosync}
+                disabled={!canCommunityWrite}
+                className={commStyles.switchBtn}
+                data-align-group="commSw:center-y@481"
+                onClick={() => void handleToggleAutosync()}
+              >
+                {t('community.autoSync')}
+              </button>
+            </div>
+            <div className={commStyles.commSwitchRow}>
+              <div className={commStyles.commRowInfo} data-align-group="commSw2:center-y@481">
+                <b className={styles.lab}>{t('community.logSetting')}</b>
+                <p>{t('community.logHint')}</p>
+              </div>
+              <button
+                type="button"
+                id="commPracticeLog"
+                role="switch"
+                aria-checked={currentPracticeLog}
+                disabled={!canCommunityWrite || !hasPublicName}
+                className={commStyles.switchBtn}
+                data-align-group="commSw2:center-y@481"
+                onClick={() => void handleTogglePracticeLog()}
+              >
+                {t('community.public')}
+              </button>
+            </div>
+            {!canCommunityWrite ? (
+              <p id="commProNotice" className="hint">
+                {t('community.proOnly')}
+              </p>
+            ) : !hasPublicName ? (
+              <p id="commNameRequiredNotice" className="hint">
+                {t('community.err.nameRequired')}
+              </p>
+            ) : null}
+            {commErr ? (
+              <p id="commErrMsg" role="alert" className="msg err">
+                {t(commErr.key as any, commErr.vars)}
+              </p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {/* 4. 화면 모드 */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" aria-labelledby="hScreen">
