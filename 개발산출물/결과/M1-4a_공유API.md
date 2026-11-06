@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-06 (win)
 - 입력: `결과/M1-1_스키마설계.md` §2-2·§4·§5-5·§6, `결과/M1-2a_티어쿼터관리API.md`, `진행_티어크레딧.md` §2(N1~N3 답)·§3-2(바꿀 파일, 승인)
-- 브랜치: `feat/m1-4a-community` (main `2a8fba4`에서) — PR·CI는 §6
+- 브랜치: `feat/m1-4a-community` (main `2a8fba4`에서) — **PR #83** → main, CI 전부 통과(run 42142956837)
 - 상태: **코드·테스트 완료**. 화면은 M2-2
 
 ## 1. N1~N3 답 → 설계에 반영한 것
@@ -103,4 +103,5 @@
 
 ## 6. PR·CI
 
-(커밋·PR 뒤 채움)
+- **PR #83** `feat/m1-4a-community` → main. CI run 42142956837 전부 통과: Kotlin test (JDK 21), Node 22·24, E2E spa·legacy, Docker build & smoke, CI ok
+- 머지 뒤 배포: Cloud Run 로그 `now at version v8` 확인 → 이 절에 적는다
