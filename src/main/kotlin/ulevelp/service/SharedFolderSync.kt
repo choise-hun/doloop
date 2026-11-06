@@ -17,6 +17,9 @@ import java.util.UUID
  */
 object SharedFolderSync {
     const val KIND_USER = "user"
+    const val KIND_CURATED = "curated"           // 운영자 큐레이션 폴더(M1-4b)
+    const val KIND_MONTHLY_PICK = "monthly_pick" // 이달의 곡(운영자, 최대 5곡)
+    val OPERATOR_KINDS = setOf(KIND_CURATED, KIND_MONTHLY_PICK)
 
     /**
      * 자동 연동 — 그 사용자의 공개본 중 `auto_sync=true`(= 공개 중)이고 소유자 실제 티어가 유료인 것만,
