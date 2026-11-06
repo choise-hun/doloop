@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>레슨 카드 시안</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#F0EEEA;--card:#F6F5F2;--line:#D9D6D0;--ink:#1D1D1F;--sub:#6E6E73;--mute:#9A9893;--accent:#C34811}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","WenQuanYi Zen Hei",sans-serif;padding:40px 32px;width:1320px}
+.label{font:500 13px "Noto Sans KR",sans-serif;letter-spacing:.02em;color:var(--sub);margin:0 0 14px}
+.list{display:grid;gap:16px;margin-bottom:56px}
+.card{background:var(--card);border:1px solid var(--line);padding:26px 28px;display:grid;grid-template-columns:1fr auto;gap:10px 24px}
+.title{font-weight:700;font-size:21px;letter-spacing:-.01em}
+.desc{grid-column:1;font-size:15.5px;color:#3A3A3C;line-height:1.5}
+.meta{display:flex;align-items:center;gap:14px;font:400 13px "IBM Plex Mono",monospace;color:var(--sub);white-space:nowrap}
+.meta b{font-weight:500;color:var(--ink);letter-spacing:.04em}
+.tag{border:1px solid var(--line);padding:3px 8px;color:var(--ink);font-family:"Noto Sans KR",sans-serif;font-size:12.5px}
+.actions{grid-column:1/-1;display:flex;gap:28px;align-items:center;margin-top:8px}
+.link{font-weight:700;font-size:15px;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.link .tri{font-size:10px}
+.link.sub{font-weight:500;color:var(--sub)}
+.arrow{font-weight:400}
+/* B */
+.card.b .actions{gap:16px}
+.btn{height:40px;padding:0 20px;border-radius:9999px;background:var(--ink);color:#F6F5F2;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:0}
+.btn .tri{font-size:9px}
+.card.b.active{border-color:var(--ink)}
+.dot{width:6px;height:6px;background:var(--accent);display:inline-block}
+</style></head><body>
+
+<p class="label">시안 A · 필 없음. 행동은 위젯처럼 텍스트 링크로</p>
+<div class="list">
+ <div class="card"><div class="title">R&amp;B, City Pop, Jazz 만능 코드진행</div>
+  <div class="meta"><b>CHILL THE WORLD</b><span class="tag">중급</span><span class="tag">화성</span></div>
+  <div class="desc">E Key 기반 2-5-1 진행 및 세컨더리 도미넌트를 활용한 R&amp;B·시티팝·재즈 코드 보이싱</div>
+  <div class="actions"><a class="link"><span class="tri">▶</span>연습하기 <span class="arrow">→</span></a><a class="link sub">상세 보기</a></div></div>
+ <div class="card"><div class="title">R&amp;B, City Pop, Jazz 만능 코드진행</div>
+  <div class="meta"><b>CHILL THE WORLD</b><span class="tag">중급</span><span class="tag">화성</span></div>
+  <div class="desc">E Major 키의 R&amp;B, 시티팝, 재즈 스타일 2-5-1 코드 진행 소개</div>
+  <div class="actions"><a class="link"><span class="tri">▶</span>연습하기 <span class="arrow">→</span></a><a class="link sub">상세 보기</a></div></div>
+</div>
+
+<p class="label">시안 B · 필은 화면 전체에 하나만 (지금 이어서 할 카드), 높이 40px. 나머지는 시안 A와 같음</p>
+<div class="list">
+ <div class="card b active"><div class="title">R&amp;B, City Pop, Jazz 만능 코드진행</div>
+  <div class="meta"><span class="dot"></span><span>이어서 · 10/28</span><b>CHILL THE WORLD</b><span class="tag">중급</span><span class="tag">화성</span></div>
+  <div class="desc">E Key 기반 2-5-1 진행 및 세컨더리 도미넌트를 활용한 R&amp;B·시티팝·재즈 코드 보이싱</div>
+  <div class="actions"><button class="btn"><span class="tri">▶</span>연습</button><a class="link sub">상세 보기</a></div></div>
+ <div class="card b"><div class="title">R&amp;B, City Pop, Jazz 만능 코드진행</div>
+  <div class="meta"><b>CHILL THE WORLD</b><span class="tag">중급</span><span class="tag">화성</span></div>
+  <div class="desc">E 키 기반 R&amp;B, 시티팝, 재즈 2-5-1-6 코드 진행과 어그먼트 텐션 활용 팁</div>
+  <div class="actions"><a class="link"><span class="tri">▶</span>연습하기 <span class="arrow">→</span></a><a class="link sub">상세 보기</a></div></div>
+</div>
+</body></html>
