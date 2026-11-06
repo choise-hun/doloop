@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeAudio } from '../components/common/SafeAudio';
 import { SafeLink } from '../components/common/SafeLink';
+import { SongRecordPanel } from '../components/songRecord/SongRecordPanel';
 import { auth, useAuth } from '../lib/auth';
 import { apiClient, CategoryDto, SongDto, TakeDto } from '../lib/apiClient';
 import { takeOpenCategory } from '../lib/categories';
@@ -141,14 +142,16 @@ export function PracticePage(): React.ReactElement {
   // 홈 분류 버튼에서 넘어온 분류 id (null = 아직 안 읽음)
   const pendingCategoryRef = useRef<string | null>(null);
 
-  // 녹음 및 Drive 1곡 제한 모달 상태
+  // 녹음 및 무료 녹음 곡 수 한도 모달 상태
   const [recording, setRecording] = useState(false);
   const [recElapsedSec, setRecElapsedSec] = useState(0);
   const [take, setTakeState] = useState<PendingTakeState | null>(null);
   const [uploadingTake, setUploadingTake] = useState(false);
   const [recMsg, setRecMsg] = useState<{ text: string; err: boolean }>({ text: '', err: false });
   const [takeLimitModalOpen, setTakeLimitModalOpen] = useState(false);
+  const [takeLimitCount, setTakeLimitCount] = useState<number>(2);
   const [busyDriveConnect, setBusyDriveConnect] = useState(false);
+  const [srReloadKey, setSrReloadKey] = useState(0);
 
   // 내부 가변 참조 (인터벌·콜백 최신 상태 유지)
   const playerRef = useRef<any>(null);
@@ -368,6 +371,7 @@ export function PracticePage(): React.ReactElement {
       };
       stRef.current.song = updatedSong;
       setSong(updatedSong);
+      setSrReloadKey((k) => k + 1);
       setSyncMsg({ text: `저장됨 ${getNowHhMm()}`, err: false });
     } catch (e: any) {
       if (e && e.status === 404) {
@@ -743,6 +747,7 @@ export function PracticePage(): React.ReactElement {
       takeRef.current = nextTake;
       setTakeState(nextTake);
       setTakeLimitModalOpen(false);
+      setSrReloadKey((k) => k + 1);
       setRecMsg({
         text: opts?.replaceOldSongTakes
           ? `이전 곡 서버 녹음을 교체하고 계정에 저장됨 ${t.time} · ${formatPlayerTime(t.seconds)}`
@@ -750,19 +755,14 @@ export function PracticePage(): React.ReactElement {
         err: false,
       });
     } catch (e: any) {
-      if (e && e.status === 409 && e.code === 'SINGLE_SONG_TAKE_LIMIT') {
+      if (e && e.status === 403 && e.code === 'FREE_TAKE_SONG_LIMIT_EXCEEDED') {
+        const limitNum = Number((e.data as any)?.detail?.limit) || 2;
+        setTakeLimitCount(limitNum);
         setTakeLimitModalOpen(true);
         setRecMsg({
           text:
             e.message ||
-            'Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 녹음을 저장할 수 있습니다.',
-          err: true,
-        });
-      } else if (e && e.status === 409 && e.code === 'RECENT_SONG_ONLY') {
-        setRecMsg({
-          text:
-            e.message ||
-            'Google Drive 미연결 상태에서는 가장 최근 연습 곡에만 녹음을 저장할 수 있습니다.',
+            `무료 플랜은 ${limitNum}곡까지 녹음을 저장할 수 있어요`,
           err: true,
         });
       } else if (e && e.status === 404) {
@@ -1402,7 +1402,7 @@ export function PracticePage(): React.ReactElement {
         </header>
 
         <div className={`pp-main ${styles.ppMain}`}>
-          <section className={`pp-stage ${styles.ppStage}`}>
+          <section className={`pp-stage ${styles.ppStage}`} data-align-group="sr-left:left">
             <div className={`pp-video ${styles.ppVideo}`} id="videoBox">
               <div className={styles.playerMount}>
                 <div id="player" />
@@ -1771,6 +1771,16 @@ export function PracticePage(): React.ReactElement {
             </p>
           </section>
         </div>
+
+        {Boolean(videoId) && (
+          <section id="songRecord" className={styles.songRecord} aria-label="이 곡의 연습 기록">
+            <SongRecordPanel
+              songId={song?.id ?? null}
+              loggedIn={Boolean(activeUid) && apiClient.isLoggedIn()}
+              reloadKey={srReloadKey}
+            />
+          </section>
+        )}
       </div>
 
       {/* 우측 곡 목록 서랍 */}
@@ -1854,7 +1864,7 @@ export function PracticePage(): React.ReactElement {
       </aside>
       <div className={`pp-scrim ${styles.ppScrim}`} id="scrim" hidden={!libOpen} onClick={closeDrawer} />
 
-      {/* RN-D3 & E1-1: Drive 미연결 1곡 제한 충돌 선택 모달 (#takeLimitModal) */}
+      {/* 무료 녹음 곡 수 한도 초과 모달 (#takeLimitModal) */}
       <div
         className={`pp-modal-backdrop ${styles.modalBackdrop}`}
         id="takeLimitModal"
@@ -1868,16 +1878,17 @@ export function PracticePage(): React.ReactElement {
       >
         <div className={`pp-modal-card ${styles.modalCard}`}>
           <h2 className={styles.modalTitle} id="takeLimitTitle">
-            이전 연습 곡의 서버 녹음이 남아 있어요
+            무료 녹음 저장 한도 안내
           </h2>
           <p className={styles.modalDesc} id="takeLimitDesc">
-            Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 서버에 녹음을 저장할 수 있습니다. 개인 Google Drive를 연결해 모든 곡의 녹음을 무제한 보관하거나, 이전 곡의 서버 녹음을 지우고 현재 곡 녹음으로 교체할 수 있어요. (이미 Google Drive에 저장된 녹음은 지워지지 않아요)
+            무료 플랜은 {takeLimitCount}곡까지 녹음을 저장할 수 있어요. 다른 곡에 저장된 서버 녹음을 지우고 이 곡의 녹음으로 바꾸거나, 취소 후 파일 저장 버튼으로 기기에 직접 보관할 수 있어요.
           </p>
           <div className={`pp-modal-actions ${styles.modalActions}`}>
             <button
               type="button"
               className="pillBtn"
               id="btnTakeLimitConnectDrive"
+              hidden={!authState.me?.limits?.drive}
               disabled={busyDriveConnect || uploadingTake}
               onClick={handleConnectDriveFromPlayer}
             >
@@ -1888,9 +1899,12 @@ export function PracticePage(): React.ReactElement {
               className="ghostBtn"
               id="btnTakeLimitReplaceOld"
               disabled={busyDriveConnect || uploadingTake}
-              onClick={() => void uploadTakeNow({ replaceOldSongTakes: true })}
+              onClick={() => {
+                if (!window.confirm('다른 곡에 저장된 서버 녹음을 모두 지우고 이 곡의 녹음을 저장할까요?')) return;
+                void uploadTakeNow({ replaceOldSongTakes: true });
+              }}
             >
-              이전 곡 녹음 지우고 현재 곡 녹음 저장
+              다른 곡 녹음 지우고 이 곡 녹음 저장
             </button>
             <button
               type="button"
