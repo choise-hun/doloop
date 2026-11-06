@@ -67,7 +67,7 @@ class IntegrationService(
 ) {
 
     companion object {
-        val VALID_APP_IDS = setOf("ulevelp", "guitar-practice")
+        val VALID_APP_IDS = setOf("ulevelp")
         /** Gemini는 M1-3b부터 서버 키 + 크레딧(BYOK 제거, V6) */
         val VALID_PROVIDERS = setOf("notion")
         const val REMOVED_PROVIDER_GEMINI = "gemini"
