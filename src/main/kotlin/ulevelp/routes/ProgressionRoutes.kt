@@ -92,16 +92,32 @@ fun Route.registerProgressionRoutes(
 
 /** 분석 구간·속도 선택 필드(GA-2, `진행_분석설정.md` §3-2). 잘못되면 400 INVALID_INPUT */
 internal fun parseAnalyzeOptions(body: JsonObject): AnalysisJobOptions {
-    val startSec = optSec(body, "startSec")
-    val endSec = optSec(body, "endSec")
-    if (endSec != null && endSec <= (startSec ?: 0)) {
-        throw InvalidInputException("endSec는 startSec보다 1초 이상 커야 합니다.")
-    }
+    val (startSec, endSec) = parseAnalyzeRange(body)
     val pace = body.optString("pace", 20) ?: NoteService.PACE_NORMAL
     if (pace !in NoteService.PACE_FPS) {
         throw InvalidInputException("pace는 slow·normal·fast 중 하나여야 합니다.")
     }
     return AnalysisJobOptions(startSec = startSec, endSec = endSec, pace = pace)
+}
+
+/**
+ * 노트 분석 구간(M2-1s S-D1·S-D2, `진행_노트구간서버.md` §2): 진행 분석과 같은 구간 검증, `pace`는 읽지 않는다.
+ * 구간 필드가 둘 다 없으면 null — 구간 없는 노트 요청은 예전과 같다(S-D4)
+ */
+internal fun parseNoteRangeOptions(body: JsonObject): AnalysisJobOptions? {
+    val (startSec, endSec) = parseAnalyzeRange(body)
+    if (startSec == null && endSec == null) return null
+    return AnalysisJobOptions(startSec = startSec, endSec = endSec)
+}
+
+/** `startSec`·`endSec` 선택 필드(정수 0~86400, `endSec > (startSec ?: 0)`). 잘못되면 400 INVALID_INPUT */
+private fun parseAnalyzeRange(body: JsonObject): Pair<Int?, Int?> {
+    val startSec = optSec(body, "startSec")
+    val endSec = optSec(body, "endSec")
+    if (endSec != null && endSec <= (startSec ?: 0)) {
+        throw InvalidInputException("endSec는 startSec보다 1초 이상 커야 합니다.")
+    }
+    return startSec to endSec
 }
 
 private fun optSec(body: JsonObject, name: String): Int? {

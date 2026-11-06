@@ -48,11 +48,14 @@ data class AnalyzeJobCreateResponse(
     val reservedCredits: Int = 0
 )
 
-/** 코드 진행 영상 분석 옵션(GA-2, `진행_분석설정.md` §3-2). 검증은 라우트에서 끝난 값 */
+/**
+ * 분석 옵션(GA-2, `진행_분석설정.md` §3-2). 검증은 라우트에서 끝난 값.
+ * 노트 분석은 구간만 쓴다(M2-1s) — `pace`는 코드 진행 작업만 저장·사용한다
+ */
 data class AnalysisJobOptions(
     val startSec: Int? = null,
     val endSec: Int? = null,
-    /** `slow` | `normal` | `fast` */
+    /** `slow` | `normal` | `fast` — 코드 진행만 */
     val pace: String = NoteService.PACE_NORMAL
 )
 
@@ -66,7 +69,9 @@ data class AnalysisJobDto(
     val status: String,
     val error: String? = null,
     val noteId: String? = null,
-    /** 분석 구간(초)·속도 — 코드 진행 영상 작업만, 없으면 null (GA-2) */
+    /** 요청 때 메모(M2-1s S-D5 — 원탭 재시도에서 복원) */
+    val memo: String = "",
+    /** 분석 구간(초, 노트·코드 진행 — 없으면 null)·속도(코드 진행만) (GA-2, M2-1s) */
     val startSec: Int? = null,
     val endSec: Int? = null,
     val pace: String? = null,
@@ -223,9 +228,10 @@ class NoteService(
         if (!preTier.limits.ai) throw aiUpgradeRequired(preTier.tier)
         requireGeminiKey()
 
-        // 예약액(M1-3a §6): 구간 없으면 YouTube 영상 길이
+        // 예약액(M1-3a §6): 구간 없으면 YouTube 영상 길이. 속도는 코드 진행만
+        val pace = if (kind == JOB_KIND_PROGRESSION) options?.pace else null
         val seconds = creditService.analysisSeconds(videoId, options?.startSec, options?.endSec)
-        val reserveAmount = CreditMath.reserve(kind, options?.pace, seconds)
+        val reserveAmount = CreditMath.reserve(kind, pace, seconds)
 
         val nowUtc = clock.instant().atOffset(ZoneOffset.UTC)
         val todayUtc = LocalDate.now(clock.withZone(ZoneOffset.UTC))
@@ -307,7 +313,7 @@ class NoteService(
                 if (options != null) {
                     it[AnalysisJobsTable.startSec] = options.startSec
                     it[AnalysisJobsTable.endSec] = options.endSec
-                    it[AnalysisJobsTable.pace] = options.pace
+                    it[AnalysisJobsTable.pace] = pace // 노트는 NULL(M2-1s S-D2)
                 }
                 it[status] = "queued"
                 it[createdAt] = nowUtc
@@ -372,13 +378,17 @@ class NoteService(
         val tags = jobRow[AnalysisJobsTable.tags]
         val memo = jobRow[AnalysisJobsTable.memo]
         val isProgression = jobRow[AnalysisJobsTable.kind] == JOB_KIND_PROGRESSION
-        // 코드 진행 영상: 속도별 fps + 구간. 노트 분석은 null(클라이언트 기본 fps)
+        // 코드 진행 영상: 속도별 fps + 구간. 노트 분석: 구간이 있을 때만 구간(fps null = 클라이언트 기본), 없으면 null(M2-1s)
+        val jobStartSec = jobRow[AnalysisJobsTable.startSec]
+        val jobEndSec = jobRow[AnalysisJobsTable.endSec]
         val videoOptions = if (isProgression) {
             GeminiVideoOptions(
                 fps = PACE_FPS[jobRow[AnalysisJobsTable.pace] ?: PACE_NORMAL] ?: PACE_FPS.getValue(PACE_NORMAL),
-                startSec = jobRow[AnalysisJobsTable.startSec],
-                endSec = jobRow[AnalysisJobsTable.endSec]
+                startSec = jobStartSec,
+                endSec = jobEndSec
             )
+        } else if (jobStartSec != null || jobEndSec != null) {
+            GeminiVideoOptions(fps = null, startSec = jobStartSec, endSec = jobEndSec)
         } else null
 
         // 2. 트랜잭션 밖에서 외부 호출 (최대 jobTimeoutMs)
@@ -701,6 +711,7 @@ class NoteService(
         status = row[AnalysisJobsTable.status],
         error = row[AnalysisJobsTable.error],
         noteId = row[AnalysisJobsTable.noteId]?.toString(),
+        memo = row[AnalysisJobsTable.memo],
         startSec = row[AnalysisJobsTable.startSec],
         endSec = row[AnalysisJobsTable.endSec],
         pace = row[AnalysisJobsTable.pace],

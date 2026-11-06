@@ -170,7 +170,9 @@ export interface AnalysisJobDto {
   status: 'queued' | 'running' | 'done' | 'failed' | string;
   error?: string | null;
   noteId?: string | null;
-  /** 코드 진행 영상 작업의 분석 구간(초)·속도 (GA-2). 노트 작업은 null */
+  /** 요청 때 메모(M2-1s — 원탭 재시도에서 복원). 없으면 "" */
+  memo?: string;
+  /** 분석 구간(초, 노트·코드 진행 — 없으면 null)·속도(코드 진행만, 노트는 null) (GA-2, M2-1s) */
   startSec?: number | null;
   endSec?: number | null;
   pace?: 'slow' | 'normal' | 'fast' | string | null;

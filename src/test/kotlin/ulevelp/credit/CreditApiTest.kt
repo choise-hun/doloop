@@ -395,7 +395,7 @@ class CreditApiTest {
     }
 
     @Test
-    fun `B2 estimate - 노트는 영상 길이, 코드 진행은 구간·속도 + 잘못된 입력`() = testApplication {
+    fun `B2 estimate - 노트는 구간(속도 무시), 코드 진행은 구간·속도 + 잘못된 입력`() = testApplication {
         app()
         assertEquals(HttpStatusCode.Unauthorized, client.post("/api/v1/credits/estimate").status)
         val (_, token) = client.newUser()
@@ -406,9 +406,23 @@ class CreditApiTest {
         }
 
         duration.durationSec = 600
-        val note = est(buildJsonObject { put("kind", "note"); put("url", VIDEO); put("pace", "fast"); put("endSec", 10) })
+        // 노트 구간 없음 → 영상 길이 600초(예전과 같다, S-D4)
+        val note = est(buildJsonObject { put("kind", "note"); put("url", VIDEO) })
         assertEquals(HttpStatusCode.OK, note.status, note.bodyAsText())
-        assertEquals(buildJsonObject { put("estimatedCredits", 9); put("reserveCredits", 15) }, json(note.bodyAsText()), "노트는 구간·속도 무시")
+        assertEquals(buildJsonObject { put("estimatedCredits", 9); put("reserveCredits", 15) }, json(note.bodyAsText()))
+        // 노트 구간(M2-1s S-D3): 끝 10초 → 10초분으로 준다. pace는 무시(모르는 값도 400 아님)
+        val noteRange = est(buildJsonObject { put("kind", "note"); put("url", VIDEO); put("pace", "warp"); put("endSec", 10) })
+        assertEquals(HttpStatusCode.OK, noteRange.status, noteRange.bodyAsText())
+        assertEquals(
+            buildJsonObject { put("estimatedCredits", CreditMath.estimate("note", null, 10)); put("reserveCredits", CreditMath.reserve("note", null, 10)) },
+            json(noteRange.bodyAsText())
+        )
+        assertTrue(json(noteRange.bodyAsText())["reserveCredits"]!!.jsonPrimitive.int < 15, "구간이 예약을 줄인다")
+        val noteFast = est(buildJsonObject { put("kind", "note"); put("url", VIDEO); put("pace", "fast"); put("endSec", 10) })
+        assertEquals(json(noteRange.bodyAsText()), json(noteFast.bodyAsText()), "노트는 속도와 무관")
+        // 노트 시작만 → 영상 길이 − 시작
+        val noteTail = est(buildJsonObject { put("kind", "note"); put("url", VIDEO); put("startSec", 360) })
+        assertEquals(CreditMath.reserve("note", null, 240), json(noteTail.bodyAsText())["reserveCredits"]!!.jsonPrimitive.int)
 
         val fast = est(buildJsonObject { put("kind", "progression"); put("url", VIDEO); put("pace", "fast"); put("startSec", 60); put("endSec", 300) })
         assertEquals(buildJsonObject { put("estimatedCredits", 16); put("reserveCredits", 22) }, json(fast.bodyAsText()))
@@ -423,7 +437,10 @@ class CreditApiTest {
             buildJsonObject { put("kind", "note"); put("url", "https://example.com/x") },
             buildJsonObject { put("kind", "progression"); put("url", VIDEO); put("pace", "warp") },
             buildJsonObject { put("kind", "progression"); put("url", VIDEO); put("startSec", 600) },
-            buildJsonObject { put("kind", "progression"); put("url", VIDEO); put("startSec", 30); put("endSec", 30) }
+            buildJsonObject { put("kind", "progression"); put("url", VIDEO); put("startSec", 30); put("endSec", 30) },
+            buildJsonObject { put("kind", "note"); put("url", VIDEO); put("startSec", 30); put("endSec", 30) },
+            buildJsonObject { put("kind", "note"); put("url", VIDEO); put("startSec", 600) },
+            buildJsonObject { put("kind", "note"); put("url", VIDEO); put("endSec", "10") }
         )
         for (b in bad) {
             val r = est(b)
