@@ -212,7 +212,7 @@ const rows = (page) => page.locator('#progList > li');
 
 test('P1 비로그인: CHORDS 메뉴 활성, 기본 시드 범위 토글, 진행 넣기는 로그인 안내', async ({ page }) => {
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
-  const nav = page.locator('nav a', { hasText: 'CHORDS' });
+  const nav = page.locator('nav.site-nav a', { hasText: 'CHORDS' });
   await expect(nav).toHaveAttribute('href', 'progressions.html');
   await expect(nav).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#progSeedNote')).toBeVisible();
