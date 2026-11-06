@@ -1,0 +1,32 @@
+/* frontend/src/components/ops/Ops.module.css — 운영 섹션(M2-4). 섹션·패널·필드는 SettingsPage.module.css를 쓰고, 여기는 운영 전용만.
+   간격은 설정과 같은 6·12·16 */
+
+/* 이메일 칸 + 찾기 버튼 한 줄(390에서도 버튼 글자가 짧아 한 줄) */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.searchRow > input {
+  flex: 1;
+}
+.searchRow > button {
+  flex: none;
+}
+
+/* 찾은 계정 + 크리에이터 폼 */
+.userBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.userInfo b {
+  font-size: 15px;
+}

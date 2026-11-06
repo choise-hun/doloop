@@ -33,19 +33,53 @@ const GRACE_CREDITS_ROUTE = [
     }),
 ];
 const USER_GRACE = { ...STATES.user, me: PRO_ME, routes: [GRACE_CREDITS_ROUTE] };
-const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO, userGrace: USER_GRACE };
+// M2-4a: owner 계정 — 운영 섹션(접힘)을 펼치고 크리에이터 검색까지 한 화면(폴더 0개)
+const OWNER_ADMIN_USERS_ROUTE = [
+  (url) => url.pathname === '/api/v1/admin/users',
+  (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify({
+        users: [
+          {
+            id: '00000000-0000-4000-8000-000000000002',
+            email: 'creator.with.a.very.long.address@example.com',
+            displayName: 'Creator With A Long Display Name',
+            role: 'user',
+            tier: 'pro',
+            billingTier: 'pro',
+            tierOverride: null,
+            tierOverrideUntil: null,
+            credits: { monthly: 10, purchased: 0 },
+            isCreator: true,
+            creatorBadge: '재즈 기타',
+            creatorBio: '재즈 스탠더드 커버와 코드 보이싱 강의를 올려요.',
+          },
+        ],
+      }),
+    }),
+];
+const USER_OWNER = { ...STATES.user, me: { role: 'owner' }, routes: [OWNER_ADMIN_USERS_ROUTE] };
+const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO, userGrace: USER_GRACE, userOwner: USER_OWNER };
 
 async function settingsReady(page, state) {
   if (state === 'guest') await page.locator('#accGuest').waitFor();
   else await expect(page.locator('#accEmail')).toHaveText('a@example.com');
   if (state === 'userPro') await expect(page.locator('#creditNext')).toContainText('170');
   if (state === 'userGrace') await expect(page.locator('#creditExpire')).toContainText('무료');
+  if (state === 'userOwner') {
+    await page.locator('#hOps').click();
+    await page.locator('#opsEmail').fill('creator.with.a.very.long.address@example.com');
+    await page.locator('#opsSearch').click();
+    await page.locator('#opsCreatorForm').waitFor();
+  }
 }
 
 layoutSuite({
   name: 'settings',
   path: '/settings.html',
-  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }],
+  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }, { name: 'userOwner', mock: USER_OWNER }],
   ready: settingsReady,
   dark: 'userPro',
 });
@@ -150,7 +184,7 @@ function collectWrappedPills() {
   return out;
 }
 
-for (const state of ['guest', 'user', 'userPro', 'userGrace']) {
+for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner']) {
   for (const width of [390, 768, 1280]) {
     test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -183,6 +217,20 @@ for (const width of WIDTHS) {
     await expect(page.locator('#ntnToken')).toBeHidden();
     await page.locator('#advNotion > summary').click();
     await expect(page.locator('#ntnToken')).toBeVisible();
+    expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
+  });
+}
+
+// M2-4a: 운영 섹션(펼침·크리에이터 폼)도 설정 간격 스케일 6·12·16
+for (const width of WIDTHS) {
+  test(`FT settings userOwner ${width}px 운영 섹션 간격 스케일·일정함`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_OWNER);
+    await page.goto('/settings.html', { waitUntil: 'load' });
+    test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+    await settingsReady(page, 'userOwner');
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(200);
     expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
   });
 }
