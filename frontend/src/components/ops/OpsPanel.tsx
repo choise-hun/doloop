@@ -1,5 +1,5 @@
 // frontend/src/components/ops/OpsPanel.tsx
-// 설정 맨 아래 "운영 (owner 전용)" 접힘 섹션 (M2-4a, 개발산출물/진행_운영화면.md §2 O1~O4).
+// 설정 맨 아래 "운영 (owner 전용)" 접힘 섹션 (M2-4a 크리에이터 지정, M2-4b 큐레이션·이달의 곡 = OpsFolders.tsx, 개발산출물/진행_운영화면.md §2 O1~O4).
 // 보일지는 /me role로 정하지만 권한 판정은 서버(/admin OwnerOnlyPlugin)다. 펼치기 전에는 /admin 요청을 보내지 않는다.
 // 문구는 한국어 고정(O2 — owner 혼자 쓴다). L1-2a 하드코딩 한글 검사에서 components/ops/는 예외
 import React, { useState } from 'react';
@@ -7,6 +7,7 @@ import { apiClient, AdminUserDto } from '../../lib/apiClient';
 import { tierLabel } from '../../lib/jobError.mts';
 import s from '../../pages/SettingsPage.module.css';
 import o from './Ops.module.css';
+import { OpsFolders } from './OpsFolders';
 
 const FORBIDDEN_TEXT = 'owner 권한이 없어요. 계정 역할이 바뀌었으면 다시 로그인해 주세요.';
 const BADGE_MAX = 20;
@@ -39,12 +40,16 @@ export function OpsPanel(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
 
-  // /admin 403 = 역할이 바뀐 경우 → 폼을 숨기고 안내 한 줄
-  const handleError = (e: any, fallback: string): void => {
+  // /admin 403 = 역할이 바뀐 경우 → 폼을 숨기고 안내 한 줄(폴더 편집 OpsFolders도 같은 판정을 쓴다)
+  const isForbidden = (e: any): boolean => {
     if (e && e.status === 403) {
       setForbidden(true);
-      return;
+      return true;
     }
+    return false;
+  };
+  const handleError = (e: any, fallback: string): void => {
+    if (isForbidden(e)) return;
     setMsg({ text: errText(e, fallback), kind: 'err' });
   };
 
@@ -112,93 +117,102 @@ export function OpsPanel(): React.ReactElement {
               {FORBIDDEN_TEXT}
             </p>
           ) : (
-            <div className={s.panel} id="opsCreator">
-              <h3>크리에이터 지정</h3>
-              <form
-                className={s.field}
-                data-align-group="opsForm: left"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void search();
-                }}
-              >
-                <label className={s.lab} htmlFor="opsEmail">
-                  가입 이메일
-                </label>
-                <div className={o.searchRow}>
-                  <input
-                    className="inpField"
-                    id="opsEmail"
-                    type="email"
-                    autoComplete="off"
-                    maxLength={320}
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  <button className="ghostBtn" type="submit" id="opsSearch" disabled={searching || !email.trim()}>
-                    찾기
-                  </button>
-                </div>
-              </form>
-
-              {searched && !target ? (
-                <p className="hint" id="opsNoUser">
-                  그 이메일로 가입한 계정이 없어요.
-                </p>
-              ) : null}
-
-              {target ? (
-                <div className={o.userBox} id="opsCreatorForm">
-                  <p className={o.userInfo} id="opsUserInfo">
-                    <b>{target.displayName || '(이름 없음)'}</b>
-                    <span>
-                      {target.email} · {tierLabel(target.tier)} · 지금 {creatorText(target)}
-                    </span>
-                  </p>
-                  <label className={s.checkRow}>
-                    <input type="checkbox" id="opsIsCreator" checked={isCreator} onChange={(e) => toggleCreator(e.target.checked)} />
-                    크리에이터로 지정
+            <>
+              <div className={s.panel} id="opsCreator">
+                <h3>크리에이터 지정</h3>
+                <form
+                  className={s.field}
+                  data-align-group="opsForm: left"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void search();
+                  }}
+                >
+                  <label className={s.lab} htmlFor="opsEmail">
+                    가입 이메일
                   </label>
-                  <label className={s.field} data-align-group="opsForm: left">
-                    <span className={s.lab}>배지 ({BADGE_MAX}자까지, 비우면 지워요)</span>
+                  <div className={o.searchRow}>
                     <input
                       className="inpField"
-                      id="opsBadge"
+                      id="opsEmail"
+                      type="email"
                       autoComplete="off"
-                      maxLength={BADGE_MAX}
-                      placeholder="예: 재즈 기타"
-                      value={badge}
-                      onChange={(e) => setBadge(e.target.value)}
+                      maxLength={320}
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                     />
-                  </label>
-                  <label className={s.field} data-align-group="opsForm: left">
-                    <span className={s.lab}>소개 ({BIO_MAX}자까지)</span>
-                    <textarea className="inpField" id="opsBio" maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)} />
-                  </label>
-                  <label className={s.field} data-align-group="opsForm: left">
-                    <span className={s.lab}>사유 (감사 기록)</span>
-                    <input
-                      className="inpField"
-                      id="opsReason"
-                      autoComplete="off"
-                      maxLength={REASON_MAX}
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                    />
-                  </label>
-                  <div className={s.row}>
-                    <button className="pillBtn" type="button" id="opsCreatorSave" disabled={saving || !reason.trim()} onClick={() => void save()}>
-                      저장
+                    <button className="ghostBtn" type="submit" id="opsSearch" disabled={searching || !email.trim()}>
+                      찾기
                     </button>
                   </div>
-                </div>
-              ) : null}
+                </form>
 
-              <p className={`msg${msg.kind ? ' ' + msg.kind : ''}`} id="opsMsg" role="status">
-                {msg.text}
-              </p>
-            </div>
+                {searched && !target ? (
+                  <p className="hint" id="opsNoUser">
+                    그 이메일로 가입한 계정이 없어요.
+                  </p>
+                ) : null}
+
+                {target ? (
+                  <div className={o.userBox} id="opsCreatorForm">
+                    <p className={o.userInfo} id="opsUserInfo">
+                      <b>{target.displayName || '(이름 없음)'}</b>
+                      <span>
+                        {target.email} · {tierLabel(target.tier)} · 지금 {creatorText(target)}
+                      </span>
+                    </p>
+                    <label className={s.checkRow}>
+                      <input type="checkbox" id="opsIsCreator" checked={isCreator} onChange={(e) => toggleCreator(e.target.checked)} />
+                      크리에이터로 지정
+                    </label>
+                    <label className={s.field} data-align-group="opsForm: left">
+                      <span className={s.lab}>배지 ({BADGE_MAX}자까지, 비우면 지워요)</span>
+                      <input
+                        className="inpField"
+                        id="opsBadge"
+                        autoComplete="off"
+                        maxLength={BADGE_MAX}
+                        placeholder="예: 재즈 기타"
+                        value={badge}
+                        onChange={(e) => setBadge(e.target.value)}
+                      />
+                    </label>
+                    <label className={s.field} data-align-group="opsForm: left">
+                      <span className={s.lab}>소개 ({BIO_MAX}자까지)</span>
+                      <textarea className="inpField" id="opsBio" maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)} />
+                    </label>
+                    <label className={s.field} data-align-group="opsForm: left">
+                      <span className={s.lab}>사유 (감사 기록)</span>
+                      <input
+                        className="inpField"
+                        id="opsReason"
+                        autoComplete="off"
+                        maxLength={REASON_MAX}
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                      />
+                    </label>
+                    <div className={s.row}>
+                      <button
+                        className="pillBtn"
+                        type="button"
+                        id="opsCreatorSave"
+                        disabled={saving || !reason.trim()}
+                        onClick={() => void save()}
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <p className={`msg${msg.kind ? ' ' + msg.kind : ''}`} id="opsMsg" role="status">
+                  {msg.text}
+                </p>
+              </div>
+              <OpsFolders open={open} onForbidden={isForbidden} />
+            </>
           )}
         </div>
       </details>
