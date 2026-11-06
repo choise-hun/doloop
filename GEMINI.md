@@ -22,7 +22,8 @@
 
 1. **Kotlin/Ktor 백엔드 및 DB 작업 시:** `docs/rules/backend-kotlin.md` 필독 (Exposed 트랜잭션, 코루틴 취소 전파, 비동기 HttpClient, 보상 트랜잭션 등)
 2. **프론트엔드(`frontend/src/`, `public/`) 및 UI 작업 시:** `docs/rules/frontend-state.md` 필독 (비동기 레이스 방어, 렌더 타임 정규화, 미디어 초기화 등)
-3. **단위/E2E 테스트, 보안, 배포 스크립트 작업 시:** `docs/rules/testing-security.md` 필독 (단언 왜곡 금지, SSRF/CSP, 결정적 이벤트 대기 등)
+3. **프론트엔드 반응형 정렬·레이아웃 작업 시:** `docs/rules/frontend-layout.md` 필독 (배치 약속 data-align-group, G0~G8 자동 검사, 4개 폭 스크린샷 9대 질문 등)
+4. **단위/E2E 테스트, 보안, 배포 스크립트 작업 시:** `docs/rules/testing-security.md` 필독 (단언 왜곡 금지, SSRF/CSP, 결정적 이벤트 대기 등)
 
 ---
 
@@ -63,4 +64,4 @@
    - PR 생성 후 `gh pr checks --watch`로 CI 완료까지 대기.
    - **CI 성공:** `PR #n — step/<ID> → main (CI 통과, 시니어 리뷰 대기)` 안내. 시니어 리뷰(PR 코멘트) 반영 뒤 사용자가 머지한다.
    - **CI 실패:** 원인 분석 후 수정·push하여 재검증.
-6. **종료 멘트:** 답변 끝에 다음 세션 시작 코드 블록과 권장 Effort(`높음`/`중간`/`낮음`)를 명시.
+6. **종료 멘트:** 답변 끝에 다음 세션 시작 코드 블록(`[필수 가드레일]` 문구 포함)과 권장 Effort(`높음`/`중간`/`낮음`)를 명시.
