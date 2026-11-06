@@ -1,6 +1,7 @@
 # GR-1: JS 가드레일 위반 수정 및 `test/guardrail_checklist.test.js` 활성화
 
 - **일시:** 2026-11-06
+- **PR:** #91 (`step/GR-1` → `main`, CI 통과: run `42161649489`)
 - **입력:** `개발산출물/진행_가드레일.md`, `개발산출물/결과/GR-0_위반정리.md`
 - **목적:** `GR-0`에서 확정한 JS 단위 테스트(`assert.rejects` 내부 `async` 래퍼) 및 Playwright E2E(`waitForTimeout`) 위반을 수정하고, `test/guardrail_checklist.test.js`를 활성화하여 검증한다.
 
@@ -78,3 +79,4 @@ Running 35 tests using 1 worker
 ## 4. 다음 step에 넘길 것 (GR-2)
 
 - PR #89(`fix/GR-appid`) 머지 후 `main`에서 분기하여 `GR-0_위반정리.md` §3에 정리된 Kotlin 블로킹 `httpClient.send(` 7개 파일 11곳을 `httpClient.sendAsync(...).await()`로 전환하고 `src/test/kotlin/ulevelp/ArchitectureGuardrailTest.kt`를 활성화한다.
+
