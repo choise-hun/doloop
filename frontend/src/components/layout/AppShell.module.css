@@ -162,7 +162,8 @@
 
   .shell,
   .playerShell {
-    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    /* 고정 탭 바 높이(56px) + 하단 여백(16px) + safe-area (PR #99 리뷰 반영) */
+    padding-bottom: calc(56px + 16px + env(safe-area-inset-bottom, 0px));
   }
 
   .tabBar {
