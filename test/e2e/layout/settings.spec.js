@@ -61,7 +61,49 @@ const OWNER_ADMIN_USERS_ROUTE = [
     }),
 ];
 const USER_OWNER = { ...STATES.user, me: { role: 'owner' }, routes: [OWNER_ADMIN_USERS_ROUTE] };
-const SETTINGS_STATES = { guest: STATES.guest, user: STATES.user, userPro: USER_PRO, userGrace: USER_GRACE, userOwner: USER_OWNER };
+// M2-4b: owner + 운영자 폴더 2개(이달의 곡 5곡·공개, 큐레이션 초안), 긴 제목 — 이달의 곡을 골라 편집 화면까지
+const LONG = 'Neo-Soul Practice Session With A Very Long Title That Should Never Break The Card Layout';
+const OPS_FOLDER = (over) => ({
+  ownerId: null, isPublic: false, autoSync: false, hidden: false, hiddenAt: null, hiddenReason: null,
+  descriptionI18n: {}, month: null, sortOrder: 0, likeCount: 0, cloneCount: 0, publishedAt: null, createdAt: '2026-11-06T00:00:00Z',
+  ...over,
+});
+const OWNER_FOLDERS_ROUTE = [
+  (url) => url.pathname === '/api/v1/admin/shared-folders',
+  (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify({
+        folders: [
+          {
+            folder: OPS_FOLDER({
+              id: '00000000-0000-4000-8000-000000000301', kind: 'monthly_pick', month: '2026-12', isPublic: true, publishedAt: '2026-11-01T00:00:00Z',
+              title: '12월의 곡 · ' + LONG, titleI18n: { ko: '12월의 곡 · ' + LONG, en: 'Picks of December' },
+              descriptionI18n: { ko: '연말 분위기의 네오소울 곡 다섯 개. 구간을 반복하며 리듬 기타 보이싱을 익혀요.' }, itemCount: 5,
+            }),
+            items: [1, 2, 3, 4, 5].map((n, i) => ({
+              videoId: 'abcdefghij' + n, position: i, title: `${n} · ${LONG}`, artist: 'Channel With A Long Name', a: 12, b: 48, rate: 0.75,
+              noteI18n: { ko: '인트로 리프를 0.75배로 반복해요.' },
+            })),
+          },
+          {
+            folder: OPS_FOLDER({ id: '00000000-0000-4000-8000-000000000302', kind: 'curated', title: '재즈 입문 · ' + LONG, titleI18n: { ko: '재즈 입문 · ' + LONG }, sortOrder: 1, itemCount: 0 }),
+            items: [],
+          },
+        ],
+      }),
+    }),
+];
+const USER_OWNER_DATA = { ...STATES.user, me: { role: 'owner' }, routes: [OWNER_FOLDERS_ROUTE] };
+const SETTINGS_STATES = {
+  guest: STATES.guest,
+  user: STATES.user,
+  userPro: USER_PRO,
+  userGrace: USER_GRACE,
+  userOwner: USER_OWNER,
+  userOwnerData: USER_OWNER_DATA,
+};
 
 async function settingsReady(page, state) {
   if (state === 'guest') await page.locator('#accGuest').waitFor();
@@ -74,12 +116,17 @@ async function settingsReady(page, state) {
     await page.locator('#opsSearch').click();
     await page.locator('#opsCreatorForm').waitFor();
   }
+  if (state === 'userOwnerData') {
+    await page.locator('#hOps').click();
+    await page.locator('.opsFolderRow .opsFolderPick').first().click();
+    await expect(page.locator('.opsItem')).toHaveCount(5);
+  }
 }
 
 layoutSuite({
   name: 'settings',
   path: '/settings.html',
-  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }, { name: 'userOwner', mock: USER_OWNER }],
+  states: ['guest', 'user', { name: 'userPro', mock: USER_PRO }, { name: 'userGrace', mock: USER_GRACE }, { name: 'userOwner', mock: USER_OWNER }, { name: 'userOwnerData', mock: USER_OWNER_DATA }],
   ready: settingsReady,
   dark: 'userPro',
 });
@@ -184,7 +231,7 @@ function collectWrappedPills() {
   return out;
 }
 
-for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner']) {
+for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner', 'userOwnerData']) {
   for (const width of [390, 768, 1280]) {
     test(`FT settings ${state} ${width}px 버튼·필 글자 한 줄(고급 설정 펼침 포함)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -221,14 +268,14 @@ for (const width of WIDTHS) {
   });
 }
 
-// M2-4a: 운영 섹션(펼침·크리에이터 폼)도 설정 간격 스케일 6·12·16
-for (const width of WIDTHS) {
-  test(`FT settings userOwner ${width}px 운영 섹션 간격 스케일·일정함`, async ({ page }) => {
+// M2-4a·M2-4b: 운영 섹션(펼침·크리에이터 폼·폴더 편집)도 설정 간격 스케일 6·12·16
+for (const [state, width] of ['userOwner', 'userOwnerData'].flatMap((st) => WIDTHS.map((w) => [st, w]))) {
+  test(`FT settings ${state} ${width}px 운영 섹션 간격 스케일·일정함`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await mockApp(page, USER_OWNER);
+    await mockApp(page, SETTINGS_STATES[state]);
     await page.goto('/settings.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
-    await settingsReady(page, 'userOwner');
+    await settingsReady(page, state);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
