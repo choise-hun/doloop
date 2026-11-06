@@ -2,6 +2,8 @@
 // 서버는 `<코드>: 문장 (HTTP n). — Google 문구` 형식으로 저장한다. 코드가 없으면 문장을 그대로 보여 준다.
 // M1-3b부터 Gemini는 서버 키라 키·결제 오류는 사용자가 고칠 수 없다(결과/M1-3b_크레딧서버.md B10). 실패 작업의 예약 크레딧은 전액 돌아간다.
 
+import { t, type I18nKey } from './i18n.mts';
+
 export type JobErrorCode =
   | 'GEMINI_BILLING'
   | 'GEMINI_RATE_LIMIT'
@@ -21,31 +23,14 @@ export interface JobErrorView {
   detail: string;
 }
 
-const KNOWN: Record<Exclude<JobErrorCode, 'UNKNOWN'>, { title: string; hint: string }> = {
-  GEMINI_BILLING: {
-    title: '서비스 점검',
-    hint: '서버의 AI 사용 한도에 문제가 생겼어요. 크레딧은 돌려드렸어요. 잠시 뒤 다시 시도하고, 계속되면 운영자에게 알려 주세요.',
-  },
-  GEMINI_RATE_LIMIT: {
-    title: '요청 몰림',
-    hint: '분석 요청이 몰렸어요. 크레딧은 돌려드렸어요. 잠시 뒤 다시 시도해 주세요.',
-  },
-  GEMINI_OVERLOADED: {
-    title: 'AI 일시 장애',
-    hint: 'Google 쪽 서버가 붐벼 응답하지 못했어요. 크레딧은 돌려드렸어요. 잠시 뒤 다시 시도해 주세요.',
-  },
-  PROVIDER_KEY_INVALID: {
-    title: '서비스 점검',
-    hint: '서버의 AI 연결에 문제가 생겼어요. 크레딧은 돌려드렸어요. 잠시 뒤 다시 시도하고, 계속되면 운영자에게 알려 주세요.',
-  },
-  GEMINI_API_ERROR: {
-    title: '분석 실패',
-    hint: '영상이 비공개·삭제됐거나 AI가 요청을 거절했어요. 크레딧은 돌려드렸어요.',
-  },
-  GEMINI_MAX_TOKENS: {
-    title: '분석량 초과',
-    hint: '영상 내용이 많아 결과가 잘렸어요. 크레딧은 돌려드렸어요. 구간을 줄여 다시 시도해 주세요.',
-  },
+// 문구는 i18n/ko.mts. 여기는 키만(호출 시점 언어로 t() — L0 §1 D5)
+const KNOWN: Record<Exclude<JobErrorCode, 'UNKNOWN'>, { title: I18nKey; hint: I18nKey }> = {
+  GEMINI_BILLING: { title: 'job.billing.title', hint: 'job.billing.hint' },
+  GEMINI_RATE_LIMIT: { title: 'job.rateLimit.title', hint: 'job.rateLimit.hint' },
+  GEMINI_OVERLOADED: { title: 'job.overloaded.title', hint: 'job.overloaded.hint' },
+  PROVIDER_KEY_INVALID: { title: 'job.keyInvalid.title', hint: 'job.keyInvalid.hint' },
+  GEMINI_API_ERROR: { title: 'job.apiError.title', hint: 'job.apiError.hint' },
+  GEMINI_MAX_TOKENS: { title: 'job.maxTokens.title', hint: 'job.maxTokens.hint' },
 };
 
 const PREFIX = /^([A-Z][A-Z_]+):\s*/;
@@ -55,22 +40,24 @@ export function describeJobError(error: unknown): JobErrorView {
   const m = PREFIX.exec(raw);
   const code = m && m[1] in KNOWN ? (m[1] as Exclude<JobErrorCode, 'UNKNOWN'>) : null;
   if (code) {
-    return { code, ...KNOWN[code], detail: raw.slice(m![0].length) };
+    const k = KNOWN[code];
+    return { code, title: t(k.title), hint: t(k.hint), detail: raw.slice(m![0].length) };
   }
   return {
     code: 'UNKNOWN',
-    title: '분석 실패',
-    hint: raw || '원인을 알 수 없어요. 잠시 뒤 다시 시도해 주세요.',
+    title: t('job.unknown.title'),
+    hint: raw || t('job.unknown.hint'),
     detail: raw,
   };
 }
 
-const TIER_LABEL: Record<string, string> = { free: '무료', pro: 'Pro', pro_plus: 'Pro+' };
+const TIER_KEY: Record<string, I18nKey> = { free: 'tier.free', pro: 'tier.pro', pro_plus: 'tier.proPlus' };
 
 /** 티어 코드 → 화면 이름(free·pro·pro_plus). 모르는 값은 그대로 */
 export function tierLabel(tier: unknown): string {
-  const t = typeof tier === 'string' ? tier : '';
-  return TIER_LABEL[t] || t;
+  const v = typeof tier === 'string' ? tier : '';
+  const key = Object.prototype.hasOwnProperty.call(TIER_KEY, v) ? TIER_KEY[v] : null;
+  return key ? t(key) : v;
 }
 
 /**
@@ -83,18 +70,18 @@ export function describeAnalyzeRequestError(err: unknown): string {
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   switch (e.code) {
     case 'TIER_UPGRADE_REQUIRED':
-      return `AI 영상 분석은 ${tierLabel(detail.nextTier) || 'Pro'} 플랜부터 쓸 수 있어요.`;
+      return t('analyze.tierRequired', { tier: tierLabel(detail.nextTier) || t('tier.pro') });
     case 'INSUFFICIENT_CREDITS': {
       const required = num(detail.required);
       const balance = num(detail.balance);
-      const nums = required !== null && balance !== null ? ` (필요 ${required} · 남은 ${balance})` : '';
-      return `크레딧이 부족해요${nums}. 구간을 줄이거나 다음 지급 뒤에 다시 시도해 주세요.`;
+      const nums = required !== null && balance !== null ? t('analyze.creditNums', { required, balance }) : '';
+      return t('analyze.insufficientCredits', { nums });
     }
     case 'GEMINI_UNAVAILABLE':
-      return 'AI 분석을 잠시 쓸 수 없어요. 잠시 뒤 다시 시도해 주세요.';
+      return t('analyze.unavailable');
     case 'VIDEO_NOT_FOUND':
-      return '영상을 찾을 수 없어요. 공개 또는 일부 공개 영상인지 확인해 주세요.';
+      return t('analyze.videoNotFound');
     default:
-      return typeof e.message === 'string' && e.message.trim() ? e.message : '요청 실패';
+      return typeof e.message === 'string' && e.message.trim() ? e.message : t('analyze.requestFailed');
   }
 }

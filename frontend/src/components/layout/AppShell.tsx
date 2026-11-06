@@ -2,17 +2,18 @@ import React, { useEffect, useState } from 'react';
 import styles from './AppShell.module.css';
 import { useAuth, auth } from '../../lib/auth';
 import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
+import { t, type I18nKey } from '../../lib/i18n.mts';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'chords' | 'notes' | 'settings' | 'privacy';
 
 // 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
-const MAIN_NAV: Array<{ key: ActiveNavKey; label: string; href: string | null }> = [
-  { key: 'learn', label: 'LEARN', href: 'chords.html' },
-  { key: 'play', label: 'PLAY', href: 'practice.html' },
-  { key: 'trails', label: 'TRAILS', href: 'log.html' },
-  { key: 'chords', label: 'CHORDS', href: 'progressions.html' },
-  { key: 'notes', label: 'NOTES', href: 'notes.html' },
+const MAIN_NAV: Array<{ key: ActiveNavKey; labelKey: I18nKey; href: string | null }> = [
+  { key: 'learn', labelKey: 'nav.learn', href: 'chords.html' },
+  { key: 'play', labelKey: 'nav.play', href: 'practice.html' },
+  { key: 'trails', labelKey: 'nav.trails', href: 'log.html' },
+  { key: 'chords', labelKey: 'nav.chords', href: 'progressions.html' },
+  { key: 'notes', labelKey: 'nav.notes', href: 'notes.html' },
 ];
 
 export interface AppShellProps {
@@ -37,10 +38,10 @@ export function AppShell({
   }, []);
 
   const signedInUser = authState.user;
-  const navLabel = signedInUser ? auth.computeInitial(signedInUser, authState.me) : 'LOGIN';
+  const navLabel = signedInUser ? auth.computeInitial(signedInUser, authState.me) : t('nav.login');
   const navAriaLabel = signedInUser
-    ? `계정 설정 (${signedInUser.email || navLabel})`
-    : 'Google 계정으로 로그인';
+    ? t('nav.accountAria', { who: signedInUser.email || navLabel })
+    : t('nav.loginAria');
   const embedded = auth.isEmbedded();
 
   const handleAuthClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -71,14 +72,14 @@ export function AppShell({
 
   return (
     <div className={shellClass} data-shell-variant={variant}>
-      <nav className={`site-nav ${styles.siteNav}`} aria-label="사이트">
+      <nav className={`site-nav ${styles.siteNav}`} aria-label={t('nav.ariaSite')}>
         <span className={styles.navMain}>
           <a
             href="./"
             className={styles.brandLink}
             aria-current={activeNav === 'home' ? 'page' : undefined}
           >
-            ⌂ HOME
+            {t('nav.home')}
           </a>
           {MAIN_NAV.map((item) =>
             item.href ? (
@@ -88,16 +89,16 @@ export function AppShell({
                 className={`${styles.navItem} ${styles.navMainItem}`}
                 aria-current={activeNav === item.key ? 'page' : undefined}
               >
-                {item.label}
+                {t(item.labelKey)}
               </a>
             ) : (
               <span
                 key={item.key}
                 className={`${styles.navItem} ${styles.navItemDisabled} ${styles.navMainItem}`}
                 aria-disabled="true"
-                title="준비 중"
+                title={t('nav.disabledTitle')}
               >
-                {item.label}
+                {t(item.labelKey)}
               </span>
             )
           )}
@@ -108,7 +109,7 @@ export function AppShell({
             className={styles.navItem}
             aria-current={activeNav === 'settings' ? 'page' : undefined}
           >
-            SETTING
+            {t('nav.settings')}
           </a>
           <a
             href="settings.html#account"
@@ -126,7 +127,7 @@ export function AppShell({
         </span>
       </nav>
       <main className={mainClass}>{children}</main>
-      <nav className={styles.tabBar} aria-label="주요 메뉴" data-tabbar="1">
+      <nav className={styles.tabBar} aria-label={t('nav.ariaTabs')} data-tabbar="1">
         {MAIN_NAV.map((item) =>
           item.href ? (
             <a
@@ -136,7 +137,7 @@ export function AppShell({
               data-align-group="tabs:top,bottom,height"
               aria-current={activeNav === item.key ? 'page' : undefined}
             >
-              {item.label}
+              {t(item.labelKey)}
             </a>
           ) : (
             <span
@@ -144,16 +145,16 @@ export function AppShell({
               className={`${styles.tabItem} ${styles.tabItemDisabled}`}
               data-align-group="tabs:top,bottom,height"
               aria-disabled="true"
-              title="준비 중"
+              title={t('nav.disabledTitle')}
             >
-              {item.label}
+              {t(item.labelKey)}
             </span>
           )
         )}
       </nav>
       {showThemeToggle && (
         <footer className={styles.siteFoot}>
-          <span className={styles.themeGroup} role="group" aria-label="화면 모드">
+          <span className={styles.themeGroup} role="group" aria-label={t('theme.group')}>
             <button
               type="button"
               id="theme-light"
@@ -161,7 +162,7 @@ export function AppShell({
               aria-pressed={theme === 'light'}
               onClick={() => handleThemePick('light')}
             >
-              라이트
+              {t('theme.light')}
             </button>
             <button
               type="button"
@@ -170,7 +171,7 @@ export function AppShell({
               aria-pressed={theme === 'dark'}
               onClick={() => handleThemePick('dark')}
             >
-              다크
+              {t('theme.dark')}
             </button>
           </span>
         </footer>
