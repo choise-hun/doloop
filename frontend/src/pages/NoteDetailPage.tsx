@@ -7,6 +7,8 @@ import { auth, useAuth } from '../lib/auth';
 import { apiClient, NoteDetailDto } from '../lib/apiClient';
 import { safeUrl } from '../lib/security';
 import { NOTE_FORM_TAGS } from './NotesPage';
+import { t } from '../lib/i18n.mts';
+import { buildNoteMarkdown, notePracticeHref } from '../lib/noteMarkdown.mts';
 import styles from './NoteDetailPage.module.css';
 
 export function parseTimestampSec(ts: unknown): number | null {
@@ -27,7 +29,7 @@ function TimestampCell({ ts, videoId }: { ts?: string; videoId?: string }): Reac
   if (sec !== null && videoId) {
     return (
       <td>
-        <SafeLink href={`practice.html?v=${encodeURIComponent(videoId)}&t=${encodeURIComponent(String(sec))}`}>
+        <SafeLink href={notePracticeHref(videoId, sec)}>
           {ts}
         </SafeLink>
       </td>
@@ -51,6 +53,53 @@ export function NoteDetailPage(): React.ReactElement {
   const [editMsg, setEditMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
 
   const detailReqSeqRef = useRef(0);
+
+  // M2-1d: 마크다운 복사 상태
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyMsg, setCopyMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
+  const copySeqRef = useRef(0);
+  const copyTimerRef = useRef<number | null>(null);
+  const noteIdRef = useRef<string | null>(null);
+
+  const clearCopyTimer = () => {
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => clearCopyTimer();
+  }, []);
+
+  const copyMarkdown = async () => {
+    if (!note || copyBusy) return;
+    const mySeq = ++copySeqRef.current; // 이 클릭의 번호
+    const myUid = activeUid;
+    const myNoteId = note.id;
+    const text = buildNoteMarkdown(note, window.location.origin); // await 전에 스냅샷
+    clearCopyTimer();
+    setCopyBusy(true);
+    let ok = false;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      ok = false; // 문구로 알린다
+    } finally {
+      // 늦은 결과: 다른 클릭·노트 재로딩·계정 전환이 끼었으면 아무것도 세우지 않는다
+      const stale =
+        copySeqRef.current !== mySeq ||
+        auth.getUser()?.id !== myUid ||
+        noteIdRef.current !== myNoteId; // noteIdRef = setNote 때 같이 갱신
+      if (!stale) {
+        setCopyBusy(false);
+        setCopyMsg(ok ? { text: t('note.copyMdDone'), kind: 'ok' } : { text: t('note.copyMdFail'), kind: 'err' });
+        if (ok) copyTimerRef.current = window.setTimeout(() => setCopyMsg({ text: '', kind: '' }), 2500);
+      }
+    }
+  };
 
   // CH-5: "코드 진행 수집에 넣기" 토글 (PUT /notes/{id}/collect). count = 이 노트에서 온 진행 수(null = 모름)
   const [collectOn, setCollectOn] = useState(false);
@@ -107,6 +156,11 @@ export function NoteDetailPage(): React.ReactElement {
   };
 
   const clearState = (msg: string) => {
+    ++copySeqRef.current;
+    clearCopyTimer();
+    setCopyBusy(false);
+    setCopyMsg({ text: '', kind: '' });
+    noteIdRef.current = null;
     setNote(null);
     setCollectOn(false);
     setCollectCount(null);
@@ -143,6 +197,7 @@ export function NoteDetailPage(): React.ReactElement {
           clearState('학습 노트를 찾을 수 없어요.');
           return;
         }
+        noteIdRef.current = res.id;
         setNote(res);
         setCollectOn(Boolean(res.collectProgressions));
         if (res.collectProgressions) void loadCollectCount(res.id, myUid);
@@ -193,15 +248,63 @@ export function NoteDetailPage(): React.ReactElement {
               ))}
             </span>
           </div>
-          <div className={`row note-actions ${styles.noteActions}`}>
+          <div
+            id="noteActionBar"
+            className={`row ${styles.noteActionBar}`}
+            role="group"
+            aria-label={t('note.actionsAria')}
+          >
             <SafeLink
               id="notePracticeLink"
               className="pillBtn"
-              href={note?.videoId ? `practice.html?v=${encodeURIComponent(note.videoId)}` : 'practice.html'}
+              href={note?.videoId ? notePracticeHref(note.videoId) : 'practice.html'}
               hidden={!note?.videoId}
+              data-align-group="noteActions:center-y@481"
             >
-              ▶ 플레이어에서 연습
+              {t('note.openPlayer')}
             </SafeLink>
+            <button
+              id="btnCopyMarkdown"
+              className="ghostBtn"
+              type="button"
+              disabled={copyBusy}
+              onClick={() => void copyMarkdown()}
+              data-align-group="noteActions:center-y@481"
+            >
+              {t('note.copyMd')}
+            </button>
+            <label
+              className={styles.collectPill}
+              data-on={collectOn ? 'true' : 'false'}
+              title="켜면 이 노트의 화성 진행이 CHORDS 코드 진행 모음(분석)에 들어가요."
+              data-align-group="noteActions:center-y@481"
+            >
+              <input
+                type="checkbox"
+                id="noteCollectToggle"
+                checked={collectOn}
+                disabled={collectBusy}
+                onChange={(e) => void toggleCollect(e.target.checked)}
+              />
+              <span>코드 진행 수집에 넣기</span>
+            </label>
+          </div>
+
+          <div id="noteActionStatus" className={styles.actionStatus}>
+            {collectOn && (
+              <SafeLink id="noteCollectLink" href="progressions.html?scope=analysis">
+                CHORDS에서 보기{collectCount !== null ? ` (${collectCount}개)` : ''} →
+              </SafeLink>
+            )}
+            <p className={`msg${collectMsg.kind ? ' ' + collectMsg.kind : ''}`} id="noteCollectMsg" role="status">
+              {collectMsg.text}
+            </p>
+            <p className={`msg${copyMsg.kind ? ' ' + copyMsg.kind : ''}`} id="noteCopyMsg" role="status">
+              {copyMsg.text}
+            </p>
+          </div>
+
+          <div id="noteSubActions" className={styles.subActions}>
             <SafeLink
               id="noteYoutubeLink"
               className="ghostBtn"
@@ -229,28 +332,6 @@ export function NoteDetailPage(): React.ReactElement {
               노트 삭제
             </button>
           </div>
-        </div>
-
-        <div className={`card ${styles.card} ${styles.collectBox}`} id="noteCollectBox">
-          <label className={styles.collectLabel}>
-            <input
-              type="checkbox"
-              id="noteCollectToggle"
-              checked={collectOn}
-              disabled={collectBusy}
-              onChange={(e) => void toggleCollect(e.target.checked)}
-            />
-            <span>코드 진행 수집에 넣기</span>
-          </label>
-          <span className="hint">켜면 이 노트의 화성 진행이 CHORDS 코드 진행 모음(분석)에 들어가요.</span>
-          {collectOn && (
-            <SafeLink id="noteCollectLink" href="progressions.html?scope=analysis">
-              CHORDS에서 보기{collectCount !== null ? ` (${collectCount}개)` : ''} →
-            </SafeLink>
-          )}
-          <p className={`msg${collectMsg.kind ? ' ' + collectMsg.kind : ''}`} id="noteCollectMsg" role="status">
-            {collectMsg.text}
-          </p>
         </div>
 
         <div className={`card summary-box ${styles.summaryBox}`} id="noteSummaryBox">
@@ -374,7 +455,7 @@ export function NoteDetailPage(): React.ReactElement {
                     {sec !== null && note?.videoId ? (
                       <SafeLink
                         className={`badge ${styles.badge}`}
-                        href={`practice.html?v=${encodeURIComponent(note.videoId)}&t=${encodeURIComponent(String(sec))}`}
+                        href={notePracticeHref(note.videoId, sec)}
                       >
                         {m.timestamp}
                       </SafeLink>

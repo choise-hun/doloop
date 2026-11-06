@@ -62,4 +62,17 @@ export const KO = {
   'notes.job.queuedHint': '곧 시작해요. 이 화면을 닫아도 분석은 계속돼요.',
   'notes.job.runningHint': '영상을 보고 노트를 정리하는 중이에요. 보통 1~3분 걸려요.',
   'notes.job.slowHint': '평소보다 오래 걸리고 있어요. 이 화면을 닫아도 분석은 계속돼요.',
+  // NoteDetailPage — M2-1d
+  'note.openPlayer': '▶ 이 영상 플레이어로 열기',
+  'note.copyMd': '마크다운 복사',
+  'note.copyMdDone': '마크다운을 복사했어요.',
+  'note.copyMdFail': '복사하지 못했어요. 브라우저가 클립보드 사용을 막았어요.',
+  'note.actionsAria': '노트 동작',
+  'note.md.untitled': '(제목 없음)',
+  'note.md.summary': '핵심 요약',
+  'note.md.keywords': '키워드',
+  'note.md.harmony': '화성',
+  'note.md.moments': '주요 구간',
+  'note.md.practice': '연습 과제',
+  'note.md.memo': '메모',
 } as const;
