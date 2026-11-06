@@ -50,6 +50,7 @@
 - **로그인:** 브라우저 `public/auth.js`가 supabase-js `signInWithOAuth({ provider: 'google', options: { redirectTo: <원래 페이지> } })`를 호출합니다. 토큰 발급·갱신(refresh)·저장은 supabase-js가 하며, `createClient` 옵션 `auth.storageKey = 'ulp:auth'`로 저장 키를 `ulp:` 규칙에 맞춥니다.
 - **로그아웃:** `supabase.auth.signOut()` 후 `ulp:keys`를 지웁니다(`FR-AUTH-1`).
 - **첫 로그인 프로필 생성(`FR-AUTH-2`):** 별도 가입 API 없이, 인증된 첫 요청에서 서버가 `users`(`id = sub`, `email`)와 `profiles`를 `INSERT ... ON CONFLICT (id) DO NOTHING`으로 만듭니다. 이메일이 바뀌었으면 `users.email`만 갱신합니다.
+  - **첫 언어(L1-1):** 프로필을 새로 만드는 그 요청의 `Accept-Language`에서 q 순으로 첫 지원 언어(`ko`·`en`·`ja`, `ko-KR`은 `ko`)를 `profiles.locale`에 넣습니다. 없으면 `null`(화면 자동). 이미 있는 프로필의 `locale`은 헤더로 바꾸지 않습니다
 
 ### 2.2 내 프로필 및 사용량 조회
 - **`GET /api/v1/me`**
@@ -85,6 +86,7 @@
   "migratedLocalAt": "2026-10-30T09:30:00Z"
 }
 ```
+- **`locale`(L1-1):** `"ko"`·`"en"`·`"ja"` 또는 `null`(자동 — 화면이 고르고, 서버 AI 노트는 `ko`). 그 밖의 값(`"fr"`, `""`, `"KO"`, `"ko-KR"`, 숫자 등)은 `400 INVALID_INPUT`. 응답 `MeResponseDto.locale`에 그대로 나옵니다. 서버가 언어를 쓰는 곳은 AI 노트 Gemini 프롬프트뿐이며(`ko`·`null`은 기존 프롬프트 그대로, `en`·`ja`는 끝에 언어 지시 — enum `difficulty`·`instrument`·`source`와 key 형식은 번역하지 않음), API 응답 문구·코드값은 언어와 무관합니다(`계획/상용_서비스_계획.md` §3-4)
 
 ### 2.4 계정 탈퇴 (전체 삭제)
 - **`DELETE /api/v1/me`**
