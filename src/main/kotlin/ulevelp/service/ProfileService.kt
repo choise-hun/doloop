@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import ulevelp.api.*
@@ -53,7 +55,11 @@ data class MeResponseDto(
     val creatorBadge: String? = null,
     val creatorBio: String,
     val shareAutosync: Boolean,
-    val sharePracticeLog: Boolean
+    val sharePracticeLog: Boolean,
+    // 커뮤니티 이름(N2, M1-4a) — 커뮤니티 처음 쓸 때 직접 정함. null = 아직 안 정함
+    val publicName: String? = null,
+    // 다음에 이름을 바꿀 수 있는 시각(7일에 한 번). null = 지금 바로 된다
+    val publicNameNextChangeAt: String? = null
 )
 
 class ProfileService(private val db: Database?) {
@@ -210,7 +216,28 @@ class ProfileService(private val db: Database?) {
             null
         }
 
+        // 설정 "연습 리스트 공유 자동 연동"(M1-1 §4). 켜기는 유료만, 끄면 모든 폴더 auto_sync=false(마지막 공개본은 남음)
+        val hasShareAutosync = body.containsKey("shareAutosync")
+        val newShareAutosync: Boolean? = if (hasShareAutosync) {
+            val elem = body["shareAutosync"]
+            if (elem !is JsonPrimitive || elem.isString || elem.booleanOrNull == null) {
+                throw InvalidInputException("shareAutosync는 불리언이어야 합니다.")
+            }
+            elem.boolean
+        } else {
+            null
+        }
+
         return DatabaseFactory.dbQuery(database) {
+            if (newShareAutosync == true) {
+                requireCommunityWrite(tierContext(userId))
+            }
+            if (newShareAutosync == false) {
+                SharedFoldersTable.update({ SharedFoldersTable.ownerId eq userId }) {
+                    it[autoSync] = false
+                }
+            }
+
             if (newStorageProvider == "drive") {
                 requireDrive(tierContext(userId)) // 무료는 Drive 불가(M1-1 §5-1)
                 val notionSyncEnabled = NotionSyncTable
@@ -225,8 +252,11 @@ class ProfileService(private val db: Database?) {
                 }
             }
 
-            if (hasDisplayName || hasStorageProvider || hasDriveFolderId || hasMigratedLocalAt) {
+            if (hasDisplayName || hasStorageProvider || hasDriveFolderId || hasMigratedLocalAt || newShareAutosync != null) {
                 ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                    if (newShareAutosync != null) {
+                        it[shareAutosync] = newShareAutosync
+                    }
                     if (hasDisplayName && newDisplayName != null) {
                         it[displayName] = newDisplayName
                     }
@@ -385,7 +415,11 @@ class ProfileService(private val db: Database?) {
             creatorBadge = row[ProfilesTable.creatorBadge],
             creatorBio = row[ProfilesTable.creatorBio],
             shareAutosync = row[ProfilesTable.shareAutosync],
-            sharePracticeLog = row[ProfilesTable.sharePracticeLog]
+            sharePracticeLog = row[ProfilesTable.sharePracticeLog],
+            publicName = row[ProfilesTable.publicName],
+            publicNameNextChangeAt = nextPublicNameChangeAt(
+                row[ProfilesTable.publicName], row[ProfilesTable.publicNameChangedAt], OffsetDateTime.now(ZoneOffset.UTC)
+            )?.let { formatTimestamp(it) }
         )
     }
 }

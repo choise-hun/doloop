@@ -305,6 +305,7 @@ class TakeService(
                         it[lastDate] = input.date
                         it[updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
                     }
+                    SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 순서(마지막 연습일)
                 }
 
                 // 8) ensureSession

@@ -91,6 +91,8 @@ class PracticeService(private val db: Database?) {
                 }
                 it[lastDate] = newLast
             }
+            // 자동 연동(M1-4a): 구간·배속·순서(마지막 연습일)가 공개본에 반영된다
+            SharedFolderSync.resyncCategories(this, userId, null)
 
             // 3. 추가 초/루프가 0이면 곡만 갱신하고 종료
             if (input.addSeconds == 0 && input.addLoops == 0) {

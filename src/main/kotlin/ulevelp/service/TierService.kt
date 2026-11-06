@@ -259,12 +259,23 @@ fun requireDrive(ctx: TierContext) {
  * 다운그레이드 정리 (§1-3). 실제 티어가 유료 → free가 된 그 트랜잭션에서 부른다.
  * - 학습 기록 공유 끄기(A8)
  * - 저장소를 서버로 되돌림 — Drive 녹음은 재생 유지, 새 업로드는 무료 한도의 서버 저장으로 받는다
- * TODO(stub): M1-4에서 그 사용자의 shared_folders(kind='user')를 is_public=false, auto_sync=false로
+ * - 공개 폴더 비공개 + 자동 연동 정지(Q8, M1-4a). 행·좋아요는 남고, 재구독 뒤 "다시 게시"로 되살린다
  */
 fun Transaction.downgradeCleanup(userId: UUID) {
     ProfilesTable.update({ ProfilesTable.id eq userId }) {
         it[sharePracticeLog] = false
         it[storageProvider] = "supabase"
+    }
+    SharedFoldersTable.update({ (SharedFoldersTable.ownerId eq userId) and (SharedFoldersTable.kind eq SharedFolderSync.KIND_USER) }) {
+        it[isPublic] = false
+        it[autoSync] = false
+    }
+}
+
+/** 커뮤니티 쓰기(폴더 공개·다시 게시·통째 복제·자동 연동 켜기)는 유료(Q10). 무료 403 `TIER_UPGRADE_REQUIRED` */
+fun requireCommunityWrite(ctx: TierContext) {
+    if (!ctx.limits.communityWrite) {
+        throw tierUpgradeRequired("community", ctx.tier, "커뮤니티 공개·복제는 유료 플랜에서 쓸 수 있습니다.")
     }
 }
 

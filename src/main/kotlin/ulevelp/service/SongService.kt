@@ -169,13 +169,7 @@ class SongService(
 
             val categoryIdsMap = categoryIdsBySong(userId)
 
-            val statusOrder = mapOf("practicing" to 0, "paused" to 1, "done" to 2)
-
-            songRows.sortedWith(
-                compareBy<ResultRow> { statusOrder[it[SongsTable.status]] ?: 99 }
-                    .thenBy(Comparator.nullsLast(Comparator.reverseOrder())) { it[SongsTable.lastDate] }
-                    .thenByDescending { it[SongsTable.updatedAt] }
-            ).map { row ->
+            songRows.sortedWith(LIST_ORDER).map { row ->
                 val songId = row[SongsTable.id]
                 val totalSec = totalSecondsMap[songId] ?: 0L
                 rowToDto(row, totalSec, categoryIdsMap[songId].orEmpty())
@@ -317,6 +311,8 @@ class SongService(
             if (songFieldsChanged) {
                 OutboxRepository.enqueueIfSyncEnabled(userId, "song", songId, "upsert")
             }
+            // 자동 연동(M1-4a): 분류 소속·상태(순서)가 바뀌었을 수 있다
+            SharedFolderSync.resyncCategories(this, userId, null)
 
             loadSongDto(userId = userId, songId = songId)
                 ?: throw NotFoundException("곡을 찾을 수 없습니다.")
@@ -357,6 +353,7 @@ class SongService(
             }
 
             SongsTable.deleteWhere { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+            SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 지운 곡을 공개본에서도 뺀다
 
             trashIds
         }
@@ -509,6 +506,14 @@ class SongService(
 
     companion object {
         const val UNTITLED = "(제목 없음)"
+
+        private val STATUS_ORDER = mapOf("practicing" to 0, "paused" to 1, "done" to 2)
+
+        /** 곡 목록 순서: 상태(연습 중·보류·완료) → 마지막 연습일 최근 → 수정 최근. 공개본 항목 순서도 이것(M1-1 §4) */
+        val LIST_ORDER: Comparator<ResultRow> =
+            compareBy<ResultRow> { STATUS_ORDER[it[SongsTable.status]] ?: 99 }
+                .thenBy(Comparator.nullsLast(Comparator.reverseOrder())) { it[SongsTable.lastDate] }
+                .thenByDescending { it[SongsTable.updatedAt] }
         val VIDEO_ID_REGEX = Regex("^[A-Za-z0-9_-]{11}$")
         val STATUS_LABELS: Map<String, String> = mapOf(
             "practicing" to "연습 중",

@@ -58,6 +58,43 @@ data class AdminAuditDto(
 @Serializable
 data class AdminAuditListResponse(val rows: List<AdminAuditDto>)
 
+// ---- 커뮤니티 관리 (M1-4a) ----
+
+@Serializable
+data class AdminReportDto(
+    val id: Long,
+    val folderId: String,
+    val folderTitle: String,
+    val folderHidden: Boolean,
+    val ownerId: String?,
+    val ownerPublicName: String?,
+    val reporterId: String,
+    val reason: String,
+    val detail: String,
+    val status: String,
+    val createdAt: String,
+    val resolvedAt: String?
+)
+
+@Serializable
+data class AdminReportListResponse(val rows: List<AdminReportDto>)
+
+@Serializable
+data class AdminSharedFolderDto(
+    val id: String,
+    val kind: String,
+    val ownerId: String?,
+    val title: String,
+    val isPublic: Boolean,
+    val autoSync: Boolean,
+    val hidden: Boolean,
+    val hiddenAt: String?,
+    val hiddenReason: String?
+)
+
+@Serializable
+data class AdminPublicNameResponse(val userId: String, val publicName: String?)
+
 /**
  * owner 관리 API (개발산출물/결과/M1-1_스키마설계.md §5-2). 모든 쓰기는 같은 트랜잭션에서 admin_audit 한 행.
  * role은 DB profiles.role에서만 읽는다(JWT user_metadata 금지) — 확인은 AdminRoutes의 route 한 곳
@@ -71,6 +108,8 @@ class AdminService(private val db: Database?) {
         const val MAX_BIO_LENGTH = 200
         const val MAX_AUDIT_LIMIT = 200
         val BUCKETS = setOf("purchased", "monthly")
+        val REPORT_STATUSES = setOf("open", "resolved", "dismissed")
+        val REPORT_RESOLUTIONS = setOf("resolved", "dismissed")
 
         private fun ts(dt: OffsetDateTime): String = DateTimeFormatter.ISO_INSTANT.format(dt.toInstant())
     }
@@ -285,6 +324,131 @@ class AdminService(private val db: Database?) {
             toDto(afterRow)
         }
     }
+
+    // ================= 커뮤니티 (M1-4a, §5-2 M1-4 줄) =================
+
+    private fun reportJson(row: ResultRow) = buildJsonObject {
+        put("status", row[FolderReportsTable.status])
+        put("resolvedAt", row[FolderReportsTable.resolvedAt]?.let { ts(it) })
+    }
+
+    private fun folderJson(row: ResultRow) = buildJsonObject {
+        put("hiddenAt", row[SharedFoldersTable.hiddenAt]?.let { ts(it) })
+        put("hiddenReason", row[SharedFoldersTable.hiddenReason])
+    }
+
+    private fun reportQuery() = FolderReportsTable
+        .join(SharedFoldersTable, JoinType.INNER, FolderReportsTable.folderId, SharedFoldersTable.id)
+        .join(ProfilesTable, JoinType.LEFT, SharedFoldersTable.ownerId, ProfilesTable.id)
+        .select(
+            FolderReportsTable.id, FolderReportsTable.folderId, FolderReportsTable.reporterId, FolderReportsTable.reason,
+            FolderReportsTable.detail, FolderReportsTable.status, FolderReportsTable.createdAt, FolderReportsTable.resolvedAt,
+            SharedFoldersTable.title, SharedFoldersTable.hiddenAt, SharedFoldersTable.ownerId, ProfilesTable.publicName
+        )
+
+    private fun toReportDto(row: ResultRow) = AdminReportDto(
+        id = row[FolderReportsTable.id],
+        folderId = row[FolderReportsTable.folderId].toString(),
+        folderTitle = row[SharedFoldersTable.title],
+        folderHidden = row[SharedFoldersTable.hiddenAt] != null,
+        ownerId = row[SharedFoldersTable.ownerId]?.toString(),
+        ownerPublicName = row.getOrNull(ProfilesTable.publicName),
+        reporterId = row[FolderReportsTable.reporterId].toString(),
+        reason = row[FolderReportsTable.reason],
+        detail = row[FolderReportsTable.detail],
+        status = row[FolderReportsTable.status],
+        createdAt = ts(row[FolderReportsTable.createdAt]),
+        resolvedAt = row[FolderReportsTable.resolvedAt]?.let { ts(it) }
+    )
+
+    /** `GET /admin/reports?status=&limit=` — 최근 순(기본 open) */
+    suspend fun listReports(status: String, limit: Int): AdminReportListResponse = DatabaseFactory.dbQuery(requireDb()) {
+        val rows = reportQuery()
+            .where { FolderReportsTable.status eq status }
+            .orderBy(FolderReportsTable.id to SortOrder.DESC)
+            .limit(limit)
+            .map { toReportDto(it) }
+        AdminReportListResponse(rows)
+    }
+
+    /** `PATCH /admin/reports/{id}` `{status: resolved|dismissed, reason}` — 열린 신고만(아니면 409) */
+    suspend fun resolveReport(actorId: UUID, reportId: Long, status: String, reason: String): AdminReportDto {
+        if (status !in REPORT_RESOLUTIONS) throw InvalidInputException("status는 resolved 또는 dismissed여야 합니다.")
+        return DatabaseFactory.dbQuery(requireDb()) {
+            val before = FolderReportsTable.selectAll().where { FolderReportsTable.id eq reportId }
+                .forUpdate(ForUpdateOption.ForUpdate)
+                .singleOrNull() ?: throw NotFoundException("신고를 찾을 수 없습니다.")
+            if (before[FolderReportsTable.status] != "open") throw ConflictException("이미 처리한 신고입니다.")
+            FolderReportsTable.update({ FolderReportsTable.id eq reportId }) {
+                it[FolderReportsTable.status] = status
+                it[resolvedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+            }
+            val after = FolderReportsTable.selectAll().where { FolderReportsTable.id eq reportId }.single()
+            val ownerId = SharedFoldersTable.select(SharedFoldersTable.ownerId)
+                .where { SharedFoldersTable.id eq before[FolderReportsTable.folderId] }
+                .singleOrNull()?.get(SharedFoldersTable.ownerId)
+            audit(actorId, "report_resolve", ownerId, reportJson(before), reportJson(after), reason, targetId = reportId.toString())
+            toReportDto(reportQuery().where { FolderReportsTable.id eq reportId }.single())
+        }
+    }
+
+    /**
+     * `PATCH /admin/shared-folders/{id}` — M1-4a는 `hidden`·`hiddenReason`만(user 폴더 포함).
+     * TODO(stub): M1-4b 운영자 폴더 titleI18n·descriptionI18n·isPublic·sortOrder
+     */
+    suspend fun setFolderHidden(actorId: UUID, folderId: UUID, hidden: Boolean, hiddenReason: String?, reason: String): AdminSharedFolderDto {
+        if (hiddenReason != null && hiddenReason.length > MAX_REASON_LENGTH) {
+            throw InvalidInputException("hiddenReason은 ${MAX_REASON_LENGTH}자 이하여야 합니다.")
+        }
+        return DatabaseFactory.dbQuery(requireDb()) {
+            val before = SharedFoldersTable.selectAll().where { SharedFoldersTable.id eq folderId }
+                .forUpdate(ForUpdateOption.ForUpdate)
+                .singleOrNull() ?: throw NotFoundException("폴더를 찾을 수 없습니다.")
+            SharedFoldersTable.update({ SharedFoldersTable.id eq folderId }) {
+                if (hidden) {
+                    it[hiddenAt] = before[SharedFoldersTable.hiddenAt] ?: OffsetDateTime.now(ZoneOffset.UTC)
+                    it[SharedFoldersTable.hiddenReason] = hiddenReason
+                } else {
+                    it[hiddenAt] = null
+                    it[SharedFoldersTable.hiddenReason] = null
+                }
+            }
+            val after = SharedFoldersTable.selectAll().where { SharedFoldersTable.id eq folderId }.single()
+            audit(
+                actorId, if (hidden) "folder_hide" else "folder_unhide", before[SharedFoldersTable.ownerId],
+                folderJson(before), folderJson(after), reason, targetId = folderId.toString()
+            )
+            AdminSharedFolderDto(
+                id = folderId.toString(),
+                kind = after[SharedFoldersTable.kind],
+                ownerId = after[SharedFoldersTable.ownerId]?.toString(),
+                title = after[SharedFoldersTable.title],
+                isPublic = after[SharedFoldersTable.isPublic],
+                autoSync = after[SharedFoldersTable.autoSync],
+                hidden = after[SharedFoldersTable.hiddenAt] != null,
+                hiddenAt = after[SharedFoldersTable.hiddenAt]?.let { ts(it) },
+                hiddenReason = after[SharedFoldersTable.hiddenReason]
+            )
+        }
+    }
+
+    /** `DELETE /admin/users/{userId}/public-name` `{reason}` — 커뮤니티 이름 NULL(N2). 사용자는 바로 새 이름을 정할 수 있다 */
+    suspend fun resetPublicName(actorId: UUID, userId: UUID, reason: String): AdminPublicNameResponse =
+        DatabaseFactory.dbQuery(requireDb()) {
+            val before = loadUserRow(userId, lock = true)
+            ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                it[publicName] = null
+                it[publicNameKey] = null
+                it[publicNameChangedAt] = null // 7일 제한도 풀어 바로 새 이름을 정할 수 있게
+            }
+            audit(
+                actorId, "public_name_reset", userId,
+                buildJsonObject { put("publicName", before[ProfilesTable.publicName]) },
+                buildJsonObject { put("publicName", null as String?) },
+                reason
+            )
+            AdminPublicNameResponse(userId.toString(), null)
+        }
 
     /** `GET /admin/audit?targetUserId=&limit=` — 최근 순 */
     suspend fun listAudit(targetUserId: UUID?, limit: Int): AdminAuditListResponse = DatabaseFactory.dbQuery(requireDb()) {

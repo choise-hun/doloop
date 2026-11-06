@@ -50,6 +50,10 @@ object ProfilesTable : Table("profiles") {
     val creatorBio = text("creator_bio").default("")
     val shareAutosync = bool("share_autosync").default(false)
     val sharePracticeLog = bool("share_practice_log").default(false)
+    // V8 커뮤니티 공개 이름(N2): 커뮤니티 처음 쓸 때 직접 정함, 7일에 한 번 변경. NULL = 아직 안 정함(또는 owner 초기화)
+    val publicName = text("public_name").nullable()
+    val publicNameKey = text("public_name_key").nullable()
+    val publicNameChangedAt = timestampWithTimeZone("public_name_changed_at").nullable()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
@@ -388,6 +392,89 @@ val ALL_TABLES: List<Table> = listOf(
     SongCategoriesTable,
     ProgressionsTable,
     CreditLedgerTable,
-    AdminAuditTable
+    AdminAuditTable,
+    VideoTitlesTable,
+    SharedFoldersTable,
+    SharedFolderItemsTable,
+    FollowsTable,
+    FolderLikesTable,
+    FolderReportsTable
 )
 
+
+/**
+ * V8 커뮤니티 (개발산출물/결과/M1-1_스키마설계.md §2-2 + N1~N3, `V8__community.sql`)
+ */
+object VideoTitlesTable : Table("video_titles") {
+    val videoId = text("video_id")
+    val title = text("title")
+    val author = text("author").default("")
+    val fetchedAt = timestampWithTimeZone("fetched_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(videoId)
+}
+
+object SharedFoldersTable : Table("shared_folders") {
+    val id = uuid("id").autoGenerate()
+    val kind = text("kind")
+    val ownerId = uuid("owner_id").nullable()
+    val sourceCategoryId = uuid("source_category_id").nullable()
+    val title = text("title")
+    val titleI18n = jsonb<JsonElement>("title_i18n", Json).default(JsonObject(emptyMap()))
+    val descriptionI18n = jsonb<JsonElement>("description_i18n", Json).default(JsonObject(emptyMap()))
+    val month = date("month").nullable()
+    val isPublic = bool("is_public").default(false)
+    val autoSync = bool("auto_sync").default(false)
+    val sortOrder = integer("sort_order").default(0)
+    val cloneCount = integer("clone_count").default(0)
+    val likeCount = integer("like_count").default(0)
+    val publishedAt = timestampWithTimeZone("published_at").nullable()
+    val hiddenAt = timestampWithTimeZone("hidden_at").nullable()
+    val hiddenReason = text("hidden_reason").nullable()
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SharedFolderItemsTable : Table("shared_folder_items") {
+    val folderId = uuid("folder_id").references(SharedFoldersTable.id, onDelete = ReferenceOption.CASCADE)
+    val videoId = text("video_id")
+    val position = integer("position")
+    val a = decimal("a", 8, 1).nullable()
+    val b = decimal("b", 8, 1).nullable()
+    val rate = decimal("rate", 4, 2).default(BigDecimal("1.00"))
+    val noteI18n = jsonb<JsonElement>("note_i18n", Json).default(JsonObject(emptyMap()))
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(folderId, videoId)
+}
+
+object FollowsTable : Table("follows") {
+    val followerId = uuid("follower_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val followeeId = uuid("followee_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(followerId, followeeId)
+}
+
+object FolderLikesTable : Table("folder_likes") {
+    val folderId = uuid("folder_id").references(SharedFoldersTable.id, onDelete = ReferenceOption.CASCADE)
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(folderId, userId)
+}
+
+object FolderReportsTable : Table("folder_reports") {
+    val id = long("id").autoIncrement()
+    val folderId = uuid("folder_id").references(SharedFoldersTable.id, onDelete = ReferenceOption.CASCADE)
+    val reporterId = uuid("reporter_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val reason = text("reason")
+    val detail = text("detail").default("")
+    val status = text("status").default("open")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val resolvedAt = timestampWithTimeZone("resolved_at").nullable()
+
+    override val primaryKey = PrimaryKey(id)
+}

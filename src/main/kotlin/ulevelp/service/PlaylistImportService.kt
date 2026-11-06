@@ -142,7 +142,17 @@ class PlaylistImportService(
             // 상한(MAX_FETCH_ITEMS) 뒤로 가져오지 않은 항목도 칸 부족으로 건너뜀에 센다
             skippedLimit += (playlist.itemCount - playlist.items.size).coerceAtLeast(0)
 
-            // TODO(stub): M1-4 자동 연동 — SharedFolderSync.resyncCategories(this, userId, listOf(categoryId)) (설계 §4)
+            // YouTube가 준 제목·채널명을 공개본 제목 캐시에(N3 — 사용자 입력이 아니다)
+            val titled = entries.filter { it.available && it.title.isNotBlank() }
+            if (titled.isNotEmpty()) {
+                VideoTitlesTable.batchInsert(titled, ignore = true) { item ->
+                    this[VideoTitlesTable.videoId] = item.videoId
+                    this[VideoTitlesTable.title] = item.title.take(300)
+                    this[VideoTitlesTable.author] = item.channel.take(200)
+                }
+            }
+            // 자동 연동(M1-4a, 설계 §4)
+            SharedFolderSync.resyncCategories(this, userId, listOf(categoryId))
 
             PlaylistImportResponse(
                 categoryId = categoryId.toString(),

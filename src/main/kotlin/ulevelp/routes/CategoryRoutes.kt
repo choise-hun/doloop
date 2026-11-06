@@ -18,7 +18,8 @@ import java.util.UUID
 fun Route.registerCategoryRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
-    categoryService: CategoryService
+    categoryService: CategoryService,
+    communityService: CommunityService
 ) {
     route("/categories") {
         install(SupabaseAuthPlugin) {
@@ -86,6 +87,9 @@ fun Route.registerCategoryRoutes(
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, CategoryEnvelope(category = updated))
         }
+
+        // 내 분류 공개(M1-4a) — 같은 인증 플러그인 아래
+        registerCategoryShareRoutes(communityService)
 
         delete("/{categoryId}") {
             val user = call.requireAuthUser()
