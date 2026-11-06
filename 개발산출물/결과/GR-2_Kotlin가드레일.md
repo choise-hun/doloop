@@ -1,7 +1,7 @@
 # GR-2: Kotlin 블로킹 `httpClient.send` 전환 및 `ArchitectureGuardrailTest` 활성화
 
 - **일시:** 2026-11-06
-- **PR:** (생성 후 갱신)
+- **PR:** #92 (`step/GR-2` → `main`)
 - **입력:** `개발산출물/진행_가드레일.md`, `개발산출물/결과/GR-0_위반정리.md`
 - **목적:** `GR-0`에서 확정한 Kotlin 코루틴 내 블로킹 `httpClient.send(` 7개 파일 11곳을 전수 `httpClient.sendAsync(...).await()` (`kotlinx.coroutines.future.await`)로 전환하고, `src/test/kotlin/ulevelp/ArchitectureGuardrailTest.kt`를 활성화하여 검증한다.
 
