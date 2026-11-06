@@ -99,6 +99,11 @@ test('NA-4 복사 성공: 마크다운 복사 및 성공 문구 표시 후 사�
   await expect(copyMsg).toHaveText('마크다운을 복사했어요.');
   await expect(copyMsg).toHaveClass(/ok/);
 
+  // 실제로 클립보드에 마크다운을 썼는지(버튼만 있고 안 쓰는 버그)
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.startsWith('# 테스트 화성 노트\n')).toBe(true);
+  expect(copied).toContain('[01:24](http');
+
   // 2.5초 타이머 만료 후 빈 글자
   await expect(copyMsg).toHaveText('', { timeout: 4000 });
 });
@@ -112,6 +117,7 @@ test('NA-5 복사 실패: writeText 거부 시 실패 문구 세우고 유지', 
       configurable: true,
     });
   });
+  await page.clock.install();
   test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
   await page.locator('#btnCopyMarkdown').click();
 
@@ -119,8 +125,8 @@ test('NA-5 복사 실패: writeText 거부 시 실패 문구 세우고 유지', 
   await expect(copyMsg).toHaveText('복사하지 못했어요. 브라우저가 클립보드 사용을 막았어요.');
   await expect(copyMsg).toHaveClass(/err/);
 
-  // 3초 뒤에도 문구가 유지됨
-  await page.evaluate(() => new Promise((r) => setTimeout(r, 1000)));
+  // 3초 뒤에도 문구가 유지됨(성공 때의 2.5초 지우기가 실패에는 없다) — 임의 sleep 대신 가짜 시계
+  await page.clock.runFor(3000);
   await expect(copyMsg).toHaveText('복사하지 못했어요. 브라우저가 클립보드 사용을 막았어요.');
 });
 

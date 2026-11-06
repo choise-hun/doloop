@@ -54,14 +54,6 @@
   text-decoration: none;
 }
 
-.noteActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 6px;
-}
-
 /* M2-1d: 액션 바 · 상태 줄 · 둘째 줄 */
 .noteActionBar {
   display: flex;
