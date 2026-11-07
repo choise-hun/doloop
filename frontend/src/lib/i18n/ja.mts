@@ -1245,4 +1245,18 @@ export const JA: Record<I18nKey, string> = {
   'notes.tagArrangement': "アレンジ",
   'notes.tagMixing': "ミキシング",
   'notes.tagTab': "TAB",
+  // UI-2 — プレイヤー プリセット・タイマー・セッション アコーディオン・テイク完了
+  'practice.waitTimer': '-10s 待機',
+  'practice.presetSave': 'プリセット保存',
+  'practice.presetSelect': 'プリセット選択',
+  'practice.presetPrompt': 'プリセット名を入力してください',
+  'practice.presetMergeConfirm': '既存のプリセットが存在します。既存の区間と統合(累積)しますか？',
+  'practice.presetDeleteConfirm': 'このプリセットを削除しますか？',
+  'record.btnComplete': '区間完了',
+  'record.btnCompleted': '✓ 区間完了',
+  'record.btnDetailAccordion': '詳細を見る',
+  'record.btnDeleteShort': '✕ 削除',
+  'record.abSelectNone': 'AB 未選択',
+  'record.abSelectA': 'スロット A',
+  'record.abSelectB': 'スロット B',
 };

@@ -1245,4 +1245,18 @@ export const EN: Record<I18nKey, string> = {
   'notes.tagArrangement': "Arrangement",
   'notes.tagMixing': "Mixing",
   'notes.tagTab': "TAB",
+  // UI-2 — Player preset, timer, session accordion, take complete
+  'practice.waitTimer': '-10s Wait',
+  'practice.presetSave': 'Save Preset',
+  'practice.presetSelect': 'Select Preset',
+  'practice.presetPrompt': 'Enter preset name',
+  'practice.presetMergeConfirm': 'Preset already exists. Merge with existing range?',
+  'practice.presetDeleteConfirm': 'Delete this preset?',
+  'record.btnComplete': 'Complete Part',
+  'record.btnCompleted': '✓ Part Completed',
+  'record.btnDetailAccordion': 'Details',
+  'record.btnDeleteShort': '✕ Delete',
+  'record.abSelectNone': 'No AB',
+  'record.abSelectA': 'Slot A',
+  'record.abSelectB': 'Slot B',
 };

@@ -1263,4 +1263,18 @@ export const KO = {
   'notes.tagArrangement': "편곡",
   'notes.tagMixing': "믹싱",
   'notes.tagTab': "TAB",
+  // UI-2 — 플레이어 프리셋·타이머·세션아코디언·테이크완료
+  'practice.waitTimer': '-10s 대기',
+  'practice.presetSave': '구간 프리셋 저장',
+  'practice.presetSelect': '프리셋 선택',
+  'practice.presetPrompt': '프리셋 이름을 입력하세요',
+  'practice.presetMergeConfirm': '이미 존재하는 프리셋입니다. 기존 구간과 병합(누적)하시겠습니까?',
+  'practice.presetDeleteConfirm': '이 프리셋을 삭제하시겠습니까?',
+  'record.btnComplete': '구간 완료',
+  'record.btnCompleted': '✓ 구간 완료',
+  'record.btnDetailAccordion': '상세 보기',
+  'record.btnDeleteShort': '✕ 삭제',
+  'record.abSelectNone': '미선택',
+  'record.abSelectA': 'A 슬롯',
+  'record.abSelectB': 'B 슬롯',
 } as const;
