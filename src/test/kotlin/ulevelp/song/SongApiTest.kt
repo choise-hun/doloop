@@ -103,7 +103,7 @@ class SongApiTest {
 
         val expectedKeys = setOf(
             "id", "title", "artist", "status", "statusCode", "videoId",
-            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl"
+            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl", "durationSec"
         )
         assertEquals(expectedKeys, songObj.keys)
 
@@ -912,7 +912,7 @@ class SongApiTest {
         val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
         val songObj = json["song"]!!.jsonObject
         assertEquals(1560L, songObj["totalSeconds"]!!.jsonPrimitive.long)
-        assertEquals(15, songObj.keys.size)
+        assertEquals(16, songObj.keys.size)
 
         val sessionsArr = json["sessions"]!!.jsonArray
         assertEquals(2, sessionsArr.size)
@@ -923,21 +923,21 @@ class SongApiTest {
         assertEquals(24, s0["loops"]!!.jsonPrimitive.int)
         assertEquals(0.75, s0["rate"]!!.jsonPrimitive.double)
         assertEquals("좋음", s0["memo"]!!.jsonPrimitive.content)
-        assertEquals(10, s0.keys.size)
+        assertEquals(12, s0.keys.size)
 
         val s1 = sessionsArr[1].jsonObject
         assertEquals("2026-10-28", s1["date"]!!.jsonPrimitive.content)
-        assertEquals(10, s1.keys.size)
+        assertEquals(12, s1.keys.size)
 
         val takesArr = json["takes"]!!.jsonArray
         assertEquals(2, takesArr.size)
         val t0 = takesArr[0].jsonObject
         assertEquals("2026-10-30T14:22:10Z", t0["recordedAt"]!!.jsonPrimitive.content)
-        assertEquals(12, t0.keys.size)
+        assertEquals(14, t0.keys.size)
 
         val t1 = takesArr[1].jsonObject
         assertEquals("2026-10-28T10:00:00Z", t1["recordedAt"]!!.jsonPrimitive.content)
-        assertEquals(12, t1.keys.size)
+        assertEquals(14, t1.keys.size)
     }
 
     @Test

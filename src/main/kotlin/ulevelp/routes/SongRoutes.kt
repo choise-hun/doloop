@@ -225,5 +225,69 @@ fun Route.registerSongRoutes(
                 buildJsonObject { put("ok", true) }
             )
         }
+
+        // ============================================================
+        // 구간 프리셋 CRUD (V9)
+        // ============================================================
+        get("/{songId}/presets") {
+            val user = call.requireAuthUser()
+            val songId = parsePathUuid(call.parameters["songId"])
+            val presets = songService.listPresets(user.id, songId)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, PresetListResponse(presets = presets))
+        }
+
+        put("/{songId}/presets") {
+            val user = call.requireAuthUser()
+            val songId = parsePathUuid(call.parameters["songId"])
+            val body = call.receiveJsonObject()
+
+            val rawName = body.requireString("name", 50).trim()
+            if (rawName.isEmpty()) {
+                throw InvalidInputException("프리셋 이름(name)은 비워 둘 수 없습니다.")
+            }
+
+            val aDbl = body.requireDouble("a", -10.0, 86400.0)
+            val a = BigDecimal.valueOf(aDbl).setScale(1, RoundingMode.HALF_UP)
+
+            val bDbl = body.requireDouble("b", 0.0, 86400.0)
+            val b = BigDecimal.valueOf(bDbl).setScale(1, RoundingMode.HALF_UP)
+
+            if (a >= b) {
+                throw InvalidInputException("시작 시간(a)은 끝 시간(b)보다 작아야 합니다.")
+            }
+
+            val rateDbl = body.optDouble("rate", 0.25, 2.0) ?: 1.00
+            val rate = BigDecimal.valueOf(rateDbl).setScale(2, RoundingMode.HALF_UP)
+            val completed = body.optBoolean("completed", false)
+            val merge = body.optBoolean("merge", true)
+
+            val preset = songService.upsertPreset(
+                userId = user.id,
+                songId = songId,
+                input = UpsertPresetInput(
+                    name = rawName,
+                    a = a,
+                    b = b,
+                    rate = rate,
+                    completed = completed,
+                    merge = merge
+                )
+            )
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, PresetEnvelope(ok = true, preset = preset))
+        }
+
+        delete("/{songId}/presets/{presetId}") {
+            val user = call.requireAuthUser()
+            val songId = parsePathUuid(call.parameters["songId"])
+            val presetId = parsePathUuid(call.parameters["presetId"])
+            val deleted = songService.deletePreset(user.id, songId, presetId)
+            if (!deleted) {
+                throw NotFoundException("프리셋을 찾을 수 없습니다.")
+            }
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
+        }
     }
 }

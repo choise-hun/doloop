@@ -47,6 +47,8 @@ data class SessionWithSongDto(
     val segment: String,
     val rate: Double?,
     val memo: String,
+    val partStats: kotlinx.serialization.json.JsonElement? = null,
+    val coveragePct: Int = 0,
     val takes: List<TakeDto>
 )
 
@@ -165,6 +167,8 @@ class SessionService(private val db: Database?) {
                     segment = formatSegment(aDec, bDec),
                     rate = row[SessionsTable.rate]?.toDouble(),
                     memo = row[SessionsTable.memo],
+                    partStats = row[SessionsTable.partStats],
+                    coveragePct = row[SessionsTable.coveragePct],
                     takes = takesBySessionId[sessionId] ?: emptyList()
                 )
             }
@@ -245,7 +249,9 @@ class SessionService(private val db: Database?) {
                 sizeBytes = row[TakesTable.sizeBytes],
                 storage = row[TakesTable.storage],
                 storageKey = row[TakesTable.storageKey],
-                memo = row[TakesTable.memo]
+                memo = row[TakesTable.memo],
+                partName = row[TakesTable.partName],
+                completed = row[TakesTable.completed]
             )
     }
 }

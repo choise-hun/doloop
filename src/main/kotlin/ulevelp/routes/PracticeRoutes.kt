@@ -49,6 +49,9 @@ fun Route.registerPracticeRoutes(
             val date = body.requireDate("date")
             val addSeconds = body.optInt("addSeconds", 0, 21600, 0)
             val addLoops = body.optInt("addLoops", 0, 100000, 0)
+            val partName = body.optString("partName", 50)
+            val durationSec = body.optInt("durationSec", 0, 86400, 0)
+            val completed = body.optBoolean("completed", false)
 
             val response = practiceService.saveProgress(
                 userId = user.id,
@@ -60,7 +63,10 @@ fun Route.registerPracticeRoutes(
                     rate = rate,
                     date = date,
                     addSeconds = addSeconds,
-                    addLoops = addLoops
+                    addLoops = addLoops,
+                    partName = partName,
+                    durationSec = if (durationSec > 0) durationSec else null,
+                    completed = completed
                 )
             )
 

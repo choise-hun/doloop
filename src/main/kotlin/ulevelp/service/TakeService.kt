@@ -20,6 +20,7 @@ import ulevelp.db.SongsTable
 import ulevelp.db.NotionSyncTable
 import ulevelp.db.StorageTrashTable
 import ulevelp.db.TakesTable
+import ulevelp.db.SongPresetsTable
 import ulevelp.storage.StorageClient
 import ulevelp.storage.StorageException
 import java.math.BigDecimal
@@ -42,7 +43,9 @@ data class TakeDto(
     val sizeBytes: Long,
     val storage: String,
     val storageKey: String,
-    val memo: String
+    val memo: String,
+    val partName: String = "",
+    val completed: Boolean = false
 )
 
 @Serializable
@@ -61,7 +64,9 @@ data class TakeUploadInput(
     val durationSec: Int,
     val mime: String,
     val bytes: ByteArray,
-    val replaceOldSongTakes: Boolean = false
+    val replaceOldSongTakes: Boolean = false,
+    val partName: String = "",
+    val completed: Boolean = false
 )
 
 data class DriveTakeRegisterInput(
@@ -74,7 +79,9 @@ data class DriveTakeRegisterInput(
     val durationSec: Int,
     val mime: String,
     val sizeBytes: Long,
-    val driveFileId: String
+    val driveFileId: String,
+    val partName: String = "",
+    val completed: Boolean = false
 )
 
 data class TakeDownloadData(
@@ -330,6 +337,8 @@ class TakeService(
                     it[storage] = "supabase"
                     it[storageKey] = key
                     it[memo] = ""
+                    it[partName] = input.partName
+                    it[completed] = input.completed
                 }
 
                 // 10) Outbox 적재
@@ -351,7 +360,9 @@ class TakeService(
                     sizeBytes = input.bytes.size.toLong(),
                     storage = "supabase",
                     storageKey = key,
-                    memo = ""
+                    memo = "",
+                    partName = input.partName,
+                    completed = input.completed
                 )
                 Pair(dto, trashIds)
             }
@@ -478,6 +489,8 @@ class TakeService(
                 it[storage] = "drive"
                 it[storageKey] = input.driveFileId
                 it[memo] = ""
+                it[partName] = input.partName
+                it[completed] = input.completed
             }
 
             if (sessionResult.created) {
@@ -496,7 +509,9 @@ class TakeService(
                 sizeBytes = input.sizeBytes,
                 storage = "drive",
                 storageKey = input.driveFileId,
-                memo = ""
+                memo = "",
+                partName = input.partName,
+                completed = input.completed
             )
         }
     }
@@ -547,21 +562,7 @@ class TakeService(
         return DatabaseFactory.dbQuery(database) {
             requireDrive(tierContext(userId))
             val row = TakesTable
-                .select(
-                    TakesTable.id,
-                    TakesTable.sessionId,
-                    TakesTable.songId,
-                    TakesTable.recordedAt,
-                    TakesTable.a,
-                    TakesTable.b,
-                    TakesTable.rate,
-                    TakesTable.durationSec,
-                    TakesTable.mime,
-                    TakesTable.sizeBytes,
-                    TakesTable.storage,
-                    TakesTable.storageKey,
-                    TakesTable.memo
-                )
+                .selectAll()
                 .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
                 .singleOrNull() ?: throw NotFoundException("녹음을 찾을 수 없습니다.")
 
@@ -605,10 +606,40 @@ class TakeService(
                 sizeBytes = row[TakesTable.sizeBytes],
                 storage = "drive",
                 storageKey = driveFileId,
-                memo = row[TakesTable.memo]
+                memo = row[TakesTable.memo],
+                partName = row[TakesTable.partName],
+                completed = row[TakesTable.completed]
             )
 
             Pair(takeDto, trashIds)
+        }
+    }
+
+    suspend fun toggleComplete(userId: UUID, takeId: UUID, completed: Boolean): TakeDto {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val takeRow = TakesTable.selectAll()
+                .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
+                .singleOrNull() ?: throw NotFoundException("녹음 테이크를 찾을 수 없습니다.")
+
+            TakesTable.update({ (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }) {
+                it[TakesTable.completed] = completed
+            }
+
+            val partName = takeRow[TakesTable.partName]
+            val songId = takeRow[TakesTable.songId]
+            if (partName.isNotBlank()) {
+                // 연관된 프리셋 상태 동기화 (V9)
+                SongPresetsTable.update({ (SongPresetsTable.songId eq songId) and (SongPresetsTable.name eq partName) }) {
+                    it[SongPresetsTable.completed] = completed
+                }
+            }
+
+            val updatedRow = TakesTable.selectAll()
+                .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
+                .single()
+
+            SessionService.rowToTakeDto(updatedRow)
         }
     }
 
