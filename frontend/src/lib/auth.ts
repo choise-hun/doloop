@@ -211,6 +211,7 @@ function createAuthModule() {
       currentMe = null;
       lastFetchedUid = null;
       clearKeysCache();
+      syncLangFromProfile(null);
       notify();
       return null;
     }
@@ -218,6 +219,7 @@ function createAuthModule() {
     if (currentMe && uid && currentMe.id !== uid) {
       currentMe = null;
       clearKeysCache();
+      syncLangFromProfile(null);
     }
     try {
       const me = await apiFetch<MeProfile>('/api/v1/me');
@@ -231,6 +233,7 @@ function createAuthModule() {
       currentMe = null;
       lastFetchedUid = null;
       clearKeysCache();
+      syncLangFromProfile(null);
       notify();
       return null;
     }
@@ -334,6 +337,7 @@ function createAuthModule() {
         currentMe = null;
         lastFetchedUid = null;
         clearKeysCache();
+        syncLangFromProfile(null);
         notify();
         return;
       }
@@ -342,6 +346,7 @@ function createAuthModule() {
         currentMe = null;
         lastFetchedUid = null;
         clearKeysCache();
+        syncLangFromProfile(null);
       }
 
       notify();

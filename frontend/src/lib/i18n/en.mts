@@ -186,7 +186,7 @@ export const EN: Record<I18nKey, string> = {
   'folder.reason.spam': "Spam",
   'folder.reason.inappropriate': "Inappropriate name",
   'folder.reason.copyright': "Copyright",
-  'folder.reason.other': "Guitar",
+  'folder.reason.other': "Other",
   'folder.practice': "Practice this segment",
   'folder.close': "Close",
   'folder.creator': "Creator",

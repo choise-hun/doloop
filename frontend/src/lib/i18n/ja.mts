@@ -186,7 +186,7 @@ export const JA: Record<I18nKey, string> = {
   'folder.reason.spam': "スパム",
   'folder.reason.inappropriate': "不適切な名前",
   'folder.reason.copyright': "著作権",
-  'folder.reason.other': "ギター",
+  'folder.reason.other': "その他",
   'folder.practice': "この区間を練習",
   'folder.close': "閉じる",
   'folder.creator': "クリエイター",
