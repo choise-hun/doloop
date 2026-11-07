@@ -13,6 +13,7 @@ import { TastePanel } from '../components/progressions/TastePanel';
 import { hasSequence } from '../lib/chords/stats.mts';
 import pStyles from '../components/progressions/Progressions.module.css';
 import { emptyForm, filterScope, jobOptionsLabel, playHref, searchProgressions, seedToDto, SORT_LABEL, sortProgressions, summarizeDoneJobs } from '../components/progressions/model.mts';
+import { t, type I18nKey } from '../lib/i18n.mts';
 import type { ProgressionForm, SortBy } from '../components/progressions/model.mts';
 import { auth, canUseAi, useAuth } from '../lib/auth';
 import { AnalysisJobDto, apiClient, ProgressionDto, ProgressionInput, ProgressionScope } from '../lib/apiClient';
@@ -22,17 +23,17 @@ import { describeJobError } from '../lib/jobError.mts';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './ProgressionsPage.module.css';
 
-const SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
-  ['reference', '레퍼런스'],
-  ['analysis', '분석'],
-  ['all', '합산'],
+const SCOPES: ReadonlyArray<readonly [ProgressionScope, I18nKey]> = [
+  ['reference', 'prog.scopeReference'],
+  ['analysis', 'prog.scopeAnalysis'],
+  ['all', 'prog.scopeAll'],
 ];
 
 type AddTab = 'video' | 'manual' | 'paste';
-const ADD_TABS: ReadonlyArray<readonly [AddTab, string]> = [
-  ['video', '코드 진행 영상'],
-  ['manual', '직접 입력'],
-  ['paste', '붙여넣기'],
+const ADD_TABS: ReadonlyArray<readonly [AddTab, I18nKey]> = [
+  ['video', 'prog.tabVideo'],
+  ['manual', 'prog.tabManual'],
+  ['paste', 'prog.tabPaste'],
 ];
 
 const SEEDS: ProgressionDto[] = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_ARCHIVE_PROGRESSIONS].map(seedToDto);
@@ -53,7 +54,7 @@ const isActive = (j: AnalysisJobDto) => j.status === 'queued' || j.status === 'r
 
 export function ProgressionsPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '코드 진행 모음 · ULeveLP';
+    document.title = t('prog.pageTitle');
   }, []);
 
   const authState = useAuth();
@@ -87,7 +88,7 @@ export function ProgressionsPage(): React.ReactElement {
       setLoadMsg('');
       return;
     }
-    setLoadMsg('코드 진행을 불러오는 중...');
+    setLoadMsg(t('prog.loading'));
     try {
       const list = await apiClient.progressions.list();
       if (mySeq !== listSeqRef.current || auth.getUser()?.id !== uid) return;
@@ -95,7 +96,7 @@ export function ProgressionsPage(): React.ReactElement {
       setLoadMsg('');
     } catch (err: any) {
       if (mySeq !== listSeqRef.current) return;
-      setLoadMsg((err && err.message) || '코드 진행을 불러오지 못했어요.');
+      setLoadMsg((err && err.message) || t('prog.loadFailed'));
     }
   }, []);
 
@@ -164,7 +165,7 @@ export function ProgressionsPage(): React.ReactElement {
 
   const handleCreate = async (body: ProgressionInput) => {
     const created = await apiClient.progressions.create(body);
-    if (!created) throw new Error('저장 응답이 비어 있어요.');
+    if (!created) throw new Error(t('prog.saveResponseEmpty'));
     setItems((prev) => [created, ...prev.filter((x) => x.id !== created.id)]);
     setJustSaved(created);
     setManualInit({ form: emptyForm(body.kind || 'reference'), seq: manualInit.seq + 1 });
@@ -195,7 +196,7 @@ export function ProgressionsPage(): React.ReactElement {
     const vid = videoIdFrom(j.url || '');
     const opts = jobOptionsLabel(j);
     const label = (vid ? `youtu.be/${vid}` : j.url) + (opts ? ` · ${opts}` : '');
-    if (isActive(j)) return <>{j.status === 'queued' ? '대기 중' : '분석 중'} · {label}</>;
+    if (isActive(j)) return <>{j.status === 'queued' ? t('prog.jobQueued') : t('prog.jobAnalyzing')} · {label}</>;
     if (j.status === 'failed') {
       const why = describeJobError(j.error);
       return (
@@ -211,17 +212,17 @@ export function ProgressionsPage(): React.ReactElement {
   const doneLine = (): React.ReactNode => {
     const { jobCount, collected, latestNoteId } = doneSum;
     const noteLink = latestNoteId ? (
-      <SafeLink href={`note.html?id=${encodeURIComponent(latestNoteId)}`}>{jobCount > 1 ? '최근 노트 보기' : '노트 보기'}</SafeLink>
+      <SafeLink href={`note.html?id=${encodeURIComponent(latestNoteId)}`}>{jobCount > 1 ? t('prog.jobViewLatestNote') : t('prog.jobViewNote')}</SafeLink>
     ) : null;
-    const prefix = jobCount > 1 ? `영상 ${jobCount}개 · ` : '';
+    const prefix = jobCount > 1 ? t('prog.jobVideosPrefix', { count: jobCount }) : '';
     return collected > 0 ? (
       <>
         {prefix}
-        {collected}개 수집 · {noteLink}
+        {t('prog.jobCollected', { count: collected })}{noteLink}
       </>
     ) : (
       <>
-        {prefix}진행을 찾지 못했습니다 · {noteLink}
+        {t('prog.jobNoneFound', { prefix })}{noteLink}
       </>
     );
   };
@@ -231,13 +232,13 @@ export function ProgressionsPage(): React.ReactElement {
       <div className={styles.header}>
         <div>
           <h1 className={styles.pageTitle}>Chords</h1>
-          <p className={styles.pageSub}>좋아하는 곡과 영상에서 모은 코드 진행. 모은 진행은 연습실에서 바로 연주해 볼 수 있어요.</p>
+          <p className={styles.pageSub}>{t('prog.pageSub')}</p>
         </div>
         <div className={styles.headActs}>
-          <div className={styles.scope} role="group" aria-label="범위" id="progScope">
-            {SCOPES.map(([s, label]) => (
+          <div className={styles.scope} role="group" aria-label={t('prog.scopeGroupAria')} id="progScope">
+            {SCOPES.map(([s, labelKey]) => (
               <button key={s} type="button" aria-pressed={scope === s} data-scope={s} onClick={() => pickScope(s)}>
-                {label} <span className={styles.count}>{counts[s]}</span>
+                {t(labelKey)} <span className={styles.count}>{counts[s]}</span>
               </button>
             ))}
           </div>
@@ -249,32 +250,32 @@ export function ProgressionsPage(): React.ReactElement {
             aria-controls="progAddPanel"
             onClick={() => setAddOpen((v) => !v)}
           >
-            {addOpen ? '닫기' : '+ 진행 넣기'}
+            {addOpen ? t('prog.btnClose') : t('prog.btnAddProg')}
           </button>
         </div>
       </div>
 
       {addOpen && (
-        <section className={styles.addPanel} id="progAddPanel" aria-label="진행 넣기">
+        <section className={styles.addPanel} id="progAddPanel" aria-label={t('prog.addPanelAria')}>
           {!loggedIn ? (
             <p className={styles.loginGate} id="progLoginGate">
-              로그인하면 진행을 모을 수 있어요. <SafeLink href="settings.html#account">로그인 →</SafeLink>
+              {t('prog.loginPrompt')}<SafeLink href="settings.html#account">{t('prog.loginLink')}</SafeLink>
             </p>
           ) : (
             <>
-              <div className={styles.tabs} role="tablist" aria-label="입력 방법">
-                {ADD_TABS.map(([t, label]) => (
+              <div className={styles.tabs} role="tablist" aria-label={t('prog.inputTabsAria')}>
+                {ADD_TABS.map(([tId, labelKey]) => (
                   <button
-                    key={t}
+                    key={tId}
                     type="button"
                     role="tab"
-                    id={`progTab-${t}`}
-                    aria-selected={addTab === t}
-                    aria-controls={`progTabPanel-${t}`}
-                    onClick={() => setAddTab(t)}
+                    id={`progTab-${tId}`}
+                    aria-selected={addTab === tId}
+                    aria-controls={`progTabPanel-${tId}`}
+                    onClick={() => setAddTab(tId)}
                   >
-                    {label}
-                    {t === 'video' && <BetaBadge />}
+                    {t(labelKey)}
+                    {tId === 'video' && <BetaBadge />}
                   </button>
                 ))}
               </div>
@@ -297,7 +298,7 @@ export function ProgressionsPage(): React.ReactElement {
                       key={manualInit.seq}
                       idPrefix="new"
                       initial={manualInit.form}
-                      submitLabel="저장"
+                      submitLabel={t('prog.btnSave')}
                       onSubmit={handleCreate}
                     />
                   </>
@@ -324,20 +325,20 @@ export function ProgressionsPage(): React.ReactElement {
 
       {justSaved && (
         <div className={styles.savedBanner} id="progSavedBanner" role="status">
-          <span>방금 넣은 진행, 연습실에서 바로 연주해볼까요?</span>
+          <span>{t('prog.justSavedPrompt')}</span>
           <SafeLink className="pillBtn" href={playHref(justSaved)}>
-            연주하기
+            {t('prog.btnPlayNow')}
           </SafeLink>
-          <button type="button" className={styles.linkBtn} onClick={() => setJustSaved(null)} aria-label="안내 닫기">
-            닫기
+          <button type="button" className={styles.linkBtn} onClick={() => setJustSaved(null)} aria-label={t('prog.dismissAlertAria')}>
+            {t('prog.btnClose')}
           </button>
         </div>
       )}
 
       <div className={styles.layout}>
-        <section className={styles.listCol} aria-label="진행 목록">
+        <section className={styles.listCol} aria-label={t('prog.listSectionAria')}>
           {jobs.length > 0 && (
-            <ul className={styles.jobs} id="progJobs" aria-label="코드 진행 영상 분석">
+            <ul className={styles.jobs} id="progJobs" aria-label={t('prog.jobsListAria')}>
               {openJobs.map((j) => (
                 <li key={j.id} data-job={j.id} data-status={j.status} className={isActive(j) ? styles.jobActive : styles.jobFail}>
                   {jobLine(j)}
@@ -352,7 +353,7 @@ export function ProgressionsPage(): React.ReactElement {
           )}
           {!loggedIn && (
             <p className={styles.seedNote} id="progSeedNote">
-              기본 예시 진행이에요. 로그인하면 내 진행을 모으고 고칠 수 있어요.
+              {t('prog.seedNotice')}
             </p>
           )}
           {loadMsg && (
@@ -366,14 +367,14 @@ export function ProgressionsPage(): React.ReactElement {
                 type="search"
                 id="progSearch"
                 className={styles.search}
-                placeholder="곡명·아티스트·키 검색"
-                aria-label="진행 검색"
+                placeholder={t('prog.searchPlaceholder')}
+                aria-label={t('prog.searchAria')}
                 value={query}
                 maxLength={100}
                 onChange={(e) => setQuery(e.target.value)}
               />
               <label className={styles.sortLabel}>
-                정렬
+                {t('prog.sortLabel')}
                 <select id="progSort" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
                   {(Object.keys(SORT_LABEL) as SortBy[]).map((k) => (
                     <option key={k} value={k}>
@@ -384,7 +385,7 @@ export function ProgressionsPage(): React.ReactElement {
               </label>
               {(query || tasteFilter) && (
                 <span className={styles.count} id="progSearchCount">
-                  {inScope.length}개 중 {shown.length}개
+                  {t('prog.filterCount', { total: inScope.length, shown: shown.length })}
                 </span>
               )}
             </div>
@@ -392,30 +393,30 @@ export function ProgressionsPage(): React.ReactElement {
           {tasteFilter && inScope.length > 0 && (
             <div className={pStyles.tasteFilter} id="progTasteFilter" role="status">
               <span>
-                <b>{tasteFilter}</b>{tasteFilter.includes('→') ? ' 이동' : ' 묶음'}이 들어 있는 진행만 보는 중
+                <b>{tasteFilter}</b>{tasteFilter.includes('→') ? t('prog.tasteActiveMove') : t('prog.tasteActiveGroup')}{t('prog.tasteFilterNotice')}
               </span>
               <button type="button" className="ghostBtn" id="progTasteFilterClear" onClick={() => setTasteFilter('')}>
-                해제
+                {t('prog.btnResetFilter')}
               </button>
             </div>
           )}
           {!loadMsg && inScope.length > 0 && shown.length === 0 && (
             <p className="empty" id="progNoMatch">
-              {query ? `"${query}"에 맞는 진행이 없어요.` : '맞는 진행이 없어요.'}
+              {query ? t('prog.noMatchWithQuery', { query }) : t('prog.noMatch')}
             </p>
           )}
           {!loadMsg && inScope.length === 0 && (
             <div className={styles.empty} id="progEmpty">
               {scope === 'analysis' ? (
                 <p>
-                  분석한 진행이 아직 없어요. 코드 진행 영상을 넣거나, 학습 노트 상세에서 "코드 진행 수집에 넣기"를 켜 보세요.
+                  {t('prog.emptyAnalysis')}
                 </p>
               ) : (
-                <p>아직 모은 진행이 없어요. 좋아하는 곡의 진행을 넣어 보세요.</p>
+                <p>{t('prog.emptyManual')}</p>
               )}
               {loggedIn && (
                 <button type="button" className="ghostBtn" onClick={() => openAdd(scope === 'analysis' ? 'video' : 'manual')}>
-                  {scope === 'analysis' ? '코드 진행 영상 넣기' : '직접 입력하기'}
+                  {scope === 'analysis' ? t('prog.btnEmptyAnalysisAction') : t('prog.btnEmptyManualAction')}
                 </button>
               )}
             </div>
@@ -434,9 +435,9 @@ export function ProgressionsPage(): React.ReactElement {
           </ul>
         </section>
 
-        <aside className={styles.tasteCol} aria-label="취향 코드 진행" id="progTaste">
-          <h2>취향 코드 진행</h2>
-          <TastePanel list={inScope} scopeLabel={SCOPES.find(([s]) => s === scope)?.[1] || ''} filter={tasteFilter} onFilter={pickTaste} />
+        <aside className={styles.tasteCol} aria-label={t('prog.tasteSectionAria')} id="progTaste">
+          <h2>{t('prog.tasteSectionTitle')}</h2>
+          <TastePanel list={inScope} scopeLabel={t(SCOPES.find(([s]) => s === scope)?.[1] || 'prog.scopeReference')} filter={tasteFilter} onFilter={pickTaste} />
         </aside>
       </div>
 

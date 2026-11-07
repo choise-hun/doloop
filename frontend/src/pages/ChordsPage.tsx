@@ -1,5 +1,6 @@
 // frontend/src/pages/ChordsPage.tsx
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { t, type I18nKey } from '../lib/i18n.mts';
 import { AppShell } from '../components/layout/AppShell';
 import {
   audioEngine,
@@ -36,15 +37,15 @@ import styles from './ChordsPage.module.css';
 
 export type ChordTabId = 'scale' | 'tone' | 'matrix' | 'circle' | 'reint' | 'tf' | 'ds' | 'prog';
 
-export const CHORD_TABS: ReadonlyArray<{ id: ChordTabId; label: string }> = [
-  { id: 'scale', label: '1 · 스케일 연습' },
-  { id: 'tone', label: '2 · 코드톤 지도' },
-  { id: 'matrix', label: '3 · 보이싱 매트릭스' },
-  { id: 'circle', label: '4 · 탑노트 5도권' },
-  { id: 'reint', label: '5 · 코드 재해석' },
-  { id: 'tf', label: '6 · 2-5-1 탐색' },
-  { id: 'ds', label: '7 · 더블 스탑 연습' },
-  { id: 'prog', label: '8 · 진행 연주' },
+export const CHORD_TABS: ReadonlyArray<{ id: ChordTabId; labelKey: I18nKey }> = [
+  { id: 'scale', labelKey: 'chords.tabScale' },
+  { id: 'tone', labelKey: 'chords.tabTone' },
+  { id: 'matrix', labelKey: 'chords.tabMatrix' },
+  { id: 'circle', labelKey: 'chords.tabCircle' },
+  { id: 'reint', labelKey: 'chords.tabReint' },
+  { id: 'tf', labelKey: 'chords.tabTf' },
+  { id: 'ds', labelKey: 'chords.tabDs' },
+  { id: 'prog', labelKey: 'chords.tabProg' },
 ];
 
 // "#matrix" → 'matrix', "#prog?c=…" → 'prog' (CH-5b), 그 밖은 null
@@ -54,13 +55,13 @@ function tabFromHash(hash: string): ChordTabId | null {
   return CHORD_TABS.some((t) => t.id === h) ? (h as ChordTabId) : null;
 }
 
-export const CAGED_BLOCK_CHIPS: ReadonlyArray<{ v: number; label: string }> = [
-  { v: 1, label: '#1 (A) Shape' },
-  { v: 2, label: '#2 (G) Shape' },
-  { v: 3, label: '#3 (E) Shape' },
-  { v: 4, label: '#4 (D) Shape' },
-  { v: 5, label: '#5 (C) Shape' },
-  { v: 0, label: '전체 지판' },
+export const CAGED_BLOCK_CHIPS: ReadonlyArray<{ v: number; labelKey: I18nKey }> = [
+  { v: 1, labelKey: 'chords.cagedShapeOne' },
+  { v: 2, labelKey: 'chords.cagedShapeTwo' },
+  { v: 3, labelKey: 'chords.cagedShapeThree' },
+  { v: 4, labelKey: 'chords.cagedShapeFour' },
+  { v: 5, labelKey: 'chords.cagedShapeFive' },
+  { v: 0, labelKey: 'chords.cagedShapeFull' },
 ];
 
 export const DOUBLE_STOP_SCALES: ReadonlyArray<{ id: string; name: string }> = [
@@ -76,19 +77,19 @@ export function isCagedUnsupportedScale(scaleId: string): boolean {
   return scaleId === 'harmMinor' || scaleId === 'melMinor';
 }
 
-const START_PAT = [
-  { v: 0, label: 'A · 1도 시작' },
-  { v: 1, label: 'B · 3도 시작' },
-  { v: 2, label: 'C · 5도 시작' },
-  { v: 3, label: 'D · 7도 시작' },
+const START_PAT: ReadonlyArray<{ v: number; labelKey: I18nKey }> = [
+  { v: 0, labelKey: 'chords.scaleStartRoot' },
+  { v: 1, labelKey: 'chords.scaleStartThird' },
+  { v: 2, labelKey: 'chords.scaleStartFifth' },
+  { v: 3, labelKey: 'chords.scaleStartSeventh' },
 ];
 
-const RULE: Record<string, string> = {
-  maj7: '기준 폼',
-  '7': '7도를 반음 내림',
-  m7: '3도도 반음 내림',
-  m7b5: '5도도 반음 내림',
-  dim7: '7도를 한 번 더 내림 (bb7)',
+const RULE: Record<string, I18nKey> = {
+  maj7: 'chords.mxFamilyMajSeven',
+  '7': 'chords.mxFamilySeven',
+  m7: 'chords.mxFamilyMseven',
+  m7b5: 'chords.mxFamilyMsevenBfive',
+  dim7: 'chords.mxFamilyDimSeven',
 };
 
 const ROMAN: Record<'major' | 'minor', string[]> = {
@@ -107,7 +108,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 export function ChordsPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '기타 코드 연습실';
+    document.title = '기타 코드 연습실'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   // 초기 탭 결정
@@ -571,10 +572,10 @@ export function ChordsPage(): React.ReactElement {
     for (const v of vs) {
       const kind =
         v.notes.length === 3
-          ? '3음'
+          ? t('chords.toneThreeNotes')
           : v.notes.some((n: any) => n.cls === 'root')
-          ? '근음 포함'
-          : '근음 생략';
+          ? t('chords.toneIncludeRoot')
+          : t('chords.toneOmitRoot');
       const key = kind + v.notes[0].s;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -686,7 +687,7 @@ export function ChordsPage(): React.ReactElement {
   const riSwapPlan = useMemo(() => {
     if (riNotes.length < 3) return [];
     const roles = [
-      { r: '마이너 ii', root: CT.pc(riKey + 2), fams: ['min'] },
+      { r: t('chords.reintMinorTwo'), root: CT.pc(riKey + 2), fams: ['min'] },
       { r: 'V', root: CT.pc(riKey + 7), fams: ['dom', 'sus'] },
       { r: 'I', root: riKey, fams: ['maj'] },
     ];
@@ -719,13 +720,13 @@ export function ChordsPage(): React.ReactElement {
       const wrong = shuffle([...Array(12).keys()].filter((r) => !valid.has(r))).slice(0, 3);
       qObj = {
         notes,
-        text: `이 모양을 ${it.famLabel} 코드로 읽으려면 근음은?`,
+        text: t('chords.quizQuestionOne', { family: it.famLabel }),
         opts: shuffle([it.root, ...wrong]).map((r) => ({
           label: CT.NAMES[r],
           ok: r === it.root,
         })),
         explain: `${it.name} · ${notes
-          .map((n, k) => `${6 - n.s}번줄 ${it.degs[k]}`)
+          .map((n, k) => t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[k] }))
           .reverse()
           .join(', ')}`,
       };
@@ -733,15 +734,15 @@ export function ChordsPage(): React.ReactElement {
       const k = Math.floor(Math.random() * notes.length);
       qObj = {
         notes,
-        text: `이 모양을 ${it.name}(으)로 볼 때 ${it.degs[k]} 역할을 하는 줄은?`,
+        text: t('chords.quizQuestionTwo', { name: it.name, deg: it.degs[k] }),
         opts: shuffle(
           notes.map((n, j) => ({
-            label: `${6 - n.s}번줄`,
+            label: t('chords.quizStringOnly', { str: 6 - n.s }),
             ok: j === k || it.degs[j] === it.degs[k],
           }))
         ),
         explain: notes
-          .map((n, j) => `${6 - n.s}번줄 ${it.degs[j]}`)
+          .map((n, j) => t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[j] }))
           .reverse()
           .join(', '),
       };
@@ -804,7 +805,7 @@ export function ChordsPage(): React.ReactElement {
   const [tfPlaying, setTfPlaying] = useState<boolean>(false);
 
   function runTfSearch() {
-    setTfStatus('탐색 중…');
+    setTfStatus(t('chords.tfSearching'));
     const timerId = window.setTimeout(() => {
       const lo = tfLo;
       const hi = Math.max(lo, tfHi);
@@ -819,7 +820,7 @@ export function ChordsPage(): React.ReactElement {
         pent: tfUsePent ? { root: tfProot, type: tfPtype } : null,
       });
       const ok = res.filter((k: any) => k.paths.length);
-      setTfStatus(`프렛 ${lo}–${hi} 안에서 ${ok.length}/12개 키 성립`);
+      setTfStatus(t('chords.tfResultStatus', { lo, hi, count: ok.length }));
       setTfOkList(ok);
       if (!ok.some((k: any) => k.key === tfKey)) {
         setTfKey(ok.length ? ok[0].key : null);
@@ -976,30 +977,30 @@ export function ChordsPage(): React.ReactElement {
       <div className={styles.pane}>
       <header className={styles.pageHeader}>
         <div className={styles.headRow}>
-          <h1 className={styles.pageTitle} data-align-group="head: center-y">코드 연습실</h1>
+          <h1 className={styles.pageTitle} data-align-group="head: center-y">{t('chords.pageTitle')}</h1>
           <a href="/practice.html" className={styles.practiceLink} data-align-group="head: center-y">
-            플레이어로 돌아가기 →
+            {t('chords.backToPlayer')}
           </a>
         </div>
         <p className={styles.subText}>
-          스케일 연습(CAGED 5블럭) · 코드톤 지도 · 보이싱 매트릭스 · 탑노트 5도권 · 코드 재해석 · 2-5-1 탐색 · 7 · 더블 스탑 연습 · 진행 연주
+          {t('chords.pageSub')}
         </p>
       </header>
 
       {/* 상단 탭 내비게이션 */}
-      <nav className={styles.tabs} role="tablist" aria-label="연습 모드">
-        {CHORD_TABS.map((t) => (
+      <nav className={styles.tabs} role="tablist" aria-label={t('chords.tabListAria')}>
+        {CHORD_TABS.map((tab) => (
           <button
-            key={t.id}
-            id={`tab-${t.id}`}
+            key={tab.id}
+            id={`tab-${tab.id}`}
             role="tab"
             type="button"
             className={styles.tab}
             data-align-group="tabs: top,height"
-            aria-selected={activeTab === t.id}
-            onClick={() => handleTabChange(t.id)}
+            aria-selected={activeTab === tab.id}
+            onClick={() => handleTabChange(tab.id)}
           >
-            {t.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </nav>
@@ -1043,17 +1044,17 @@ export function ChordsPage(): React.ReactElement {
               <div id="sc-change" className={styles.note}>
                 {scCi === 0 ? (
                   <span>
-                    <b>{scCurrentKey.rootName}</b>에서 시작. 바퀴를 돌면 키마다 바뀌는 음을 점선으로 보여줘요.
+                    <b>{scCurrentKey.rootName}</b>{t('chords.scCircleIntroPost')}
                   </span>
                 ) : (
                   <span>
-                    {scCircleList[(scCi + 11) % 12]?.rootName} → <b>{scCurrentKey.rootName}</b> 바뀐 음:{' '}
-                    {scCurrentKey.added?.length ? scCurrentKey.added.join(', ') : '없음'}
+                    {scCircleList[(scCi + 11) % 12]?.rootName} → <b>{scCurrentKey.rootName}</b> {t('chords.scChangedNotes')}:{' '}
+                    {scCurrentKey.added?.length ? scCurrentKey.added.join(', ') : t('chords.none')}
                   </span>
                 )}
               </div>
               <div id="sc-next" className={styles.status}>
-                다음: {scCircleList[(scCi + 1) % 12]?.name}
+                {t('chords.nextPrefix')}: {scCircleList[(scCi + 1) % 12]?.name}
               </div>
               <div className={styles.row}>
                 <button
@@ -1062,7 +1063,7 @@ export function ChordsPage(): React.ReactElement {
                   className={styles.ghost}
                   onClick={() => setScCi((scCi + 11) % 12)}
                 >
-                  ◀ 이전 키
+                  {t('chords.btnPrevKey')}
                 </button>
                 <button
                   id="sc-nextb"
@@ -1070,7 +1071,7 @@ export function ChordsPage(): React.ReactElement {
                   className={styles.ghost}
                   onClick={() => setScCi((scCi + 1) % 12)}
                 >
-                  다음 키 ▶
+                  {t('chords.btnNextKey')}
                 </button>
               </div>
             </div>
@@ -1086,7 +1087,7 @@ export function ChordsPage(): React.ReactElement {
                 hi={scWinHi}
                 flip={scHand === 'left'}
                 block={scActiveBlockObj ? { lo: scActiveBlockObj.lo, hi: scActiveBlockObj.hi } : null}
-                label={`${scCurrentKey.name} 지판`}
+                label={t('chords.fretboardKeyLabel', { name: scCurrentKey.name })}
                 notes={scBoardNotes}
                 onNoteClick={(pitch) => scPlayNote(pitch, audioEngine.now() + 0.02)}
               />
@@ -1099,7 +1100,7 @@ export function ChordsPage(): React.ReactElement {
               {scMilestoneSummary.summaryText}
             </div>
           )}
-          <div id="sc-seq" className={styles.seq} aria-label="CAGED 블럭 연주 시퀀스">
+          <div id="sc-seq" className={styles.seq} aria-label={t('chords.cagedSeqAria')}>
             {scSeqNotes.map((n, i) => {
               const isNow = !!scNow && scNow.s === n.s && scNow.f === n.f;
               return (
@@ -1116,19 +1117,19 @@ export function ChordsPage(): React.ReactElement {
 
           {/* 범례 */}
           <div className={styles.legend}>
-            <span><i className="r" />근음</span>
-            <span><i className="g" />스케일 구성음</span>
-            <span><i className="ctxk" />블럭 밖 스케일 음</span>
-            <span><i className="blkk" />CAGED 블럭 폼</span>
-            <span><i className="lowest-k" />블럭 시작·종착 최저 루트</span>
-            <span id="sc-leg-moved" hidden={scMode !== 'circle'}><i className="m" />이전 키에서 바뀐 음</span>
-            <span><i className="n" />지금 울리는 음</span>
+            <span><i className="r" />{t('chords.legendRoot')}</span>
+            <span><i className="g" />{t('chords.legendScaleNotes')}</span>
+            <span><i className="ctxk" />{t('chords.legendOutNotes')}</span>
+            <span><i className="blkk" />{t('chords.legendBlockForm')}</span>
+            <span><i className="lowest-k" />{t('chords.legendLowestRoot')}</span>
+            <span id="sc-leg-moved" hidden={scMode !== 'circle'}><i className="m" />{t('chords.legendPrevChanged')}</span>
+            <span><i className="n" />{t('chords.legendCurrentPlaying')}</span>
           </div>
 
           {/* 슬라이더 컨트롤 */}
           <div className={styles.scSliders}>
             <label className={styles.scSl}>
-              줌 (프렛 폭)
+              {t('chords.sliderZoom')}
               <input
                 id="sc-zoom"
                 type="range"
@@ -1139,7 +1140,7 @@ export function ChordsPage(): React.ReactElement {
               />
             </label>
             <label className={styles.scSl}>
-              위치 (시작 프렛)
+              {t('chords.sliderPos')}
               <input
                 id="sc-pos"
                 type="range"
@@ -1157,22 +1158,22 @@ export function ChordsPage(): React.ReactElement {
         <div className={styles.panel}>
           {/* 악기 선택 필 칩 */}
           <div className={styles.field}>
-            <span className={styles.lab}>악기 선택 (기타 / 베이스)</span>
+            <span className={styles.lab}>{t('chords.instrumentSelectLab')}</span>
             <div id="sc-inst-chips" className={styles.chips}>
-              {CT.TUNINGS.map((t) => (
+              {CT.TUNINGS.map((tun) => (
                 <button
-                  key={t.id}
+                  key={tun.id}
                   type="button"
                   className={styles.chip}
-                  aria-pressed={scInst === t.id}
+                  aria-pressed={scInst === tun.id}
                   onClick={() => {
-                    setScInst(t.id);
-                    setScZoom(Math.max(0, (CT.TUNING_BY[t.id]?.frets || 22) + 1 - 13));
+                    setScInst(tun.id);
+                    setScZoom(Math.max(0, (CT.TUNING_BY[tun.id]?.frets || 22) + 1 - 13));
                     setScPos(0);
                   }}
                 >
-                  {t.name}
-                  <small>{t.open.length}현 · {t.frets}f</small>
+                  {tun.name}
+                  <small>{t('chords.tuningSummary', { strings: tun.open.length, frets: tun.frets })}</small>
                 </button>
               ))}
             </div>
@@ -1193,7 +1194,7 @@ export function ChordsPage(): React.ReactElement {
 
           {/* CAGED 5블럭 선택기 */}
           <div className={styles.field}>
-            <span className={styles.lab}>CAGED 5블럭 포지션 (관계장조 창 기준)</span>
+            <span className={styles.lab}>{t('chords.cagedBlockSelectLab')}</span>
             <div id="sc-block" className={styles.chips}>
               {CAGED_BLOCK_CHIPS.map((b) => (
                 <button
@@ -1204,18 +1205,18 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={scEffBlock === b.v}
                   onClick={() => setScBlock(b.v)}
                 >
-                  {b.label}
+                  {t(b.labelKey)}
                 </button>
               ))}
             </div>
             <span id="sc-block-msg" className={styles.note} hidden={!scIsCagedUnsupported}>
-              화성·가락단음계는 CAGED 5블럭 대신 전체 지판 모드로 표시됩니다 (3NPS 7포지션 후보).
+              {t('chords.cagedMinorNotice')}
             </span>
           </div>
 
           <div className={styles.controls}>
             <div className={styles.field}>
-              <span className={styles.lab}>연습 모드</span>
+              <span className={styles.lab}>{t('chords.practiceModeLab')}</span>
               <div id="sc-mode" className={styles.chips}>
                 <button
                   type="button"
@@ -1226,7 +1227,7 @@ export function ChordsPage(): React.ReactElement {
                     setScCi(0);
                   }}
                 >
-                  단순 스케일
+                  {t('chords.modeSimpleScale')}
                 </button>
                 <button
                   type="button"
@@ -1237,14 +1238,14 @@ export function ChordsPage(): React.ReactElement {
                     setScCi(0);
                   }}
                 >
-                  5도권 순환
+                  {t('chords.modeCircleCycle')}
                 </button>
               </div>
             </div>
 
             <div className={styles.field}>
               <label id="sc-root-lab" htmlFor="sc-root">
-                {scMode === 'circle' ? '시작 루트' : '루트 음'}
+                {scMode === 'circle' ? t('chords.startRootLabel') : t('chords.rootNoteLabel')}
               </label>
               <select
                 id="sc-root"
@@ -1264,7 +1265,7 @@ export function ChordsPage(): React.ReactElement {
             </div>
 
             <div className={styles.field}>
-              <label htmlFor="sc-type">스케일 종류</label>
+              <label htmlFor="sc-type">{t('chords.scaleTypeLabel')}</label>
               <select
                 id="sc-type"
                 className={styles.selectField}
@@ -1280,7 +1281,7 @@ export function ChordsPage(): React.ReactElement {
             </div>
 
             <div className={styles.field}>
-              <span className={styles.lab}>음표 라벨</span>
+              <span className={styles.lab}>{t('chords.noteLabelLab')}</span>
               <div id="sc-label" className={styles.chips}>
                 {(['deg', 'name', 'none'] as const).map((l) => (
                   <button
@@ -1290,14 +1291,14 @@ export function ChordsPage(): React.ReactElement {
                     aria-pressed={scLabel === l}
                     onClick={() => setScLabel(l)}
                   >
-                    {l === 'deg' ? '도수' : l === 'name' ? '음이름' : '없음'}
+                    {l === 'deg' ? t('chords.labelDegree') : l === 'name' ? t('chords.labelNoteName') : t('chords.none')}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className={styles.field}>
-              <span className={styles.lab}>손잡이</span>
+              <span className={styles.lab}>{t('chords.handednessLab')}</span>
               <div id="sc-hand" className={styles.chips}>
                 <button
                   type="button"
@@ -1305,7 +1306,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={scHand === 'right'}
                   onClick={() => setScHand('right')}
                 >
-                  오른손
+                  {t('chords.rightHand')}
                 </button>
                 <button
                   type="button"
@@ -1313,13 +1314,13 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={scHand === 'left'}
                   onClick={() => setScHand('left')}
                 >
-                  왼손
+                  {t('chords.leftHand')}
                 </button>
               </div>
             </div>
 
             <div id="sc-circle-opts" className={styles.field} hidden={scMode !== 'circle'}>
-              <span className={styles.lab}>순환 방향</span>
+              <span className={styles.lab}>{t('chords.cycleDirectionLab')}</span>
               <div id="sc-dir" className={styles.chips}>
                 <button
                   type="button"
@@ -1330,7 +1331,7 @@ export function ChordsPage(): React.ReactElement {
                     setScCi(0);
                   }}
                 >
-                  5도 위 (C→G→D)
+                  {t('chords.fifthUp')}
                 </button>
                 <button
                   type="button"
@@ -1341,28 +1342,28 @@ export function ChordsPage(): React.ReactElement {
                     setScCi(0);
                   }}
                 >
-                  4도 위 (C→F→B♭)
+                  {t('chords.fourthUp')}
                 </button>
               </div>
             </div>
 
             <div className={styles.field} hidden={scMode !== 'circle'}>
-              <label htmlFor="sc-bars">키당 마디 수</label>
+              <label htmlFor="sc-bars">{t('chords.barsPerKeyLabel')}</label>
               <select
                 id="sc-bars"
                 className={styles.selectField}
                 value={scBars}
                 onChange={(e) => setScBars(+e.target.value)}
               >
-                <option value={0}>스케일 한 바퀴</option>
-                <option value={1}>1마디 (8박)</option>
-                <option value={2}>2마디 (16박)</option>
-                <option value={4}>4마디 (32박)</option>
+                <option value={0}>{t('chords.scaleOneCycle')}</option>
+                <option value={1}>{t('chords.barsOne')}</option>
+                <option value={2}>{t('chords.barsTwo')}</option>
+                <option value={4}>{t('chords.barsFour')}</option>
               </select>
             </div>
 
             <div className={styles.field}>
-              <span className={styles.lab}>재생 범위</span>
+              <span className={styles.lab}>{t('chords.playRangeLab')}</span>
               <div id="sc-range" className={styles.chips}>
                 <button
                   type="button"
@@ -1370,7 +1371,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={scRange === 'oct'}
                   onClick={() => setScRange('oct')}
                 >
-                  한 옥타브
+                  {t('chords.rangeOneOctave')}
                 </button>
                 <button
                   type="button"
@@ -1378,13 +1379,13 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={scRange === 'pos'}
                   onClick={() => setScRange('pos')}
                 >
-                  보이는 범위 전체
+                  {t('chords.rangeVisibleAll')}
                 </button>
               </div>
             </div>
 
             <div className={styles.field}>
-              <label htmlFor="sc-bpm">BPM (8분음표)</label>
+              <label htmlFor="sc-bpm">{t('chords.bpmLabel')}</label>
               <input
                 id="sc-bpm"
                 className={styles.numField}
@@ -1403,7 +1404,7 @@ export function ChordsPage(): React.ReactElement {
                 checked={scRootOnly}
                 onChange={(e) => setScRootOnly(e.target.checked)}
               />
-              근음만 보기 (암기)
+              {t('chords.rootOnlyMem')}
             </label>
           </div>
 
@@ -1415,10 +1416,10 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={scPlaying}
               onClick={toggleScPlay}
             >
-              {scPlaying ? '정지' : '재생'}
+              {scPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
             <span id="sc-status" className={styles.status}>
-              {scWinLo}–{scWinHi}프렛 · 보이는 스케일 음 {scBoardNotes.length}개
+              {t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
             </span>
           </div>
         </div>
@@ -1428,11 +1429,11 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-tone" role="tabpanel" className={styles.pane} hidden={activeTab !== 'tone'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>2-note-per-string 코드톤 지도.</b> 줄마다 두 음씩 짚어 4성 화음의 모든 구성음을 1~4프렛 안에서 파악합니다.
+            <b>{t('chords.toneIntroBold')}</b> {t('chords.toneIntroText')}
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="tone-root">루트 음</label>
+              <label htmlFor="tone-root">{t('chords.rootNoteLabel')}</label>
               <select
                 id="tone-root"
                 className={styles.selectField}
@@ -1447,7 +1448,7 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="tone-near">시작 프렛 부근</label>
+              <label htmlFor="tone-near">{t('chords.startFretNearLabel')}</label>
               <input
                 id="tone-near"
                 className={styles.numField}
@@ -1477,12 +1478,12 @@ export function ChordsPage(): React.ReactElement {
                 checked={toneAuto}
                 onChange={(e) => setToneAuto(e.target.checked)}
               />
-              한 바퀴 돌면 다음 성질 자동 전환
+              {t('chords.toneAutoCycle')}
             </label>
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>시작 도수 패턴</span>
+            <span className={styles.lab}>{t('chords.toneStartPatternLab')}</span>
             <div id="tone-start" className={styles.chips}>
               {START_PAT.map((p) => (
                 <button
@@ -1492,14 +1493,14 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={toneStart === p.v}
                   onClick={() => setToneStart(p.v)}
                 >
-                  {p.label}
+                  {t(p.labelKey)}
                 </button>
               ))}
             </div>
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>화음 성질</span>
+            <span className={styles.lab}>{t('chords.toneChordQualityLab')}</span>
             <div id="tone-q" className={styles.chips}>
               {CT.ARP_Q.map((q) => (
                 <button
@@ -1510,7 +1511,7 @@ export function ChordsPage(): React.ReactElement {
                   onClick={() => setToneQ(q)}
                 >
                   {CT.QBY[q]?.name}
-                  <small>{RULE[q]}</small>
+                  <small>{t(RULE[q])}</small>
                 </button>
               ))}
             </div>
@@ -1526,7 +1527,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={toneDir === d}
                   onClick={() => setToneDir(d)}
                 >
-                  {d === 'up' ? '상행' : d === 'down' ? '하행' : '왕복'}
+                  {d === 'up' ? t('chords.dsAscending') : d === 'down' ? t('chords.dsDescending') : t('chords.dsRoundtrip')}
                 </button>
               ))}
             </div>
@@ -1537,7 +1538,7 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={tonePlaying}
               onClick={toggleTonePlay}
             >
-              {tonePlaying ? '정지' : '재생'}
+              {tonePlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
           </div>
         </div>
@@ -1545,7 +1546,7 @@ export function ChordsPage(): React.ReactElement {
         <div className={styles.panel}>
           <h3 id="tone-title" className={styles.h3}>
             {CT.NAMES[toneRoot]}
-            {CT.QBY[toneQ]?.name} · {START_PAT[toneStart]?.label}
+            {CT.QBY[toneQ]?.name} · {t(START_PAT[toneStart]?.labelKey)}
           </h3>
           <div ref={toneScrollRef} className={styles.scroll}>
             <div id="tone-board">
@@ -1572,11 +1573,11 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-matrix" role="tabpanel" className={styles.pane} hidden={activeTab !== 'matrix'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>보이싱 매트릭스.</b> 드롭 2·3·2&4의 4가지 전위와 4줄 조합을 손 폭 안에 맞춰 펼칩니다.
+            <b>{t('chords.matrixIntroBold')}</b> {t('chords.matrixIntroText')}
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="mx-root">루트 음</label>
+              <label htmlFor="mx-root">{t('chords.rootNoteLabel')}</label>
               <select
                 id="mx-root"
                 className={styles.selectField}
@@ -1591,7 +1592,7 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="mx-span">손 폭 (프렛)</label>
+              <label htmlFor="mx-span">{t('chords.handSpanFretLabel')}</label>
               <input
                 id="mx-span"
                 className={styles.numField}
@@ -1615,7 +1616,7 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="mx-beats">코드당 박자</label>
+              <label htmlFor="mx-beats">{t('chords.beatsPerChordLabel')}</label>
               <input
                 id="mx-beats"
                 className={styles.numField}
@@ -1629,7 +1630,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>드롭 종류</span>
+            <span className={styles.lab}>{t('chords.dropTypeLab')}</span>
             <div id="mx-drop" className={styles.chips}>
               {CT.DROPS.map((d) => (
                 <button
@@ -1646,7 +1647,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>전위 (베이스 음)</span>
+            <span className={styles.lab}>{t('chords.inversionBassLab')}</span>
             <div id="mx-inv" className={styles.chips}>
               {CT.INV_NAME.map((n, i) => (
                 <button
@@ -1663,7 +1664,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>줄 조합</span>
+            <span className={styles.lab}>{t('chords.stringComboLab')}</span>
             <div id="mx-set" className={styles.chips}>
               {mxPlayableSets.map((s: any) => {
                 const sk = s.set.join(',');
@@ -1675,8 +1676,8 @@ export function ChordsPage(): React.ReactElement {
                     aria-pressed={mxSetKey === sk}
                     onClick={() => setMxSetKey(sk)}
                   >
-                    {s.label}번줄
-                    <small>{s.full ? '9개 성질 전부' : '일부 성질만'}</small>
+                    {t('chords.stringNum', { n: s.label })}
+                    <small>{s.full ? t('chords.allNineQualities') : t('chords.partialQualities')}</small>
                   </button>
                 );
               })}
@@ -1684,7 +1685,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>포지션 선택</span>
+            <span className={styles.lab}>{t('chords.positionSelectLab')}</span>
             <div id="mx-place" className={styles.chips}>
               {mxPlacements.map((p: any, i: number) => (
                 <button
@@ -1694,7 +1695,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={safeMxPlace === i}
                   onClick={() => setMxPlace(i)}
                 >
-                  {Math.min(...p.frets)}프렛 부근
+                  {t('chords.fretNearCount', { n: Math.min(...p.frets) })}
                 </button>
               ))}
             </div>
@@ -1708,17 +1709,17 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={mxPlaying}
               onClick={toggleMxPlay}
             >
-              {mxPlaying ? '정지' : '재생'}
+              {mxPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
             <span id="mx-count" className={styles.status}>
-              {CT.NAMES[mxRoot]} 기준, 손 폭 {mxSpan + 1}프렛 안에서 잡히는 조합 {mxCounts.ok}개
+              {t('chords.matrixCombinations', { name: CT.NAMES[mxRoot], span: mxSpan + 1, count: mxCounts.ok })}
             </span>
           </div>
         </div>
 
         <div className={styles.panel}>
           <div id="mx-struct" className={styles.meta}>
-            아래 음부터: {mxDropStructure.map((n: any) => CT.SLOT_NAME[n.slot]).join(' → ')}
+            {t('chords.matrixFromBottom')}: {mxDropStructure.map((n: any) => CT.SLOT_NAME[n.slot]).join(' → ')}
           </div>
           <h3 id="mx-btitle" className={styles.h3}>
             {CT.NAMES[mxRoot]}
@@ -1732,7 +1733,7 @@ export function ChordsPage(): React.ReactElement {
                     CT.atR0(mxDropStructure, activeMxSetObj.set, mxR0, mxQ)?.notes || []
                   }
                   ctx={buildCtxNotes(mxRoot, q4Tones(mxQ))}
-                  label={`${CT.NAMES[mxRoot]}${CT.QBY[mxQ]?.name} 지판`}
+                  label={t('chords.matrixFretboardLabel', { chord: `${CT.NAMES[mxRoot]}${CT.QBY[mxQ]?.name}` })}
                 />
               )}
             </div>
@@ -1755,7 +1756,7 @@ export function ChordsPage(): React.ReactElement {
                   {a.valid ? (
                     <ChordBoxSvg notes={a.notes} label={`${CT.NAMES[mxRoot]}${q.name}`} />
                   ) : (
-                    <div>이 자리에선 불가</div>
+                    <div>{t('chords.matrixImpossible')}</div>
                   )}
                   <figcaption>
                     <b>
@@ -1794,15 +1795,15 @@ export function ChordsPage(): React.ReactElement {
                 Top: {ccCurrentStep?.deg} ({CT.NAMES[ccCurrentStep?.topPc]})
               </div>
               <div id="cc-where" className={styles.status}>
-                {CT.strName(ccStr)} {ccTopFret}프렛 고정
+                {t('chords.circleTopFretFixed', { str: CT.strName(ccStr), fret: ccTopFret })}
               </div>
               <div id="cc-next" className={styles.note}>
-                다음: {ccNextStep?.name} · Top {ccNextStep?.deg}
+                {t('chords.nextPrefix')}: {ccNextStep?.name} · Top {ccNextStep?.deg}
               </div>
             </div>
             <div className={styles.row}>
               <button id="cc-prev" type="button" className={styles.ghost} onClick={() => ccMove(-1)}>
-                ◀ 이전
+                {t('chords.btnPrev')}
               </button>
               <button
                 id="cc-play"
@@ -1811,17 +1812,17 @@ export function ChordsPage(): React.ReactElement {
                 aria-pressed={ccPlaying}
                 onClick={toggleCcPlay}
               >
-                {ccPlaying ? '정지' : '재생'}
+                {ccPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
               </button>
               <button id="cc-nextb" type="button" className={styles.ghost} onClick={() => ccMove(1)}>
-                다음 ▶
+                {t('chords.btnNext')}
               </button>
             </div>
           </div>
 
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="cc-root">시작 루트</label>
+              <label htmlFor="cc-root">{t('chords.startRootLabel')}</label>
               <select
                 id="cc-root"
                 className={styles.selectField}
@@ -1836,7 +1837,7 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-top">탑노트 음정</label>
+              <label htmlFor="cc-top">{t('chords.topNoteIntervalLabel')}</label>
               <select
                 id="cc-top"
                 className={styles.selectField}
@@ -1851,7 +1852,7 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-str">탑노트 줄</label>
+              <label htmlFor="cc-str">{t('chords.topNoteStringLabel')}</label>
               <select
                 id="cc-str"
                 className={styles.selectField}
@@ -1860,13 +1861,13 @@ export function ChordsPage(): React.ReactElement {
               >
                 {[5, 4, 3, 2, 1, 0].map((s) => (
                   <option key={s} value={s}>
-                    {6 - s}번줄
+                    {t('chords.stringNum', { n: 6 - s })}
                   </option>
                 ))}
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-near">프렛 부근</label>
+              <label htmlFor="cc-near">{t('chords.nearFretLabel')}</label>
               <input
                 id="cc-near"
                 className={styles.numField}
@@ -1890,7 +1891,7 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-beats">코드당 박자</label>
+              <label htmlFor="cc-beats">{t('chords.beatsPerChordLabel')}</label>
               <input
                 id="cc-beats"
                 className={styles.numField}
@@ -1908,7 +1909,7 @@ export function ChordsPage(): React.ReactElement {
                 checked={ccHint}
                 onChange={(e) => setCcHint(e.target.checked)}
               />
-              추천 폼 힌트 보기
+              {t('chords.showRecomHint')}
             </label>
             <label className={styles.check}>
               <input
@@ -1917,7 +1918,7 @@ export function ChordsPage(): React.ReactElement {
                 checked={ccTopSnd}
                 onChange={(e) => setCcTopSnd(e.target.checked)}
               />
-              탑노트 단음 울림
+              {t('chords.soundTopNote')}
             </label>
             <label className={styles.check}>
               <input
@@ -1926,7 +1927,7 @@ export function ChordsPage(): React.ReactElement {
                 checked={ccSkip}
                 onChange={(e) => setCcSkip(e.target.checked)}
               />
-              불협 칸 건너뛰기
+              {t('chords.skipDissonant')}
             </label>
           </div>
         </div>
@@ -1963,7 +1964,7 @@ export function ChordsPage(): React.ReactElement {
                     : [{ s: ccStr, f: ccTopFret, deg: ccCurrentStep?.deg.replace(/ .*/, ''), cls: 'guide' }]
                 }
                 ctx={ccCurrentStep?.q ? buildCtxNotes(ccCurrentStep.root, geTones(ccCurrentStep.q)) : []}
-                label={`${ccCurrentStep?.name} 지판`}
+                label={t('chords.circleFretboardLabel', { name: ccCurrentStep?.name })}
               />
             </div>
           </div>
@@ -1986,7 +1987,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <details id="cc-all" open={ccAllOpen} onToggle={() => setCcAllOpen(!ccAllOpen)}>
-            <summary>이 탑노트로 가능한 모든 도미넌트 보기</summary>
+            <summary>{t('chords.allDominantsSummary')}</summary>
             <div id="cc-alllist" />
           </details>
         </div>
@@ -1996,17 +1997,17 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-reint" role="tabpanel" className={styles.pane} hidden={activeTab !== 'reint'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>코드 재해석.</b> 하나의 손 모양이 바라보는 근음에 따라 전혀 다른 코드로 변하는 화성적 다의성을 익힙니다.
+            <b>{t('chords.reintIntroBold')}</b> {t('chords.reintIntroText')}
           </p>
           <div className={styles.field}>
-            <span className={styles.lab}>프리셋 폼</span>
+            <span className={styles.lab}>{t('chords.presetFormLab')}</span>
             <div id="ri-presets" className={styles.chips}>
               {REINT_PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   className={styles.chip}
-                  title={p.hint}
+                  title={t(p.hintKey)}
                   aria-pressed={riPreset === p.id}
                   onClick={() => {
                     setRiPreset(p.id);
@@ -2023,7 +2024,7 @@ export function ChordsPage(): React.ReactElement {
                 aria-pressed={riPreset === 'custom'}
                 onClick={() => setRiPreset('custom')}
               >
-                직접 찍기
+                {t('chords.btnManualPick')}
               </button>
             </div>
           </div>
@@ -2035,7 +2036,7 @@ export function ChordsPage(): React.ReactElement {
                 to={15}
                 clickable
                 notes={riDegNotes}
-                label="보이싱 입력 지판"
+                label={t('chords.reintInputLabel')}
                 onCellClick={(s, f) => {
                   const copy = [...riFrets];
                   copy[s] = copy[s] === f ? -1 : f;
@@ -2059,7 +2060,7 @@ export function ChordsPage(): React.ReactElement {
                 if (riNotes.length) audioEngine.chord(pitchesOf(riNotes), audioEngine.now() + 0.02);
               }}
             >
-              소리 듣기
+              {t('chords.btnListenSound')}
             </button>
             <button
               id="ri-clear"
@@ -2071,7 +2072,7 @@ export function ChordsPage(): React.ReactElement {
                 setRiPick(0);
               }}
             >
-              지판 비우기
+              {t('chords.btnClearFretboard')}
             </button>
           </div>
         </div>
@@ -2081,13 +2082,13 @@ export function ChordsPage(): React.ReactElement {
             <div id="ri-shape">
               {riNotes.length ? (
                 <figure className={styles.cell}>
-                  <ChordBoxSvg notes={riDegNotes} label="현재 모양" />
+                  <ChordBoxSvg notes={riDegNotes} label={t('chords.currentShapeLabel')} />
                   <figcaption>
                     <b>{fretText(riNotes)}</b>
                   </figcaption>
                 </figure>
               ) : (
-                <div className={styles.empty}>지판을 눌러 줄마다 한 음씩 찍으세요.</div>
+                <div className={styles.empty}>{t('chords.reintEmptyPrompt')}</div>
               )}
             </div>
 
@@ -2111,10 +2112,10 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
 
-          <h3 className={styles.h3}>2-5-1 진행 속에 넣기</h3>
+          <h3 className={styles.h3}>{t('chords.reintTwoFiveOneTitle')}</h3>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="ri-key">키 선택</label>
+              <label htmlFor="ri-key">{t('chords.selectKeyLabel')}</label>
               <select
                 id="ri-key"
                 className={styles.selectField}
@@ -2147,7 +2148,7 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={riPlaying}
               onClick={toggleRiPlay}
             >
-              {riPlaying ? '정지' : '재생'}
+              {riPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
           </div>
           <div id="ri-swap" className={styles.boxrow}>
@@ -2156,7 +2157,7 @@ export function ChordsPage(): React.ReactElement {
                 {!p.none ? (
                   <ChordBoxSvg notes={p.notes} label={p.name} />
                 ) : (
-                  <div className={styles.empty}>이 모양은 불가</div>
+                  <div className={styles.empty}>{t('chords.shapeImpossible')}</div>
                 )}
                 <figcaption>
                   <b>{p.ro.r} {p.name}</b>
@@ -2167,16 +2168,16 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           {/* 퀴즈 박스 */}
-          <h3 className={styles.h3}>보이싱 해석 퀴즈</h3>
+          <h3 className={styles.h3}>{t('chords.quizTitle')}</h3>
           <div className={styles.quiz}>
             <div id="qz-box">
               {quizQuestion && (
-                <ChordBoxSvg notes={quizQuestion.notes} label="퀴즈 모양" />
+                <ChordBoxSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} />
               )}
             </div>
             <div className={styles.field}>
               <div id="qz-score" className={styles.meta}>
-                {quizScore.n ? `${quizScore.score} / ${quizScore.n}` : '아직 푼 문제 없음'}
+                {quizScore.n ? `${quizScore.score} / ${quizScore.n}` : t('chords.noSolvedQuiz')}
               </div>
               <div id="qz-text" className={styles.lead}>
                 {quizQuestion?.text}
@@ -2196,7 +2197,7 @@ export function ChordsPage(): React.ReactElement {
                         n: prev.n + 1,
                       }));
                       setQuizFeedback({
-                        text: (o.ok ? '맞아요! ' : '아쉬워요. ') + quizQuestion.explain,
+                        text: (o.ok ? t('chords.quizCorrect') : t('chords.quizIncorrect')) + quizQuestion.explain,
                         good: o.ok,
                       });
                     }}
@@ -2219,10 +2220,10 @@ export function ChordsPage(): React.ReactElement {
                     if (quizQuestion) audioEngine.chord(pitchesOf(quizQuestion.notes), audioEngine.now() + 0.02);
                   }}
                 >
-                  소리 듣기
+                  {t('chords.btnListenSound')}
                 </button>
                 <button id="qz-next" type="button" className={styles.btn} onClick={startNewQuiz}>
-                  다음 문제 ▶
+                  {t('chords.btnNextQuiz')}
                 </button>
               </div>
             </div>
@@ -2234,23 +2235,23 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-tf" role="tabpanel" className={styles.pane} hidden={activeTab !== 'tf'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>2-5-1 탐색기.</b> 목표 프렛 창 안에서 부드러운 성부 진행으로 연결되는 2-5-1 보이싱 경로를 자동 발굴합니다.
+            <b>{t('chords.tfIntroBold')}</b> {t('chords.tfIntroText')}
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="a-kind">진행 성격</label>
+              <label htmlFor="a-kind">{t('chords.tfProgKindLabel')}</label>
               <select
                 id="a-kind"
                 className={styles.selectField}
                 value={tfKind}
                 onChange={(e) => setTfKind(e.target.value as 'major' | 'minor')}
               >
-                <option value="major">메이저 2-5-1</option>
-                <option value="minor">마이너 2-5-1</option>
+                <option value="major">{t('chords.tfMajorTwoFiveOne')}</option>
+                <option value="minor">{t('chords.tfMinorTwoFiveOne')}</option>
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-lo">시작 프렛</label>
+              <label htmlFor="a-lo">{t('chords.fretStartLabel')}</label>
               <input
                 id="a-lo"
                 className={styles.numField}
@@ -2262,7 +2263,7 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-hi">끝 프렛</label>
+              <label htmlFor="a-hi">{t('chords.fretEndLabel')}</label>
               <input
                 id="a-hi"
                 className={styles.numField}
@@ -2274,7 +2275,7 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-proot">펜타토닉 기준 루트</label>
+              <label htmlFor="a-proot">{t('chords.tfPentaRootLabel')}</label>
               <select
                 id="a-proot"
                 className={styles.selectField}
@@ -2289,19 +2290,19 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-ptype">펜타 종류</label>
+              <label htmlFor="a-ptype">{t('chords.tfPentaTypeLabel')}</label>
               <select
                 id="a-ptype"
                 className={styles.selectField}
                 value={tfPtype}
                 onChange={(e) => setTfPtype(e.target.value as 'min' | 'maj')}
               >
-                <option value="min">마이너 펜타</option>
-                <option value="maj">메이저 펜타</option>
+                <option value="min">{t('chords.tfMinorPenta')}</option>
+                <option value="maj">{t('chords.tfMajorPenta')}</option>
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-out">펜타 밖 최대 음수</label>
+              <label htmlFor="a-out">{t('chords.tfMaxNotesOutPenta')}</label>
               <input
                 id="a-out"
                 className={styles.numField}
@@ -2313,16 +2314,16 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-guide">가이드톤 필수</label>
+              <label htmlFor="a-guide">{t('chords.tfGuideToneReq')}</label>
               <select
                 id="a-guide"
                 className={styles.selectField}
                 value={tfNeedGuide}
                 onChange={(e) => setTfNeedGuide(+e.target.value)}
               >
-                <option value={2}>3도·7도 모두 필수</option>
-                <option value={1}>하나만 필수</option>
-                <option value={0}>제한 없음</option>
+                <option value={2}>{t('chords.tfBothThreeSevenReq')}</option>
+                <option value={1}>{t('chords.tfOnlyOneReq')}</option>
+                <option value={0}>{t('chords.tfNoLimit')}</option>
               </select>
             </div>
             <label className={styles.check}>
@@ -2332,7 +2333,7 @@ export function ChordsPage(): React.ReactElement {
                 checked={tfUsePent}
                 onChange={(e) => setTfUsePent(e.target.checked)}
               />
-              펜타토닉 창 필터
+              {t('chords.tfFilterPenta')}
             </label>
             <label className={styles.check}>
               <input
@@ -2341,13 +2342,13 @@ export function ChordsPage(): React.ReactElement {
                 checked={tfVariants}
                 onChange={(e) => setTfVariants(e.target.checked)}
               />
-              텐션 변형 포함
+              {t('chords.tfIncludeTension')}
             </label>
           </div>
 
           <div className={styles.row}>
             <button id="a-go" type="button" className={styles.btn} onClick={runTfSearch}>
-              탐색 실행
+              {t('chords.tfRunSearch')}
             </button>
             <span id="a-status" className={styles.status}>
               {tfStatus}
@@ -2359,7 +2360,7 @@ export function ChordsPage(): React.ReactElement {
         <div id="a-view" className={styles.panel} hidden={!tfCurrentPath}>
           <div className={styles.headRow}>
             <h3 id="a-vtitle" className={styles.h3}>
-              {tfKey != null && CT.NAMES[tfKey]} 2-5-1 진행
+              {tfKey != null && CT.NAMES[tfKey]} {t('chords.tfProgTitle')}
             </h3>
             <span id="a-vmeta" className={styles.meta} />
             <button
@@ -2369,7 +2370,7 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={tfPlaying}
               onClick={playTfSequence}
             >
-              {tfPlaying ? '재생 중…' : '진행 듣기'}
+              {tfPlaying ? t('chords.tfPlaying') : t('chords.tfListen')}
             </button>
           </div>
 
@@ -2400,20 +2401,20 @@ export function ChordsPage(): React.ReactElement {
                     geTones(tfCurrentPath.chords[tfC].q)
                   )}
                   block={{ lo: tfLo, hi: tfHi }}
-                  label="2-5-1 지판"
+                  label={t('chords.tfFretboardLabel')}
                 />
               )}
             </div>
           </div>
           <div id="a-vctxl" className={styles.note}>
-            지판 전체의 같은 코드톤
+            {t('chords.tfSameChordToneFull')}
           </div>
 
           <div id="a-out-list" className={styles.results}>
             {tfOkList.map((k: any) => (
               <article key={k.key} className={styles.panel}>
                 <h4 className={styles.h3}>
-                  {CT.NAMES[k.key]} {tfKind === 'minor' ? '마이너' : '메이저'} 2-5-1
+                  {CT.NAMES[k.key]} {tfKind === 'minor' ? t('chords.minor') : t('chords.major')} {t('chords.tfProgTitle')}
                 </h4>
                 <div className={styles.boxrowTight}>
                   {k.paths[0].chords.map((c: any, ci: number) => (
@@ -2446,28 +2447,28 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-ds" role="tabpanel" className={styles.pane} hidden={activeTab !== 'ds'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>3도 · 6도 · 4도 더블 스탑.</b> 스케일 위에서 두 줄 화음(Double-Stop)을 인접 줄 또는 한 줄 건너뛴 줄 쌍으로 익히고 두 음을 동시에 울려 하모니 감각을 키웁니다.
+            <b>{t('chords.dsIntroBold')}</b> {t('chords.dsIntroText')}
           </p>
 
           <div className={styles.field}>
-            <span className={styles.lab}>악기 선택</span>
+            <span className={styles.lab}>{t('chords.dsInstrumentLab')}</span>
             <div id="ds-inst" className={styles.chips}>
-              {CT.TUNINGS.map((t) => (
+              {CT.TUNINGS.map((tun) => (
                 <button
-                  key={t.id}
+                  key={tun.id}
                   type="button"
                   className={styles.chip}
-                  aria-pressed={dsInst === t.id}
+                  aria-pressed={dsInst === tun.id}
                   onClick={() => {
-                    const nextTun = CT.TUNING_BY[t.id] || CT.TUNING_BY.g6;
+                    const nextTun = CT.TUNING_BY[tun.id] || CT.TUNING_BY.g6;
                     const nextPair = getSafeDoubleStopPair(nextTun.open.length, dsInterval, dsPair);
-                    setDsInst(t.id);
+                    setDsInst(tun.id);
                     setDsPair(nextPair);
                     setDsSel(0);
                   }}
                 >
-                  {t.name}
-                  <small>{t.open.length}현 · {t.frets}f</small>
+                  {tun.name}
+                  <small>{t('chords.tuningSummary', { strings: tun.open.length, frets: tun.frets })}</small>
                 </button>
               ))}
             </div>
@@ -2475,7 +2476,7 @@ export function ChordsPage(): React.ReactElement {
 
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="ds-root">루트 음</label>
+              <label htmlFor="ds-root">{t('chords.rootNoteLabel')}</label>
               <select
                 id="ds-root"
                 className={styles.selectField}
@@ -2490,7 +2491,7 @@ export function ChordsPage(): React.ReactElement {
               </select>
             </div>
             <div className={styles.field}>
-              <label htmlFor="ds-scale">스케일 종류</label>
+              <label htmlFor="ds-scale">{t('chords.scaleTypeLabel')}</label>
               <select
                 id="ds-scale"
                 className={styles.selectField}
@@ -2519,7 +2520,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>더블 스탑 음정</span>
+            <span className={styles.lab}>{t('chords.dsIntervalLab')}</span>
             <div id="ds-interval" className={styles.chips}>
               {CT.DOUBLE_STOP_INTERVALS.map((iv) => (
                 <button
@@ -2542,7 +2543,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.lab}>줄 쌍 선택</span>
+            <span className={styles.lab}>{t('chords.dsStringPairLab')}</span>
             <div id="ds-pair" className={styles.chips}>
               {dsPairOptions.map((opt) => {
                 const isSel = effectiveDsPair[0] === opt.pair[0] && effectiveDsPair[1] === opt.pair[1];
@@ -2575,7 +2576,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={dsDir === d}
                   onClick={() => setDsDir(d)}
                 >
-                  {d === 'up' ? '상행' : d === 'down' ? '하행' : '왕복'}
+                  {d === 'up' ? t('chords.dsAscending') : d === 'down' ? t('chords.dsDescending') : t('chords.dsRoundtrip')}
                 </button>
               ))}
             </div>
@@ -2586,10 +2587,10 @@ export function ChordsPage(): React.ReactElement {
               aria-pressed={dsPlaying}
               onClick={toggleDsPlay}
             >
-              {dsPlaying ? '정지' : '재생'}
+              {dsPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
             <span id="ds-status" className={styles.status}>
-              다이어토닉 더블 스탑 {dsStepsList.length}개 스텝
+              {t('chords.dsDiatonicSteps', { count: dsStepsList.length })}
             </span>
           </div>
         </div>
@@ -2597,7 +2598,7 @@ export function ChordsPage(): React.ReactElement {
         <div className={styles.panel}>
           <h3 id="ds-title" className={styles.h3}>
             {CT.NAMES[dsRoot]} {dsScale} · {CT.DOUBLE_STOP_INTERVALS.find((i) => i.id === dsInterval)?.name} (
-            {dsTuning.open.length - effectiveDsPair[1]}-{dsTuning.open.length - effectiveDsPair[0]}번줄)
+            {t('chords.stringPairLabel', { high: dsTuning.open.length - effectiveDsPair[1], low: dsTuning.open.length - effectiveDsPair[0] })})
           </h3>
           <div className={styles.scroll}>
             <div id="ds-board">
@@ -2606,7 +2607,7 @@ export function ChordsPage(): React.ReactElement {
                 isBass={dsTuning.kind === 'bass'}
                 lo={0}
                 hi={dsTuning.frets}
-                label="더블 스탑 지판"
+                label={t('chords.dsFretboardLabel')}
                 notes={dsBoardNotes}
                 onNoteClick={(pitch) => {
                   const foundIdx = dsStepsList.findIndex(
@@ -2619,15 +2620,15 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           <div className={styles.legend}>
-            <span><i className="r" />근음</span>
-            <span><i className="g" />더블 스탑 구성음</span>
-            <span><i className="ctxk" />지판 전체 스케일 음</span>
-            <span><i className="blkk" />현재 짚는 두 음 범위</span>
-            <span><i className="n" />지금 울리는 두 음</span>
+            <span><i className="r" />{t('chords.legendRoot')}</span>
+            <span><i className="g" />{t('chords.dsLegendIntervalNotes')}</span>
+            <span><i className="ctxk" />{t('chords.dsLegendFullScaleNotes')}</span>
+            <span><i className="blkk" />{t('chords.dsLegendCurrentRange')}</span>
+            <span><i className="n" />{t('chords.dsLegendCurrentlyPlaying')}</span>
           </div>
 
           <h3 className={styles.h3}>
-            다이어토닉 더블 스탑 스텝 (카드를 누르면 두 음이 동시에 울려요)
+            {t('chords.dsCardHint')}
           </h3>
           <div id="ds-steps" className={styles.strip}>
             {dsStepsList.map((step, idx) => {

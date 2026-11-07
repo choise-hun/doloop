@@ -95,3 +95,90 @@ test('I0-6 사전의 모든 키가 소스 어딘가에서 쓰인다', () => {
   const unused = Object.keys(KO).filter((k) => !src.includes(`'${k}'`));
   assert.deepEqual(unused, []);
 });
+
+// LA-1~3: 정적 검증 — 한글 잔존 0 · 마커 사유 2자 이상 · 동적 템플릿 키 금지
+const D6_DIRS = new Set([
+  'frontend/src/lib/i18n',
+  'frontend/src/lib/engine',
+  'frontend/src/components/ops',
+]);
+const D6_FILES = new Set([
+  'frontend/src/lib/opsForm.mts',
+  'frontend/src/lib/noteMarkdown.mts',
+]);
+
+const getTargetFiles = () => {
+  const files = [];
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(__dirname, '..', rel), { withFileTypes: true })) {
+      const child = `${rel}/${e.name}`;
+      if (e.isDirectory()) {
+        if (!D6_DIRS.has(child)) walk(child);
+      } else if (/\.(tsx|ts|mts|mjs)$/.test(e.name)) {
+        if (!D6_FILES.has(child)) files.push(child);
+      }
+    }
+  };
+  walk('frontend/src');
+  return files;
+};
+
+test('LA-1 한글 잔존 0 (D6 제외, i18n-keep 줄 제외)', () => {
+  const files = getTargetFiles();
+  const remains = [];
+  const hangulRegex = /[가-힣]/;
+
+  for (const rel of files) {
+    const raw = read(rel);
+    // 블록 주석 줄 번호 유지 치환
+    const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, (m) => '\n'.repeat((m.match(/\n/g) || []).length));
+    const lines = stripped.split('\n');
+    lines.forEach((line, idx) => {
+      if (line.includes('// i18n-keep:')) return;
+      const codeOnly = line.replace(/\/\/.*$/, '');
+      if (hangulRegex.test(codeOnly)) {
+        remains.push(`${rel}:${idx + 1}`);
+      }
+    });
+  }
+
+  assert.deepEqual(remains, []);
+});
+
+test('LA-2 마커 사유가 2자 이상인지 검증', () => {
+  const files = getTargetFiles();
+  const invalidMarkers = [];
+
+  for (const rel of files) {
+    const raw = read(rel);
+    const lines = raw.split('\n');
+    lines.forEach((line, idx) => {
+      const match = line.match(/\/\/\s*i18n-keep:(.*)$/);
+      if (match) {
+        const reason = match[1].trim();
+        if (reason.length < 2) {
+          invalidMarkers.push(`${rel}:${idx + 1}: reason too short ("${reason}")`);
+        }
+      }
+    });
+  }
+
+  assert.deepEqual(invalidMarkers, []);
+});
+
+test('LA-3 동적 템플릿 리터럴 t() 호출 금지', () => {
+  const files = getTargetFiles();
+  let dynamicCount = 0;
+  const dynamicRegex = /\bt\(\s*`/g;
+
+  for (const rel of files) {
+    const raw = read(rel);
+    const codeOnly = raw
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => '\n'.repeat((m.match(/\n/g) || []).length))
+      .replace(/\/\/.*$/gm, '');
+    const matches = codeOnly.match(dynamicRegex);
+    if (matches) dynamicCount += matches.length;
+  }
+
+  assert.equal(dynamicCount, 0);
+});

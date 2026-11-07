@@ -2,6 +2,7 @@
 // CH-5b: 연습실 8번째 탭 "진행 연주" — chords.html#prog?c=&k=&t=&from= 로 받은 진행을 정석 폼 보이싱 경로로 연주
 // 프레임: 개발산출물/결과/CH-1a_프레임.md §3, 엔진: 결과/CH-2b_엔진퀄리티.md §2, 결과/CH-2c-2_정석폼.md §2
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { t, type I18nKey } from '../../lib/i18n.mts';
 import { SafeLink } from '../common/SafeLink';
 import { audioEngine, CT, GE, loadChordForms, PATH } from '../../lib/musicEngine';
 import type { FormTable, PathOptions, Voicing, VoicingPath } from '../../lib/musicEngine';
@@ -48,14 +49,14 @@ function computePaths(chords: ChordOk[], table: FormTable, lo: number, hi: numbe
   return { paths: [], mode: 'none' };
 }
 
-const KIND_TEXT: Record<string, string> = { table: '정석 폼', rule: '규칙 폼', compact: '간단한 폼(대체)' };
+const KIND_KEY: Record<string, I18nKey> = { table: 'chords.kindTable', rule: 'chords.kindRule', compact: 'chords.kindCompact' };
 
 function voicingNotes(v: Voicing, chord: ChordOk): string[] {
   const out: string[] = [];
   const kind = v.kind || 'compact';
-  out.push(KIND_TEXT[kind] || kind);
-  if (v.omit && v.omit.length) out.push(`${v.omit.join('·')} 생략`);
-  if (chord.bass !== undefined && v.notes.length && v.notes[0].pc !== chord.bass) out.push('베이스 생략(재생 베이스로만)');
+  out.push(KIND_KEY[kind] ? t(KIND_KEY[kind]) : kind);
+  if (v.omit && v.omit.length) out.push(t('chords.omitNotes', { notes: v.omit.join('·') }));
+  if (chord.bass !== undefined && v.notes.length && v.notes[0].pc !== chord.bass) out.push(t('chords.omitBass'));
   return out;
 }
 
@@ -96,7 +97,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
     let alive = true;
     loadChordForms()
       .then((t) => alive && setTable(t))
-      .catch(() => alive && setTableErr('정석 폼 표를 불러오지 못했어요. 새로고침해 보세요.'));
+      .catch(() => alive && setTableErr(t('chords.tableErr')));
     return () => {
       alive = false;
     };
@@ -199,7 +200,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
 
   const back = (
     <SafeLink id="pp-back" className={styles.ghost} href={backHref(prog.from)}>
-      ← 코드 진행 모음으로
+      ← {t('chords.backToProgressions')}
     </SafeLink>
   );
 
@@ -209,11 +210,11 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
     return (
       <div className={styles.panel} id="pp-empty">
         <div className={styles.headRow}>
-          <h2 className={styles.h3}>진행 연주</h2>
+          <h2 className={styles.h3}>{t('chords.progPlayTitle')}</h2>
           {back}
         </div>
         <p className={styles.lead}>
-          코드 진행 모음에서 <b>▶ 연습실에서 직접 연주해볼까요?</b>를 누르면 그 진행이 여기로 와요. 기본 진행을 고르거나 코드를 직접 넣어 볼 수도 있어요.
+          {t('chords.progPlayIntroPre')}<b>{t('chords.progPlayIntroBold')}</b>{t('chords.progPlayIntroPost')}
         </p>
         <div className={styles.chips} id="pp-seeds">
           {SEEDS.map((s) => (
@@ -232,18 +233,18 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
           }}
         >
           <label htmlFor="pp-input" className={styles.lab}>
-            코드 직접 입력
+            {t('chords.inputDirectLabel')}
           </label>
           <input
             id="pp-input"
             className={`${styles.numField} ${styles.ppInput}`}
-            placeholder="예: C - G - Am - F"
+            placeholder={t('chords.inputDirectPh')}
             value={draft}
             maxLength={600}
             onChange={(e) => setDraft(e.target.value)}
           />
           <button type="submit" className={styles.btn} disabled={!draftSymbols.length}>
-            연주하기
+            {t('chords.btnPlayProg')}
           </button>
         </form>
       </div>
@@ -251,15 +252,15 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
   }
 
   const status = !table
-    ? tableErr || '정석 폼 불러오는 중…'
+    ? tableErr || t('chords.tableLoading')
     : !playable.length
-      ? '읽을 수 있는 코드가 없어요.'
+      ? t('chords.errNoReadableChord')
       : mode === 'none'
-        ? '이 범위에서 이어 칠 수 있는 보이싱 경로가 없어요. 프렛 범위를 넓혀 보세요.'
+        ? t('chords.errNoVoicingPath')
         : mode === 'both'
-          ? '정석 폼이 없는 코드가 있어 간단한 폼으로 대체했어요.'
+          ? t('chords.warnFallbackCompact')
           : mode === 'wide'
-            ? '이 범위로는 경로가 없어 0–15프렛으로 넓혀 찾았어요.'
+            ? t('chords.warnExpandedFret')
             : '';
 
   return (
@@ -267,7 +268,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
       <div className={styles.panel}>
         <div className={styles.headRow}>
           <h2 className={styles.h3} id="pp-title">
-            {prog.title || '진행 연주'}
+            {prog.title || t('chords.progDefaultTitle')}
             {targetKey && <span className={styles.meta}>{targetKey}</span>}
           </h2>
           {back}
@@ -278,7 +279,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
             const k = playable.indexOf(it);
             const v = k >= 0 ? voicings[k] : undefined;
             const notes = it.chord && v ? voicingNotes(v, it.chord) : [];
-            const sub = [it.roman, it.chord ? '' : '못 읽음 — 빠집니다', ...(it.warn && it.chord ? ['도수 중복'] : [])].filter(Boolean).join(' · ');
+            const sub = [it.roman, it.chord ? '' : t('chords.chordUnreadable'), ...(it.warn && it.chord ? [t('chords.degreeDuplicate')] : [])].filter(Boolean).join(' · ');
             return (
               <button
                 key={it.i}
@@ -299,28 +300,28 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
         </div>
         {skipped > 0 && (
           <p className={styles.note} id="pp-skipped">
-            못 읽는 코드 {skipped}개는 빼고 연주해요.
+            {t('chords.skippedNotice', { skipped })}
           </p>
         )}
 
         <div className={styles.controls}>
           <div className={styles.field}>
-            <label htmlFor="pp-semis">키 옮기기</label>
+            <label htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
             <select id="pp-semis" className={styles.selectField} value={semis} onChange={(e) => setSemis(+e.target.value)}>
               {SEMIS.map((n) => (
                 <option key={n} value={n}>
-                  {n === 0 ? '원래 키' : `${n > 0 ? '+' : ''}${n}`}
+                  {n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`}
                   {prog.key ? ` · ${transposeKey(prog.key, n)}` : ''}
                 </option>
               ))}
             </select>
           </div>
           <div className={styles.field}>
-            <label htmlFor="pp-lo">프렛 범위 시작</label>
+            <label htmlFor="pp-lo">{t('chords.fretStartLabel')}</label>
             <input id="pp-lo" type="number" className={styles.numField} min={0} max={15} value={lo} onChange={(e) => setLo(Math.max(0, Math.min(15, +e.target.value || 0)))} />
           </div>
           <div className={styles.field}>
-            <label htmlFor="pp-hi">프렛 범위 끝</label>
+            <label htmlFor="pp-hi">{t('chords.fretEndLabel')}</label>
             <input id="pp-hi" type="number" className={styles.numField} min={1} max={15} value={hi} onChange={(e) => setHi(Math.max(1, Math.min(15, +e.target.value || 1)))} />
           </div>
           <div className={styles.field}>
@@ -328,32 +329,32 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
             <input id="pp-bpm" type="number" className={styles.numField} min={40} max={200} value={bpm} onChange={(e) => setBpm(Math.max(40, Math.min(200, +e.target.value || 80)))} />
           </div>
           <div className={styles.field}>
-            <label htmlFor="pp-beats">코드당 박</label>
+            <label htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
             <select id="pp-beats" className={styles.selectField} value={beats} onChange={(e) => setBeats(+e.target.value)}>
               {[1, 2, 4, 8].map((b) => (
                 <option key={b} value={b}>
-                  {b}박
+                  {t('chords.beatsUnit', { b })}
                 </option>
               ))}
             </select>
           </div>
           <label className={styles.check}>
             <input type="checkbox" id="pp-loop" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-            반복
+            {t('chords.repeatLabel')}
           </label>
         </div>
 
         <div className={styles.row}>
-          <div className={styles.chips} role="group" aria-label="보이싱 경로" id="pp-paths">
+          <div className={styles.chips} role="group" aria-label={t('chords.voicingPathAria')} id="pp-paths">
             {paths.map((p, i) => (
               <button key={i} type="button" className={styles.chip} aria-pressed={i === pathIdx} onClick={() => setPathIdx(i)}>
-                경로 {i + 1}
-                <small>이동 {p.cost.toFixed(1)}</small>
+                {t('chords.pathNum', { n: i + 1 })}
+                <small>{t('chords.pathCost', { cost: p.cost.toFixed(1) })}</small>
               </button>
             ))}
           </div>
           <button id="pp-play" type="button" className={styles.playbtn} aria-pressed={playing} disabled={!voicings.length} onClick={togglePlay}>
-            {playing ? '■ 멈춤' : '▶ 재생'}
+            {playing ? t('chords.btnStop') : t('chords.btnPlay')}
           </button>
         </div>
         {status && (
@@ -387,7 +388,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
           {curItem && curV && (
             <>
               <h3 className={styles.h3} id="pp-cur">
-                고른 코드: {curItem.shown}
+                {t('chords.selectedChord')}: {curItem.shown}
                 <span className={styles.meta}>{voicingNotes(curV, curItem.chord!).join(' · ')}</span>
                 {curItem.warn && <span className={styles.meta}>{curItem.warn}</span>}
               </h3>
@@ -398,27 +399,27 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
                     curItem.chord!.root,
                     curItem.chord!.degrees.filter((d) => GE.DEG[d]).map((d) => ({ iv: GE.DEG[d][0], deg: d }))
                   )}
-                  label={`${curItem.shown} 지판`}
+                  label={t('chords.selectedChordFretboard', { chord: curItem.shown })}
                 />
               </div>
               <div className={styles.row}>
                 <button type="button" className={styles.ghost} id="pp-alt" aria-expanded={showAlt} onClick={() => setShowAlt((x) => !x)}>
-                  {showAlt ? '다른 보이싱 닫기' : '다른 보이싱 보기'}
+                  {showAlt ? t('chords.closeAltVoicing') : t('chords.showAltVoicing')}
                 </button>
                 {Q4_IDS.has(curItem.chord!.quality) && (
                   <button type="button" className={styles.ghost} id="pp-open-matrix" onClick={() => onOpenMatrix(curItem.chord!.root, curItem.chord!.quality)}>
-                    보이싱 매트릭스에서 열기
+                    {t('chords.openInMatrix')}
                   </button>
                 )}
                 {CT.ARP_Q.includes(curItem.chord!.quality) && (
                   <button type="button" className={styles.ghost} id="pp-open-tone" onClick={() => onOpenTone(curItem.chord!.root, curItem.chord!.quality)}>
-                    코드톤 지도에서 열기
+                    {t('chords.openInTone')}
                   </button>
                 )}
               </div>
               {showAlt && (
                 <div className={`${styles.boxrow} ${styles.ppBoxes}`} id="pp-alts">
-                  {alts.length === 0 && <p className={styles.note}>이 범위에는 다른 보이싱이 없어요.</p>}
+                  {alts.length === 0 && <p className={styles.note}>{t('chords.noOtherVoicing')}</p>}
                   {alts.map((v, i) => {
                     const sel = GE.fretStr(v) === GE.fretStr(curV);
                     return (
@@ -434,7 +435,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
                         <ChordBoxSvg notes={geNotesToDiagram(v)} label={curItem.shown} />
                         <figcaption>
                           <span>{GE.fretStr(v)}</span>
-                          <small>{KIND_TEXT[v.kind || 'compact']}</small>
+                          <small>{t(KIND_KEY[v.kind || 'compact'])}</small>
                         </figcaption>
                       </figure>
                     );
@@ -444,16 +445,16 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
             </>
           )}
           <p className={styles.note} id="pp-note-hint">
-            연습실은 기타 지판 기준이에요.{' '}
+            {t('chords.guitarNotice')}{' '}
             {prog.note ? (
               <>
-                영상에서 온 진행이라 원본 노트에 영상 속 보이싱(건반 영상이면 건반 보이싱)이 있어요.{' '}
+                {t('chords.originalNoteVoicingHint')}{' '}
                 <SafeLink id="pp-note-link" href={`note.html?id=${encodeURIComponent(prog.note)}`}>
-                  원본 노트에서 보이싱 보기 →
+                  {t('chords.viewVoicingInNote')}
                 </SafeLink>
               </>
             ) : (
-              '건반 영상에서 온 진행의 원본 건반 보이싱은 코드 진행 모음의 그 행에서 노트로 이어져요.'
+              t('chords.keyboardVideoNotice')
             )}
           </p>
         </div>

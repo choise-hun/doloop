@@ -8,7 +8,7 @@ export type RepeatCandidate = { chords: string[]; repeats: number; start: number
 
 const SECTION_WORDS =
   'intro|verse|pre-?chorus|chorus|bridge|interlude|instrumental|solo|hook|refrain|break|outro|ending|coda|' +
-  '인트로|벌스|프리코러스|코러스|후렴|브릿지|간주|아웃트로|엔딩';
+  '인트로|벌스|프리코러스|코러스|후렴|브릿지|간주|아웃트로|엔딩'; // i18n-keep: 입력 해석용 섹션 이름 정규식(D5-2)
 const SECTION_RE = new RegExp(`^((?:${SECTION_WORDS})(?:\\s*\\d+)?)\\s*([:：])?\\s*(.*)$`, 'i');
 const IGNORE_RE = /^[|/\\%:.\-–—~*→>]+$/; // 마디선·반복 기호·화살표
 const BAR_NO_RE = /^\(?\d+\.?\)?$/; // 마디 번호

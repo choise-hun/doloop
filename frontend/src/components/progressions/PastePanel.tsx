@@ -1,5 +1,6 @@
 // CH-5: 붙여넣기 — 코드 사이트 텍스트 → 코드 줄 → 반복 구간 후보 → 하나 골라 직접 입력 폼으로 (CH-1a §2, 설계 §5-5)
 import React, { useMemo, useState } from 'react';
+import { t } from '../../lib/i18n.mts';
 import { extractChordLines, findRepeats } from '../../lib/chords/pasteParse.mts';
 import type { RepeatCandidate } from '../../lib/chords/pasteParse.mts';
 import styles from './Progressions.module.css';
@@ -37,25 +38,25 @@ export function PastePanel({ onPick }: PastePanelProps): React.ReactElement {
   return (
     <div className={styles.editor} data-testid="pastePanel">
       <label className={styles.field}>
-        <span className={styles.lab}>코드 사이트에서 복사한 텍스트</span>
+        <span className={styles.lab}>{t('prog.pasteLabel')}</span>
         <textarea
           className={`inpField ${styles.pasteArea}`}
           id="pasteText"
           value={text}
           spellCheck={false}
-          placeholder={'[Chorus]\nFM7   E7   Am7   Gm7 C7\n가사 줄은 자동으로 건너뜁니다'}
+          placeholder={t('prog.pastePlaceholder')}
           onChange={(e) => setText(e.target.value)}
         />
       </label>
       {text.trim() && (
         <p className="hint" id="pasteSummary">
-          {lineCount ? `코드 줄 ${lineCount}개를 찾았어요. 반복 묶음을 골라 입력 폼으로 넘기세요.` : '코드만 적힌 줄을 찾지 못했어요. 코드 줄을 함께 복사했는지 확인해 주세요.'}
+          {lineCount ? t('prog.pasteFoundLines', { count: lineCount }) : t('prog.pasteNotFound')}
         </p>
       )}
       {candidates.length > 0 && (
-        <ul className={styles.candidates} aria-label="진행 후보">
+        <ul className={styles.candidates} aria-label={t('prog.pasteCandidatesAria')}>
           {candidates.map((c, i) => {
-            const label = c.repeats > 1 ? `${c.chords.length}코드 ×${c.repeats}` : `전체 순서 그대로 (${c.chords.length}코드)`;
+            const label = c.repeats > 1 ? t('prog.pasteRepeatFormat', { chords: c.chords.length, repeats: c.repeats }) : t('prog.pasteFullOrder', { chords: c.chords.length });
             return (
               <li key={i} className={styles.candidate} data-candidate={i}>
                 <div>
@@ -66,7 +67,7 @@ export function PastePanel({ onPick }: PastePanelProps): React.ReactElement {
                   <div className={styles.candChords}>{c.chords.join(' - ')}</div>
                 </div>
                 <button type="button" className="ghostBtn" onClick={() => onPick(c.chords, c.section || '')}>
-                  이 진행으로 입력
+                  {t('prog.pasteApplyBtn')}
                 </button>
               </li>
             );

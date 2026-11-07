@@ -1,5 +1,6 @@
 // CH-5: 진행 목록 한 행 — 요약(코드·로마숫자) + 주 버튼(연습실) + 펼침 상세(코드 칩·메모·출처) + 수정·삭제
 import React, { useEffect, useRef, useState } from 'react';
+import { t } from '../../lib/i18n.mts';
 import { SafeLink } from '../common/SafeLink';
 import type { ProgressionDto, ProgressionInput } from '../../lib/apiClient';
 import { safeUrl } from '../../lib/security';
@@ -38,7 +39,7 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
 
   const roman = romanLine(p);
   const loop = loopHref(p);
-  const meta = [p.key || '키 모름', ORIGIN_LABEL[p.origin] || p.origin, p.origin === 'ai' && p.evidence ? `근거 ${p.evidence}` : '']
+  const meta = [p.key || t('prog.rowKeyUnknown'), ORIGIN_LABEL[p.origin] || p.origin, p.origin === 'ai' && p.evidence ? t('prog.rowAiEvidence', { evidence: p.evidence }) : '']
     .filter(Boolean)
     .join(' · ');
   const sub = [p.artist || p.channel, p.part].filter(Boolean).join(' · ');
@@ -46,13 +47,13 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
 
   const remove = async () => {
     if (!onRemove) return;
-    const extra = p.noteId ? '\n(노트는 남고, 노트의 수집 토글은 켠 채로 둡니다)' : '';
-    if (!window.confirm(`"${p.title}" 진행을 삭제할까요?${extra}`)) return;
+    const extra = p.noteId ? t('prog.rowDeleteExtra') : '';
+    if (!window.confirm(t('prog.rowDeleteConfirm', { title: p.title, extra }))) return;
     setErr('');
     try {
       await onRemove(p.id);
     } catch (ex: any) {
-      setErr((ex && ex.message) || '삭제에 실패했어요.');
+      setErr((ex && ex.message) || t('prog.rowDeleteFailed'));
     }
   };
 
@@ -70,23 +71,23 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
           {sub && <span className={styles.rowSub}>{sub}</span>}
           <span className={styles.rowMeta}>
             <span className={styles.kindBadge}>{KIND_LABEL[p.kind]}</span> {meta}
-            {seed ? ' · 기본' : ''}
+            {seed ? t('prog.rowBadgeBasic') : ''}
           </span>
           <span className={styles.rowChords}>{chordLine(p)}</span>
           {roman && <span className={styles.rowRoman}>{roman}</span>}
         </button>
         <div className={styles.rowActs}>
           <SafeLink className="pillBtn" href={playHref(p)} data-act="play">
-            ▶ 연습실에서 직접 연주해볼까요?
+            {t('prog.rowPlayPrompt')}
           </SafeLink>
           {loop && (
             <SafeLink className="ghostBtn" href={loop} data-act="loop">
-              구간 반복
+              {t('prog.rowLoopSection')}
             </SafeLink>
           )}
           {p.noteId && (
             <SafeLink className="ghostBtn" href={`note.html?id=${encodeURIComponent(p.noteId)}`} data-act="note">
-              노트
+              {t('prog.rowNote')}
             </SafeLink>
           )}
         </div>
@@ -99,7 +100,7 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
               idPrefix={`edit-${p.id.slice(0, 8)}`}
               initial={formFromDto(p)}
               original={p}
-              submitLabel="수정 저장"
+              submitLabel={t('prog.rowSaveEdit')}
               onCancel={() => setEditing(false)}
               onSubmit={async (patch) => {
                 await onUpdate(p.id, patch);
@@ -108,7 +109,7 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
             />
           ) : (
             <>
-              <ol className={styles.chips} aria-label="코드">
+              <ol className={styles.chips} aria-label={t('prog.rowChipsAria')}>
                 {p.chords.map((c, i) => {
                   const chk = checkChord(c.symbol);
                   return (
@@ -124,29 +125,29 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
                 })}
               </ol>
               <dl className={styles.facts}>
-                <dt>수집 경로</dt>
-                <dd>{seed ? '기본 예시' : ROUTE_LABEL[p.route] || p.route}</dd>
+                <dt>{t('prog.rowColRoute')}</dt>
+                <dd>{seed ? t('prog.rowRouteBasic') : ROUTE_LABEL[p.route] || p.route}</dd>
                 {p.instrument && (
                   <>
-                    <dt>악기</dt>
+                    <dt>{t('prog.rowColInst')}</dt>
                     <dd>{p.instrument}</dd>
                   </>
                 )}
                 {range && (
                   <>
-                    <dt>구간</dt>
+                    <dt>{t('prog.rowColRange')}</dt>
                     <dd>{range}</dd>
                   </>
                 )}
                 {p.album && (
                   <>
-                    <dt>앨범</dt>
+                    <dt>{t('prog.rowColAlbum')}</dt>
                     <dd>{p.album}</dd>
                   </>
                 )}
                 {p.releaseDate && (
                   <>
-                    <dt>발매일</dt>
+                    <dt>{t('prog.rowColReleaseDate')}</dt>
                     <dd>{p.releaseDate}</dd>
                   </>
                 )}
@@ -162,7 +163,7 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
                 )}
                 {p.url && (
                   <>
-                    <dt>링크</dt>
+                    <dt>{t('prog.rowColLink')}</dt>
                     <dd>
                       <SafeLink href={safeUrl(p.url)} external>
                         {p.url} ↗
@@ -175,10 +176,10 @@ export function ProgressionRow({ p, seed, initiallyOpen, onUpdate, onRemove }: P
               {!seed && (
                 <div className={styles.actions}>
                   <button type="button" className="ghostBtn" data-act="edit" onClick={() => setEditing(true)}>
-                    수정
+                    {t('prog.rowBtnEdit')}
                   </button>
                   <button type="button" className="ghostBtn" data-act="delete" onClick={remove}>
-                    삭제
+                    {t('prog.rowBtnDelete')}
                   </button>
                 </div>
               )}

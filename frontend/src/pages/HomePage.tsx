@@ -19,17 +19,17 @@ import { chordLine, filterScope, KIND_LABEL, ORIGIN_LABEL, playHref, seedToDto }
 import { pickRandom, tasteStats } from '../lib/chords/stats.mts';
 import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
-import { t } from '../lib/i18n.mts';
+import { t, type I18nKey } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import styles from './HomePage.module.css';
 
 // 홈 "취향 코드 진행 꺼내보기"(CH-6): 서버 진행 목록(없으면 기본 시드) + 범위 토글. 노트 화성 읽기·`편곡` 태그 규칙은 없앴다(설계 §8)
 const PROG_SEEDS: ProgressionDto[] = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_ARCHIVE_PROGRESSIONS].map(seedToDto);
-const PROG_SCOPES: ReadonlyArray<readonly [ProgressionScope, string]> = [
-  ['reference', '레퍼런스'],
-  ['analysis', '분석'],
-  ['all', '합산'],
+const PROG_SCOPES: ReadonlyArray<readonly [ProgressionScope, I18nKey]> = [
+  ['reference', 'home.scopeReference'],
+  ['analysis', 'home.scopeAnalysis'],
+  ['all', 'home.scopeAll'],
 ];
 
 // 최근 곡 위젯 아래 분류 바로가기 `ㅁ ㅁ ㅁ +`. +는 분류 추가·이름·삭제·홈 표시·순서 팝업 (서버 저장)
@@ -100,7 +100,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
     try {
       await job();
     } catch (e: any) {
-      setErr((e && e.message) || '저장하지 못했어요');
+      setErr((e && e.message) || t('home.catSaveFailed'));
       if (uidRef.current) void reload(uidRef.current);
     }
   };
@@ -109,7 +109,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
     e.preventDefault();
     const name = newName.trim();
     if (!name) {
-      setErr('이름을 입력하세요');
+      setErr(t('home.catNameRequired'));
       return;
     }
     void run(async () => {
@@ -163,9 +163,9 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
   if (!uid) {
     return (
       <div className={styles.genreWrap}>
-        <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기" data-align-group="strip:bottom@821">
+        <div className={styles.genreRow} id="categoryRow" aria-label={t('home.catAriaShortcut')} data-align-group="strip:bottom@821">
           <p className={`${styles.genreCell} ${styles.genreHint} ${styles.genreHintFull}`} id="categoryHint">
-            로그인하면 곡을 분류할 수 있어요
+            {t('home.catLoginPrompt')}
           </p>
         </div>
       </div>
@@ -174,7 +174,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
 
   return (
     <div className={styles.genreWrap} ref={wrapRef}>
-      <div className={styles.genreRow} id="categoryRow" aria-label="분류 바로가기" data-align-group="strip:bottom@821">
+      <div className={styles.genreRow} id="categoryRow" aria-label={t('home.catAriaShortcut')} data-align-group="strip:bottom@821">
         {shown.map((c) => (
           <SafeLink
             key={c.id}
@@ -190,17 +190,17 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
         {loadState !== 'loading' && shown.length === 0 && (
           <p className={`${styles.genreCell} ${styles.genreHint}`} id="categoryHint">
             {loadState === 'error'
-              ? '분류를 불러오지 못했어요'
+              ? t('home.catLoadFailed')
               : list.length === 0
-                ? '+를 눌러 분류를 만들어 보세요'
-                : '홈에 보일 분류를 켜 주세요'}
+                ? t('home.catCreatePrompt')
+                : t('home.catShowPrompt')}
           </p>
         )}
         <button
           type="button"
           className={`${styles.genreCell} ${styles.genreAdd}`}
           id="categorySettingsBtn"
-          aria-label="분류 관리"
+          aria-label={t('home.catAriaManage')}
           aria-expanded={open}
           aria-controls="categorySettings"
           onClick={() => setOpen((v) => !v)}
@@ -209,8 +209,8 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
         </button>
       </div>
       {open && (
-        <div className={styles.genrePop} id="categorySettings" role="dialog" aria-label="분류 관리">
-          <p className={styles.genrePopTitle}>분류 · 홈에 보일 것 · 순서</p>
+        <div className={styles.genrePop} id="categorySettings" role="dialog" aria-label={t('home.catAriaManage')}>
+          <p className={styles.genrePopTitle}>{t('home.catManageTitle')}</p>
           <form className={styles.genrePopAdd} onSubmit={add}>
             <input
               type="text"
@@ -218,12 +218,12 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
               className={styles.genrePopInput}
               value={newName}
               maxLength={CATEGORY_NAME_MAX}
-              placeholder="새 분류 이름"
-              aria-label="새 분류 이름"
+              placeholder={t('home.catNewNamePh')}
+              aria-label={t('home.catNewNamePh')}
               onChange={(e) => setNewName(e.target.value)}
             />
             <button type="submit" className={styles.genrePopBtn} id="categoryAddBtn">
-              추가
+              {t('home.catBtnAdd')}
             </button>
           </form>
           {err && (
@@ -232,7 +232,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
             </p>
           )}
           {sorted.length === 0 ? (
-            <p className={styles.genrePopEmpty}>아직 분류가 없어요</p>
+            <p className={styles.genrePopEmpty}>{t('home.catEmpty')}</p>
           ) : (
             <ul className={styles.genrePopList}>
               {sorted.map((c, idx) => (
@@ -243,7 +243,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
                       className={styles.genrePopInput}
                       value={editName}
                       maxLength={CATEGORY_NAME_MAX}
-                      aria-label="분류 이름"
+                      aria-label={t('home.catNameAria')}
                       autoFocus
                       onChange={(e) => setEditName(e.target.value)}
                       onBlur={saveEdit}
@@ -268,7 +268,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
                   <button
                     type="button"
                     className={styles.genreMove}
-                    aria-label={`${c.name} 이름 바꾸기`}
+                    aria-label={t('home.catRenameAria', { name: c.name })}
                     onClick={() => {
                       setEditId(c.id);
                       setEditName(c.name);
@@ -279,7 +279,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
                   <button
                     type="button"
                     className={styles.genreMove}
-                    aria-label={`${c.name} 위로`}
+                    aria-label={t('home.catMoveUpAria', { name: c.name })}
                     disabled={idx === 0}
                     onClick={() => move(idx, -1)}
                   >
@@ -288,7 +288,7 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
                   <button
                     type="button"
                     className={styles.genreMove}
-                    aria-label={`${c.name} 아래로`}
+                    aria-label={t('home.catMoveDownAria', { name: c.name })}
                     disabled={idx === sorted.length - 1}
                     onClick={() => move(idx, 1)}
                   >
@@ -297,10 +297,10 @@ function CategoryShortcuts({ uid }: { uid: string | null }): React.ReactElement 
                   <button
                     type="button"
                     className={`${styles.genreMove} ${confirmId === c.id ? styles.genreConfirm : ''}`}
-                    aria-label={confirmId === c.id ? `${c.name} 삭제 확인` : `${c.name} 삭제`}
+                    aria-label={confirmId === c.id ? t('home.catDeleteConfirmAria', { name: c.name }) : t('home.catDeleteAria', { name: c.name })}
                     onClick={() => remove(c.id)}
                   >
-                    {confirmId === c.id ? '삭제' : '×'}
+                    {confirmId === c.id ? t('home.catBtnDelete') : '×'}
                   </button>
                 </li>
               ))}
@@ -389,7 +389,7 @@ export function HomePage(): React.ReactElement {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
         setSongs([]);
         setSongsLoading(false);
-        setSongsError((err && err.message) || '곡 목록을 불러오지 못했어요');
+        setSongsError((err && err.message) || t('home.songsLoadFailed'));
       });
 
     // 세션 달력 조회 (주간 스트릭용)
@@ -469,7 +469,7 @@ export function HomePage(): React.ReactElement {
     : localSongs[0]
       ? {
           videoId: localSongs[0].videoId,
-          title: `최근 기기 연습 영상 (${localSongs[0].videoId})`,
+          title: t('home.recentLocalSongTitle', { videoId: localSongs[0].videoId }),
           a: localSongs[0].a,
           b: localSongs[0].b,
           pos: localSongs[0].pos,
@@ -485,9 +485,9 @@ export function HomePage(): React.ReactElement {
   const progInScope = useMemo(() => filterScope(progAll, progScope), [progAll, progScope]);
   const progStats = useMemo(() => tasteStats(progInScope), [progInScope]);
   const progCurrent = progInScope.find((p) => p.id === progPickId) || progInScope[0] || null;
-  const progScopeLabel = PROG_SCOPES.find(([s]) => s === progScope)?.[1] || '';
+  const progScopeLabel = t(PROG_SCOPES.find(([s]) => s === progScope)?.[1] || 'home.scopeReference');
   const progTasteTop = progStats.patterns[0] || progStats.moves[0] || null;
-  const progTasteKind = progStats.patterns[0] ? '자주 나오는 진행' : progStats.moves[0] ? '가장 많은 코드 이동' : '';
+  const progTasteKind = progStats.patterns[0] ? t('home.tasteFrequentPattern') : progStats.moves[0] ? t('home.tasteMostMove') : '';
   const progTasteHref = 'progressions.html' + (progScope === 'reference' ? '' : '?scope=' + progScope) + '#progTaste';
 
   // 빈 상태에서만 CHORDS·PLAYER 목록 아랫선을 맞춘다(안내 칸이 높이를 채움) — 프론트_정렬규격.md §3
@@ -517,8 +517,8 @@ export function HomePage(): React.ReactElement {
             type="url"
             inputMode="url"
             autoComplete="off"
-            placeholder="유튜브 링크를 붙여넣으세요"
-            aria-label="유튜브 링크"
+            placeholder={t('home.phYoutubeUrl')}
+            aria-label={t('home.ariaYoutubeUrl')}
             value={goUrl}
             onChange={(e) => setGoUrl(e.target.value)}
           />
@@ -535,7 +535,7 @@ export function HomePage(): React.ReactElement {
                 id="goPlay"
                 href={pickedVideoId ? 'practice.html?v=' + encodeURIComponent(pickedVideoId) : 'practice.html'}
               >
-                ▶ 바로 연습
+                {t('home.btnPracticeNow')}
               </SafeLink>
               <SafeLink
                 className="ghostBtn"
@@ -546,7 +546,7 @@ export function HomePage(): React.ReactElement {
                     : 'notes.html'
                 }
               >
-                노트 만들기
+                {t('home.btnCreateNote')}
               </SafeLink>
             </div>
           </div>
@@ -561,18 +561,18 @@ export function HomePage(): React.ReactElement {
             </button>
           ) : null}
           <p className={`msg${hasInvalidUrl ? ' err' : ''}`} id="goMsg" role="status">
-            {hasInvalidUrl ? '유튜브 영상 링크가 아니에요' : ''}
+            {hasInvalidUrl ? t('home.errInvalidYoutubeUrl') : ''}
           </p>
         </form>
       </div>
 
       {/* 상단 연속성 위젯: 주간 스트릭(Mo~Su)·작심삼일 + 가장 최근 연습했던 곡 */}
-      <section className={styles.topWidgets} aria-label="연습 연속성 대시보드">
+      <section className={styles.topWidgets} aria-label={t('home.ariaDashboard')}>
         <div className={styles.widgetCard} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>WEEKLY STREAK</h2>
             <SafeLink href="log.html" className={styles.widgetLink}>
-              기록 보기 →
+              {t('home.linkViewLog')}
             </SafeLink>
           </div>
           <div className={styles.streakGrid} id="streakDays">
@@ -610,14 +610,14 @@ export function HomePage(): React.ReactElement {
 
         <div className={styles.widgetCard} id="recentSongCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
-            <h2 className={styles.widgetTitle}>가장 최근 연습했던 곡</h2>
+            <h2 className={styles.widgetTitle}>{t('home.titleRecentSong')}</h2>
             {recentSong && (
               <SafeLink
                 href={buildPracticeResumeHref(recentSong)}
                 className={styles.widgetLink}
                 id="recentSongGo"
               >
-                (바로가기)
+                {t('home.shortcutLabel')}
               </SafeLink>
             )}
           </div>
@@ -634,7 +634,7 @@ export function HomePage(): React.ReactElement {
                 <p
                   className={styles.recentSongTitle}
                   id="recentSongTitle"
-                  data-layout-ignore="G3: 최근 곡 제목은 한 줄 말줄임(카드 높이 고정)"
+                  data-layout-ignore="G3: 최근 곡 제목은 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                 >
                   {recentSong.title}
                 </p>
@@ -646,7 +646,7 @@ export function HomePage(): React.ReactElement {
                   className={styles.widgetLink}
                   data-align-group="songText:left"
                 >
-                  ▶ 이어서 구간 연습하기 →
+                  {t('home.btnResumeSong')}
                 </SafeLink>
               </div>
             </div>
@@ -657,7 +657,7 @@ export function HomePage(): React.ReactElement {
               </div>
               <div className={styles.recentInfo} data-align-group="songEmpty:top">
                 <p className={styles.emptyText}>
-                  아직 연습 중인 곡이 없어요. 위 입력창에 유튜브 링크를 붙여넣어 시작하세요.
+                  {t('home.emptyRecentSong')}
                 </p>
               </div>
             </div>
@@ -676,28 +676,28 @@ export function HomePage(): React.ReactElement {
         >
           <div className={`frame-head ${styles.frameHead}`}>
             <h2 id="fBetter">BETTER</h2>
-            <span>연습실</span>
+            <span>{t('home.hubPractice')}</span>
           </div>
 
           <div className={styles.betterCols}>
             <div className={styles.subCol} data-align-group="chordsCol:center-x">
               <div className={styles.subColHead}>
-                <h3 className={styles.subColTitle}>CHORDS · 7가지 연습 모드</h3>
+                <h3 className={styles.subColTitle}>{t('home.titleChordModes')}</h3>
               </div>
               <ul
                 className={`frame-list ${styles.frameList}`}
                 id="modes"
                 data-align-group={songsEmpty ? 'player:bottom@821' : undefined}
               >
-                {CHORD_MODES.map(([id, name], idx) => {
+                {CHORD_MODES.map(([id, nameKey], idx) => {
                   const isCur = id === lastTab;
                   return (
                     <li key={id} className={isCur ? `cur ${styles.curItem}` : undefined}>
                       <SafeLink href={`chords.html#${encodeURIComponent(id)}`}>
                         <span className={`t ${styles.itemTitle}`}>
-                          {idx + 1} · {name}
+                          {idx + 1} · {t(nameKey)}
                         </span>
-                        <span className={`m ${styles.itemMeta}`}>{isCur ? '이어서' : ''}</span>
+                        <span className={`m ${styles.itemMeta}`}>{isCur ? t('home.tagContinue') : ''}</span>
                       </SafeLink>
                     </li>
                   );
@@ -710,16 +710,16 @@ export function HomePage(): React.ReactElement {
                   href="chords.html"
                   data-align-group="btns:height,bottom@821; chordsCol:center-x; vaultBtm:bottom@821"
                 >
-                  코드 연습실
+                  {t('home.linkChordsHub')}
                 </SafeLink>
               </div>
             </div>
 
             <div className={styles.subCol} data-align-group="playerCol:center-x">
               <div className={styles.subColHead}>
-                <h3 className={styles.subColTitle}>PLAYER · 내 연습 곡</h3>
+                <h3 className={styles.subColTitle}>{t('home.titlePlayerSongs')}</h3>
                 <SafeLink href="log.html#songs" className={styles.widgetLink}>
-                  곡 보관함 →
+                  {t('home.linkSongLibrary')}
                 </SafeLink>
               </div>
               <ul
@@ -729,16 +729,16 @@ export function HomePage(): React.ReactElement {
               >
                 {!activeUid ? (
                   <li className={`note ${styles.noteItem}`}>
-                    로그인하면 내 연습 곡이 여기 보여요.
-                    <SafeLink href="settings.html#account">로그인하러 가기 →</SafeLink>
+                    {t('home.playerLoginPrompt')}
+                    <SafeLink href="settings.html#account">{t('home.linkGoLogin')}</SafeLink>
                   </li>
                 ) : songsLoading ? (
-                  <li className={`note ${styles.noteItem}`}>불러오는 중…</li>
+                  <li className={`note ${styles.noteItem}`}>{t('home.loading')}</li>
                 ) : songsError ? (
                   <li className={`note ${styles.noteItem}`}>{songsError}</li>
                 ) : songs.length === 0 ? (
                   <li className={`note ${styles.noteItem}`}>
-                    아직 곡이 없어요. 위에 유튜브 링크를 붙여넣어 시작하세요.
+                    {t('home.emptySongs')}
                   </li>
                 ) : (
                   songs.slice(0, 5).map((s) => {
@@ -754,7 +754,7 @@ export function HomePage(): React.ReactElement {
                         <SafeLink href={`practice.html?v=${encodeURIComponent(s.videoId)}`}>
                           <span
                             className={`t ${styles.itemTitle}`}
-                            data-layout-ignore="G3: 곡 목록 제목은 한 줄 말줄임(목록 줄 높이 고정)"
+                            data-layout-ignore="G3: 곡 목록 제목은 한 줄 말줄임(목록 줄 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                           >
                             {s.title}
                           </span>
@@ -772,7 +772,7 @@ export function HomePage(): React.ReactElement {
                   href="practice.html"
                   data-align-group="btns:height,bottom@821; playerCol:center-x"
                 >
-                  플레이어
+                  {t('home.linkPlayerHub')}
                 </SafeLink>
               </div>
             </div>
@@ -787,14 +787,14 @@ export function HomePage(): React.ReactElement {
         >
           <div className={`frame-head ${styles.frameHead}`}>
             <h2 id="fVault">VAULT</h2>
-            <span>학습</span>
+            <span>{t('home.hubStudy')}</span>
           </div>
 
           <div className={styles.vaultSection} id="recentNoteCard">
             <div className={styles.subColHead}>
-              <h3 className={styles.subColTitle}>최근 공부한 내용</h3>
+              <h3 className={styles.subColTitle}>{t('home.titleRecentStudy')}</h3>
               <SafeLink href="notes.html" className={styles.widgetLink}>
-                전체 노트 →
+                {t('home.linkAllNotes')}
               </SafeLink>
             </div>
             {recentNote ? (
@@ -809,16 +809,16 @@ export function HomePage(): React.ReactElement {
                   <p
                     className={styles.noteBoxTitle}
                     id="recentNoteTitle"
-                    data-layout-ignore="G3: 최근 노트 제목은 한 줄 말줄임(카드 높이 고정)"
+                    data-layout-ignore="G3: 최근 노트 제목은 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                   >
-                    {recentNote.title || '(제목 없음)'}
+                    {recentNote.title || t('home.noTitle')}
                   </p>
                   <p
                     className={styles.noteBoxSummary}
                     id="recentNoteHeadline"
-                    data-layout-ignore="G3: 최근 노트 요약은 한 줄 말줄임(카드 높이 고정)"
+                    data-layout-ignore="G3: 최근 노트 요약은 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                   >
-                    {recentNote.headline || recentNote.channel || '핵심 요약 노트'}
+                    {recentNote.headline || recentNote.channel || t('home.defaultNoteHeadline')}
                   </p>
                   <div className={styles.noteBoxFoot}>
                     <SafeLink
@@ -827,7 +827,7 @@ export function HomePage(): React.ReactElement {
                       id="recentNoteLink"
                       data-align-group="noteText:left"
                     >
-                      확인하기 →
+                      {t('home.btnConfirmNote')}
                     </SafeLink>
                   </div>
                 </div>
@@ -838,10 +838,10 @@ export function HomePage(): React.ReactElement {
                   NO NOTE
                 </div>
                 <div className={styles.noteBoxBody} data-align-group="noteEmpty:top; noteEmptyText:left">
-                  <p className={`${styles.noteBoxSummary} ${styles.wrapText}`}>아직 생성한 학습 노트가 없어요.</p>
+                  <p className={`${styles.noteBoxSummary} ${styles.wrapText}`}>{t('home.emptyRecentNote')}</p>
                   <div className={styles.noteBoxFoot}>
                     <SafeLink href="notes.html" className={styles.widgetLink} data-align-group="noteEmptyText:left">
-                      노트 만들러 가기 →
+                      {t('home.btnGoCreateNote')}
                     </SafeLink>
                   </div>
                 </div>
@@ -851,13 +851,13 @@ export function HomePage(): React.ReactElement {
 
           <div className={`${styles.vaultSection} ${styles.vaultSectionGrow}`} id="progressionPickerSection">
             <div className={styles.subColHead}>
-              <h3 className={styles.subColTitle}>취향 코드 진행 꺼내보기</h3>
+              <h3 className={styles.subColTitle}>{t('home.titleTasteProgressions')}</h3>
               <SafeLink href="progressions.html" className={styles.widgetLink}>
-                코드 진행 모음 →
+                {t('home.linkProgLibrary')}
               </SafeLink>
             </div>
-            <div className={styles.progScopeRow} id="progScope" role="group" aria-label="진행 범위">
-              {PROG_SCOPES.map(([s, label]) => (
+            <div className={styles.progScopeRow} id="progScope" role="group" aria-label={t('home.ariaProgScope')}>
+              {PROG_SCOPES.map(([s, labelKey]) => (
                 <button
                   key={s}
                   type="button"
@@ -869,7 +869,7 @@ export function HomePage(): React.ReactElement {
                     setProgPickId(null);
                   }}
                 >
-                  {label}
+                  {t(labelKey)}
                 </button>
               ))}
             </div>
@@ -878,7 +878,7 @@ export function HomePage(): React.ReactElement {
                 <div className={styles.progHead}>
                   <span className={styles.progBadge}>{progCurrent ? KIND_LABEL[progCurrent.kind] : progScopeLabel}</span>
                   <span className={styles.progKey} id="progRefKey">
-                    {progCurrent ? progCurrent.key || '키 없음' : ''}
+                    {progCurrent ? progCurrent.key || t('home.noKey') : ''}
                   </span>
                 </div>
                 {progCurrent ? (
@@ -887,9 +887,9 @@ export function HomePage(): React.ReactElement {
                       {chordLine(progCurrent)}
                     </SafeLink>
                     <p className={styles.progSub} id="progRefTitle">
-                      {progCurrent.title || '(제목 없음)'}
+                      {progCurrent.title || t('home.noTitle')}
                       <span className={styles.progSource}>
-                        출처: {progSeeded ? '기본' : ORIGIN_LABEL[progCurrent.origin] || progCurrent.origin}
+                        {t('home.originPrefix')} {progSeeded ? t('home.originBasic') : ORIGIN_LABEL[progCurrent.origin] || progCurrent.origin}
                       </span>
                     </p>
                     <div className={styles.progActs}>
@@ -903,21 +903,21 @@ export function HomePage(): React.ReactElement {
                           setProgPickId(next ? next.id : null);
                         }}
                       >
-                        # 랜덤으로 보여주기
+                        {t('home.btnPickRandom')}
                       </button>
                       <SafeLink href={playHref(progCurrent)} className={styles.randBtn} id="progRefPlay">
-                        연주하기
+                        {t('home.btnPlayProg')}
                       </SafeLink>
                     </div>
                   </>
                 ) : (
                   <>
                     <p className={styles.progSub} id="progRefTitle">
-                      {progScopeLabel} 범위에 모은 진행이 없어요.
+                      {t('home.emptyScopeProg', { scope: progScopeLabel })}
                     </p>
                     <div className={styles.progActs}>
                       <SafeLink href="progressions.html" className={styles.randBtn} id="btnRandRef">
-                        진행 넣으러 가기
+                        {t('home.btnGoAddProg')}
                       </SafeLink>
                     </div>
                   </>
@@ -926,23 +926,23 @@ export function HomePage(): React.ReactElement {
 
               <div className={styles.progCard} id="progArchBox" data-align-group="prog:top,bottom@821">
                 <div className={styles.progHead}>
-                  <span className={styles.progBadge}>취향</span>
+                  <span className={styles.progBadge}>{t('home.badgeTaste')}</span>
                   <span className={styles.progKey} id="progArchKey">
-                    진행 {progStats.total}개
+                    {t('home.progCount', { count: progStats.total })}
                   </span>
                 </div>
                 <SafeLink href={progTasteHref} className={styles.progChordsLink} id="progArchChords">
-                  {progTasteTop ? progTasteTop.label : '아직 겹치는 진행이 없어요'}
+                  {progTasteTop ? progTasteTop.label : t('home.noOverlapProg')}
                 </SafeLink>
                 <p className={styles.progSub} id="progArchTitle">
-                  {progTasteTop ? `${progTasteKind} · ${progTasteTop.count}번` : '진행이 쌓이면 자주 쓰는 진행이 보여요'}
+                  {progTasteTop ? t('home.tasteSummaryCount', { kind: progTasteKind, count: progTasteTop.count }) : t('home.tasteSummaryEmpty')}
                   <span className={styles.progSource}>
-                    많이 쓴 키: {progStats.keys[0] ? progStats.keys[0].label : '—'}
+                    {t('home.topKeyPrefix')} {progStats.keys[0] ? progStats.keys[0].label : '—'}
                   </span>
                 </p>
                 <div className={styles.progActs}>
                   <SafeLink href={progTasteHref} className={styles.randBtn} id="progTasteLink">
-                    취향 통계 보기
+                    {t('home.btnViewTasteStats')}
                   </SafeLink>
                 </div>
               </div>
@@ -978,10 +978,10 @@ export function HomePage(): React.ReactElement {
         hidden={!nlPracticeUrl && !nlNotesUrl}
       >
         <SafeLink id="nlPractice" href={nlPracticeUrl || 'settings.html#links'} external={Boolean(nlPracticeUrl)} hidden={!nlPracticeUrl}>
-          악기 연습 ↗
+          {t('home.footerPractice')}
         </SafeLink>
         <SafeLink id="nlNotes" href={nlNotesUrl || 'settings.html#links'} external={Boolean(nlNotesUrl)} hidden={!nlNotesUrl}>
-          학습 영상 노트 ↗
+          {t('home.footerNotes')}
         </SafeLink>
       </div>
 

@@ -13,19 +13,19 @@ import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './NotesPage.module.css';
 
 export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
-  '화성',
-  '사운드 디자인',
+  '화성', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '사운드 디자인', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
   'DAW/MIDI',
-  '리듬',
-  '편곡',
-  '믹싱',
+  '리듬', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '편곡', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '믹싱', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
   'TAB',
 ];
 
 export const NOTE_FILTER_TAGS: ReadonlyArray<string> = ['', ...NOTE_FORM_TAGS];
 
 /** M2-1b: 첫 진입 때 골라 둔 태그(앱 명세 §3.1-2 "기본 화성") */
-const DEFAULT_FORM_TAGS: ReadonlyArray<string> = ['화성'];
+const DEFAULT_FORM_TAGS: ReadonlyArray<string> = ['화성']; // i18n-keep: 서버 태그 기본값(D5-1)
 
 /** M2-1c: 구간 오류 → 문구 키 */
 const RANGE_ERROR_KEY = { format: 'notes.range.errFormat', order: 'notes.range.errOrder' } as const;
@@ -40,15 +40,15 @@ type EstimateState =
 function formatAgo(iso?: string | null): string {
   if (!iso) return '';
   const diffSec = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diffSec < 60) return '방금';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
+  if (diffSec < 60) return t('notes.agoJustNow');
+  if (diffSec < 3600) return t('notes.agoMinutes', { m: Math.floor(diffSec / 60) });
+  if (diffSec < 86400) return t('notes.agoHours', { h: Math.floor(diffSec / 3600) });
   return new Date(iso).toLocaleDateString('ko-KR');
 }
 
 export function NotesPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '학습 노트 · ULeveLP';
+    document.title = '학습 노트 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
@@ -224,7 +224,7 @@ export function NotesPage(): React.ReactElement {
     e.preventDefault();
     if (submittingRef.current) return;
     if (!pickedVideoId) {
-      setFormMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
+      setFormMsg({ text: t('notes.errNotYoutubeUrl'), kind: 'err' });
       return;
     }
     if (range.error) {
@@ -233,21 +233,21 @@ export function NotesPage(): React.ReactElement {
       return;
     }
     if (selectedTags.length === 0) {
-      setFormMsg({ text: '태그를 하나 이상 골라주세요.', kind: 'err' });
+      setFormMsg({ text: t('notes.errSelectTag'), kind: 'err' });
       return;
     }
     if (!loggedIn) {
-      setFormMsg({ text: '로그인하면 영상 분석을 요청할 수 있어요.', kind: 'err' });
+      setFormMsg({ text: t('notes.errLoginRequired'), kind: 'err' });
       return;
     }
     if (tierBlocked) {
-      setFormMsg({ text: 'AI 영상 분석은 Pro 플랜부터 쓸 수 있어요.', kind: 'err' });
+      setFormMsg({ text: t('notes.errProRequired'), kind: 'err' });
       return;
     }
 
     submittingRef.current = true;
     setSubmitting(true);
-    setFormMsg({ text: '분석 요청을 보내는 중...', kind: '' });
+    setFormMsg({ text: t('notes.sendingAnalyzeReq'), kind: '' });
     try {
       const orderedTags = NOTE_FORM_TAGS.filter((t) => selectedTags.includes(t));
       const r = await apiClient.notes.analyze({
@@ -256,8 +256,8 @@ export function NotesPage(): React.ReactElement {
         memo: memoVal.trim(),
         ...rangeBody(range),
       });
-      const reserved = typeof r.reservedCredits === 'number' ? ` (${r.reservedCredits}크레딧 예약 — 실제 사용량만 빠져요)` : '';
-      setFormMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤에 정리가 완료돼요.`, kind: 'ok' });
+      const reserved = typeof r.reservedCredits === 'number' ? t('notes.reservedCredits', { n: r.reservedCredits }) : '';
+      setFormMsg({ text: t('notes.analyzeRequested', { reserved }), kind: 'ok' });
       setUrlVal('');
       setMemoVal('');
       setStartText('');
@@ -293,8 +293,8 @@ export function NotesPage(): React.ReactElement {
 
   const keyGateVisible = !loggedIn || tierBlocked;
   const keyGateText = !loggedIn
-    ? '로그인하면 영상 분석을 요청할 수 있어요.'
-    : 'AI 영상 분석은 Pro 플랜부터 쓸 수 있어요. 분석할 때마다 크레딧을 써요.';
+    ? t('notes.errLoginRequired')
+    : t('notes.gatePro');
 
   return (
     <AppShell variant="narrow" activeNav="notes">
@@ -306,9 +306,9 @@ export function NotesPage(): React.ReactElement {
           <BetaBadge alignGroup="notesTitle:center-y" />
         </div>
         <p className={`page-sub ${styles.pageSub}`}>
-          유튜브 링크와 태그를 넣으면 AI가 영상을 분석해서 학습 노트를 생성해요. 보통 1~3분 걸려요.{' '}
+          {t('notes.pageSub')}{' '}
           <SafeLink id="notionLink" href={notionLinkUrl} external hidden={!notionLinkUrl}>
-            노션에서 보기 ↗
+            {t('notes.viewInNotion')}
           </SafeLink>
         </p>
       </div>
@@ -317,16 +317,16 @@ export function NotesPage(): React.ReactElement {
         <p id="keyGateMsg">{keyGateText}</p>
         <div className={styles.keyGateActions}>
           {loggedIn ? (
-            <SafeLink href="settings.html#credits">SETTING에서 크레딧 보기 →</SafeLink>
+            <SafeLink href="settings.html#credits">{t('notes.linkSettingsCredits')}</SafeLink>
           ) : (
-            <SafeLink href="settings.html#account">로그인 →</SafeLink>
+            <SafeLink href="settings.html#account">{t('notes.linkLogin')}</SafeLink>
           )}
         </div>
       </div>
 
       <form className={`note-form ${styles.noteForm}`} id="form" onSubmit={handleSubmit}>
         <label className={styles.field}>
-          <span className={styles.lab}>유튜브 링크</span>
+          <span className={styles.lab}>{t('notes.labYoutubeUrl')}</span>
           <input
             className="inpField"
             id="url"
@@ -342,13 +342,13 @@ export function NotesPage(): React.ReactElement {
             id="preview"
           >
             <img src={pickedVideoId ? thumb(pickedVideoId) : undefined} alt="" />
-            <span className="hint">영상을 확인했어요</span>
+            <span className="hint">{t('notes.hintVideoConfirmed')}</span>
           </span>
         </label>
 
         <div className={styles.field}>
-          <span className={styles.lab}>태그</span>
-          <div className={`tags ${styles.tags}`} id="tags" role="group" aria-label="태그">
+          <span className={styles.lab}>{t('notes.labTags')}</span>
+          <div className={`tags ${styles.tags}`} id="tags" role="group" aria-label={t('notes.ariaTags')}>
             {NOTE_FORM_TAGS.map((t) => (
               <button
                 key={t}
@@ -361,7 +361,7 @@ export function NotesPage(): React.ReactElement {
               </button>
             ))}
           </div>
-          <span className="hint">고른 태그에 맞춰 정리 항목이 달라져요. 여러 개 골라도 됩니다.</span>
+          <span className="hint">{t('notes.hintTags')}</span>
         </div>
 
         <div className={styles.optBlock}>
@@ -426,12 +426,12 @@ export function NotesPage(): React.ReactElement {
             </div>
             <label className={styles.field}>
               <span className={styles.lab}>
-                메모 <span className="hint">(선택)</span>
+                {t('notes.labMemo')} <span className="hint">{t('notes.range.optional')}</span>
               </span>
               <textarea
                 className="inpField"
                 id="memo"
-                placeholder="예: 3:20부터 나오는 보이싱 위주로"
+                placeholder={t('notes.phMemo')}
                 value={memoVal}
                 onChange={(e) => setMemoVal(e.target.value)}
               />
@@ -447,7 +447,7 @@ export function NotesPage(): React.ReactElement {
             data-align-group="submitRow:center-y"
             disabled={submitting || keyGateVisible}
           >
-            분석 요청
+            {t('notes.btnAnalyze')}
           </button>
           {estimate.kind !== 'idle' && (
             <span
@@ -479,14 +479,14 @@ export function NotesPage(): React.ReactElement {
         </p>
       </form>
 
-      <h2 className={styles.sectionTitle}>진행 및 최근 작업</h2>
+      <h2 className={styles.sectionTitle}>{t('notes.titleJobs')}</h2>
       <ul className={`runs ${styles.runs}`} id="jobs">
         {jobs.length === 0 ? (
-          <li className={`empty ${styles.empty}`}>진행 중이거나 최근 요청한 작업이 없어요.</li>
+          <li className={`empty ${styles.empty}`}>{t('notes.emptyJobs')}</li>
         ) : (
           jobs.map((job) => {
             const vid = videoIdFrom(job.url || '');
-            const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.join(', ') : '(태그 없음)';
+            const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.join(', ') : t('notes.noTags');
             const timeStr = formatAgo(job.createdAt);
             const why = job.status === 'failed' ? describeJobError(job.error) : null;
             const stage = jobStage(job, nowMs); // 대기·분석 중이면 경과 시간 배지·안내, 끝났으면 null
@@ -495,14 +495,17 @@ export function NotesPage(): React.ReactElement {
               <li key={job.id} className={`run ${styles.runItem}`}>
                 {vid ? (
                   <SafeLink href={`https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`} external>
-                    <img src={thumb(vid)} alt="영상 썸네일" />
+                    <img src={thumb(vid)} alt={t('notes.altThumb')} />
                   </SafeLink>
                 ) : (
                   <span />
                 )}
                 <div data-align-group={canRetry ? 'jobRetry:left' : undefined}>
                   <div className={`t ${styles.runTitle}`}>{tagStr}</div>
-                  <div className={`sub ${styles.runSub}`} data-layout-ignore="G3: 작업 줄 URL은 한 줄 말줄임(줄 높이 고정)">
+                  <div
+                    className={`sub ${styles.runSub}`}
+                    data-layout-ignore="G3: 작업 줄 URL은 한 줄 말줄임(줄 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+                  >
                     {(timeStr ? `${timeStr} · ` : '') + (job.url || '')}
                   </div>
                   {why && (
@@ -522,7 +525,7 @@ export function NotesPage(): React.ReactElement {
                       className={`badge ok ${styles.badge} ${styles.badgeOk}`}
                       href={`note.html?id=${encodeURIComponent(job.noteId)}`}
                     >
-                      노트 보기 →
+                      {t('notes.btnViewNote')}
                     </SafeLink>
                   )}
                   <span
@@ -537,10 +540,10 @@ export function NotesPage(): React.ReactElement {
                     {stage
                       ? stage.label
                       : job.status === 'done'
-                        ? '완료'
+                        ? t('notes.statusDone')
                         : why
                           ? why.title
-                          : '실패'}
+                          : t('notes.statusFailed')}
                   </span>
                 </div>
                 {canRetry && (
@@ -561,8 +564,8 @@ export function NotesPage(): React.ReactElement {
         )}
       </ul>
 
-      <h2 className={styles.sectionTitle}>내 학습 노트</h2>
-      <div className={`tags filter-tags ${styles.filterTags}`} id="noteTagFilter" role="group" aria-label="노트 태그 필터">
+      <h2 className={styles.sectionTitle}>{t('notes.titleNotes')}</h2>
+      <div className={`tags filter-tags ${styles.filterTags}`} id="noteTagFilter" role="group" aria-label={t('notes.ariaTagFilter')}>
         {NOTE_FILTER_TAGS.map((tag) => (
           <button
             key={tag || 'all'}
@@ -576,7 +579,7 @@ export function NotesPage(): React.ReactElement {
               void loadNotesOnly(tag, activeUid);
             }}
           >
-            {tag || '전체'}
+            {tag || t('notes.tagAll')}
           </button>
         ))}
       </div>
@@ -584,7 +587,7 @@ export function NotesPage(): React.ReactElement {
       <div className={`notes-list ${styles.notesList}`} id="notesList">
         {notes.length === 0 ? (
           <p className={`empty ${styles.empty}`}>
-            {filterTag ? `"${filterTag}" 태그의 학습 노트가 없어요.` : '저장된 학습 노트가 없어요.'}
+            {filterTag ? t('notes.emptyFilteredNotes', { tag: filterTag }) : t('notes.emptyNotes')}
           </p>
         ) : (
           notes.map((n) => (
@@ -594,7 +597,7 @@ export function NotesPage(): React.ReactElement {
                   className={`note-card-title ${styles.noteCardTitle}`}
                   href={`note.html?id=${encodeURIComponent(n.id)}`}
                 >
-                  {n.title || '(제목 없음)'}
+                  {n.title || t('notes.noTitle')}
                 </SafeLink>
                 <div className={`note-card-meta ${styles.noteCardMeta}`}>
                   {n.channel && <span className="sub">{n.channel}</span>}
@@ -611,11 +614,11 @@ export function NotesPage(): React.ReactElement {
               <div className={`row note-card-acts ${styles.noteCardActs}`}>
                 {n.videoId && (
                   <SafeLink className="pillBtn" href={`practice.html?v=${encodeURIComponent(n.videoId)}`}>
-                    ▶ 연습
+                    {t('notes.btnPractice')}
                   </SafeLink>
                 )}
                 <SafeLink className="ghostBtn" href={`note.html?id=${encodeURIComponent(n.id)}`}>
-                  상세 보기
+                  {t('notes.btnDetail')}
                 </SafeLink>
               </div>
             </div>

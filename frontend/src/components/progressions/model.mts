@@ -7,6 +7,7 @@ import { KEYS, keyName, parseKey, romanize } from '../../lib/chords/roman.mts';
 import { guessKeys } from '../../lib/chords/keyGuess.mts';
 import type { KeyGuess } from '../../lib/chords/keyGuess.mts';
 import type { ProgressionChordDto, ProgressionDto, ProgressionInput, ProgressionScope } from '../../lib/apiClient';
+import { t, type I18nKey } from '../../lib/i18n.mts';
 
 export { KEYS };
 export type { KeyGuess };
@@ -55,27 +56,27 @@ export function splitChordInput(text: string): string[] {
   return out;
 }
 
-export const FAIL_TEXT: Record<ChordFailReason, string> = {
-  empty: '빈 코드',
-  'no-chord': '코드 없음(N.C.) 표시',
-  'bad-root': '근음은 A~G로 시작해야 합니다',
-  'bad-bass': '슬래시 뒤 베이스음을 읽지 못했습니다',
-  'bad-paren': '괄호가 맞지 않습니다',
-  'unknown-suffix': '모르는 코드 표기입니다',
-  conflict: '서로 맞지 않는 표기가 섞였습니다',
+export const FAIL_TEXT: Record<ChordFailReason, I18nKey> = {
+  empty: 'prog.failEmpty',
+  'no-chord': 'prog.failNoChord',
+  'bad-root': 'prog.failBadRoot',
+  'bad-bass': 'prog.failBadBass',
+  'bad-paren': 'prog.failBadParen',
+  'unknown-suffix': 'prog.failUnknownSuffix',
+  conflict: 'prog.failConflict',
 };
 
 export type ChordCheck = { symbol: string; ok: boolean; warning: string };
 
 // 칩 한 개의 상태: 못 읽음 / 너무 김 / 같은 음 도수 중복(경고만 — 결정 기록 2026-11-04)
 export function checkChord(symbol: string): ChordCheck {
-  if (symbol.length > MAX_SYMBOL) return { symbol, ok: false, warning: `코드는 ${MAX_SYMBOL}자까지 넣을 수 있습니다` };
+  if (symbol.length > MAX_SYMBOL) return { symbol, ok: false, warning: t('prog.warnSymbolLength', { max: MAX_SYMBOL }) };
   const c = parseChord(symbol);
-  if (!c.ok) return { symbol, ok: false, warning: FAIL_TEXT[c.reason] };
+  if (!c.ok) return { symbol, ok: false, warning: t(FAIL_TEXT[c.reason]) };
   const dup = duplicatePitches(c);
   if (dup.length) {
     const pairs = dup.map((g) => g.join(' = ')).join(', ');
-    return { symbol, ok: true, warning: `도수 표기는 중복이지만 연주 음은 겹칩니다 (${pairs})` };
+    return { symbol, ok: true, warning: t('prog.warnDuplicateDegree', { pairs }) };
   }
   return { symbol, ok: true, warning: '' };
 }
@@ -170,22 +171,22 @@ export function buildChords(symbols: string[], romans: string[], orig?: Progress
 
 // 입력 검사. 문제가 있으면 첫 문구, 없으면 ''
 export function validateForm(form: ProgressionForm, symbols: string[]): string {
-  if (!form.title.trim()) return form.kind === 'reference' ? '곡 제목을 입력하세요.' : '제목을 입력하세요.';
-  if (form.title.trim().length > 300) return '제목은 300자까지 넣을 수 있습니다.';
-  if (form.kind === 'reference' && !form.artist.trim()) return '아티스트를 입력하세요.';
-  if (!symbols.length) return '코드를 하나 이상 입력하세요.';
-  if (symbols.length > MAX_CHORDS) return `코드는 ${MAX_CHORDS}개까지 넣을 수 있습니다.`;
+  if (!form.title.trim()) return form.kind === 'reference' ? t('prog.errSongTitleReq') : t('prog.errTitleReq');
+  if (form.title.trim().length > 300) return t('prog.errTitleMax');
+  if (form.kind === 'reference' && !form.artist.trim()) return t('prog.errArtistReq');
+  if (!symbols.length) return t('prog.errChordsReq');
+  if (symbols.length > MAX_CHORDS) return t('prog.errChordsMax', { max: MAX_CHORDS });
   const long = symbols.find((s) => s.length > MAX_SYMBOL);
-  if (long) return `코드는 ${MAX_SYMBOL}자까지 넣을 수 있습니다: ${long}`;
+  if (long) return t('prog.errChordLength', { max: MAX_SYMBOL, long });
   for (const [label, text] of [['Mood', form.moods], ['Genre', form.genres], ['Tag', form.tags]] as const) {
     const items = splitList(text);
-    if (items.length > MAX_LIST) return `${label}는 ${MAX_LIST}개까지 넣을 수 있습니다.`;
+    if (items.length > MAX_LIST) return t('prog.errListMax', { label, max: MAX_LIST });
     const over = items.find((x) => x.length > MAX_LIST_ITEM);
-    if (over) return `${label} 항목은 ${MAX_LIST_ITEM}자까지 넣을 수 있습니다: ${over}`;
+    if (over) return t('prog.errListItemMax', { label, max: MAX_LIST_ITEM, over });
   }
   const url = form.url.trim();
-  if (url && !/^https?:\/\//i.test(url)) return '링크는 http:// 또는 https://로 시작해야 합니다.';
-  if (form.releaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.releaseDate)) return '발매일은 YYYY-MM-DD 형식이어야 합니다.';
+  if (url && !/^https?:\/\//i.test(url)) return t('prog.errUrlHttp');
+  if (form.releaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.releaseDate)) return t('prog.errReleaseDate');
   return '';
 }
 
@@ -240,9 +241,19 @@ export function filterScope<T extends { kind: string }>(list: T[], scope: Progre
   return scope === 'all' ? list.slice() : list.filter((p) => p.kind === scope);
 }
 
-export const ORIGIN_LABEL: Record<string, string> = { ai: 'AI', manual: '직접' };
-export const ROUTE_LABEL: Record<string, string> = { video: '코드 진행 영상', note: '학습 영상 노트', manual: '직접 입력' };
-export const KIND_LABEL: Record<string, string> = { reference: '레퍼런스', analysis: '분석' };
+export const ORIGIN_LABEL: Record<string, string> = {
+  get ai() { return t('prog.originAi'); },
+  get manual() { return t('prog.originManual'); },
+};
+export const ROUTE_LABEL: Record<string, string> = {
+  get video() { return t('prog.routeVideo'); },
+  get note() { return t('prog.routeNote'); },
+  get manual() { return t('prog.routeManual'); },
+};
+export const KIND_LABEL: Record<string, string> = {
+  get reference() { return t('prog.kindReference'); },
+  get analysis() { return t('prog.kindAnalysis'); },
+};
 
 export function chordLine(p: { chords: ProgressionChordDto[] }): string {
   return (p.chords || []).map((c) => c.symbol).join(' - ');
@@ -286,7 +297,11 @@ export function formatSec(sec: number | null): string {
 export const MAX_SEC = 86400;
 export type Pace = 'slow' | 'normal' | 'fast';
 export const PACES: Pace[] = ['slow', 'normal', 'fast'];
-export const PACE_LABEL: Record<Pace, string> = { slow: '느림', normal: '보통', fast: '빠름' };
+export const PACE_LABEL: Record<Pace, string> = {
+  get slow() { return t('prog.paceSlow'); },
+  get normal() { return t('prog.paceNormal'); },
+  get fast() { return t('prog.paceFast'); },
+};
 
 /**
  * 시간 입력 → 초. `80`·`1:20`·`1:02:03`. 빈 칸은 null(전체), 형식·범위가 틀리면 undefined.
@@ -309,10 +324,10 @@ export function checkRange(startText: string, endText: string): RangeCheck {
   const s = parseTimeInput(startText);
   const e = parseTimeInput(endText);
   if (s === undefined || e === undefined) {
-    return { startSec: null, endSec: null, error: '시간은 1:20 또는 80처럼 적어 주세요(최대 24시간).' };
+    return { startSec: null, endSec: null, error: t('prog.errTimeFormat') };
   }
   if (e !== null && e <= (s ?? 0)) {
-    return { startSec: s, endSec: e, error: '끝 시간은 시작보다 1초 이상 뒤여야 해요.' };
+    return { startSec: s, endSec: e, error: t('prog.errEndTimeAfter') };
   }
   return { startSec: s, endSec: e, error: '' };
 }
@@ -322,7 +337,7 @@ export function jobOptionsLabel(j: { startSec?: number | null; endSec?: number |
   const has = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
   let range = '';
   if (has(j.startSec) || has(j.endSec)) {
-    range = `${has(j.startSec) ? formatSec(j.startSec) : '0:00'}–${has(j.endSec) ? formatSec(j.endSec) : '끝'}`;
+    range = `${has(j.startSec) ? formatSec(j.startSec) : '0:00'}–${has(j.endSec) ? formatSec(j.endSec) : t('prog.rangeEnd')}`;
   }
   const pace = j.pace && (PACES as string[]).includes(j.pace) ? PACE_LABEL[j.pace as Pace] : '';
   return [range, pace].filter(Boolean).join(' · ');
@@ -391,7 +406,11 @@ export function seedToDto(s: SeedItem): ProgressionDto {
 // ── 목록 검색·정렬 (CH-5b) ─────────────────────────────
 
 export type SortBy = 'recent' | 'title' | 'key';
-export const SORT_LABEL: Record<SortBy, string> = { recent: '최근 추가', title: '곡명', key: '키' };
+export const SORT_LABEL: Record<SortBy, string> = {
+  get recent() { return t('prog.sortRecent'); },
+  get title() { return t('prog.sortTitle'); },
+  get key() { return t('prog.sortKey'); },
+};
 
 type Listed = { title?: string; artist?: string; channel?: string; key?: string | null };
 

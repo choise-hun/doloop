@@ -23,7 +23,7 @@ test('M41-1 프리셋 5개 · id·label 중복 없음 · 6줄 · 기본 id 존�
   assert.equal(new Set(P.REINT_PRESETS.map((p) => p.label)).size, 5);
   for (const p of P.REINT_PRESETS) {
     assert.equal(p.frets.length, 6, p.id);
-    assert.ok(p.hint.length > 0, p.id);
+    assert.ok(p.hintKey.length > 0, p.id);
   }
   assert.ok(P.REINT_PRESETS.some((p) => p.id === P.DEFAULT_REINT_PRESET_ID));
 });
