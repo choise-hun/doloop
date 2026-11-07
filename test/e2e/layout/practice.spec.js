@@ -285,3 +285,123 @@ test('T4: 테이크 .ab-select 매핑 및 구간 완료 토글', async ({ page }
   await expect(btnComp).toContainText('✓');
 });
 
+// UI-3 검증 테스트 (시작/끝 라벨, ✕ 가드, 프리셋 2행 카드, 재생 중심 필, 1120px 정렬)
+test('T5 (UI-3): 시작/끝 라벨, 대기 드롭다운, 1120px 정렬 및 재생 버튼 중심 필 검증', async ({ page }) => {
+  await mockApp(page, USER_DATA_SR);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+
+  // 1. A/B 라벨이 '시작' / '끝'으로 렌더링되는지 확인
+  await expect(page.locator('#setA small')).toHaveText('시작');
+  await expect(page.locator('#setB small')).toHaveText('끝');
+
+  // 2. 대기 시간 드롭다운(#waitSelect) 렌더링 확인
+  const waitSel = page.locator('#waitSelect');
+  await expect(waitSel).toBeVisible();
+  await expect(waitSel).toHaveValue('0');
+
+  // 3. 1120px 컨테이너 규격 확인 (playerShell 너비가 1120px 이하)
+  const shell = page.locator('[data-shell-variant="player"]');
+  const box = await shell.boundingBox();
+  expect(box.width).toBeLessThanOrEqual(1120);
+
+  // 4. 재생 버튼(#playBtn)은 원형/필 곡률 유지, 보조 버튼(#backBtn)은 0px 직각
+  const playRadius = await page.locator('#playBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
+  expect(playRadius).toBe('9999px');
+  const backRadius = await page.locator('#backBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
+  expect(backRadius).toBe('0px');
+});
+
+test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검증', async ({ page }) => {
+  let putPayload = null;
+  const mockWithPresets = {
+    ...USER_DATA_SR,
+    routes: [
+      ...(USER_DATA_SR.routes || []),
+      [
+        (url) => url.pathname.includes('/presets'),
+        (route) => {
+          if (route.request().method() === 'GET') {
+            return route.fulfill({
+              status: 200,
+              contentType: 'application/json; charset=utf-8',
+              body: JSON.stringify({
+                presets: [
+                  {
+                    id: 'preset-1',
+                    songId: SONG_0.id,
+                    name: '인트로',
+                    a: 10,
+                    b: 25,
+                    rate: 1,
+                    completed: false,
+                    createdAt: '2026-11-07T00:00:00Z',
+                    updatedAt: '2026-11-07T00:00:00Z',
+                  },
+                ],
+              }),
+            });
+          }
+          if (route.request().method() === 'PUT') {
+            putPayload = JSON.parse(route.request().postData() || '{}');
+            return route.fulfill({
+              status: 200,
+              contentType: 'application/json; charset=utf-8',
+              body: JSON.stringify({
+                ok: true,
+                preset: {
+                  id: 'preset-1',
+                  songId: SONG_0.id,
+                  name: putPayload.name,
+                  a: putPayload.a,
+                  b: putPayload.b,
+                  rate: putPayload.rate || 1,
+                  completed: false,
+                  createdAt: '2026-11-07T00:00:00Z',
+                  updatedAt: '2026-11-07T00:00:00Z',
+                },
+              }),
+            });
+          }
+          return route.continue();
+        },
+      ],
+    ],
+  };
+
+  await mockApp(page, mockWithPresets);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  await page.locator('#presetSection').waitFor();
+
+  // 프리셋 선택 시 업데이트 버튼(#btnUpdatePreset)과 삭제 버튼(#btnDeletePreset) 노출
+  const presetSelect = page.locator('#presetSelect');
+  await presetSelect.selectOption('preset-1');
+  await expect(page.locator('#btnUpdatePreset')).toBeVisible();
+  await expect(page.locator('#btnDeletePreset')).toBeVisible();
+
+  // 덮어쓰기 클릭 시 confirm 호출 검증
+  let confirmCalled = false;
+  page.once('dialog', async (dialog) => {
+    confirmCalled = true;
+    await dialog.accept();
+  });
+  await page.locator('#btnUpdatePreset').click();
+  await expect.poll(() => putPayload).not.toBeNull();
+  expect(confirmCalled).toBe(true);
+  expect(putPayload.merge).toBe(false);
+
+  // ✕ 클릭 시 루프 해제 confirm 가드 호출 검증
+  let clearConfirmCalled = false;
+  page.once('dialog', async (dialog) => {
+    clearConfirmCalled = true;
+    await dialog.accept();
+  });
+  await page.locator('#clearBtn').click();
+  expect(clearConfirmCalled).toBe(true);
+  await expect(page.locator('#aTime')).toHaveText('--:--');
+  await expect(page.locator('#bTime')).toHaveText('--:--');
+});
+
+

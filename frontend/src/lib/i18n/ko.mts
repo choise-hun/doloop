@@ -1273,4 +1273,13 @@ export const KO = {
   'record.abSelectNone': '미선택',
   'record.abSelectA': 'A 슬롯',
   'record.abSelectB': 'B 슬롯',
+  // UI-3 — 플레이어 정렬 및 UI 정밀 교정
+  'practice.pointStart': '시작',
+  'practice.pointEnd': '끝',
+  'practice.waitLeadNone': '대기 없음',
+  'practice.waitLeadSec': '{sec}초 대기',
+  'practice.clearLoopConfirm': '설정된 반복 구간(시작·끝)을 해제하시겠습니까?',
+  'practice.presetUpdate': '현재 구간으로 덮어쓰기',
+  'practice.presetUpdateConfirm': '선택한 프리셋을 현재 구간({range})으로 덮어쓰시겠습니까?',
+  'practice.driveConnectedShort': 'Drive 연동됨',
 } as const;
