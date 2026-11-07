@@ -6,7 +6,7 @@ window.ULEVELP_CONFIG = {
   supabaseUrl: 'https://vefrfhafmiiivpgjhqiu.supabase.co',
   // Supabase 대시보드 Project Settings → API → Publishable key (또는 anon public key)
   supabaseAnonKey: 'sb_publishable_MmTjc8Xk831VCYkVvMT6nw_jhnmrfE-',
-  // Ktor API 서버 Base URL (비어 있으면 현재 페이지와 같은 Origin 사용, GitHub Pages 배포 시 Cloud Run URL 입력)
+  // Ktor API 서버 Base URL (비어 있으면 현재 페이지와 같은 Origin 사용)
   apiBaseUrl: '',
   // Google Drive 연동용 OAuth 클라이언트 ID (K6-1에서 사용)
   googleClientId: '175439281655-s2kavvppihv1npsims22mj24q23dcgol.apps.googleusercontent.com',
