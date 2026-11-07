@@ -1904,6 +1904,13 @@ export function PracticePage(): React.ReactElement {
                     className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
                     id="btnWaitTimer"
                     aria-pressed={waitLeadSec > 0 || waitTimerOn}
+                    aria-label={
+                      countdownSec != null
+                        ? `-${countdownSec}s`
+                        : waitLeadSec > 0
+                          ? t('practice.waitLeadSec', { sec: waitLeadSec })
+                          : t('practice.waitLeadNone')
+                    }
                     onClick={() => {
                       const next = waitLeadSec > 0 ? 0 : 3;
                       setWaitLeadSec(next);

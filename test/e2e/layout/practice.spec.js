@@ -381,6 +381,11 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
   await expect(page.locator('#btnUpdatePreset')).toBeVisible();
   await expect(page.locator('#btnDeletePreset')).toBeVisible();
 
+  // 360px 모바일 뷰포트에서 프리셋 액션 버튼 줄바꿈(flex-wrap) 및 가로 스크롤 없음 검증
+  await page.setViewportSize({ width: 360, height: 740 });
+  const hasHScroll = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHScroll).toBe(false);
+
   // 덮어쓰기 클릭 시 confirm 호출 검증
   let confirmCalled = false;
   page.once('dialog', async (dialog) => {

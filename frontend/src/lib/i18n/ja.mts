@@ -1242,7 +1242,7 @@ export const JA: Record<I18nKey, string> = {
   'notes.tagMixing': "ミキシング",
   'notes.tagTab': "TAB",
   // UI-2 — プレイヤー プリセット・タイマー・セッション アコーディオン・テイク完了
-  'practice.waitTimer': '-10s 待機',
+  'practice.waitTimer': '0s',
   'practice.presetSave': 'プリセット保存',
   'practice.presetSelect': 'プリセット選択',
   'practice.presetPrompt': 'プリセット名を入力してください',

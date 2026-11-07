@@ -1260,7 +1260,7 @@ export const KO = {
   'notes.tagMixing': "믹싱",
   'notes.tagTab': "TAB",
   // UI-2 — 플레이어 프리셋·타이머·세션아코디언·테이크완료
-  'practice.waitTimer': '-10s 대기',
+  'practice.waitTimer': '0s',
   'practice.presetSave': '구간 프리셋 저장',
   'practice.presetSelect': '프리셋 선택',
   'practice.presetPrompt': '프리셋 이름을 입력하세요',

@@ -1242,7 +1242,7 @@ export const EN: Record<I18nKey, string> = {
   'notes.tagMixing': "Mixing",
   'notes.tagTab': "TAB",
   // UI-2 — Player preset, timer, session accordion, take complete
-  'practice.waitTimer': '-10s Wait',
+  'practice.waitTimer': '0s',
   'practice.presetSave': 'Save Preset',
   'practice.presetSelect': 'Select Preset',
   'practice.presetPrompt': 'Enter preset name',
