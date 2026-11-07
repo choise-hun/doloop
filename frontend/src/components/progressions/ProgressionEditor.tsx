@@ -1,6 +1,7 @@
 // CH-5: 진행 입력·수정 폼 (직접 입력 탭과 행 수정이 같이 쓴다)
 // 코드 칩 미리보기 + 키 자동 추정(→ 드롭다운 확인) + 로마숫자 자동 계산
 import React, { useMemo, useState } from 'react';
+import { t } from '../../lib/i18n.mts';
 import type { ProgressionDto, ProgressionInput } from '../../lib/apiClient';
 import {
   KEYS,
@@ -66,22 +67,22 @@ export function ProgressionEditor({
     if (original) {
       body = formToPatch(full, symbols, romans, original);
       if (Object.keys(body).length === 0) {
-        setMsg({ text: '바뀐 내용이 없습니다.', kind: '' });
+        setMsg({ text: t('prog.editorNoChanges'), kind: '' });
         return;
       }
-      if (patchTurnsManual(body, original) && !window.confirm('코드나 키를 고치면 출처가 "직접"으로 바뀌고 AI 근거 표시가 사라집니다. 저장할까요?')) {
+      if (patchTurnsManual(body, original) && !window.confirm(t('prog.editorManualConfirm'))) {
         return;
       }
     } else {
       body = formToCreate(full, symbols, romans);
     }
     setSaving(true);
-    setMsg({ text: '저장하는 중...', kind: '' });
+    setMsg({ text: t('prog.editorSaving'), kind: '' });
     try {
       await onSubmit(body);
       setMsg({ text: '', kind: '' });
     } catch (ex: any) {
-      setMsg({ text: (ex && ex.message) || '저장에 실패했어요.', kind: 'err' });
+      setMsg({ text: (ex && ex.message) || t('prog.editorSaveFailed'), kind: 'err' });
     } finally {
       setSaving(false);
     }
@@ -90,15 +91,15 @@ export function ProgressionEditor({
   return (
     <form className={styles.editor} onSubmit={handleSubmit} data-testid={`${idPrefix}-form`} noValidate>
       <div className={styles.field}>
-          <span className={styles.lab}>구분</span>
-          <div className={styles.segment} role="group" aria-label="구분">
+          <span className={styles.lab}>{t('prog.editorKindGroup')}</span>
+          <div className={styles.segment} role="group" aria-label={t('prog.editorKindGroup')}>
             {(['reference', 'analysis'] as const).map((k) => (
               <button
                 key={k}
                 type="button"
                 aria-pressed={form.kind === k}
                 disabled={k === 'reference' && fromVideo}
-                title={k === 'reference' && fromVideo ? '영상에서 온 진행은 레퍼런스로 바꿀 수 없습니다.' : undefined}
+                title={k === 'reference' && fromVideo ? t('prog.editorFromVideoDisabled') : undefined}
                 onClick={() => set('kind', k)}
               >
                 {KIND_LABEL[k]}
@@ -106,25 +107,25 @@ export function ProgressionEditor({
             ))}
           </div>
           <span className="hint">
-            {form.kind === 'reference' ? '좋아하는 실제 곡의 진행' : '영상·공부에서 얻은 진행'}
+            {form.kind === 'reference' ? t('prog.editorDescReference') : t('prog.editorDescAnalysis')}
           </span>
         </div>
 
       <div className={styles.grid2}>
         <label className={styles.field}>
-          <span className={styles.lab}>{form.kind === 'reference' ? '곡 제목' : '제목'} <em>*</em></span>
+          <span className={styles.lab}>{form.kind === 'reference' ? t('prog.editorLabelSongTitle') : t('prog.editorLabelTitle')} <em>*</em></span>
           <input className="inpField" id={fid('title')} value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
         </label>
         <label className={styles.field}>
           <span className={styles.lab}>
-            아티스트 {form.kind === 'reference' ? <em>*</em> : <span className="hint">(선택)</span>}
+            {t('prog.editorLabelArtist')} {form.kind === 'reference' ? <em>*</em> : <span className="hint">{t('prog.editorOptionalHint')}</span>}
           </span>
           <input className="inpField" id={fid('artist')} value={form.artist} maxLength={200} onChange={(e) => set('artist', e.target.value)} />
         </label>
       </div>
 
       <label className={styles.field}>
-        <span className={styles.lab}>코드 <em>*</em></span>
+        <span className={styles.lab}>{t('prog.editorLabelChords')} <em>*</em></span>
         <input
           className="inpField"
           id={fid('chords')}
@@ -134,11 +135,11 @@ export function ProgressionEditor({
           spellCheck={false}
           onChange={(e) => set('chordsText', e.target.value)}
         />
-        <span className="hint">- 나 공백으로 나눕니다. 입력한 표기 그대로 저장돼요.</span>
+        <span className="hint">{t('prog.editorChordsHelp')}</span>
       </label>
 
       {symbols.length > 0 && (
-        <ol className={styles.chips} aria-label="코드 미리보기" data-testid={`${idPrefix}-chips`}>
+        <ol className={styles.chips} aria-label={t('prog.editorChipsAria')} data-testid={`${idPrefix}-chips`}>
           {checks.map((c, i) => (
             <li key={i} className={`${styles.chip} ${c.ok ? '' : styles.chipBad}`} data-ok={c.ok ? '1' : '0'} title={c.warning || undefined}>
               <span className={styles.chipSym}>{c.symbol}</span>
@@ -150,13 +151,13 @@ export function ProgressionEditor({
       )}
       {badCount > 0 && (
         <p className={styles.warnLine} role="note">
-          읽지 못한 코드 {badCount}개는 그대로 저장되지만 로마숫자·연습실 연주에서 빠집니다.
+          {t('prog.editorBadChordsWarning', { count: badCount })}
         </p>
       )}
 
       <div className={styles.grid2}>
         <label className={styles.field}>
-          <span className={styles.lab}>키</span>
+          <span className={styles.lab}>{t('prog.editorLabelKey')}</span>
           <select
             className="inpField"
             id={fid('key')}
@@ -166,17 +167,17 @@ export function ProgressionEditor({
               set('key', e.target.value);
             }}
           >
-            <option value="">모름</option>
+            <option value="">{t('prog.editorKeyUnknown')}</option>
             {guesses.length > 0 && (
-              <optgroup label="추정">
+              <optgroup label={t('prog.editorKeyEstimated')}>
                 {guesses.map((g, i) => (
                   <option key={'g' + g.key} value={g.key}>
-                    {g.key}{i === 0 ? ' (추천)' : ''}
+                    {g.key}{i === 0 ? t('prog.editorKeyRecommended') : ''}
                   </option>
                 ))}
               </optgroup>
             )}
-            <optgroup label="전체">
+            <optgroup label={t('prog.editorKeyAll')}>
               {KEYS.filter((k) => !guesses.some((g) => g.key === k)).map((k) => (
                 <option key={k} value={k}>
                   {k}
@@ -185,31 +186,31 @@ export function ProgressionEditor({
             </optgroup>
           </select>
           <span className="hint" data-testid={`${idPrefix}-keyHint`}>
-            {!keyTouched && guesses[0] ? '코드로 추정한 키예요. 다르면 골라 주세요.' : ' '}
+            {!keyTouched && guesses[0] ? t('prog.editorKeyHelp') : ' '}
           </span>
         </label>
         <div className={styles.field}>
-          <span className={styles.lab}>로마숫자</span>
+          <span className={styles.lab}>{t('prog.editorLabelRoman')}</span>
           <output className={styles.romanOut} id={fid('roman')}>
-            {romans.some(Boolean) ? romans.map((r) => r || '?').join(' - ') : '키를 고르면 계산돼요'}
+            {romans.some(Boolean) ? romans.map((r) => r || '?').join(' - ') : t('prog.editorRomanHelp')}
           </output>
           {original && keepRomans && (
             <button type="button" className={styles.linkBtn} onClick={() => setRecalc(true)}>
-              로마숫자 다시 계산
+              {t('prog.editorRecomputeRomans')}
             </button>
           )}
         </div>
       </div>
 
       <details className={styles.more} open={Boolean(initial.part || initial.moods || initial.genres || initial.tags || initial.url || initial.memo)}>
-        <summary>더 적기 (구간·Mood·Genre·Tag·링크·메모)</summary>
+        <summary>{t('prog.editorMoreDetailsSummary')}</summary>
         <div className={styles.grid2}>
           <label className={styles.field}>
-            <span className={styles.lab}>진행 이름·구간</span>
-            <input className="inpField" id={fid('part')} value={form.part} maxLength={100} placeholder="후렴, 인트로, 2-5-1 변형" onChange={(e) => set('part', e.target.value)} />
+            <span className={styles.lab}>{t('prog.editorLabelPart')}</span>
+            <input className="inpField" id={fid('part')} value={form.part} maxLength={100} placeholder={t('prog.editorPartPlaceholder')} onChange={(e) => set('part', e.target.value)} />
           </label>
           <label className={styles.field}>
-            <span className={styles.lab}>앨범</span>
+            <span className={styles.lab}>{t('prog.editorLabelAlbum')}</span>
             <input className="inpField" id={fid('album')} value={form.album} maxLength={200} onChange={(e) => set('album', e.target.value)} />
           </label>
           <label className={styles.field}>
@@ -222,19 +223,19 @@ export function ProgressionEditor({
           </label>
           <label className={styles.field}>
             <span className={styles.lab}>Tag</span>
-            <input className="inpField" id={fid('tags')} value={form.tags} placeholder="쉼표로 나눔" onChange={(e) => set('tags', e.target.value)} />
+            <input className="inpField" id={fid('tags')} value={form.tags} placeholder={t('prog.editorTagsPlaceholder')} onChange={(e) => set('tags', e.target.value)} />
           </label>
           <label className={styles.field}>
-            <span className={styles.lab}>발매일</span>
+            <span className={styles.lab}>{t('prog.editorLabelReleaseDate')}</span>
             <input className="inpField" id={fid('releaseDate')} type="date" min="1900-01-01" max="2100-12-31" value={form.releaseDate} onChange={(e) => set('releaseDate', e.target.value)} />
           </label>
         </div>
         <label className={styles.field}>
-          <span className={styles.lab}>링크 (코드 사이트·영상)</span>
+          <span className={styles.lab}>{t('prog.editorLabelUrl')}</span>
           <input className="inpField" id={fid('url')} type="url" value={form.url} maxLength={500} placeholder="https://" onChange={(e) => set('url', e.target.value)} />
         </label>
         <label className={styles.field}>
-          <span className={styles.lab}>메모</span>
+          <span className={styles.lab}>{t('prog.editorLabelMemo')}</span>
           <textarea className="inpField" id={fid('memo')} value={form.memo} maxLength={2000} onChange={(e) => set('memo', e.target.value)} />
         </label>
       </details>
@@ -245,7 +246,7 @@ export function ProgressionEditor({
         </button>
         {onCancel && (
           <button className="ghostBtn" type="button" onClick={onCancel} disabled={saving}>
-            취소
+            {t('prog.editorCancelBtn')}
           </button>
         )}
       </div>

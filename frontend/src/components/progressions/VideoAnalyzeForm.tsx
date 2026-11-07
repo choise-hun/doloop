@@ -44,7 +44,7 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
     e.preventDefault();
     if (sendingRef.current || busy) return;
     if (!vid) {
-      setMsg({ text: '유튜브 영상 링크가 아니에요.', kind: 'err' });
+      setMsg({ text: t('prog.videoNotYoutube'), kind: 'err' });
       return;
     }
     const range = checkRange(startText, endText);
@@ -54,7 +54,7 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
     }
     sendingRef.current = true;
     setSending(true);
-    setMsg({ text: '분석 요청을 보내는 중...', kind: '' });
+    setMsg({ text: t('prog.videoSending'), kind: '' });
     try {
       const r = await apiClient.progressions.analyze({
         url: `https://www.youtube.com/watch?v=${vid}`,
@@ -65,8 +65,8 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
         force: confirmDup,
       });
       setConfirmDup(false);
-      const reserved = typeof r.reservedCredits === 'number' ? ` (${r.reservedCredits}크레딧 예약 — 실제 사용량만 빠져요)` : '';
-      setMsg({ text: `분석을 요청했어요${reserved}. 보통 1~3분 뒤 목록 맨 위에 진행이 생겨요. 학습 노트도 같이 남습니다.`, kind: 'ok' });
+      const reserved = typeof r.reservedCredits === 'number' ? t('prog.videoReservedCredits', { credits: r.reservedCredits }) : '';
+      setMsg({ text: t('prog.videoSuccess', { reserved }), kind: 'ok' });
       setUrl('');
       setMemo('');
       setStartText('');
@@ -76,7 +76,7 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
     } catch (err: any) {
       if (err && err.code === 'DUPLICATE_ANALYSIS') {
         setConfirmDup(true);
-        setMsg({ text: '이미 같은 영상·구간·속도로 분석했어요. 다시 분석하려면 "다시 분석"을 한 번 더 눌러 주세요.', kind: 'err' });
+        setMsg({ text: t('prog.videoDupNotice'), kind: 'err' });
       } else {
         setMsg({ text: describeAnalyzeRequestError(err), kind: 'err' });
       }
@@ -89,17 +89,17 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
   return (
     <form className={styles.editor} onSubmit={submit} data-testid="videoForm" noValidate>
       <p className={styles.intro}>
-        코드 진행을 설명하거나 연주하는 영상을 넣으면 AI가 진행(코드·로마숫자·키·구간)을 뽑아 바로 모아 둡니다. 화면에 보이거나 말한
-        코드를 우선하고, 짐작한 코드는 "추정"으로 표시돼요.
+        {t('prog.videoIntroPre')}
+        {t('prog.videoIntroPost')}
       </p>
       {!aiAllowed && (
         <div className={styles.keyGate} id="progKeyGate">
-          <span>AI 영상 분석은 Pro 플랜부터 쓸 수 있어요. 직접 입력은 무료로 쓸 수 있어요.</span>
-          <SafeLink href="settings.html#credits">SETTING에서 크레딧 보기 →</SafeLink>
+          <span>{t('prog.videoProNotice')}</span>
+          <SafeLink href="settings.html#credits">{t('prog.videoViewCredits')}</SafeLink>
         </div>
       )}
       <label className={styles.field}>
-        <span className={styles.lab}>유튜브 링크</span>
+        <span className={styles.lab}>{t('prog.videoLabelUrl')}</span>
         <input
           className="inpField"
           id="progVideoUrl"
@@ -113,13 +113,13 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
       {vid && (
         <div className={styles.videoPreview}>
           <img src={thumb(vid)} alt="" />
-          <span className="hint">영상을 확인했어요</span>
+          <span className="hint">{t('prog.videoConfirmed')}</span>
         </div>
       )}
       <div className={styles.grid2}>
         <label className={styles.field}>
           <span className={styles.lab}>
-            시작 <span className="hint">(선택)</span>
+            {t('prog.videoLabelStart')} <span className="hint">{t('prog.editorOptionalHint')}</span>
           </span>
           <input
             className="inpField"
@@ -127,14 +127,14 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
             type="text"
             inputMode="numeric"
             value={startText}
-            placeholder="1:20 또는 80"
+            placeholder={t('prog.videoStartPlaceholder')}
             autoComplete="off"
             onChange={(e) => edited(setStartText)(e.target.value)}
           />
         </label>
         <label className={styles.field}>
           <span className={styles.lab}>
-            끝 <span className="hint">(선택)</span>
+            {t('prog.videoLabelEnd')} <span className="hint">{t('prog.editorOptionalHint')}</span>
           </span>
           <input
             className="inpField"
@@ -142,7 +142,7 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
             type="text"
             inputMode="numeric"
             value={endText}
-            placeholder="비우면 영상 끝까지"
+            placeholder={t('prog.videoEndPlaceholder')}
             autoComplete="off"
             onChange={(e) => edited(setEndText)(e.target.value)}
           />
@@ -150,7 +150,7 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
       </div>
       <div className={styles.field}>
         <span className={styles.lab} id="progVideoPaceLab">
-          코드 진행 변화
+          {t('prog.videoPaceLabel')}
         </span>
         <div className={styles.segment} role="group" aria-labelledby="progVideoPaceLab" id="progVideoPace">
           {PACES.map((p) => (
@@ -160,25 +160,25 @@ export function VideoAnalyzeForm({ aiAllowed, onRequested, busy = false }: Video
           ))}
         </div>
         <span className="hint">
-          코드가 짧은 시간 안에 많이 바뀐다면 빠름을 권장해요. 빠름은 분석량이 많아 구간을 짧게 잡는 게 좋아요.
+          {t('prog.videoPaceHelp')}
         </span>
       </div>
       <label className={styles.field}>
         <span className={styles.lab}>
-          메모 <span className="hint">(선택)</span>
+          {t('prog.videoLabelMemo')} <span className="hint">{t('prog.editorOptionalHint')}</span>
         </span>
         <textarea
           className="inpField"
           id="progVideoMemo"
           value={memo}
           maxLength={2000}
-          placeholder="예: 2:10부터 나오는 후렴 진행 위주로"
+          placeholder={t('prog.videoMemoPlaceholder')}
           onChange={(e) => setMemo(e.target.value)}
         />
       </label>
       <div className={styles.actions}>
         <button className="pillBtn" type="submit" id="progVideoSubmit" disabled={sending || busy || !aiAllowed}>
-          {busy ? '분석 중…' : confirmDup ? '다시 분석' : '분석 요청'}
+          {busy ? t('prog.videoBtnBusy') : confirmDup ? t('prog.videoBtnReanalyze') : t('prog.videoBtnRequest')}
         </button>
       </div>
       <p className={styles.betaNotice} id="progBetaNotice">
