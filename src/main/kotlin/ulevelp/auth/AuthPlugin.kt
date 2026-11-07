@@ -5,6 +5,7 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.util.*
 import ulevelp.api.UnauthorizedException
+import ulevelp.service.Locales
 import ulevelp.service.ProfileService
 
 val AuthenticatedUserKey = AttributeKey<AuthenticatedUser>("AuthenticatedUser")
@@ -35,7 +36,11 @@ val SupabaseAuthPlugin = createRouteScopedPlugin(
         val authHeader = call.request.headers[HttpHeaders.Authorization]
         val user = activeVerifier.verifyBearerHeader(authHeader)
 
-        profileService?.ensureUserAndProfile(user)
+        // 첫 가입 때만 쓰인다(L1-1). 이미 있는 프로필의 locale은 바꾸지 않는다
+        profileService?.ensureUserAndProfile(
+            user,
+            initialLocale = Locales.parseAcceptLanguage(call.request.headers[HttpHeaders.AcceptLanguage])
+        )
         call.attributes.put(AuthenticatedUserKey, user)
     }
 }

@@ -99,8 +99,10 @@ class ProfileService(private val db: Database?) {
      *
      * - 이미 탈퇴(`deleteMe`)한 사용자의 잔여 토큰 요청은 재생성하지 않고 `401 UNAUTHORIZED`로 차단한다.
      * - 기존 사용자는 단일 `SELECT`로 확인하여 이메일 변경이 없으면 쓰기 쿼리를 발생시키지 않는다.
+     * - [initialLocale](첫 요청의 `Accept-Language`, L1-1)은 프로필을 새로 만들 때만 쓴다. 지원 언어가 아니면 NULL(화면 자동)
      */
-    suspend fun ensureUserAndProfile(user: AuthenticatedUser) {
+    suspend fun ensureUserAndProfile(user: AuthenticatedUser, initialLocale: String? = null) {
+        val firstLocale = initialLocale?.takeIf { it in Locales.SUPPORTED }
         if (user.id in deletedUserIds) {
             throw UnauthorizedException("탈퇴 처리된 계정입니다.")
         }
@@ -136,6 +138,7 @@ class ProfileService(private val db: Database?) {
             ProfilesTable.insertIgnore {
                 it[id] = user.id
                 it[displayName] = user.displayNameHint
+                it[locale] = firstLocale
             }
         }
     }
@@ -239,6 +242,23 @@ class ProfileService(private val db: Database?) {
             null
         }
 
+        // 화면·AI 노트 언어(L1-1). null = 자동(화면이 고름, 서버 프롬프트는 ko)
+        val hasLocale = body.containsKey("locale")
+        val newLocale: String? = if (hasLocale) {
+            when (val elem = body["locale"]) {
+                null, is JsonNull -> null
+                is JsonPrimitive -> {
+                    if (!elem.isString || elem.content !in Locales.SUPPORTED) {
+                        throw InvalidInputException("locale은 'ko', 'en', 'ja' 또는 null이어야 합니다.")
+                    }
+                    elem.content
+                }
+                else -> throw InvalidInputException("locale은 'ko', 'en', 'ja' 또는 null이어야 합니다.")
+            }
+        } else {
+            null
+        }
+
         return DatabaseFactory.dbQuery(database) {
             if (newShareAutosync == true) {
                 requireCommunityWrite(tierContext(userId))
@@ -271,9 +291,12 @@ class ProfileService(private val db: Database?) {
             }
 
             if (hasDisplayName || hasStorageProvider || hasDriveFolderId || hasMigratedLocalAt || newShareAutosync != null ||
-                newSharePracticeLog != null
+                newSharePracticeLog != null || hasLocale
             ) {
                 ProfilesTable.update({ ProfilesTable.id eq userId }) {
+                    if (hasLocale) {
+                        it[locale] = newLocale
+                    }
                     if (newShareAutosync != null) {
                         it[shareAutosync] = newShareAutosync
                     }
