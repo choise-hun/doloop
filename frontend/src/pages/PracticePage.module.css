@@ -731,3 +731,56 @@
   min-width: 0;
   padding-top: 10px;
 }
+
+/* UI-2: 프리셋, 대기 타이머, 드래그 핸들 */
+.presetSection {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ppPresetRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.presetSelect {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  flex: 1;
+}
+
+.btnSavePreset {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.btnWaitTimer {
+  min-height: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+}
+
+.barHandle {
+  position: absolute;
+  top: 10px;
+  width: 12px;
+  height: 24px;
+  cursor: ew-resize;
+  background: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  z-index: 2;
+}
