@@ -98,3 +98,20 @@ for (const width of [390, 768, 1280]) {
     expect(await page.evaluate(collectWrappedPills)).toEqual([]);
   });
 }
+
+// UI-2 검증 테스트 (T5)
+test('T5: NotesPage .noteCard 시안 구조 및 액션 텍스트 링크 검증', async ({ page }) => {
+  await mockApp(page, STATES.userData);
+  await page.goto('/notes.html', { waitUntil: 'load' });
+  await page.locator('#notesList').waitFor();
+
+  const firstCard = page.locator('#notesList .note-card').first();
+  await expect(firstCard).toBeVisible();
+
+  // .note-actions 및 액션 링크 검증
+  const actions = firstCard.locator('.note-actions');
+  await expect(actions).toBeVisible();
+  const links = actions.locator('a');
+  await expect(links.first()).toContainText('연습');
+  await expect(links.last()).toContainText('상세');
+});
