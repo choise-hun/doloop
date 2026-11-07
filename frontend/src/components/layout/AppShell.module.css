@@ -100,7 +100,7 @@
   gap: 2px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-card);
 }
 
 .themeBtn {
@@ -110,7 +110,7 @@
   background: transparent;
   color: var(--muted);
   padding: 4px 12px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-card);
   cursor: pointer;
 }
 
