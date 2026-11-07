@@ -1,5 +1,6 @@
 // frontend/src/components/chords/ChordDiagrams.tsx
 import React from 'react';
+import { t } from '../../lib/i18n.mts';
 import { BoardNote, CT, DoubleStopIntervalId, GE } from '../../lib/musicEngine';
 
 export interface DiagramNote {
@@ -130,7 +131,7 @@ export function getDoubleStopPairs(numStrings: number, interval: DoubleStopInter
     adjacent.push({
       key: `${sLow}-${sHigh}`,
       pair: [sLow, sHigh],
-      label: `${highNum}-${lowNum}번줄`,
+      label: t('chords.stringPairLabel', { high: highNum, low: lowNum }),
       skipped: false,
     });
   }
@@ -143,8 +144,8 @@ export function getDoubleStopPairs(numStrings: number, interval: DoubleStopInter
     skipped.push({
       key: `${sLow}-${sHigh}`,
       pair: [sLow, sHigh],
-      label: `${highNum}-${lowNum}번줄`,
-      sub: interval === '6th' ? '6도 추천' : '건너뛴 줄',
+      label: t('chords.stringPairLabel', { high: highNum, low: lowNum }),
+      sub: interval === '6th' ? t('chords.recomSixth') : t('chords.skipString'),
       skipped: true,
     });
   }
@@ -204,10 +205,10 @@ export function formatBlockSeqSummary(
   const endNote = seq[seq.length - 1];
 
   const fmtPos = (n: BoardNote) => `${numStrings - n.s}·${n.f} (${n.name})`;
-  const startLabel = `시작: 최저 루트 ${fmtPos(startNote)}`;
-  const highPeakLabel = `1번줄 끝 ${fmtPos(highestNote)}`;
-  const lowPeakLabel = `${numStrings}번줄 최저 ${fmtPos(lowestNote)}`;
-  const endLabel = `마무리: 최저 루트 ${fmtPos(endNote)}`;
+  const startLabel = t('chords.cagedStart', { pos: fmtPos(startNote) });
+  const highPeakLabel = t('chords.cagedHighPeak', { pos: fmtPos(highestNote) });
+  const lowPeakLabel = t('chords.cagedLowPeak', { num: numStrings, pos: fmtPos(lowestNote) });
+  const endLabel = t('chords.cagedEnd', { pos: fmtPos(endNote) });
 
   return {
     totalSteps: seq.length,
@@ -215,7 +216,7 @@ export function formatBlockSeqSummary(
     highPeakLabel,
     lowPeakLabel,
     endLabel,
-    summaryText: `[${startLabel}] → [${highPeakLabel}] → [${lowPeakLabel}] → [${endLabel}] (총 ${seq.length}스텝)`,
+    summaryText: t('chords.cagedSummary', { start: startLabel, high: highPeakLabel, low: lowPeakLabel, end: endLabel, count: seq.length }),
   };
 }
 
@@ -234,7 +235,7 @@ export function FretboardSvg({
   from = 0,
   to = 15,
   fretW = 44,
-  label = '지판',
+  label = t('chords.fretboardDefaultLabel'),
   clickable = false,
   notes,
   onCellClick,
@@ -384,7 +385,7 @@ export function NeckSvg({
   hi,
   flip = false,
   block = null,
-  label = '지판',
+  label = t('chords.fretboardDefaultLabel'),
   notes,
   onNoteClick,
 }: NeckSvgProps): React.ReactElement {
@@ -576,7 +577,7 @@ export interface ChordBoxSvgProps {
   label?: string;
 }
 
-export function ChordBoxSvg({ notes, label = '코드 폼' }: ChordBoxSvgProps): React.ReactElement {
+export function ChordBoxSvg({ notes, label = t('chords.chordBoxDefaultLabel') }: ChordBoxSvgProps): React.ReactElement {
   const fr = notes.filter((n) => n.f > 0).map((n) => n.f);
   const min = fr.length ? Math.min(...fr) : 1;
   const max = fr.length ? Math.max(...fr) : 1;
@@ -658,7 +659,7 @@ export function CircleWheelSvg({ steps, idx, onSelectStep }: CircleWheelSvgProps
   const C = 92;
   const cur = steps[idx] || steps[0];
   return (
-    <svg className="wheel" viewBox="0 0 184 184" width={184} height={184} role="img" aria-label="5도권 진행">
+    <svg className="wheel" viewBox="0 0 184 184" width={184} height={184} role="img" aria-label={t('chords.circleProgAria')}>
       <circle className="ring" cx={C} cy={C} r={R} />
       {steps.map((s, i) => {
         const a = -Math.PI / 2 + (i / 12) * Math.PI * 2;
@@ -682,7 +683,7 @@ export function CircleWheelSvg({ steps, idx, onSelectStep }: CircleWheelSvgProps
       {cur && (
         <>
           <text className="wc" x={C} y={C - 6}>
-            탑 {CT.NAMES[cur.topPc]}
+            {t('chords.topPrefix')} {CT.NAMES[cur.topPc]}
           </text>
           <text className="wc2" x={C} y={C + 12}>
             {cur.deg}
@@ -706,7 +707,7 @@ export function ScaleWheelSvg({ keys, idx, dir, onSelectKey }: ScaleWheelSvgProp
   const C = 92;
   const cur = keys[idx] || keys[0];
   return (
-    <svg className="wheel" viewBox="0 0 184 184" width={184} height={184} role="img" aria-label="5도권 순환">
+    <svg className="wheel" viewBox="0 0 184 184" width={184} height={184} role="img" aria-label={t('chords.circleCycleAria')}>
       <circle className="ring" cx={C} cy={C} r={R} />
       {keys.map((k, i) => {
         const a = -Math.PI / 2 + (i / 12) * Math.PI * 2 * dir;

@@ -142,7 +142,7 @@ describe('CH-5b-4 목록 검색·정렬', () => {
 describe('CH-5b-5 진행 연주 탭 연결', () => {
   test('ChordsPage: 8번째 탭 prog, #prog? 해시로 열고 탭을 오가도 진행을 유지', () => {
     const src = read('frontend/src/pages/ChordsPage.tsx');
-    assert.ok(src.includes("{ id: 'prog', label: '8 · 진행 연주' }"));
+    assert.ok(src.includes("{ id: 'prog', labelKey: 'chords.tabProg' }"));
     assert.ok(src.includes('<ProgressionPlayTab'));
     assert.ok(src.includes('id="pane-prog"'));
     assert.ok(/tabId === 'prog' && progHash \? progHash/.test(src));
