@@ -48,6 +48,54 @@ export const CHORD_TABS: ReadonlyArray<{ id: ChordTabId; labelKey: I18nKey }> = 
   { id: 'prog', labelKey: 'chords.tabProg' },
 ];
 
+const TUNING_NAME_KEY: Record<TuningId, I18nKey> = {
+  g6: 'chords.tuningGuitarSix',
+  g7: 'chords.tuningGuitarSeven',
+  b4: 'chords.tuningBassFour',
+  b5: 'chords.tuningBassFive',
+  b6: 'chords.tuningBassSix',
+};
+
+const INV_NAME_KEYS: readonly I18nKey[] = [
+  'chords.invRoot',
+  'chords.invFirst',
+  'chords.invSecond',
+  'chords.invThird',
+];
+
+const SLOT_NAME_KEYS: readonly I18nKey[] = [
+  'chords.slotRoot',
+  'chords.slotThird',
+  'chords.slotFifth',
+  'chords.slotSeventh',
+];
+
+const FAM_LABEL_KEY: Record<string, I18nKey> = {
+  maj: 'chords.famMaj',
+  min: 'chords.famMin',
+  dom: 'chords.famDom',
+  sus: 'chords.famSus',
+  hd: 'chords.famHd',
+  dim: 'chords.famDim',
+};
+
+const ROLE_KEY: Record<string, I18nKey> = {
+  '경과': 'chords.rolePassing', // i18n-keep: 엔진 role 매핑 키(D8)
+  'IV (리디안)': 'chords.roleLydianFourth', // i18n-keep: 엔진 role 매핑 키(D8)
+};
+
+const DS_NAME_KEY: Record<DoubleStopIntervalId, I18nKey> = {
+  '3rd': 'chords.dsNameThird',
+  '6th': 'chords.dsNameSixth',
+  '4th': 'chords.dsNameFourth',
+};
+
+const DS_DESC_KEY: Record<DoubleStopIntervalId, I18nKey> = {
+  '3rd': 'chords.dsDescThird',
+  '6th': 'chords.dsDescSixth',
+  '4th': 'chords.dsDescFourth',
+};
+
 // "#matrix" → 'matrix', "#prog?c=…" → 'prog' (CH-5b), 그 밖은 null
 function tabFromHash(hash: string): ChordTabId | null {
   if (isProgHash(hash)) return 'prog';
@@ -720,7 +768,7 @@ export function ChordsPage(): React.ReactElement {
       const wrong = shuffle([...Array(12).keys()].filter((r) => !valid.has(r))).slice(0, 3);
       qObj = {
         notes,
-        text: t('chords.quizQuestionOne', { family: it.famLabel }),
+        text: t('chords.quizQuestionOne', { family: FAM_LABEL_KEY[it.fam] ? t(FAM_LABEL_KEY[it.fam]) : it.famLabel }),
         opts: shuffle([it.root, ...wrong]).map((r) => ({
           label: CT.NAMES[r],
           ok: r === it.root,
@@ -1172,7 +1220,7 @@ export function ChordsPage(): React.ReactElement {
                     setScPos(0);
                   }}
                 >
-                  {tun.name}
+                  {TUNING_NAME_KEY[tun.id] ? t(TUNING_NAME_KEY[tun.id]) : tun.name}
                   <small>{t('chords.tuningSummary', { strings: tun.open.length, frets: tun.frets })}</small>
                 </button>
               ))}
@@ -1184,9 +1232,9 @@ export function ChordsPage(): React.ReactElement {
               onChange={(e) => setScInst(e.target.value as TuningId)}
               hidden
             >
-              {CT.TUNINGS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
+              {CT.TUNINGS.map((tun) => (
+                <option key={tun.id} value={tun.id}>
+                  {TUNING_NAME_KEY[tun.id] ? t(TUNING_NAME_KEY[tun.id]) : tun.name}
                 </option>
               ))}
             </select>
@@ -1657,7 +1705,7 @@ export function ChordsPage(): React.ReactElement {
                   aria-pressed={mxInv === i}
                   onClick={() => setMxInv(i)}
                 >
-                  {n}
+                  {INV_NAME_KEYS[i] ? t(INV_NAME_KEYS[i]) : n}
                 </button>
               ))}
             </div>
@@ -1719,7 +1767,7 @@ export function ChordsPage(): React.ReactElement {
 
         <div className={styles.panel}>
           <div id="mx-struct" className={styles.meta}>
-            {t('chords.matrixFromBottom')}: {mxDropStructure.map((n: any) => CT.SLOT_NAME[n.slot]).join(' → ')}
+            {t('chords.matrixFromBottom')}: {mxDropStructure.map((n: any) => (SLOT_NAME_KEYS[n.slot] ? t(SLOT_NAME_KEYS[n.slot]) : CT.SLOT_NAME[n.slot])).join(' → ')}
           </div>
           <h3 id="mx-btitle" className={styles.h3}>
             {CT.NAMES[mxRoot]}
@@ -2106,7 +2154,7 @@ export function ChordsPage(): React.ReactElement {
                   }}
                 >
                   <b>{interp.name}</b>
-                  <small>{interp.role}</small>
+                  <small>{ROLE_KEY[interp.role] ? t(ROLE_KEY[interp.role]) : interp.role}</small>
                 </button>
               ))}
             </div>
@@ -2467,7 +2515,7 @@ export function ChordsPage(): React.ReactElement {
                     setDsSel(0);
                   }}
                 >
-                  {tun.name}
+                  {TUNING_NAME_KEY[tun.id] ? t(TUNING_NAME_KEY[tun.id]) : tun.name}
                   <small>{t('chords.tuningSummary', { strings: tun.open.length, frets: tun.frets })}</small>
                 </button>
               ))}
@@ -2535,8 +2583,8 @@ export function ChordsPage(): React.ReactElement {
                     setDsSel(0);
                   }}
                 >
-                  {iv.name}
-                  <small>{iv.desc}</small>
+                  {DS_NAME_KEY[iv.id] ? t(DS_NAME_KEY[iv.id]) : iv.name}
+                  <small>{DS_DESC_KEY[iv.id] ? t(DS_DESC_KEY[iv.id]) : iv.desc}</small>
                 </button>
               ))}
             </div>
@@ -2597,7 +2645,7 @@ export function ChordsPage(): React.ReactElement {
 
         <div className={styles.panel}>
           <h3 id="ds-title" className={styles.h3}>
-            {CT.NAMES[dsRoot]} {dsScale} · {CT.DOUBLE_STOP_INTERVALS.find((i) => i.id === dsInterval)?.name} (
+            {CT.NAMES[dsRoot]} {dsScale} · {DS_NAME_KEY[dsInterval] ? t(DS_NAME_KEY[dsInterval]) : CT.DOUBLE_STOP_INTERVALS.find((i) => i.id === dsInterval)?.name} (
             {t('chords.stringPairLabel', { high: dsTuning.open.length - effectiveDsPair[1], low: dsTuning.open.length - effectiveDsPair[0] })})
           </h3>
           <div className={styles.scroll}>

@@ -8,7 +8,7 @@ import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
 import { describeAnalyzeRequestError, describeJobError } from '../lib/jobError.mts';
 import { checkNoteRange, ESTIMATE_DEBOUNCE_MS, jobStage, rangeBody, retryDraft } from '../lib/noteForm.mts';
 import type { NoteRangeError } from '../lib/noteForm.mts';
-import { t } from '../lib/i18n.mts';
+import { t, type I18nKey } from '../lib/i18n.mts';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './NotesPage.module.css';
 
@@ -21,6 +21,20 @@ export const NOTE_FORM_TAGS: ReadonlyArray<string> = [
   '믹싱', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
   'TAB',
 ];
+
+export const NOTE_TAG_KEY: Record<string, I18nKey> = {
+  '화성': 'notes.tagHarmony', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '사운드 디자인': 'notes.tagSoundDesign', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  'DAW/MIDI': 'notes.tagDawMidi',
+  '리듬': 'notes.tagRhythm', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '편곡': 'notes.tagArrangement', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  '믹싱': 'notes.tagMixing', // i18n-keep: 서버 전송 및 비교용 태그 데이터(D5-1)
+  'TAB': 'notes.tagTab',
+};
+
+export function noteTagLabel(tag: string): string {
+  return NOTE_TAG_KEY[tag] ? t(NOTE_TAG_KEY[tag]) : tag;
+}
 
 export const NOTE_FILTER_TAGS: ReadonlyArray<string> = ['', ...NOTE_FORM_TAGS];
 
@@ -349,15 +363,15 @@ export function NotesPage(): React.ReactElement {
         <div className={styles.field}>
           <span className={styles.lab}>{t('notes.labTags')}</span>
           <div className={`tags ${styles.tags}`} id="tags" role="group" aria-label={t('notes.ariaTags')}>
-            {NOTE_FORM_TAGS.map((t) => (
+            {NOTE_FORM_TAGS.map((tag) => (
               <button
-                key={t}
+                key={tag}
                 type="button"
                 className={styles.tagBtn}
-                aria-pressed={selectedTags.includes(t)}
-                onClick={() => toggleFormTag(t)}
+                aria-pressed={selectedTags.includes(tag)}
+                onClick={() => toggleFormTag(tag)}
               >
-                {t}
+                {noteTagLabel(tag)}
               </button>
             ))}
           </div>
@@ -486,7 +500,7 @@ export function NotesPage(): React.ReactElement {
         ) : (
           jobs.map((job) => {
             const vid = videoIdFrom(job.url || '');
-            const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.join(', ') : t('notes.noTags');
+            const tagStr = Array.isArray(job.tags) && job.tags.length > 0 ? job.tags.map(noteTagLabel).join(', ') : t('notes.noTags');
             const timeStr = formatAgo(job.createdAt);
             const why = job.status === 'failed' ? describeJobError(job.error) : null;
             const stage = jobStage(job, nowMs); // 대기·분석 중이면 경과 시간 배지·안내, 끝났으면 null
@@ -579,7 +593,7 @@ export function NotesPage(): React.ReactElement {
               void loadNotesOnly(tag, activeUid);
             }}
           >
-            {tag || t('notes.tagAll')}
+            {tag ? noteTagLabel(tag) : t('notes.tagAll')}
           </button>
         ))}
       </div>
@@ -587,7 +601,7 @@ export function NotesPage(): React.ReactElement {
       <div className={`notes-list ${styles.notesList}`} id="notesList">
         {notes.length === 0 ? (
           <p className={`empty ${styles.empty}`}>
-            {filterTag ? t('notes.emptyFilteredNotes', { tag: filterTag }) : t('notes.emptyNotes')}
+            {filterTag ? t('notes.emptyFilteredNotes', { tag: noteTagLabel(filterTag) }) : t('notes.emptyNotes')}
           </p>
         ) : (
           notes.map((n) => (
@@ -603,9 +617,9 @@ export function NotesPage(): React.ReactElement {
                   {n.channel && <span className="sub">{n.channel}</span>}
                   {n.difficulty && <span className={`badge ${styles.badge}`}>{n.difficulty}</span>}
                   {Array.isArray(n.tags) &&
-                    n.tags.map((t) => (
-                      <span key={t} className={`badge ${styles.badge}`}>
-                        {t}
+                    n.tags.map((tag) => (
+                      <span key={tag} className={`badge ${styles.badge}`}>
+                        {noteTagLabel(tag)}
                       </span>
                     ))}
                 </div>

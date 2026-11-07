@@ -1,5 +1,5 @@
 // frontend/src/lib/auth.ts
-import { t } from './i18n.mts';
+import { syncLangFromProfile, t, type LocaleCode } from './i18n.mts';
 import { useEffect, useState } from 'react';
 import type { SupabaseClientLike, SupabaseSessionLike, SupabaseUserLike } from '../vite-env';
 
@@ -32,6 +32,7 @@ export interface MeProfile {
   sharePracticeLog?: boolean;
   publicName?: string | null;
   publicNameNextChangeAt?: string | null;
+  locale?: LocaleCode | null;
 }
 
 export interface TierLimitsDto {
@@ -57,6 +58,7 @@ export interface ProfilePatchInput {
   migratedLocalAt?: string | null;
   shareAutosync?: boolean;
   sharePracticeLog?: boolean;
+  locale?: LocaleCode | null;
 }
 
 export interface AuthState {
@@ -219,6 +221,7 @@ function createAuthModule() {
     }
     try {
       const me = await apiFetch<MeProfile>('/api/v1/me');
+      syncLangFromProfile(me?.locale ?? null);
       currentMe = me;
       lastFetchedUid = uid || (me ? me.id : null);
       saveKeysCache(me);
@@ -253,6 +256,7 @@ function createAuthModule() {
 
   async function signOut(): Promise<void> {
     clearKeysCache();
+    syncLangFromProfile(null);
     currentMe = null;
     currentSession = null;
     lastFetchedUid = null;

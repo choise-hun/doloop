@@ -1,7 +1,8 @@
 // frontend/src/App.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { onLangChange } from './lib/i18n.mts';
 import { HomePage } from './pages/HomePage';
 import { ChordsPage } from './pages/ChordsPage';
 import { PracticePage } from './pages/PracticePage';
@@ -22,6 +23,9 @@ const queryClient = new QueryClient({
 });
 
 export function App(): React.ReactElement {
+  const [, setLangTick] = useState(0);
+  useEffect(() => onLangChange(() => setLangTick((n) => n + 1)), []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

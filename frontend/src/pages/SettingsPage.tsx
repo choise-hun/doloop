@@ -7,7 +7,7 @@ import { auth, canUseAi, useAuth } from '../lib/auth';
 import { apiClient, CreditsSummaryDto, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
 import { tierLabel } from '../lib/jobError.mts';
 import { communityErrorKey } from '../lib/community.mts';
-import { t } from '../lib/i18n.mts';
+import { getLangChoice, onLangChange, setLang, t, type I18nKey, type LangChoice, type LocaleCode } from '../lib/i18n.mts';
 import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
 import { PublicNameForm } from '../components/community/PublicNameForm';
@@ -29,12 +29,20 @@ function notionDbIdFromInput(raw: string): string {
   return m ? m[1] : s;
 }
 
+const LANG_LABEL_KEY: Record<LangChoice, I18nKey> = {
+  auto: 'settings.langAuto',
+  ko: 'settings.langKo',
+  en: 'settings.langEn',
+  ja: 'settings.langJa',
+};
+
 export function SettingsPage(): React.ReactElement {
   useEffect(() => {
     document.title = '설정 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
+  const user = authState.user;
   const signedIn = Boolean(authState.user);
   const activeUid = authState.user?.id ?? null;
   const embedded = auth.isEmbedded();
@@ -59,8 +67,11 @@ export function SettingsPage(): React.ReactElement {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 외부 연동 키 상태
-  const [notionStatusText, setNotionStatusText] = useState(() => t('settings.ntnUnregistered'));
+  const [notionKeyMeta, setNotionKeyMeta] = useState<{ hint: string; date: string } | null>(null);
   const [notionHasKey, setNotionHasKey] = useState(false);
+  const notionStatusText = notionKeyMeta
+    ? t('settings.ntnConfigured', notionKeyMeta)
+    : t('settings.ntnUnregistered');
   const [ntnToken, setNtnToken] = useState('');
   const [ntnSongsDb, setNtnSongsDb] = useState('');
   const [ntnSessionsDb, setNtnSessionsDb] = useState('');
@@ -147,6 +158,28 @@ export function SettingsPage(): React.ReactElement {
     return () => window.removeEventListener(THEME_EVENT, sync);
   }, []);
 
+  const [langChoice, setLangChoiceState] = useState<LangChoice>(() => getLangChoice());
+  const pendingLocaleRef = useRef<LocaleCode | null | undefined>(undefined);
+  const syncingLocaleRef = useRef(false);
+  useEffect(() => onLangChange(() => setLangChoiceState(getLangChoice())), []);
+  const handleLangChange = (next: LangChoice) => {
+    setLangChoiceState(next);
+    setLang(next);
+    if (!user) return;
+    pendingLocaleRef.current = next === 'auto' ? null : next;
+    if (syncingLocaleRef.current) return;
+    syncingLocaleRef.current = true;
+    void (async () => {
+      while (pendingLocaleRef.current !== undefined) {
+        const target = pendingLocaleRef.current;
+        pendingLocaleRef.current = undefined;
+        try { await apiClient.me.update({ locale: target }); }
+        catch (err) { console.warn('[i18n] locale sync failed:', err); }
+      }
+      syncingLocaleRef.current = false;
+    })();
+  };
+
   const keysReqSeqRef = useRef(0);
   const syncReqSeqRef = useRef(0);
 
@@ -156,7 +189,7 @@ export function SettingsPage(): React.ReactElement {
     setPreviewItems([]);
     setNxMsg({ text: '', kind: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setNotionStatusText(t('settings.ntnUnregistered'));
+    setNotionKeyMeta(null);
     setNotionHasKey(false);
     setNtnToken('');
     setNtnSongsDb('');
@@ -176,14 +209,14 @@ export function SettingsPage(): React.ReactElement {
 
     if (ntn) {
       setNotionHasKey(true);
-      setNotionStatusText(t('settings.ntnConfigured', { hint: ntn.hint || '', date: (ntn.updatedAt || '').slice(0, 10) }));
+      setNotionKeyMeta({ hint: ntn.hint || '', date: (ntn.updatedAt || '').slice(0, 10) });
       const cfg = ntn.config || {};
       if (cfg.songsDb) setNtnSongsDb(String(cfg.songsDb));
       if (cfg.sessionsDb) setNtnSessionsDb(String(cfg.sessionsDb));
       setNtnNotesDb(cfg.notesDb ? String(cfg.notesDb) : '');
     } else {
       setNotionHasKey(false);
-      setNotionStatusText(t('settings.ntnUnregistered'));
+      setNotionKeyMeta(null);
       setNtnToken('');
       setNtnSongsDb('');
       setNtnSessionsDb('');
@@ -733,6 +766,26 @@ export function SettingsPage(): React.ReactElement {
         </div>
       </section>
 
+      {/* 5. 언어 설정 */}
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="langSec" aria-labelledby="hLang">
+        <h2 id="hLang">{t('settings.secLang')}</h2>
+        <p id="langDesc">{t('settings.langDesc')}</p>
+        <div className={`seg-pill ${styles.segPill}`} id="langSelect" role="group" aria-label={t('settings.langAria')}>
+          {(['auto', 'ko', 'en', 'ja'] as const).map((code) => (
+            <button
+              key={code}
+              type="button"
+              className={`seg-btn ${styles.segBtn}`}
+              data-lang={code}
+              aria-pressed={langChoice === code}
+              onClick={() => handleLangChange(code)}
+            >
+              {t(LANG_LABEL_KEY[code])}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* 6. 고급 설정 — 노션 연동(2026-11-05 중단·동결: 새 기능 없음, 계획/앱_명세.md §5). 기본 접힘 */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="advanced" aria-labelledby="hAdvanced">
         <details
@@ -849,7 +902,7 @@ export function SettingsPage(): React.ReactElement {
                       setNtnToken('');
                       if (dto) {
                         setNotionHasKey(true);
-                        setNotionStatusText(t('settings.ntnConfigured', { hint: dto.hint || '', date: (dto.updatedAt || '').slice(0, 10) }));
+                        setNotionKeyMeta({ hint: dto.hint || '', date: (dto.updatedAt || '').slice(0, 10) });
                         if (dto.config) {
                           if (dto.config.songsDb) setNtnSongsDb(String(dto.config.songsDb));
                           if (dto.config.sessionsDb) setNtnSessionsDb(String(dto.config.sessionsDb));
@@ -923,7 +976,7 @@ export function SettingsPage(): React.ReactElement {
                       await apiClient.integrations.remove('notion');
                       if (auth.getUser()?.id !== reqUid) return;
                       setNotionHasKey(false);
-                      setNotionStatusText(t('settings.ntnUnregistered'));
+                      setNotionKeyMeta(null);
                       setNtnToken('');
                       setNtnSongsDb('');
                       setNtnSessionsDb('');

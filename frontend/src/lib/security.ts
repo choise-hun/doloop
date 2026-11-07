@@ -9,6 +9,7 @@ export type ULPStorageKey =
   | 'ulp:notion-practice'
   | 'ulp:notion-notes'
   | 'ulp:progressions'
+  | 'ulp:lang'
   | `ulp:v:${string}`;
 
 const LEGACY_KEY_MAP: ReadonlyArray<readonly [string, ULPStorageKey]> = [

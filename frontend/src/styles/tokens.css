@@ -136,6 +136,13 @@
   color-scheme: light;
 }
 
+:root:lang(ja) {
+  --font-body: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', sans-serif;
+  line-break: strict;
+  word-break: normal;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }

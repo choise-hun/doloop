@@ -258,6 +258,14 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .segBtn {
+    font-size: 14px;
+    padding: 0 10px;
+  }
 }
 
 .segBtn[aria-pressed="true"] {
