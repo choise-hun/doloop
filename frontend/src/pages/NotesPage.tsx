@@ -625,7 +625,7 @@ export function NotesPage(): React.ReactElement {
               <div className={`note-actions ${styles.noteActions}`}>
                 {n.videoId && (
                   <SafeLink className={`link ${styles.link}`} href={`practice.html?v=${encodeURIComponent(n.videoId)}`}>
-                    <span className={styles.tri}>▶</span>{t('notes.btnPractice')} <span className={styles.arrow}>→</span>
+                    {t('notes.btnPractice')} <span className={styles.arrow}>→</span>
                   </SafeLink>
                 )}
                 <SafeLink className={`link sub ${styles.link} ${styles.sub}`} href={`note.html?id=${encodeURIComponent(n.id)}`}>

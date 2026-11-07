@@ -87,7 +87,7 @@ export interface SongSessionDto {
   segment: string;
   rate: number | null;
   memo: string;
-  partStats?: Record<string, unknown> | null;
+  partStats?: unknown;
   coveragePct?: number;
 }
 

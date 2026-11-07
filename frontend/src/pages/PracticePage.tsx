@@ -189,6 +189,7 @@ export function PracticePage(): React.ReactElement {
     a: null as number | null,
     b: null as number | null,
     loopOn: false,
+    waitTimerOn: false,
     rate: 1,
     loops: 0,
     dirty: false,
@@ -202,6 +203,7 @@ export function PracticePage(): React.ReactElement {
     a: pointA,
     b: pointB,
     loopOn,
+    waitTimerOn,
     rate,
     loops,
     dirty,
@@ -431,7 +433,8 @@ export function PracticePage(): React.ReactElement {
       window.clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
-    if (!waitTimerOn) {
+    // 50ms 감시 타이머·단축키는 마운트 시점 클로저라 상태 대신 stRef로 읽는다
+    if (!stRef.current.waitTimerOn) {
       seekGuardUntilRef.current = Date.now() + 400;
       try {
         playerRef.current?.seekTo?.(targetTime, true);
@@ -475,7 +478,7 @@ export function PracticePage(): React.ReactElement {
     if (!playerRef.current || !stRef.current.ready) return;
     const cur = stRef.current;
     const to = cur.a != null ? cur.a : 0;
-    if (waitTimerOn && cur.playing) {
+    if (cur.waitTimerOn && cur.playing) {
       startCountdownAndPlay(to);
     } else {
       seekGuardUntilRef.current = Date.now() + 400;

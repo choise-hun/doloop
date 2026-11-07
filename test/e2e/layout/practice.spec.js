@@ -177,7 +177,9 @@ test('T2: 프리셋 저장 및 병합 다이얼로그 호출', async ({ page }) 
   await page.locator('#setA').click();
   await page.locator('#setB').click();
 
+  const dialogTypes = [];
   page.on('dialog', async (dialog) => {
+    dialogTypes.push(dialog.type());
     if (dialog.type() === 'prompt') {
       await dialog.accept('인트로');
     } else if (dialog.type() === 'confirm') {
@@ -187,6 +189,8 @@ test('T2: 프리셋 저장 및 병합 다이얼로그 호출', async ({ page }) 
 
   await page.locator('#btnSavePreset').click();
   await expect.poll(() => putPayload).not.toBeNull();
+  // 같은 이름이면 병합 확인(confirm)을 거쳐야 PUT이 나간다 — confirm 가드를 지우면 여기서 깨진다
+  expect(dialogTypes).toEqual(['prompt', 'confirm']);
   expect(putPayload.name).toBe('인트로');
   expect(putPayload.merge).toBe(true);
 });

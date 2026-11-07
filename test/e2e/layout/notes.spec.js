@@ -113,5 +113,7 @@ test('T5: NotesPage .noteCard 시안 구조 및 액션 텍스트 링크 검증',
   await expect(actions).toBeVisible();
   const links = actions.locator('a');
   await expect(links.first()).toContainText('연습');
+  // ▶는 사전 문구(notes.btnPractice)에 이미 있다 — 마크업에서 한 번 더 붙이면 깨진다
+  expect(((await links.first().textContent()) || '').split('▶').length - 1).toBe(1);
   await expect(links.last()).toContainText('상세');
 });
