@@ -432,10 +432,10 @@ export function LogPage(): React.ReactElement {
     : '#';
 
   return (
-    <AppShell variant="narrow" activeNav="trails">
+    <AppShell variant="default" activeNav="trails">
       <div className={`log-page ${styles.logContainer}`}>
         <header id="logHeader" className={styles.headerBlock} hidden={!isGuest && Boolean(detailSongId)}>
-          <h1 className={`page-title ${styles.pageTitle}`}>Log</h1>
+          <h1 className={`page-title ${styles.pageTitle}`}>TRAILS</h1>
           <p className={`page-sub ${styles.pageSub}`}>
             {t('log.pageSub')}
           </p>

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
-const { STATES } = require('../support/mock-app');
+const { mockApp, STATES } = require('../support/mock-app');
 const { COMMUNITY_FREE_ME, communityRoutes } = require('../support/community-fixtures');
 
 const HOME_CURATION = {
@@ -36,4 +36,26 @@ layoutSuite({
 test('FT home HomePage.module.css에 링크 파란색 토큰 없음', () => {
   const css = fs.readFileSync(path.join(__dirname, '../../../frontend/src/pages/HomePage.module.css'), 'utf8');
   expect(css.match(/var\(--(link|accent-text)\)/g) || []).toEqual([]);
+});
+
+test('UI-1 T2 단일 푸터 검증: 홈 화면에 중복 푸터 없이 단 하나의 footer만 존재', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#weeklyStreakCard').waitFor();
+  await expect(page.locator('footer')).toHaveCount(1);
+});
+
+test('UI-1 T3 버튼 폭 일치 검증: #betterChordsBtn의 너비가 상위 #modes 리스트 박스의 너비와 일치', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#betterChordsBtn').waitFor();
+  const list = page.locator('#modes');
+  const btn = page.locator('#betterChordsBtn');
+  const listBox = await list.boundingBox();
+  const btnBox = await btn.boundingBox();
+  expect(listBox).not.toBeNull();
+  expect(btnBox).not.toBeNull();
+  expect(Math.abs(btnBox.width - listBox.width)).toBeLessThanOrEqual(1);
 });

@@ -507,7 +507,7 @@ export function HomePage(): React.ReactElement {
       <div className={styles.hero}>
         <h1 className={`wordmark ${styles.wordmark}`}>ULeveLP</h1>
         <hr className={`home-rule ${styles.homeRule}`} />
-        <p className={`tagline ${styles.tagline}`}>DIVE INTO SOUND</p>
+        <p className={`tagline ${styles.tagline}`}>{t('home.tagline')}</p>
 
         <form className={`go ${styles.goForm}`} id="go" onSubmit={handleGoSubmit}>
           <input
@@ -984,13 +984,6 @@ export function HomePage(): React.ReactElement {
           {t('home.footerNotes')}
         </SafeLink>
       </div>
-
-      <footer className={`home-foot ${styles.homeFoot}`}>
-        <span>DAILY DIARY</span>
-        <SafeLink href="privacy.html">PRIVACY</SafeLink>
-        <span id="copy">©{new Date().getFullYear()}</span>
-      </footer>
-
     </AppShell>
   );
 }

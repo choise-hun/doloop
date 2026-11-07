@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('../support/mock-app');
 
-const TAB_LABELS = ['LEARN', 'PLAY', 'TRAILS', 'CHORDS', 'NOTES'];
+const TAB_LABELS = ['LEARN', 'PRACTICE', 'TRAILS', 'CHORDS', 'NOTES'];
 const TAB_HREFS = ['chords.html', 'practice.html', 'log.html', 'progressions.html', 'notes.html'];
 
 async function open(page, path, width) {
