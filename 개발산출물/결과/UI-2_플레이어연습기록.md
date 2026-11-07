@@ -3,7 +3,7 @@
 - **진행 파일:** `개발산출물/진행_프론트개선.md`
 - **입력:** `개발산출물/명세/UI-2_구현명세.md`
 - **근거:** 사용자 요구사항 (2026-11-07), `개발산출물/프론트_정렬규격.md`, `docs/rules/frontend-layout.md`, `docs/rules/frontend-state.md`
-- **브랜치·PR:** `step/UI-2` → `main`, PR 생성 대기
+- **브랜치·PR:** `step/UI-2` → `main`, PR #132
 - **상태:** 완료(머지 시)
 
 ---
