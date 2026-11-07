@@ -4,21 +4,22 @@
 
 **서비스:** https://ulevelp-d5ympfsmfq-du.a.run.app
 
-- 화면: React + TypeScript(Vite 빌드)
+- 화면: React + TypeScript(Vite 빌드, 단일 SPA)
+- 다국어: 한국어(`ko`), 영어(`en`), 일본어(`ja`) 3개 언어 지원 (브라우저 자동 감지 및 설정 전환)
 - 서버: Kotlin Ktor, Google Cloud Run 컨테이너 1개가 화면과 API를 같이 서빙합니다
-- 인증·DB·녹음: Supabase(Google OAuth, PostgreSQL, Storage), 녹음은 Google Drive 연결 시 사용자 드라이브에 저장
+- 인증·DB·녹음: Supabase(Google OAuth, PostgreSQL, Storage, Flyway V9 마이그레이션), 녹음은 Google Drive 연결 시 사용자 드라이브에 저장
 - 외부 연동: 노션(연습 곡·기록·학습 노트 push), Gemini(학습 노트 분석, 사용자 본인 키)
 
 > GitHub Pages(`choise-hun.github.io/ULevelP`)는 폐지되었고, 옛 주소는 위 서비스의 같은 화면으로 이동합니다(쿼리 유지). 노션 임베드 안에서는 이동하지 못하므로 임베드 대신 링크를 쓰세요.
 
-| 화면 | 하는 일 |
+| 화면 (상단 탭) | 하는 일 |
 | --- | --- |
-| `/` (`index.html`) | 홈. 유튜브 링크 붙여넣기, 주간 스트릭, 최근 연습 곡, BETTER(연습) · VAULT(학습) 대시보드 |
-| `/chords.html` | 코드 연습실 (아래 탭 7개) |
-| `/practice.html` | 유튜브 구간 연습 플레이어 + 녹음. 노션 "이어서 연습" 링크가 이 주소를 쓰므로 이름을 바꾸지 마세요 |
-| `/log.html` | 기록: 12주 달력, 곡 보관함, 곡 상세(녹음 A/B 비교) |
-| `/notes.html`, `/note.html` | 학습 영상 노트 목록·상세 (Gemini 분석) |
-| `/settings.html` | 계정, 노션·Gemini·Google Drive 연결, 화면 모드 |
+| `/` (`index.html` / `LEARN`) | 홈. 유튜브 링크 붙여넣기, 주간 스트릭, 최근 연습 곡, BETTER(연습) · VAULT(학습) 대시보드 |
+| `/practice.html` (`PRACTICE`) | 유튜브 구간 연습 플레이어 + 녹음. 사용자 정의 구간 프리셋(임의 명칭/무제한/자동 구간 병합), 드래그 핸들, 세션 및 테이크 아코디언 카드, A/B 슬롯 비교, 구간 완료 토글. (노션 "이어서 연습" 링크 호환) |
+| `/log.html` (`TRAILS`) | 기록: 12주 잔디 달력, 곡 보관함(목록/카드), 곡 상세(녹음 A/B 비교), 커뮤니티 폴더 공유 |
+| `/chords.html` (`CHORDS`) | 코드 연습실 (아래 탭 7개) |
+| `/notes.html`, `/note.html` (`NOTES`) | 학습 영상 노트 목록·상세 (Gemini 분석) |
+| `/settings.html` (`SETTINGS`) | 계정, 다국어 전환, 노션·Gemini·Google Drive 연결, 화면 모드 |
 | `/privacy.html` | 개인정보처리방침 |
 
 설계 문서(기획·요구사항·API·DB)는 [docs/](docs/README.md), 진행 기록과 다음 할 일은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md)에 있습니다. 디자인 규칙(색·곡률 토큰)은 `frontend/src/styles/tokens.css`.
@@ -75,7 +76,7 @@ main에 머지되면 CI(`ci.yml`)가 테스트·Docker 스모크를 돌립니다
 
 ```
 frontend/src/          React 화면 (pages/, components/, lib/, styles/tokens.css)
-public/                옛 화면(롤백용) + 공용 파일 (config.js, lib/theory.js·voicing.js)
+public/                정적 자산 (런타임 주입용 config.js, icon-180.png)
 src/main/kotlin/ulevelp/  Ktor 서버 (routes/, service/, auth/, db/, notion/, note/, storage/)
 server.js              테스트·화면 확인용 Node 서버
 test/                  node:test 단위 테스트, test/e2e/ Playwright
@@ -84,7 +85,7 @@ docs/                  설계 문서
 개발산출물/             단계별 명세·결과·진행 파일
 ```
 
-`public/lib/*.js`(음악 계산)는 브라우저와 Node 서버가 같은 파일을 쓰고, Kotlin 서버는 `chord/ChordTheory.kt`에 같은 규칙을 옮겨 둡니다. 계산 규칙을 바꾸면 둘 다 고칩니다.
+음악 계산 모듈(`theory.mjs`·`voicing.mjs`)은 `frontend/src/lib/engine/` 단일 경로로 관리하며, React 번들과 Node 서버(`server.js`), 단위 테스트가 동일 모듈을 사용합니다. Kotlin 서버는 `chord/ChordTheory.kt`에 같은 규칙을 유지합니다.
 
 ## API
 
