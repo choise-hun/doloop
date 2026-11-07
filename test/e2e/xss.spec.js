@@ -504,15 +504,10 @@ test('E9 설정 화면(settings.html) 외부 연동 키 상태·점검 결과 XS
   await expect(ntnMsg).toContainText(PAYLOADS.P_IMG);
   await expect(ntnMsg).toContainText(PAYLOADS.P_SVG);
 
-  // #ntnSongsDb, #ntnSessionsDb, #gemModel 에도 value로 설정되었는지 확인
+  // #ntnSongsDb, #ntnSessionsDb 에도 value로 설정되었고 React 설정에는 #gemModel이 없는지 확인
   await expect(page.locator('#ntnSongsDb')).toHaveValue(PAYLOADS.P_SVG);
   await expect(page.locator('#ntnSessionsDb')).toHaveValue(PAYLOADS.P_ATTR);
-  // M1-3c: React 설정에는 Gemini 키 칸이 없다(서버 키 + 크레딧). 레거시만 #gemModel을 본다
-  if ((await page.locator('#root').count()) === 0) {
-    await expect(page.locator('#gemModel')).toHaveValue(PAYLOADS.P_JS_URL);
-  } else {
-    await expect(page.locator('#gemModel')).toHaveCount(0);
-  }
+  await expect(page.locator('#gemModel')).toHaveCount(0);
 
   // 페이지 로드 및 버튼 동작 후에도 /api/v1/integrations 목록 조회가 1회만 호출되었는지 단언 (리뷰 1번)
   expect(integrationsListCalls).toBe(1);

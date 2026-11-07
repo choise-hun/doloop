@@ -31,49 +31,16 @@ const CSP = [
 const SRI_EXEMPT_SCRIPT = ['https://www.youtube.com/iframe_api', 'https://accounts.google.com/gsi/client'];
 const SRI_EXEMPT_STYLE = ['https://fonts.googleapis.com/css2?'];
 
-// (c)(d) HTML·URL에 끼워 넣어도 되는 식. file = public 기준 경로, expr = 식 원문(공백 하나로 줄임) 또는 정규식.
+// (c)(d) HTML·URL에 끼워 넣어도 되는 식. file = 기준 경로, expr = 식 원문(공백 하나로 줄임) 또는 정규식.
 // 줄 번호는 편집할 때마다 밀려서 식으로 맞춘다. 어디에도 안 쓰이는 항목이 생기면 테스트가 실패한다(낡은 항목 정리)
 // kind = 'html'(본문·일반 속성) 또는 'url'(href·src). html 허용은 href·src에는 통하지 않는다
-const HTML_ALLOW = [
-  // 코드 연습실(chords.html)은 외부 입력이 없다: 모든 값이 lib/theory.js·voicing.js 상수와 계산에서 나온다
-  {
-    file: 'public/app.js', kind: 'html',
-    expr: /^(?:x|y|f|s|i|T|L|R|W|H|C|VW|GAP|xL|mid|rx|width|height|start|idx|iv|ci|pi|key|outs|x\.i|p\.d|m\.f|n\.f|m\.pitch|open\[m\.s\]|mx\.span|k\.key|(?:xOf|yOf|fx)\(.*\))$/,
-    why: '지판 SVG 좌표·프렛·인덱스 숫자 (지역 변수라 숫자인지 정적으로는 모름)',
-  },
-  {
-    file: 'public/app.js', kind: 'html',
-    expr: /^(?:NOTE\[.+\](?:\.replace\(.*\))?|n|CT\.TOP_DEG\[iv\]|CT\.strName\(.+\)|GE\.fretStr\(.+\)|fretText\(.+\)|DOT_CLS\([mn]\)|cls|n\.cls|q\.id|s\.id|t\.id|g\.F\.label|p\.ro\.r)$/,
-    why: '음이름·도수·코드 id·CSS 클래스 이름 상수 (theory.js NAMES·QBY·SCALES 등 고정 값)',
-  },
-  {
-    file: 'public/app.js', kind: 'html',
-    expr: /^(?:h|(?:fretboard|neck|chordNeck|box|wheel|scWheel|rect|cell|row)\(.*\)|cells\.join\(''\))$/,
-    why: '같은 파일 안에서 이 검사를 통과한 이어 붙이기로 만든 SVG/HTML 문자열(그림 함수 결과·누적 변수)',
-  },
-  { file: 'public/practice.js', kind: 'url', expr: 't.url', why: 'URL.createObjectURL로 만든 blob: 주소(녹음 재생·파일 저장)' },
-];
+const HTML_ALLOW = [];
 
 // (g) localStorage 키. 새 키는 이 접두어만
 const STORAGE_PREFIXES = ['ulp:', 'sb-'];
-// 옛 키 허용 목록 (R2 결과 7.3, docs/03 2.5). until = 이 키를 지우는 step. onlyIn = 이 파일에서만(처음 한 번 복사할 때 읽기)
-const COPY_ONLY = { onlyIn: ['public/theme.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)' };
-const STORAGE_LEGACY = [
-  { key: 'pp:v:', prefix: true, onlyIn: ['public/data.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)', why: '자매 앱 기기 기록. 첫 로그인 이관(FR-LOCAL-2)에서 읽기만' },
-  { key: 'gv-theme', ...COPY_ONLY, why: '→ ulp:theme 복사' },
-  { key: 'gv-tab', ...COPY_ONLY, why: '→ ulp:tab 복사' },
-  { key: 'pp-lead', ...COPY_ONLY, why: '→ ulp:lead 복사' },
-  { key: 'ul-notion-practice', ...COPY_ONLY, why: '→ ulp:notion-practice 복사' },
-  { key: 'ul-notion-notes', ...COPY_ONLY, why: '→ ulp:notion-notes 복사' },
-];
+const STORAGE_LEGACY = [];
 // 저장소 함수에 키를 변수로 넘기는 곳(래퍼 내부 등)
-const STORAGE_ARG_ALLOW = [
-  { file: 'public/site.js', expr: 'k', why: 'UL.raw·UL.json 래퍼 안. 부르는 쪽의 키를 검사한다' },
-  { file: 'public/practice.js', expr: 'k', why: 'store 래퍼 안. 부르는 쪽의 키를 검사한다' },
-  { file: 'public/theme.js', expr: 'from', why: '옛 키 복사 표(이 파일 안 상수)' },
-  { file: 'public/theme.js', expr: 'to', why: '옛 키 복사 표(이 파일 안 상수)' },
-  { file: 'public/data.js', expr: 'k', why: '이관할 키 목록(ulp:v:·pp:v: 접두어로 거른 localStorage.key 값)을 읽음' },
-];
+const STORAGE_ARG_ALLOW = [];
 
 // (f) 브라우저에 있으면 안 되는 비밀 값 모양
 const SECRET_PATTERNS = [
@@ -479,20 +446,23 @@ const fmt = (ps) => ps.map((p) => `  (${p.rule}) ${p.file}:${p.line} ${p.msg}`).
 
 // ================= 테스트 =================
 
-const pub = load(path.join(ROOT, 'public'));
+const pub = [
+  ...load(path.join(ROOT, 'public')),
+  { name: 'frontend/index.html', text: fs.readFileSync(path.join(ROOT, 'frontend', 'index.html'), 'utf8').replace(/\r\n/g, '\n') },
+];
 const res = scan(pub);
 const RULES = { a: 'CSP meta·inline 스크립트·on*·style 속성 없음', b: '외부 스크립트는 정확한 버전 + SRI', c: 'HTML에 끼우는 값은 esc 등', d: 'href·src 값은 safeUrl 등', e: 'eval·Function·문자열 setTimeout 없음', f: '비밀 값 모양 없음', g: '저장소 키는 ulp:/sb- 또는 옛 키 허용 목록' };
 
 for (const [rule, name] of Object.entries(RULES)) {
-  test(`(${rule}) public/: ${name}`, () => {
+  test(`(${rule}) frontend/index.html + public/config.js: ${name}`, () => {
     const ps = res.problems.filter((p) => p.rule === rule);
     assert.equal(ps.length, 0, '\n' + fmt(ps));
   });
 }
 
-test('public/*.html 5개 이상을 실제로 읽었다', () => {
-  assert.ok(pub.filter((f) => /^public\/[^/]+\.html$/.test(f.name)).length >= 5);
-  assert.ok(pub.some((f) => f.name === 'public/app.js'));
+test('frontend/index.html 및 public/config.js를 실제로 읽었다', () => {
+  assert.ok(pub.some((f) => f.name === 'frontend/index.html'));
+  assert.ok(pub.some((f) => f.name === 'public/config.js'));
 });
 
 test('허용 목록에 안 쓰이는 항목이 없다 (지운 코드의 허용 항목은 같이 뺀다)', () => {

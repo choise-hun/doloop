@@ -21,7 +21,6 @@ function walkFiles(dir, extFilter) {
 
 test('미디어 요소의 src에 빈 문자열("")을 할당하여 초기화하지 않는다 (PR #19)', () => {
   const targetFiles = [
-    ...walkFiles(path.join(__dirname, '..', 'public'), (n) => n.endsWith('.js')),
     ...walkFiles(path.join(__dirname, '..', 'frontend', 'src'), (n) => n.endsWith('.ts') || n.endsWith('.tsx')),
   ];
 
