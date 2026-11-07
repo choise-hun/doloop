@@ -145,6 +145,8 @@ fun Route.registerTakeRoutes(
                 }
 
                 val replaceOldSongTakes = metaJson.optBoolean("replaceOldSongTakes", false)
+                val partName = metaJson.optString("partName", 50) ?: ""
+                val completed = metaJson.optBoolean("completed", false)
 
                 val input = TakeUploadInput(
                     songId = songId,
@@ -156,7 +158,9 @@ fun Route.registerTakeRoutes(
                     durationSec = durationSec,
                     mime = normalizedMime,
                     bytes = bytes,
-                    replaceOldSongTakes = replaceOldSongTakes
+                    replaceOldSongTakes = replaceOldSongTakes,
+                    partName = partName,
+                    completed = completed
                 )
 
                 val takeDto = takeService.upload(user.id, input)
@@ -209,6 +213,9 @@ fun Route.registerTakeRoutes(
                     throw InvalidInputException("mime 값이 올바르지 않습니다.")
                 }
 
+                val partName = body.optString("partName", 50) ?: ""
+                val completed = body.optBoolean("completed", false)
+
                 val input = DriveTakeRegisterInput(
                     songId = songId,
                     date = date,
@@ -219,7 +226,9 @@ fun Route.registerTakeRoutes(
                     durationSec = durationSec,
                     mime = normalizedMime,
                     sizeBytes = sizeBytes,
-                    driveFileId = storageKey
+                    driveFileId = storageKey,
+                    partName = partName,
+                    completed = completed
                 )
 
                 val takeDto = takeService.registerDriveTake(user.id, input)
@@ -265,6 +274,16 @@ fun Route.registerTakeRoutes(
             val trashIds = takeService.delete(user.id, takeId)
             storageTrashService.purge(trashIds)
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
+        }
+
+        patch("/{takeId}/complete") {
+            val user = call.requireAuthUser()
+            val takeId = parsePathUuid(call.parameters["takeId"])
+            val body = call.receiveJsonObject()
+            val completed = body.optBoolean("completed", true)
+            val takeDto = takeService.toggleComplete(user.id, takeId, completed)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, TakeEnvelope(ok = true, take = takeDto))
         }
     }
 }

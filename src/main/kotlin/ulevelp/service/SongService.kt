@@ -43,7 +43,8 @@ data class SongDto(
     val memo: String,
     val categoryIds: List<String>,
     val totalSeconds: Long,
-    val resumeUrl: String
+    val resumeUrl: String,
+    val durationSec: Int = 0
 )
 
 @Serializable
@@ -51,6 +52,34 @@ data class SongEnvelope(val song: SongDto?)
 
 @Serializable
 data class SongListResponse(val songs: List<SongDto>)
+
+@Serializable
+data class SongPresetDto(
+    val id: String,
+    val songId: String,
+    val name: String,
+    val a: Double,
+    val b: Double,
+    val rate: Double,
+    val completed: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class PresetListResponse(val presets: List<SongPresetDto>)
+
+@Serializable
+data class PresetEnvelope(val ok: Boolean = true, val preset: SongPresetDto)
+
+data class UpsertPresetInput(
+    val name: String,
+    val a: BigDecimal,
+    val b: BigDecimal,
+    val rate: BigDecimal = BigDecimal("1.00"),
+    val completed: Boolean = false,
+    val merge: Boolean = true
+)
 
 @Serializable
 data class SongSessionDto(
@@ -63,14 +92,17 @@ data class SongSessionDto(
     val b: Double?,
     val segment: String,
     val rate: Double?,
-    val memo: String
+    val memo: String,
+    val partStats: kotlinx.serialization.json.JsonElement? = null,
+    val coveragePct: Int = 0
 )
 
 @Serializable
 data class SongDetailResponse(
     val song: SongDto,
     val sessions: List<SongSessionDto>,
-    val takes: List<TakeDto>
+    val takes: List<TakeDto>,
+    val presets: List<SongPresetDto> = emptyList()
 )
 
 @Serializable
@@ -213,7 +245,9 @@ class SongService(
                     b = bVal?.toDouble(),
                     segment = SessionService.formatSegment(aVal, bVal),
                     rate = row[SessionsTable.rate]?.toDouble(),
-                    memo = row[SessionsTable.memo]
+                    memo = row[SessionsTable.memo],
+                    partStats = row[SessionsTable.partStats],
+                    coveragePct = row[SessionsTable.coveragePct]
                 )
             }
 
@@ -222,10 +256,16 @@ class SongService(
                 .orderBy(TakesTable.recordedAt to SortOrder.DESC)
                 .map { SessionService.rowToTakeDto(it) }
 
+            val presets = SongPresetsTable.selectAll()
+                .where { (SongPresetsTable.songId eq songId) and (SongPresetsTable.userId eq userId) }
+                .orderBy(SongPresetsTable.createdAt to SortOrder.ASC)
+                .map { rowToPresetDto(it) }
+
             SongDetailResponse(
                 song = songDto,
                 sessions = sessions,
-                takes = takes
+                takes = takes,
+                presets = presets
             )
         }
     }
@@ -476,6 +516,102 @@ class SongService(
         }
     }
 
+    suspend fun listPresets(userId: UUID, songId: UUID): List<SongPresetDto> {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            SongPresetsTable.selectAll()
+                .where { (SongPresetsTable.songId eq songId) and (SongPresetsTable.userId eq userId) }
+                .orderBy(SongPresetsTable.createdAt to SortOrder.ASC)
+                .map { rowToPresetDto(it) }
+        }
+    }
+
+    suspend fun upsertPreset(userId: UUID, songId: UUID, input: UpsertPresetInput): SongPresetDto {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            // 1. 곡 존재 확인
+            val songExists = SongsTable.selectAll()
+                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                .count() > 0L
+            if (!songExists) throw NotFoundException("곡을 찾을 수 없습니다.")
+
+            // 2. 기존 동일 이름 프리셋 확인
+            val existing = SongPresetsTable.selectAll()
+                .where { (SongPresetsTable.songId eq songId) and (SongPresetsTable.name eq input.name) }
+                .singleOrNull()
+
+            if (existing != null) {
+                val finalA = if (input.merge) {
+                    val exA = existing[SongPresetsTable.a]
+                    if (input.a < exA) input.a else exA
+                } else input.a
+
+                val finalB = if (input.merge) {
+                    val exB = existing[SongPresetsTable.b]
+                    if (input.b > exB) input.b else exB
+                } else input.b
+
+                val finalCompleted = if (input.merge) {
+                    input.completed || existing[SongPresetsTable.completed]
+                } else input.completed
+
+                SongPresetsTable.update({ SongPresetsTable.id eq existing[SongPresetsTable.id] }) {
+                    it[a] = finalA
+                    it[b] = finalB
+                    it[rate] = input.rate
+                    it[completed] = finalCompleted
+                    it[updatedAt] = java.time.OffsetDateTime.now(ZoneOffset.UTC)
+                }
+
+                val updatedRow = SongPresetsTable.selectAll()
+                    .where { SongPresetsTable.id eq existing[SongPresetsTable.id] }
+                    .single()
+                rowToPresetDto(updatedRow)
+            } else {
+                val newId = UUID.randomUUID()
+                SongPresetsTable.insert {
+                    it[id] = newId
+                    it[SongPresetsTable.songId] = songId
+                    it[SongPresetsTable.userId] = userId
+                    it[name] = input.name
+                    it[a] = input.a
+                    it[b] = input.b
+                    it[rate] = input.rate
+                    it[completed] = input.completed
+                }
+
+                val insertedRow = SongPresetsTable.selectAll()
+                    .where { SongPresetsTable.id eq newId }
+                    .single()
+                rowToPresetDto(insertedRow)
+            }
+        }
+    }
+
+    suspend fun deletePreset(userId: UUID, songId: UUID, presetId: UUID): Boolean {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            SongPresetsTable.deleteWhere {
+                (SongPresetsTable.id eq presetId) and
+                (SongPresetsTable.songId eq songId) and
+                (SongPresetsTable.userId eq userId)
+            } > 0
+        }
+    }
+
+    private fun rowToPresetDto(row: ResultRow): SongPresetDto =
+        SongPresetDto(
+            id = row[SongPresetsTable.id].toString(),
+            songId = row[SongPresetsTable.songId].toString(),
+            name = row[SongPresetsTable.name],
+            a = row[SongPresetsTable.a].toDouble(),
+            b = row[SongPresetsTable.b].toDouble(),
+            rate = row[SongPresetsTable.rate].toDouble(),
+            completed = row[SongPresetsTable.completed],
+            createdAt = DateTimeFormatter.ISO_INSTANT.format(row[SongPresetsTable.createdAt].toInstant()),
+            updatedAt = DateTimeFormatter.ISO_INSTANT.format(row[SongPresetsTable.updatedAt].toInstant())
+        )
+
     private fun rowToDto(row: ResultRow, totalSeconds: Long, categoryIds: List<String>): SongDto {
         val statusCode = row[SongsTable.status]
         val statusLabel = STATUS_LABELS[statusCode] ?: statusCode
@@ -500,7 +636,8 @@ class SongService(
             memo = row[SongsTable.memo],
             categoryIds = categoryIds,
             totalSeconds = totalSeconds,
-            resumeUrl = resumeUrl(publicAppUrl, videoId, pos, a, b, rate)
+            resumeUrl = resumeUrl(publicAppUrl, videoId, pos, a, b, rate),
+            durationSec = row[SongsTable.durationSec]
         )
     }
 

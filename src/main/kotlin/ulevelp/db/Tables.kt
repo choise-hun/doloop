@@ -76,6 +76,7 @@ object SongsTable : Table("songs") {
     val rate = decimal("rate", 4, 2).default(BigDecimal("1.00"))
     val lastDate = date("last_date").nullable()
     val memo = text("memo").default("")
+    val durationSec = integer("duration_sec").default(0)
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
@@ -101,6 +102,8 @@ object SessionsTable : Table("sessions") {
     val a = decimal("a", 8, 1).nullable()
     val b = decimal("b", 8, 1).nullable()
     val memo = text("memo").default("")
+    val partStats = jsonb<JsonElement>("part_stats", Json).default(JsonArray(emptyList()))
+    val coveragePct = integer("coverage_pct").default(0)
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
@@ -130,9 +133,34 @@ object TakesTable : Table("takes") {
     val storage = text("storage")
     val storageKey = text("storage_key")
     val memo = text("memo").default("")
+    val partName = text("part_name").default("")
+    val completed = bool("completed").default(false)
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
 
     override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * 5.1 song_presets (곡별 구간 프리셋 - V9)
+ */
+object SongPresetsTable : Table("song_presets") {
+    val id = uuid("id").autoGenerate()
+    val songId = uuid("song_id").references(SongsTable.id, onDelete = ReferenceOption.CASCADE)
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val name = text("name")
+    val a = decimal("a", 8, 1)
+    val b = decimal("b", 8, 1)
+    val rate = decimal("rate", 4, 2).default(BigDecimal("1.00"))
+    val completed = bool("completed").default(false)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        uniqueIndex(songId, name)
+        index(false, userId, songId)
+    }
 }
 
 /**
@@ -398,7 +426,8 @@ val ALL_TABLES: List<Table> = listOf(
     SharedFolderItemsTable,
     FollowsTable,
     FolderLikesTable,
-    FolderReportsTable
+    FolderReportsTable,
+    SongPresetsTable
 )
 
 

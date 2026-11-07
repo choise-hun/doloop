@@ -190,9 +190,10 @@ class TakeApiTest {
 
         val expectedKeys = setOf(
             "id", "sessionId", "recordedAt", "a", "b", "rate",
-            "durationSec", "mime", "sizeBytes", "storage", "storageKey", "memo"
+            "durationSec", "mime", "sizeBytes", "storage", "storageKey", "memo",
+            "partName", "completed"
         )
-        assertEquals(expectedKeys, takeObj.keys, "take는 정확히 12개 필드를 가져야 합니다.")
+        assertEquals(expectedKeys, takeObj.keys, "take는 정확히 14개 필드를 가져야 합니다.")
         assertEquals("supabase", takeObj["storage"]?.jsonPrimitive?.content)
         val takeId = takeObj["id"]?.jsonPrimitive?.content ?: fail("take.id 누락")
         val expectedKey = "$uidA/$takeId.m4a"

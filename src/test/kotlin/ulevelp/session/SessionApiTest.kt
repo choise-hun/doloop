@@ -270,7 +270,8 @@ class SessionApiTest {
         val s0 = sessions[0].jsonObject
         val expectedSessionKeys = setOf(
             "id", "songId", "songTitle", "songArtist", "videoId", "date",
-            "seconds", "minutes", "loops", "a", "b", "segment", "rate", "memo", "takes"
+            "seconds", "minutes", "loops", "a", "b", "segment", "rate", "memo", "takes",
+            "partStats", "coveragePct"
         )
         assertEquals(expectedSessionKeys, s0.keys)
         assertEquals(sessionId.toString(), s0["id"]!!.jsonPrimitive.content)
@@ -292,7 +293,8 @@ class SessionApiTest {
         assertEquals(2, takes.size)
         val expectedTakeKeys = setOf(
             "id", "sessionId", "recordedAt", "a", "b", "rate",
-            "durationSec", "mime", "sizeBytes", "storage", "storageKey", "memo"
+            "durationSec", "mime", "sizeBytes", "storage", "storageKey", "memo",
+            "partName", "completed"
         )
         assertEquals(expectedTakeKeys, takes[0].jsonObject.keys)
         assertEquals(t1.toString(), takes[0].jsonObject["id"]!!.jsonPrimitive.content)
