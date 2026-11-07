@@ -7,10 +7,14 @@ const path = require('node:path');
 
 let I;
 let KO;
+let EN;
+let JA;
 let J;
 before(async () => {
   I = await import('../frontend/src/lib/i18n.mts');
   KO = (await import('../frontend/src/lib/i18n/ko.mts')).KO;
+  EN = (await import('../frontend/src/lib/i18n/en.mts')).EN;
+  JA = (await import('../frontend/src/lib/i18n/ja.mts')).JA;
   J = await import('../frontend/src/lib/jobError.mts');
 });
 
@@ -182,3 +186,147 @@ test('LA-3 동적 템플릿 리터럴 t() 호출 금지', () => {
 
   assert.equal(dynamicCount, 0);
 });
+
+// L1-2b: LB-1~5 한·영·일 사전 대칭 · 자리표시자 · 언어 전환 · 우선순위 · 계정 삭제 확인어 불변 검증
+test('LB-1 KO·EN·JA 키 집합 100% 대칭 및 빈 번역 문자열 0건', () => {
+  const koKeys = new Set(Object.keys(KO));
+  const enKeys = new Set(Object.keys(EN));
+  const jaKeys = new Set(Object.keys(JA));
+
+  const missingInEn = [...koKeys].filter((k) => !enKeys.has(k));
+  const extraInEn = [...enKeys].filter((k) => !koKeys.has(k));
+  const missingInJa = [...koKeys].filter((k) => !jaKeys.has(k));
+  const extraInJa = [...jaKeys].filter((k) => !koKeys.has(k));
+
+  assert.deepEqual(missingInEn, []);
+  assert.deepEqual(extraInEn, []);
+  assert.deepEqual(missingInJa, []);
+  assert.deepEqual(extraInJa, []);
+
+  for (const [k, v] of Object.entries(EN)) {
+    assert.ok(typeof v === 'string' && v.trim().length > 0, `EN[${k}]`);
+  }
+  for (const [k, v] of Object.entries(JA)) {
+    assert.ok(typeof v === 'string' && v.trim().length > 0, `JA[${k}]`);
+  }
+});
+
+test('LB-2 KO·EN·JA 모든 키의 {변수} 자리표시자 집합 100% 일치', () => {
+  const varsOf = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+  for (const k of Object.keys(KO)) {
+    assert.deepEqual(varsOf(EN[k]), varsOf(KO[k]), `EN vars mismatch: ${k}`);
+    assert.deepEqual(varsOf(JA[k]), varsOf(KO[k]), `JA vars mismatch: ${k}`);
+  }
+});
+
+test('LB-3 setLang(en|ja|ko) 전환 시 t()·getLang()·getLangChoice() 반환값 검증', () => {
+  try {
+    assert.equal(I.setLang('en'), 'en');
+    assert.equal(I.getLang(), 'en');
+    assert.equal(I.getLangChoice(), 'en');
+    assert.equal(I.t('nav.home'), '⌂ HOME');
+    assert.equal(I.t('theme.light'), 'Light');
+
+    assert.equal(I.setLang('ja'), 'ja');
+    assert.equal(I.getLang(), 'ja');
+    assert.equal(I.getLangChoice(), 'ja');
+    assert.equal(I.t('nav.home'), '⌂ HOME');
+    assert.equal(I.t('theme.light'), 'ライト');
+
+    assert.equal(I.setLang('ko'), 'ko');
+    assert.equal(I.getLang(), 'ko');
+    assert.equal(I.getLangChoice(), 'ko');
+    assert.equal(I.t('nav.home'), '⌂ HOME');
+    assert.equal(I.t('theme.light'), '라이트');
+  } finally {
+    I.setLang('auto');
+    I.syncLangFromProfile(null);
+  }
+});
+
+test('LB-4 resolveActiveLang() 5단계 우선순위 및 setLang(auto) 시 profileLocaleCache 해제 검증', () => {
+  const origWindow = globalThis.window;
+  const origNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const origIntl = globalThis.Intl;
+
+  const store = new Map();
+  const mockLocalStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+
+  let mockLanguages = ['en-US'];
+  let mockTz = 'America/New_York';
+
+  try {
+    // D4: Node 기본 격리 (window === undefined → 'ko')
+    I.setLang('auto');
+    I.syncLangFromProfile(null);
+    assert.equal(I.resolveActiveLang(), 'ko');
+
+    globalThis.window = { localStorage: mockLocalStorage };
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        get languages() {
+          return mockLanguages;
+        },
+        get language() {
+          return mockLanguages[0] || '';
+        },
+      },
+    });
+    globalThis.Intl = {
+      ...origIntl,
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: mockTz }),
+      }),
+    };
+
+    // ⑤ 최종 폴백 'ko'
+    mockLanguages = ['fr-FR'];
+    mockTz = 'Europe/Paris';
+    assert.equal(I.resolveActiveLang(), 'ko');
+
+    // ④ timeZone ('Asia/Tokyo' → 'ja')
+    mockTz = 'Asia/Tokyo';
+    assert.equal(I.resolveActiveLang(), 'ja');
+
+    // ③ navigator.languages ('en-US' > timeZone 'Asia/Tokyo')
+    mockLanguages = ['en-US', 'ja-JP'];
+    assert.equal(I.resolveActiveLang(), 'en');
+
+    // ② syncLangFromProfile ('ja' > navigator 'en-US')
+    I.syncLangFromProfile('ja');
+    assert.equal(I.resolveActiveLang(), 'ja');
+
+    // ① localStorage ('ko' > profile 'ja')
+    mockLocalStorage.setItem('ulp:lang', 'ko');
+    assert.equal(I.resolveActiveLang(), 'ko');
+
+    // syncLangFromProfile('en') 후 setLang('auto') 호출 시 profileLocaleCache가 비워져 브라우저 언어로 즉시 전환
+    mockLocalStorage.removeItem('ulp:lang');
+    mockLanguages = ['ja-JP'];
+    I.syncLangFromProfile('en');
+    assert.equal(I.getLang(), 'en');
+    const resolvedAfterAuto = I.setLang('auto');
+    assert.equal(resolvedAfterAuto, 'ja');
+    assert.equal(I.getLang(), 'ja');
+    assert.equal(I.getLangChoice(), 'auto');
+  } finally {
+    if (origWindow === undefined) delete globalThis.window;
+    else globalThis.window = origWindow;
+    if (origNavigator) Object.defineProperty(globalThis, 'navigator', origNavigator);
+    globalThis.Intl = origIntl;
+    I.setLang('auto');
+    I.syncLangFromProfile(null);
+  }
+});
+
+test('LB-5 KO·EN·JA 모두 settings.deleteConfirmWord === "삭제합니다" 유지', () => {
+  assert.equal(KO['settings.deleteConfirmWord'], '삭제합니다');
+  assert.equal(EN['settings.deleteConfirmWord'], '삭제합니다');
+  assert.equal(JA['settings.deleteConfirmWord'], '삭제합니다');
+});
+
