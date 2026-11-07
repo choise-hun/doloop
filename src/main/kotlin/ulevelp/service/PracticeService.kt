@@ -71,7 +71,9 @@ class PracticeService(private val db: Database?) {
             b = input.b,
             rate = input.rate,
             completed = input.completed,
-            durationSec = durationSec
+            durationSec = durationSec,
+            addSeconds = input.addSeconds,
+            addLoops = input.addLoops
         )
 
         val updatedCount = SessionsTable.update({
@@ -173,7 +175,9 @@ class PracticeService(private val db: Database?) {
                     b = input.b,
                     rate = input.rate,
                     completed = input.completed,
-                    durationSec = finalDuration
+                    durationSec = finalDuration,
+                    addSeconds = input.addSeconds,
+                    addLoops = input.addLoops
                 )
                 finalCoverage = initialCoverage
 
@@ -267,7 +271,9 @@ class PracticeService(private val db: Database?) {
             b: BigDecimal?,
             rate: BigDecimal?,
             completed: Boolean?,
-            durationSec: Int
+            durationSec: Int,
+            addSeconds: Int = 0,
+            addLoops: Int = 0
         ): Pair<JsonElement, Int> {
             val arr = (existingJson as? JsonArray)?.toList() ?: emptyList()
             if (partName.isNullOrBlank()) {
@@ -276,6 +282,9 @@ class PracticeService(private val db: Database?) {
                     val aVal = obj["a"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
                     val bVal = obj["b"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
                     aVal to bVal
+                }.toMutableList()
+                if (a != null && b != null && a < b) {
+                    ranges.add(a.toDouble() to b.toDouble())
                 }
                 return (existingJson ?: JsonArray(emptyList())) to computeCoverage(ranges, durationSec)
             }
@@ -296,6 +305,8 @@ class PracticeService(private val db: Database?) {
                     val exA = obj["a"]?.jsonPrimitive?.doubleOrNull ?: newA
                     val exB = obj["b"]?.jsonPrimitive?.doubleOrNull ?: newB
                     val exComp = obj["completed"]?.jsonPrimitive?.booleanOrNull ?: false
+                    val exSeconds = obj["seconds"]?.jsonPrimitive?.intOrNull ?: 0
+                    val exLoops = obj["loops"]?.jsonPrimitive?.intOrNull ?: 0
 
                     val mergedA = if (newA < exA) newA else exA
                     val mergedB = if (newB > exB) newB else exB
@@ -307,6 +318,8 @@ class PracticeService(private val db: Database?) {
                         put("b", mergedB)
                         put("rate", newRate)
                         put("completed", mergedComp)
+                        put("seconds", exSeconds + addSeconds)
+                        put("loops", exLoops + addLoops)
                     })
                 } else {
                     currentList.add(obj)
@@ -320,6 +333,8 @@ class PracticeService(private val db: Database?) {
                     put("b", newB)
                     put("rate", newRate)
                     put("completed", isCompleted)
+                    put("seconds", addSeconds)
+                    put("loops", addLoops)
                 })
             }
 

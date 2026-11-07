@@ -246,7 +246,7 @@ class SongPresetAndPartApiTest {
         val body3 = Json.parseToJsonElement(res3.bodyAsText()).jsonObject
         assertEquals(32, body3["coveragePct"]?.jsonPrimitive?.int)
 
-        // 4. 곡 상세 API에서 sessions의 partStats와 coveragePct 검증
+        // 4. 곡 상세 API에서 sessions의 partStats와 coveragePct 검증 (seconds, loops 누적 포함)
         val detailRes = client.get("/api/v1/songs/$songId") {
             header(HttpHeaders.Authorization, "Bearer $token")
         }
@@ -258,6 +258,31 @@ class SongPresetAndPartApiTest {
         assertEquals(3, partStats.size)
         val partNames = partStats.map { it.jsonObject["name"]!!.jsonPrimitive.content }
         assertTrue(partNames.containsAll(listOf("A파트", "브릿지", "코러스")))
+
+        val aPart = partStats.map { it.jsonObject }.first { it["name"]!!.jsonPrimitive.content == "A파트" }
+        assertEquals(60, aPart["seconds"]!!.jsonPrimitive.int)
+        assertEquals(2, aPart["loops"]!!.jsonPrimitive.int)
+
+        // 5. 이름 없는 구간 연습(partName null) 시에도 a, b 구간이 coveragePct에 정상 반영되는지 검증 (리뷰 반영)
+        // 기존 69초(0~29, 30~44, 45~71) + 신규 100~121.3(21.3초) -> 총 90.3초 / 213 ≈ 42%
+        val res4 = client.post("/api/v1/practice/save") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("songId", songId)
+                put("pos", 110.0)
+                put("a", 100.0)
+                put("b", 121.3)
+                put("rate", 1.0)
+                put("date", today)
+                put("addSeconds", 60)
+                put("addLoops", 1)
+                put("durationSec", 213)
+            }.toString())
+        }
+        assertEquals(HttpStatusCode.OK, res4.status)
+        val body4 = Json.parseToJsonElement(res4.bodyAsText()).jsonObject
+        assertEquals(42, body4["coveragePct"]?.jsonPrimitive?.int)
     }
 
     @Test
