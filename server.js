@@ -4,16 +4,15 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const GE = require('./public/lib/voicing.js');
-const CT = require('./public/lib/theory.js');
+const GE = require('./frontend/src/lib/engine/voicing.mjs').default;
+const CT = require('./frontend/src/lib/engine/theory.mjs').default;
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
-// ULP_UI=spa면 HTML 진입 경로와 /assets/*를 React 빌드(dist/)에서 서빙한다 (RZ-3, Ktor와 같은 규칙)
+// HTML 진입 경로와 /assets/*를 React 빌드(dist/)에서 서빙한다 (Ktor와 같은 규칙)
 const DIST_DIR = path.join(__dirname, 'dist');
 const SPA_PAGES = new Set(['/index.html', '/chords.html', '/practice.html', '/log.html', '/notes.html', '/note.html', '/settings.html', '/privacy.html', '/progressions.html']);
-const SPA_MODE = process.env.ULP_UI === 'spa' && fs.existsSync(path.join(DIST_DIR, 'index.html'));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -236,8 +235,8 @@ function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname);
   if (rel === '/' || rel === '') rel = '/index.html';
   let root = PUBLIC_DIR;
-  if (SPA_MODE && SPA_PAGES.has(rel)) { root = DIST_DIR; rel = '/index.html'; }
-  else if (SPA_MODE && rel.startsWith('/assets/')) root = DIST_DIR;
+  if (SPA_PAGES.has(rel)) { root = DIST_DIR; rel = '/index.html'; }
+  else if (rel.startsWith('/assets/')) root = DIST_DIR;
   const file = path.normalize(path.join(root, rel));
   if (!file.startsWith(root + path.sep)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
   fs.stat(file, (err, st) => {
@@ -268,7 +267,7 @@ const server = http.createServer((req, res) => {
 if (require.main === module) {
   server.listen(PORT, HOST, () => {
     console.log('기타 코드 연습실: http://localhost:' + PORT);
-    console.log('UI mode:', SPA_MODE ? 'spa (dist/)' : 'legacy (public/)');
+    console.log('UI mode: spa (dist/)');
   });
   const stop = () => server.close(() => process.exit(0));
   process.on('SIGTERM', stop);

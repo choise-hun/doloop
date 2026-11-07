@@ -45,6 +45,7 @@ test('B3 progressions: 코드 진행 영상 탭에 BETA, 폼 버튼 아래 안�
   await expect(page.locator('#progTab-manual [data-beta]')).toHaveCount(0);
   await page.locator('#progTab-video').click();
   await expect(page.locator('#progBetaNotice')).toContainText(NOTICE_HEAD);
+  await page.evaluate(() => document.fonts.ready);
   const submit = await page.locator('#progVideoSubmit').boundingBox();
   const notice = await page.locator('#progBetaNotice').boundingBox();
   expect(notice.y).toBeGreaterThanOrEqual(submit.y + submit.height);

@@ -41,8 +41,7 @@ jobs:
       CRON_SA_EMAIL: ${{ vars.CRON_SA_EMAIL }}
       SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://vefrfhafmiiivpgjhqiu.supabase.co' }}
       PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || 'https://ulevelp-d5ympfsmfq-du.a.run.app/' }}
-      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://choise-hun.github.io' }}
-      ULP_UI: ${{ vars.ULP_UI || 'spa' }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://ulevelp-d5ympfsmfq-du.a.run.app' }}
     steps:
       - name: Checkout repository at verified commit
         uses: actions/checkout@v5
@@ -81,6 +80,7 @@ jobs:
           echo "Testing deployed service: ${SERVICE_URL}"
           curl -fsS --retry 5 --retry-delay 3 "${SERVICE_URL}/api/health"
           curl -fsS "${SERVICE_URL}/config.js" | grep -q 'ULEVELP_CONFIG'
+          curl -fsSL "${SERVICE_URL}/" | grep -q 'id="root"'
           echo "Testing clickjacking security header (frame-ancestors 'none')"
           curl -fsSI "${SERVICE_URL}/" | grep -i "frame-ancestors 'none'"
 
