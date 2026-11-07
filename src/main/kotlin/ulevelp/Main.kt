@@ -85,8 +85,8 @@ import java.io.File
 import java.net.URI
 import java.util.UUID
 
-private const val DEFAULT_ALLOWED_ORIGINS = "https://choise-hun.github.io,http://localhost:3000"
-private const val DEFAULT_PUBLIC_APP_URL = "https://choise-hun.github.io/ULevelP/"
+private const val DEFAULT_ALLOWED_ORIGINS = "https://ulevelp-d5ympfsmfq-du.a.run.app"
+private const val DEFAULT_PUBLIC_APP_URL = "https://ulevelp-d5ympfsmfq-du.a.run.app/"
 
 fun parseAllowedOrigins(raw: String?): List<String> {
     val source = raw?.takeIf { it.isNotBlank() } ?: DEFAULT_ALLOWED_ORIGINS
@@ -158,8 +158,7 @@ fun Application.module(
     cronOidcVerifier: CronOidcVerifier? = CronOidcConfig.fromEnvOrNull()?.let { CronOidcVerifier(it) },
     geminiClient: GeminiClient = HttpGeminiClient(),
     geminiApiKey: String? = systemGeminiApiKeyFromEnv(),
-    analyzeJobDispatcher: AnalyzeJobDispatcher? = null,
-    uiMode: String = System.getenv("ULP_UI").orEmpty()
+    analyzeJobDispatcher: AnalyzeJobDispatcher? = null
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -332,8 +331,7 @@ fun Application.module(
     }
 
     val canonicalPublicRoot = publicDir.canonicalFile
-    // ULP_UI=legacy면 spa.html이 있어도 옛 public/*.html을 서빙한다(재빌드 없는 롤백 스위치)
-    val spaEnabled = uiMode.trim().lowercase() != "legacy" && File(canonicalPublicRoot, "spa.html").isFile
+    environment.log.info("UI mode: spa (publicDir=${canonicalPublicRoot.path})")
 
     routing {
         registerChordRoutes()
@@ -400,7 +398,7 @@ fun Application.module(
                     segments.joinToString(File.separator)
                 }
 
-                val servedPath = if (spaEnabled && relPath in SPA_ENTRY_PAGES) "spa.html" else relPath
+                val servedPath = if (relPath in SPA_ENTRY_PAGES) "spa.html" else relPath
                 val targetFile = File(canonicalPublicRoot, servedPath).canonicalFile
                 val rootPrefix = canonicalPublicRoot.path + File.separator
                 if (targetFile.path != canonicalPublicRoot.path && !targetFile.path.startsWith(rootPrefix)) {

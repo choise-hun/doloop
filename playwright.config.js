@@ -1,4 +1,4 @@
-// Playwright E2E 보안(XSS·CSP) 테스트 설정 (X2)
+// Playwright E2E 및 레이아웃(React SPA) 테스트 설정 (X2, LG-1)
 'use strict';
 const { defineConfig } = require('@playwright/test');
 

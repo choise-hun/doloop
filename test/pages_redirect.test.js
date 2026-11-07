@@ -29,9 +29,14 @@ describe('R1-A2: Pages 이동 페이지 주소 변환', () => {
     assert.ok(RD.targetUrl('//evil.com', '?a=1', '').startsWith(RD.TARGET + '/?'));
   });
 
-  test('PAGES 목록 = public/*.html (레거시 화면이 늘면 같이 고치도록)', () => {
-    const legacy = fs.readdirSync(path.join(ROOT, 'public')).filter((f) => f.endsWith('.html')).sort();
-    assert.deepEqual([...RD.PAGES].sort(), legacy);
+  test('PAGES 목록 = 옛 레거시 8개 HTML, ci.yml은 progressions.html 포함 9개 + 404.html을 빌드한다', () => {
+    const legacy8 = ['chords.html', 'index.html', 'log.html', 'note.html', 'notes.html', 'practice.html', 'privacy.html', 'settings.html'];
+    assert.deepEqual([...RD.PAGES].sort(), legacy8);
+    const spa9 = [...legacy8, 'progressions.html'];
+    const ci = read('.github/workflows/ci.yml');
+    for (const page of [...spa9, '404.html']) {
+      assert.match(ci, new RegExp(`for f in [^\\n]*\\b${page.replace('.', '\\.')}\\b`));
+    }
   });
 });
 
@@ -58,7 +63,7 @@ describe('R1-A2: 이동 페이지 HTML·CI', () => {
     const ci = read('.github/workflows/ci.yml');
     const job = ci.slice(ci.indexOf('deploy-pages:'));
     assert.match(job, /cp pages\/redirect\.html "_site\/\$\(basename "\$f"\)"/);
-    assert.match(job, /for f in public\/\*\.html 404\.html/);
+    assert.match(job, /for f in index\.html chords\.html log\.html note\.html notes\.html practice\.html privacy\.html settings\.html progressions\.html 404\.html/);
     assert.match(job, /upload-pages-artifact@v4\s+with:\s+path: _site/);
     assert.doesNotMatch(job, /path: public/);
   });

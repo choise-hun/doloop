@@ -175,7 +175,7 @@ class ChordEngineTest {
     @Test
     fun `Ktor API 엔드포인트 및 정적 파일 서빙 검증`() = testApplication {
         application {
-            module(dbConfig = null, authConfig = null)
+            module(publicDir = spaPublicDir(), dbConfig = null, authConfig = null)
         }
 
         // 1. /api/health
@@ -289,7 +289,7 @@ class ChordEngineTest {
     @Test
     fun `Z2 정적 HTML 서빙 시 Clickjacking 방지 헤더 검증`() = testApplication {
         application {
-            module(dbConfig = null, authConfig = null)
+            module(publicDir = spaPublicDir(), dbConfig = null, authConfig = null)
         }
         for (path in listOf("/", "/index.html")) {
             val res = client.get(path)
@@ -303,7 +303,7 @@ class ChordEngineTest {
     @Test
     fun `Z3 정적 HTML HEAD 응답 Content-Length 단일 헤더 검증`() = testApplication {
         application {
-            module(dbConfig = null, authConfig = null)
+            module(publicDir = spaPublicDir(), dbConfig = null, authConfig = null)
         }
         val getRes = client.get("/")
         val headRes = client.head("/")
@@ -313,20 +313,17 @@ class ChordEngineTest {
         assertTrue(headRes.bodyAsBytes().isEmpty())
     }
 
-    private fun spaPublicDir(withSpa: Boolean): java.io.File {
+    private fun spaPublicDir(withSpa: Boolean = true): java.io.File {
         val dir = kotlin.io.path.createTempDirectory("ulp-public").toFile()
-        java.io.File(dir, "index.html").writeText("LEGACY-INDEX")
-        java.io.File(dir, "practice.html").writeText("LEGACY-PRACTICE")
-        java.io.File(dir, "lib").mkdirs()
-        java.io.File(dir, "lib/theory.js").writeText("// theory")
-        if (withSpa) java.io.File(dir, "spa.html").writeText("<div id=\"root\"></div>")
+        java.io.File(dir, "config.js").writeText("window.ULEVELP_CONFIG = {};")
+        if (withSpa) java.io.File(dir, "spa.html").writeText("<!doctype html><html><body><div id=\"root\"></div></body></html>")
         return dir
     }
 
     @Test
     fun `Z4 spa_html이 있으면 HTML 진입 경로에 spa_html을 서빙한다`() = testApplication {
-        application { module(publicDir = spaPublicDir(true), dbConfig = null, authConfig = null, uiMode = "") }
-        for (path in listOf("/", "/index.html", "/practice.html", "/notes.html", "/note.html?id=x")) {
+        application { module(publicDir = spaPublicDir(true), dbConfig = null, authConfig = null) }
+        for (path in listOf("/", "/index.html", "/practice.html", "/notes.html", "/note.html?id=x", "/progressions.html")) {
             val res = client.get(path)
             assertEquals(HttpStatusCode.OK, res.status, path)
             assertTrue(res.bodyAsText().contains("id=\"root\""), path)
@@ -334,22 +331,16 @@ class ChordEngineTest {
             assertEquals("no-cache", res.headers["Cache-Control"], path)
         }
         val head = client.head("/practice.html")
-        assertEquals(listOf("<div id=\"root\"></div>".length.toString()), head.headers.getAll(HttpHeaders.ContentLength))
-        assertEquals("// theory", client.get("/lib/theory.js").bodyAsText())
+        assertEquals(listOf("<!doctype html><html><body><div id=\"root\"></div></body></html>".length.toString()), head.headers.getAll(HttpHeaders.ContentLength))
+        assertEquals("window.ULEVELP_CONFIG = {};", client.get("/config.js").bodyAsText())
         assertEquals(HttpStatusCode.NotFound, client.get("/unknown.html").status)
     }
 
     @Test
-    fun `Z5 ULP_UI=legacy면 spa_html이 있어도 레거시 HTML을 서빙한다`() = testApplication {
-        application { module(publicDir = spaPublicDir(true), dbConfig = null, authConfig = null, uiMode = "legacy") }
-        assertEquals("LEGACY-INDEX", client.get("/").bodyAsText())
-        assertEquals("LEGACY-PRACTICE", client.get("/practice.html").bodyAsText())
-    }
-
-    @Test
-    fun `Z6 spa_html이 없으면 레거시 HTML을 서빙한다`() = testApplication {
-        application { module(publicDir = spaPublicDir(false), dbConfig = null, authConfig = null, uiMode = "") }
-        assertEquals("LEGACY-INDEX", client.get("/").bodyAsText())
+    fun `Z6 spa_html이 없으면 진입 경로 요청에 404 NotFound를 반환한다`() = testApplication {
+        application { module(publicDir = spaPublicDir(false), dbConfig = null, authConfig = null) }
+        assertEquals(HttpStatusCode.NotFound, client.get("/").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/practice.html").status)
         assertEquals(HttpStatusCode.NotFound, client.get("/notes.html").status)
     }
 }
