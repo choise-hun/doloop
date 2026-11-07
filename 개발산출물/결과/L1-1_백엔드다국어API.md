@@ -70,4 +70,7 @@ BUILD SUCCESSFUL
 ## 5. 겪은 문제
 
 - 테스트에서 `DatabaseConfig`가 `ulevelp.db.*`·Exposed 양쪽에 있어 모호 → `import ulevelp.db.DatabaseConfig` 명시(NoteApiTest와 같은 방식)
-- 열린 PR #119(LS-1)도 `진행_다국어.md`의 상태 줄·LS-1 행·§5를 고친다 → 둘 중 나중 머지 쪽에서 그 파일 충돌. 나중 PR 브랜치에 main을 merge해 손으로 합친다(rebase 금지)
+- PR #119(LS-1)도 `진행_다국어.md`의 상태 줄·LS-1 행·§5를 고침 → PR #119 머지 뒤 `step/L1-1`에 `origin/main`을 merge해 합침(rebase 금지)
+- PR #120 CI에서 `E2E XSS & CSP (Playwright, spa)` `test/e2e/beta-badge.spec.js:50`(`B3 progressions`)이 2회 연속 같은 값(`Expected: >= 859.6875`, `Received: 854`)으로 실패:
+  - **원인:** 백엔드 변경(L1-1)과 무관한 웹폰트 서브셋 리플로우 타이밍 레이스. `#progTab-video` 탭 전환 직후 마운트되는 `VideoAnalyzeForm.tsx` 상단 `<p className={styles.intro}>`(`font-size: 14px`, `line-height: 1.55` → 1줄 높이 `21.6875px`)는 `1280px` 뷰포트(폼 내부 폭 `1078px`)에서 `Noto Sans KR` 로드 후 가로 폭이 `1063.02px`(여유 `15px`)로 1줄에 들어간다. 탭 클릭 직후 해당 문장 음절의 Google Fonts `Noto Sans KR` unicode-range 서브셋(`woff2`)이 아직 도착하지 않은 상태(fallback 폰트)에서는 글자 폭이 `1078px`를 넘어 2줄(`height: 43.375px`, `+21.6875px`)로 줄바꿈되어 첫 `boundingBox()`(`#progVideoSubmit`)에서 `submit.bottom = 838 + 21.6875 = 859.6875`가 측정되고, 직후 둘째 `boundingBox()`(`#progBetaNotice`) 호출 사이에 서브셋 로드가 완료되어 1줄(`height: 21.6875px`)로 줄어들면서 `notice.y`는 1줄 기준 위치인 `854`로 측정됨.
+  - **결정:** `docs/LS-1` 대조군 CI(`42316507634`, `347 passed`)로 코드 무관 확인 후 PR #120은 실패 잡 재실행(`gh run rerun 42314547356 --failed`)으로 통과시키고, 이후 프론트/테스트 작업에서 `beta-badge.spec.js`도 `layout-check.js`처럼 `await page.evaluate(() => document.fonts.ready)` 후 측정(또는 단일 `page.evaluate` 내 동시 `getBoundingClientRect()`)하도록 보강하기로 결정(2026-11-07).
