@@ -606,32 +606,29 @@ export function NotesPage(): React.ReactElement {
         ) : (
           notes.map((n) => (
             <div key={n.id} className={`card note-card ${styles.noteCard}`}>
-              <div className={`note-card-head ${styles.noteCardHead}`}>
-                <SafeLink
-                  className={`note-card-title ${styles.noteCardTitle}`}
-                  href={`note.html?id=${encodeURIComponent(n.id)}`}
-                >
+              <div className={`note-card-title ${styles.noteCardTitle}`}>
+                <SafeLink href={`note.html?id=${encodeURIComponent(n.id)}`}>
                   {n.title || t('notes.noTitle')}
                 </SafeLink>
-                <div className={`note-card-meta ${styles.noteCardMeta}`}>
-                  {n.channel && <span className="sub">{n.channel}</span>}
-                  {n.difficulty && <span className={`badge ${styles.badge}`}>{n.difficulty}</span>}
-                  {Array.isArray(n.tags) &&
-                    n.tags.map((tag) => (
-                      <span key={tag} className={`badge ${styles.badge}`}>
-                        {noteTagLabel(tag)}
-                      </span>
-                    ))}
-                </div>
               </div>
-              {n.headline && <p className={`note-card-headline ${styles.noteCardHeadline}`}>{n.headline}</p>}
-              <div className={`row note-card-acts ${styles.noteCardActs}`}>
+              <div className={`note-card-meta ${styles.noteCardMeta}`}>
+                {n.channel && <b>{n.channel}</b>}
+                {n.difficulty && <span className={`tag ${styles.tag}`}>{n.difficulty}</span>}
+                {Array.isArray(n.tags) &&
+                  n.tags.map((tag) => (
+                    <span key={tag} className={`tag ${styles.tag}`}>
+                      {noteTagLabel(tag)}
+                    </span>
+                  ))}
+              </div>
+              {n.headline && <p className={`note-card-desc ${styles.noteCardDesc}`}>{n.headline}</p>}
+              <div className={`note-actions ${styles.noteActions}`}>
                 {n.videoId && (
-                  <SafeLink className="pillBtn" href={`practice.html?v=${encodeURIComponent(n.videoId)}`}>
-                    {t('notes.btnPractice')}
+                  <SafeLink className={`link ${styles.link}`} href={`practice.html?v=${encodeURIComponent(n.videoId)}`}>
+                    <span className={styles.tri}>▶</span>{t('notes.btnPractice')} <span className={styles.arrow}>→</span>
                   </SafeLink>
                 )}
-                <SafeLink className="ghostBtn" href={`note.html?id=${encodeURIComponent(n.id)}`}>
+                <SafeLink className={`link sub ${styles.link} ${styles.sub}`} href={`note.html?id=${encodeURIComponent(n.id)}`}>
                   {t('notes.btnDetail')}
                 </SafeLink>
               </div>
