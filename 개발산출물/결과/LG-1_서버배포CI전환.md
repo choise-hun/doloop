@@ -15,7 +15,7 @@
 | ④ 작업 줄 충돌 (`진행_프론트기반.md` 및 열린 PR) | **통과** — 주니어 줄 `완료/진행_프론트기반.md` 전체 완료, 열린 PR 0건 | `gh pr list --state open` |
 | ⑤ 메뉴얼 게이트 (사전 승인표 일치) | **통과** — `진행_레거시정리.md` §2-2 `[Step 1] LG-1`의 10개 파일과 `git diff --stat` 100% 일치 | 아래 §2 표 참조 |
 
-## 2. 바꾼 파일 표 (총 10개 수정 + 결과·진행 문서)
+## 2. 바꾼 파일 표 (총 13개 수정 + 결과·진행 문서)
 
 | # | 파일 경로 | 구분 | 변경 요약 |
 | --- | --- | --- | --- |
@@ -29,8 +29,11 @@
 | 8 | `test/rz3_spa.test.js` | 수정 | `RZ3-1`~`RZ3-4`를 `ULP_UI` 분기 부재, `server.js` `public/lib` 미참조, 단일 SPA CI·Cloud Run 단일 `ALLOWED_ORIGINS`·`id="root"` 스모크 검증으로 갱신 |
 | 9 | `test/pages_redirect.test.js` | 수정 | `fs.readdirSync('public')` 대신 고정 8개 레거시 목록 및 `ci.yml` 9개(`progressions.html` 포함) + `404.html` 루프 검증으로 갱신 |
 | 10 | `test/e2e/beta-badge.spec.js` | 수정 | `B3 progressions`에서 `#progTab-video` 전환 후 `await page.evaluate(() => document.fonts.ready)` 대기 추가 |
-| 11 | `개발산출물/결과/LG-1_서버배포CI전환.md` | 신규 | `LG-1` 실행 결과 및 다음 step 인계 사항 기록 |
-| 12 | `개발산출물/진행_레거시정리.md` | 수정 | `LG-1` 상태 칸 및 다음 세션(`LG-2`) 시작 지시 갱신 |
+| 11 | `README.md` | 수정 | PR #126 Codex 리뷰 반영: `ULP_UI=legacy` 롤백 안내를 Cloud Run 리비전 기반 트래픽 전환 명령(`gcloud run services update-traffic`)으로 갱신하고, `ULP_UI=spa node server.js`를 `node server.js`로 단순화 |
+| 12 | `개발산출물/인수인계_메모.md` | 수정 | `ULP_UI=spa node server.js` 안내를 `node server.js`로 정비 |
+| 13 | `개발산출물/프론트_정렬규격.md` | 수정 | 화면 확인 명령에서 `ULP_UI=spa` 제거 |
+| 14 | `개발산출물/결과/LG-1_서버배포CI전환.md` | 신규 | `LG-1` 실행 결과 및 다음 step 인계 사항 기록 |
+| 15 | `개발산출물/진행_레거시정리.md` | 수정 | `LG-1` 상태 칸 및 다음 세션(`LG-2`) 시작 지시 갱신 |
 
 ## 3. 확인 명령 출력
 

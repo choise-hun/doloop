@@ -38,8 +38,7 @@ npm run test:e2e         # Playwright (XSS·CSP·레이아웃)
 
 ```bash
 npm run build
-ULP_UI=spa node server.js     # http://localhost:3000 — React 빌드 + 코드 계산 API
-node server.js                # 같은 주소, 옛 화면(public/*.html)
+node server.js                # http://localhost:3000 — React 빌드 + 코드 계산 API
 ```
 
 `server.js`는 화면·계산 API만 있는 테스트용 서버입니다. 로그인·곡·녹음·노션 API는 Ktor 서버에만 있습니다. `npm run dev:client`(vite dev)는 CSP와 CommonJS 변환 문제로 화면 확인에 쓰지 않습니다.
@@ -52,13 +51,11 @@ docker build -t ulevelp .
 docker run --env-file .env -p 3000:3000 ulevelp
 ```
 
-`ULP_UI=legacy`를 주면 React 대신 옛 화면을 서빙합니다(운영 롤백 스위치).
-
 ## 배포
 
 main에 머지되면 CI(`ci.yml`)가 테스트·Docker 스모크를 돌립니다. Cloud Run 배포는 `scripts/deploy-cloudrun.sh`(서비스·분석 Job·노션 push 크론 스케줄러)가 하고, `deploy-cloudrun.yml`은 저장소 Variables가 설정돼야 동작합니다(현재는 로컬에서 실행). 명령은 [개발산출물/인수인계_메모.md](개발산출물/인수인계_메모.md) §6.
 
-롤백: `gcloud run services update ulevelp --region asia-northeast3 --update-env-vars ULP_UI=legacy`
+롤백: Cloud Run 콘솔에서 직전 리비전으로 트래픽 100% 전환 또는 `gcloud run services update-traffic ulevelp --region asia-northeast3 --to-revisions=PREVIOUS_REVISION=100`
 
 ## 코드 연습실 (`chords.html`)
 
