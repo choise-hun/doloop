@@ -1,4 +1,6 @@
 // frontend/src/lib/progressions.ts
+import type { I18nKey } from './i18n.mts';
+import { t } from './i18n.mts';
 import { raw, videoIdFrom } from './security';
 
 export type ProgressionCategory = 'REFERENCE' | 'ARCHIVE';
@@ -9,7 +11,7 @@ export interface ProgressionItem {
   chordsText: string;
   title: string;
   keyLabel: string;
-  sourceType: 'AI' | '직접' | '기본';
+  sourceType: 'AI' | '직접' | '기본'; // i18n-keep: 시드 sourceType 타입 유니언(D5-1)
   href: string;
 }
 
@@ -28,14 +30,14 @@ export interface WeeklyStreakSummary {
   challengeText: string;
 }
 
-export const CHORD_MODES: ReadonlyArray<readonly [string, string]> = [
-  ['scale', '스케일 연습'],
-  ['tone', '코드톤 지도'],
-  ['matrix', '보이싱 매트릭스'],
-  ['circle', '탑노트 5도권'],
-  ['reint', '코드 재해석'],
-  ['tf', '2-5-1 탐색'],
-  ['ds', '더블 스탑 연습'],
+export const CHORD_MODES: ReadonlyArray<readonly [string, I18nKey]> = [
+  ['scale', 'home.modeScale'],
+  ['tone', 'home.modeTone'],
+  ['matrix', 'home.modeMatrix'],
+  ['circle', 'home.modeCircle'],
+  ['reint', 'home.modeReint'],
+  ['tf', 'home.modeTf'],
+  ['ds', 'home.modeDs'],
 ];
 
 export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
@@ -45,7 +47,7 @@ export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     chordsText: 'CM7 - C7 - F#m7b5 - Fm6',
     title: 'Neo-Soul Minor Plagal Cadence',
     keyLabel: 'C Major',
-    sourceType: '기본',
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#reint',
   },
   {
@@ -54,7 +56,7 @@ export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     chordsText: 'FM9 - E7b9 - Am9 - C13',
     title: 'Just the Two of Us Turnaround',
     keyLabel: 'A Minor',
-    sourceType: '기본',
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#tf',
   },
   {
@@ -63,7 +65,7 @@ export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     chordsText: 'EbM9 - D7#9 - Gm9 - C9sus4',
     title: 'R&B Floating IV-III-vi-II',
     keyLabel: 'G Minor',
-    sourceType: '기본',
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#matrix',
   },
   {
@@ -72,7 +74,7 @@ export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     chordsText: 'BbM7 - A7b13 - Dm9 - G7b9',
     title: 'Autumn Leaves Minor Cycle',
     keyLabel: 'D Minor',
-    sourceType: '기본',
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#circle',
   },
   {
@@ -81,7 +83,7 @@ export const DEFAULT_REFERENCE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     chordsText: 'AbM9 - G7#5#9 - Cm9 - F13',
     title: 'Modern Gospel Dorian Vamp',
     keyLabel: 'C Minor',
-    sourceType: '기본',
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#tone',
   },
 ];
@@ -91,45 +93,40 @@ export const DEFAULT_ARCHIVE_PROGRESSIONS: ReadonlyArray<ProgressionItem> = [
     id: 'arch-seed-1',
     category: 'ARCHIVE',
     chordsText: 'Dm9 - G13 - CM9 - A7b13',
-    title: 'Drop 2 가이드톤 2-5-1-6 순환',
-    keyLabel: 'C Major',
-    sourceType: '기본',
+    title: 'Drop 2 가이드톤 2-5-1-6 순환', keyLabel: 'C Major', // i18n-keep: 기본 시드 데이터(D5-3)
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#tf',
   },
   {
     id: 'arch-seed-2',
     category: 'ARCHIVE',
     chordsText: 'Em7b5 - A7b9 - Dm6/9 - Bm7b5',
-    title: '마이너 2-5-1 및 6도 토닉 보이싱',
-    keyLabel: 'D Minor',
-    sourceType: '기본',
+    title: '마이너 2-5-1 및 6도 토닉 보이싱', keyLabel: 'D Minor', // i18n-keep: 기본 시드 데이터(D5-3)
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#tf',
   },
   {
     id: 'arch-seed-3',
     category: 'ARCHIVE',
     chordsText: 'F9 - Bb13 - Eb9 - Ab13',
-    title: '탑노트 고정 도미넌트 5도권 연결',
-    keyLabel: 'F Dominant',
-    sourceType: '기본',
+    title: '탑노트 고정 도미넌트 5도권 연결', keyLabel: 'F Dominant', // i18n-keep: 기본 시드 데이터(D5-3)
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#circle',
   },
   {
     id: 'arch-seed-4',
     category: 'ARCHIVE',
     chordsText: 'Gm9 - C7sus4 - FM9 - Bb7#11',
-    title: '서스포(sus4) 해결과 리디안 도미넌트(#11)',
-    keyLabel: 'F Major',
-    sourceType: '기본',
+    title: '서스포(sus4) 해결과 리디안 도미넌트(#11)', keyLabel: 'F Major', // i18n-keep: 기본 시드 데이터(D5-3)
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#reint',
   },
   {
     id: 'arch-seed-5',
     category: 'ARCHIVE',
     chordsText: 'Am11 - D9 - GM9 - C#m7b5 - F#7alt',
-    title: '조표 전환 모듈레이션 브리지 진행',
-    keyLabel: 'G Major',
-    sourceType: '기본',
+    title: '조표 전환 모듈레이션 브리지 진행', keyLabel: 'G Major', // i18n-keep: 기본 시드 데이터(D5-3)
+    sourceType: '기본', // i18n-keep: 기본 시드 데이터(D5-1)
     href: 'chords.html#matrix',
   },
 ];
@@ -235,8 +232,8 @@ export function computeWeeklyStreak(
   const cycleStep = streakDays === 0 ? 0 : ((streakDays - 1) % 3) + 1;
   const challengeText =
     streakDays === 0
-      ? '작심삼일 도전하기 · 오늘 첫 연습을 시작해 보세요'
-      : `작심삼일 도전하기 · 연속 ${streakDays}일째 (${cycleStep}/3)`;
+      ? t('home.streakChallengeFirst')
+      : t('home.streakChallengeDays', { days: streakDays, step: cycleStep });
 
   return {
     days,
@@ -270,11 +267,11 @@ export function formatRecentSongSegment(song: {
     song.b > song.a
   ) {
     const ratePart = song.rate && song.rate !== 1 ? ` · ${song.rate}×` : '';
-    return `${formatSec(song.a)} ~ ${formatSec(song.b)} 구간 연습 중${ratePart}`;
+    return t('home.practiceRangeDuration', { a: formatSec(song.a), b: formatSec(song.b), rate: ratePart });
   }
   const posStr = typeof song.pos === 'number' && song.pos > 0 ? formatSec(song.pos) : '00:00';
   const rateStr = song.rate ? `${song.rate}×` : '1×';
-  return `마지막 위치 ${posStr} · ${rateStr} 연습 중`;
+  return t('home.practiceLastPos', { pos: posStr, rate: rateStr });
 }
 
 /** 최근 연습 곡의 플레이어 이어하기 상대 경로를 생성한다 */

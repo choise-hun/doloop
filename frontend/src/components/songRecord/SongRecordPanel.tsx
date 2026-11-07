@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { auth, useAuth } from '../../lib/auth';
 import { apiClient, SongDetailResponse, TakeDto } from '../../lib/apiClient';
+import { t } from '../../lib/i18n.mts';
 import {
   AbCompare,
   fmtDuration,
@@ -73,7 +74,7 @@ export function SongRecordPanel({
     return (
       <div className={`panel ${styles.panel}`} data-align-group="sr-left:left">
         <p className={`empty ${styles.empty}`}>
-          로그인하면 이 곡의 연습 기록과 녹음이 여기에 모여요
+          {t('record.loginPrompt')}
         </p>
       </div>
     );
@@ -94,37 +95,42 @@ export function SongRecordPanel({
       : null;
 
   const summaryMeta = detailSong
-    ? `누적 ${fmtDuration(detailSong.totalSeconds)}${
-        detailSong.lastDate ? ` · 최근 연습 ${detailSong.lastDate}` : ' · 연습 기록 없음'
-      }`
+    ? detailSong.lastDate
+      ? t('record.summaryRecent', {
+          duration: fmtDuration(detailSong.totalSeconds),
+          date: detailSong.lastDate,
+        })
+      : t('record.summaryNoRecent', {
+          duration: fmtDuration(detailSong.totalSeconds),
+        })
     : notLoaded
-      ? '불러오는 중…'
+      ? t('record.loading')
       : '';
 
   return (
     <div className={styles.srWrap}>
       <div className={`head-row ${styles.srHeadRow}`} data-align-group="sr-left:left">
         <div className={styles.srHeadLeft}>
-          <h2 className={`h3 ${styles.h3}`}>이 곡의 연습 기록</h2>
+          <h2 className={`h3 ${styles.h3}`}>{t('record.panelTitle')}</h2>
           {summaryMeta && <span className={`meta ${styles.meta}`}>{summaryMeta}</span>}
         </div>
         <SafeLink
           className={`ghost mini ${styles.ghostMini}`}
           href={`log.html?song=${encodeURIComponent(songId)}`}
         >
-          기록에서 자세히 →
+          {t('record.linkLog')}
         </SafeLink>
       </div>
 
       {loadErr ? (
         <div className={styles.row}>
-          <span className={`meta ${styles.meta}`}>기록을 불러오지 못했어요</span>
+          <span className={`meta ${styles.meta}`}>{t('record.loadErr')}</span>
           <button
             type="button"
             className={`ghost mini ${styles.ghostMini}`}
             onClick={() => void loadSongRecord(songId, activeUid)}
           >
-            다시 시도
+            {t('record.retry')}
           </button>
         </div>
       ) : (
@@ -132,14 +138,14 @@ export function SongRecordPanel({
           <div className={`panel ${styles.panel}`}>
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`} data-align-group="sr-cols:top@1150">
-                녹음
+                {t('record.tabTakes')}
               </h3>
             </div>
             <div id="srTakes" className={styles.takesList}>
               {notLoaded ? (
-                <p className={`empty ${styles.empty}`}>불러오는 중…</p>
+                <p className={`empty ${styles.empty}`}>{t('record.loading')}</p>
               ) : takes.length === 0 ? (
-                <p className={`empty ${styles.empty}`}>아직 녹음이 없어요</p>
+                <p className={`empty ${styles.empty}`}>{t('record.emptyTakes')}</p>
               ) : (
                 takes.map((t) => (
                   <TakeItemRow
@@ -171,7 +177,7 @@ export function SongRecordPanel({
           <div className={`panel ${styles.panel}`}>
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`} data-align-group="sr-cols:top@1150">
-                연습 세션
+                {t('record.tabSessions')}
               </h3>
             </div>
             <SessionTimeline sessions={sessions} loading={notLoaded} idPrefix="sr" initialLimit={5} />

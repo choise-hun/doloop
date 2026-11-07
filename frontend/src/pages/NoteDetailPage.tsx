@@ -40,14 +40,14 @@ function TimestampCell({ ts, videoId }: { ts?: string; videoId?: string }): Reac
 
 export function NoteDetailPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '학습 노트 상세 · ULeveLP';
+    document.title = '학습 노트 상세 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
 
   const [note, setNote] = useState<NoteDetailDto | null>(null);
-  const [loadingMsg, setLoadingMsg] = useState<string>('학습 노트를 불러오는 중...');
+  const [loadingMsg, setLoadingMsg] = useState<string>(t('note.loading'));
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editMemo, setEditMemo] = useState<string>('');
   const [editMsg, setEditMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
@@ -130,11 +130,11 @@ export function NoteDetailPage(): React.ReactElement {
       } catch {
         /* 개수를 몰라도 확인은 묻는다 */
       }
-      const extra = edited > 0 ? ` 고친 진행 ${edited}개도 같이 빠집니다.` : '';
-      if (total > 0 && !window.confirm(`이 노트에서 모은 진행 ${total}개를 코드 진행 모음에서 뺄까요?${extra}`)) return;
+      const extra = edited > 0 ? t('note.confirmUncollectExtra', { count: edited }) : '';
+      if (total > 0 && !window.confirm(t('note.confirmUncollect', { total, extra }))) return;
     }
     setCollectBusy(true);
-    setCollectMsg({ text: next ? '진행을 모으는 중...' : '빼는 중...', kind: '' });
+    setCollectMsg({ text: t(next ? 'note.collecting' : 'note.uncollecting'), kind: '' });
     try {
       const r = await apiClient.notes.setCollect(note.id, next);
       if (auth.getUser()?.id !== myUid) return;
@@ -143,13 +143,13 @@ export function NoteDetailPage(): React.ReactElement {
       setCollectMsg(
         r.collect
           ? r.progressions.length > 0
-            ? { text: `진행 ${r.progressions.length}개를 모았어요.`, kind: 'ok' }
-            : { text: '이 노트에는 화성 진행이 없습니다.', kind: '' }
-          : { text: '코드 진행 모음에서 뺐어요.', kind: 'ok' }
+            ? { text: t('note.collectedCount', { count: r.progressions.length }), kind: 'ok' }
+            : { text: t('note.noHarmony'), kind: '' }
+          : { text: t('note.uncollected'), kind: 'ok' }
       );
     } catch (err: any) {
       if (auth.getUser()?.id !== myUid) return;
-      setCollectMsg({ text: (err && err.message) || '바꾸지 못했어요.', kind: 'err' });
+      setCollectMsg({ text: (err && err.message) || t('note.failedChange'), kind: 'err' });
     } finally {
       setCollectBusy(false);
     }
@@ -178,23 +178,23 @@ export function NoteDetailPage(): React.ReactElement {
     const myUid = activeUid;
 
     if (!noteId) {
-      clearState('노트 ID가 없어요.');
+      clearState(t('note.errNoId'));
       return;
     }
 
     if (!myUid || !apiClient.isLoggedIn()) {
-      clearState('로그인이 필요해요.');
+      clearState(t('note.errLoginRequired'));
       return;
     }
 
-    clearState('학습 노트를 불러오는 중...');
+    clearState(t('note.loading'));
 
     apiClient.notes
       .get(noteId)
       .then((res) => {
         if (detailReqSeqRef.current !== mySeq || auth.getUser()?.id !== myUid) return;
         if (!res) {
-          clearState('학습 노트를 찾을 수 없어요.');
+          clearState(t('note.errNotFound'));
           return;
         }
         noteIdRef.current = res.id;
@@ -207,7 +207,7 @@ export function NoteDetailPage(): React.ReactElement {
       })
       .catch((err: any) => {
         if (detailReqSeqRef.current !== mySeq || auth.getUser()?.id !== myUid) return;
-        clearState((err && err.message) || '학습 노트를 불러오지 못했어요.');
+        clearState((err && err.message) || t('note.errLoadFailed'));
       });
   }, [activeUid]);
 
@@ -225,13 +225,13 @@ export function NoteDetailPage(): React.ReactElement {
   return (
     <AppShell variant="narrow" activeNav="notes">
       <p className={`back-link ${styles.backLink}`}>
-        <SafeLink href="notes.html">← 학습 노트 목록</SafeLink>
+        <SafeLink href="notes.html">{t('note.backToList')}</SafeLink>
       </p>
 
       <div id="noteContent" hidden={!note}>
         <div className={`card ${styles.card}`} id="noteHeader">
           <h1 className={`page-title ${styles.pageTitle}`} id="noteTitle">
-            {note ? note.title || note.url || '(제목 없음)' : ''}
+            {note ? note.title || note.url || t('note.noTitle') : ''}
           </h1>
           <div className={`note-meta ${styles.noteMeta}`} id="noteMeta">
             {metaParts.join(' · ')}
@@ -276,7 +276,7 @@ export function NoteDetailPage(): React.ReactElement {
             <label
               className={styles.collectPill}
               data-on={collectOn ? 'true' : 'false'}
-              title="켜면 이 노트의 화성 진행이 CHORDS 코드 진행 모음(분석)에 들어가요."
+              title={t('note.titleCollect')}
               data-align-group="noteActions:center-y@481"
             >
               <input
@@ -286,14 +286,16 @@ export function NoteDetailPage(): React.ReactElement {
                 disabled={collectBusy}
                 onChange={(e) => void toggleCollect(e.target.checked)}
               />
-              <span>코드 진행 수집에 넣기</span>
+              <span>{t('note.labCollect')}</span>
             </label>
           </div>
 
           <div id="noteActionStatus" className={styles.actionStatus}>
             {collectOn && (
               <SafeLink id="noteCollectLink" href="progressions.html?scope=analysis">
-                CHORDS에서 보기{collectCount !== null ? ` (${collectCount}개)` : ''} →
+                {collectCount !== null
+                  ? t('note.viewInChordsWithCount', { count: collectCount })
+                  : t('note.viewInChords')}
               </SafeLink>
             )}
             <p className={`msg${collectMsg.kind ? ' ' + collectMsg.kind : ''}`} id="noteCollectMsg" role="status">
@@ -312,7 +314,7 @@ export function NoteDetailPage(): React.ReactElement {
               external
               hidden={!note?.url}
             >
-              유튜브 원본 ↗
+              {t('note.btnYoutubeOriginal')}
             </SafeLink>
             <button
               id="btnDeleteNote"
@@ -320,22 +322,22 @@ export function NoteDetailPage(): React.ReactElement {
               type="button"
               onClick={async () => {
                 if (!note || !note.id) return;
-                if (!window.confirm('이 학습 노트를 삭제할까요?')) return;
+                if (!window.confirm(t('note.confirmDelete'))) return;
                 try {
                   await apiClient.notes.remove(note.id);
                   window.location.href = 'notes.html';
                 } catch (err: any) {
-                  window.alert((err && err.message) || '노트 삭제에 실패했어요.');
+                  window.alert((err && err.message) || t('note.errDeleteFailed'));
                 }
               }}
             >
-              노트 삭제
+              {t('note.btnDelete')}
             </button>
           </div>
         </div>
 
         <div className={`card summary-box ${styles.summaryBox}`} id="noteSummaryBox">
-          <h2>핵심 요약</h2>
+          <h2>{t('note.secSummary')}</h2>
           <p className={`headline ${styles.headline}`} id="noteHeadline">
             {note?.headline || ''}
           </p>
@@ -355,16 +357,16 @@ export function NoteDetailPage(): React.ReactElement {
 
         <div id="noteSections">
           {tags.map((tag) => {
-            if (tag === '화성' && analysis.harmony) {
+            if (tag === '화성' && analysis.harmony) { // i18n-keep: 태그 데이터 비교(D5-1)
               const progs = Array.isArray(analysis.harmony.progressions) ? analysis.harmony.progressions : [];
               const concepts = Array.isArray(analysis.harmony.concepts) ? analysis.harmony.concepts : [];
               return (
                 <div key="harmony" className={`card note-section ${styles.card}`}>
-                  <h2>화성 (Harmony)</h2>
+                  <h2>{t('note.secHarmony')}</h2>
                   {progs.map((prog: any, pIdx: number) => {
                     const chords = Array.isArray(prog.chords) ? prog.chords : [];
                     const pTitle = [
-                      prog.name || '진행',
+                      prog.name || t('note.defaultProgName'),
                       prog.key ? `(${prog.key})` : '',
                       prog.instrument ? `· ${prog.instrument}` : '',
                     ]
@@ -382,13 +384,13 @@ export function NoteDetailPage(): React.ReactElement {
                               <table>
                                 <thead>
                                   <tr>
-                                    <th>코드</th>
-                                    <th>로마숫자</th>
-                                    <th>기능</th>
-                                    <th>보이싱</th>
-                                    <th>뉘앙스</th>
-                                    <th>근거</th>
-                                    <th>시간</th>
+                                    <th>{t('note.thChord')}</th>
+                                    <th>{t('note.thRoman')}</th>
+                                    <th>{t('note.thFunction')}</th>
+                                    <th>{t('note.thVoicing')}</th>
+                                    <th>{t('note.thNuance')}</th>
+                                    <th>{t('note.thBasis')}</th>
+                                    <th>{t('note.thTime')}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -427,7 +429,7 @@ export function NoteDetailPage(): React.ReactElement {
                   })}
                   {concepts.length > 0 && (
                     <div className={`concepts-box ${styles.conceptsBox}`}>
-                      <h4>주요 화성 개념</h4>
+                      <h4>{t('note.titleKeyConcepts')}</h4>
                       <ul>
                         {concepts.map((c: any, idx: number) => (
                           <li key={idx}>{typeof c === 'string' ? c : `${c.term}: ${c.description || ''}`}</li>
@@ -443,10 +445,10 @@ export function NoteDetailPage(): React.ReactElement {
         </div>
 
         <div className={`card ${styles.card}`} id="noteMomentsBox">
-          <h2>주요 구간</h2>
+          <h2>{t('note.secKeySections')}</h2>
           <ul className={`moments-list ${styles.momentsList}`} id="noteMoments">
             {moments.length === 0 ? (
-              <li className="empty">등록된 주요 구간이 없어요.</li>
+              <li className="empty">{t('note.emptyKeySections')}</li>
             ) : (
               moments.map((m: any, idx: number) => {
                 const sec = parseTimestampSec(m.timestamp);
@@ -471,10 +473,10 @@ export function NoteDetailPage(): React.ReactElement {
         </div>
 
         <div className={`card ${styles.card}`} id="notePracticeBox">
-          <h2>연습 과제</h2>
+          <h2>{t('note.secPracticeTasks')}</h2>
           <div className={`practice-list ${styles.practiceList}`} id="notePractice">
             {practiceItems.length === 0 ? (
-              <p className="empty">등록된 연습 과제가 없어요.</p>
+              <p className="empty">{t('note.emptyPracticeTasks')}</p>
             ) : (
               practiceItems.map((pText: string, idx: number) => (
                 <label key={idx} className={`check ${styles.checkLabel}`}>
@@ -487,10 +489,10 @@ export function NoteDetailPage(): React.ReactElement {
         </div>
 
         <div className={`card edit-panel ${styles.card}`} id="noteEditPanel">
-          <h2>메모 및 태그 편집</h2>
+          <h2>{t('note.secEdit')}</h2>
           <div>
-            <span className="lab">태그</span>
-            <div className={`tags ${styles.tagsGroup}`} id="editTags" role="group" aria-label="태그 편집">
+            <span className="lab">{t('note.labTag')}</span>
+            <div className={`tags ${styles.tagsGroup}`} id="editTags" role="group" aria-label={t('note.ariaEditTags')}>
               {NOTE_FORM_TAGS.map((t) => (
                 <button
                   key={t}
@@ -507,11 +509,11 @@ export function NoteDetailPage(): React.ReactElement {
             </div>
           </div>
           <label>
-            <span className="lab">메모</span>
+            <span className="lab">{t('note.labMemo')}</span>
             <textarea
               className="inpField"
               id="noteMemoInput"
-              placeholder="노트에 대한 메모를 남겨보세요."
+              placeholder={t('note.phMemo')}
               value={editMemo}
               onChange={(e) => setEditMemo(e.target.value)}
             />
@@ -524,7 +526,7 @@ export function NoteDetailPage(): React.ReactElement {
               onClick={async () => {
                 if (!note || !note.id) return;
                 const myUid = activeUid;
-                setEditMsg({ text: '저장하는 중...', kind: '' });
+                setEditMsg({ text: t('note.saving'), kind: '' });
                 try {
                   const ordered = NOTE_FORM_TAGS.filter((t) => editTags.includes(t));
                   const updated = await apiClient.notes.update(note.id, {
@@ -533,14 +535,14 @@ export function NoteDetailPage(): React.ReactElement {
                   });
                   if (auth.getUser()?.id !== myUid) return;
                   if (updated) setNote(updated);
-                  setEditMsg({ text: '저장되었습니다.', kind: 'ok' });
+                  setEditMsg({ text: t('note.saved'), kind: 'ok' });
                 } catch (err: any) {
                   if (auth.getUser()?.id !== myUid) return;
-                  setEditMsg({ text: (err && err.message) || '저장에 실패했어요.', kind: 'err' });
+                  setEditMsg({ text: (err && err.message) || t('note.saveFailed'), kind: 'err' });
                 }
               }}
             >
-              메모·태그 저장
+              {t('note.btnSave')}
             </button>
           </div>
           <p className={`msg${editMsg.kind ? ' ' + editMsg.kind : ''}`} id="noteEditMsg" role="status">

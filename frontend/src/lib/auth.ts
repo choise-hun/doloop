@@ -1,4 +1,5 @@
 // frontend/src/lib/auth.ts
+import { t } from './i18n.mts';
 import { useEffect, useState } from 'react';
 import type { SupabaseClientLike, SupabaseSessionLike, SupabaseUserLike } from '../vite-env';
 
@@ -142,7 +143,7 @@ function createAuthModule() {
       ''
     ).trim();
     if (!rawName) return 'ME';
-    if (/^[가-힣]/.test(rawName)) return rawName.slice(0, 2);
+    if (/^[가-힣]/.test(rawName)) return rawName.slice(0, 2); // i18n-keep: 한글 이름 2자 추출 정규식(D5-2)
     const parts = rawName.split(/\s+/).filter(Boolean);
     if (parts.length >= 2 && /^[A-Za-z]/.test(parts[0]) && /^[A-Za-z]/.test(parts[1])) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -193,7 +194,7 @@ function createAuthModule() {
     const res = await fetch(url, Object.assign({}, options, { headers }));
     const data = res.status === 204 ? null : await res.json().catch(() => null);
     if (!res.ok) {
-      const msg = (data && (data.message || data.error)) || '요청 처리에 실패했어요 (' + res.status + ')';
+      const msg = (data && (data.message || data.error)) || t('auth.reqFailedStatus', { status: res.status });
       const err: ApiClientError = new Error(msg);
       err.status = res.status;
       err.code = data && data.code ? data.code : '';
@@ -240,7 +241,7 @@ function createAuthModule() {
       return;
     }
     if (!client) {
-      throw new Error('public/config.js에 Supabase URL과 Publishable 키를 먼저 설정해 주세요.');
+      throw new Error(t('auth.supabaseConfigReq'));
     }
     const target = stripHash(redirectTo);
     const { error } = await client.auth.signInWithOAuth({

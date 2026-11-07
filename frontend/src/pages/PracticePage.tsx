@@ -11,6 +11,7 @@ import { playlistUrlFrom } from '../lib/community.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
+import { t } from '../lib/i18n.mts';
 import styles from './PracticePage.module.css';
 
 export const RATES: ReadonlyArray<number> = [0.25, 0.5, 0.75, 1];
@@ -78,7 +79,7 @@ export function buildPlayerResumeSearch(s: {
 }
 
 export function sanitizeDownloadName(date: string, time: string, title: string, mime: string): string {
-  const base = `${date} ${time.replace(':', '')} ${title || '녹음'}`.replace(/[\\/:*?"<>|]+/g, ' ');
+  const base = `${date} ${time.replace(':', '')} ${title || t('practice.recFileDefaultTitle')}`.replace(/[\\/:*?"<>|]+/g, ' ');
   const ext = REC_EXT[mime] || 'webm';
   return `${base}.${ext}`;
 }
@@ -306,14 +307,14 @@ export function PracticePage(): React.ReactElement {
   const ensureAccountSong = async (): Promise<SongDto> => {
     if (stRef.current.song) return stRef.current.song;
     const vid = stRef.current.videoId;
-    if (!vid) throw new Error('재생 중인 영상이 없어요');
+    if (!vid) throw new Error(t('practice.errNoPlayingVideo'));
     const created = await apiClient.songs.create({
       videoId: vid,
       title: getVideoTitle(),
       artist: getVideoAuthor(),
       rate: stRef.current.rate,
     });
-    if (!created) throw new Error('곡을 생성하지 못했어요');
+    if (!created) throw new Error(t('practice.errCreateSongFailed'));
     stRef.current.song = created;
     setSong(created);
     setSongsList(null);
@@ -326,7 +327,7 @@ export function PracticePage(): React.ReactElement {
     persistLocalSnapshot();
     if (!apiClient.isLoggedIn()) {
       if (reason === 'manual') {
-        setSyncMsg({ text: '이 기기에 저장됨 · 로그인하면 계정에 저장돼요', err: false });
+        setSyncMsg({ text: t('practice.syncLocalSaved'), err: false });
       }
       return;
     }
@@ -340,7 +341,7 @@ export function PracticePage(): React.ReactElement {
     if (reason === 'auto' && !cur.dirty && addSec < 15) return;
 
     savingRef.current = true;
-    setSyncMsg({ text: '저장 중…', err: false });
+    setSyncMsg({ text: t('practice.syncSaving'), err: false });
     try {
       const targetSong = cur.song || (await ensureAccountSong());
       const pos = cur.ready ? computeCurrentPos() : startAtRef.current;
@@ -374,14 +375,14 @@ export function PracticePage(): React.ReactElement {
       stRef.current.song = updatedSong;
       setSong(updatedSong);
       setSrReloadKey((k) => k + 1);
-      setSyncMsg({ text: `저장됨 ${getNowHhMm()}`, err: false });
+      setSyncMsg({ text: t('practice.syncSaved', { time: getNowHhMm() }), err: false });
     } catch (e: any) {
       if (e && e.status === 404) {
         stRef.current.song = null;
         setSong(null);
-        setSyncMsg({ text: '계정에서 지워진 곡이에요. 곡 추가를 누르면 다시 만들어요', err: true });
+        setSyncMsg({ text: t('practice.syncDeletedFromAccount'), err: true });
       } else {
-        setSyncMsg({ text: (e && e.message) || '저장 실패', err: true });
+        setSyncMsg({ text: (e && e.message) || t('practice.syncSaveFailed'), err: true });
       }
     } finally {
       savingRef.current = false;
@@ -504,14 +505,14 @@ export function PracticePage(): React.ReactElement {
           },
           onError() {
             setSyncMsg({
-              text: '이 영상은 임베드 재생이 막혀 있어요. 유튜브에서 직접 열어야 해요.',
+              text: t('practice.embedBlocked'),
               err: true,
             });
           },
         },
       });
     } catch {
-      setSyncMsg({ text: '유튜브 플레이어를 초기화하지 못했어요', err: true });
+      setSyncMsg({ text: t('practice.ytInitFailed'), err: true });
     }
   };
 
@@ -553,15 +554,15 @@ export function PracticePage(): React.ReactElement {
     let resolvedSong = opts?.song || null;
 
     if (!resolvedSong && apiClient.isLoggedIn()) {
-      setSyncMsg({ text: '계정 기록 확인 중…', err: false });
+      setSyncMsg({ text: t('practice.checkingAccountRecord'), err: false });
       try {
         const fetched = await apiClient.songs.byVideo(id);
         if (mySeq !== songReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
         resolvedSong = fetched;
-        setSyncMsg({ text: fetched ? '계정 기록 불러옴' : '계정에 없는 곡', err: false });
+        setSyncMsg({ text: fetched ? t('practice.accountRecordLoaded') : t('practice.notInAccount'), err: false });
       } catch (e: any) {
         if (mySeq !== songReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
-        setSyncMsg({ text: (e && e.message) || '계정 기록 확인 실패', err: true });
+        setSyncMsg({ text: (e && e.message) || t('practice.checkAccountRecordFailed'), err: true });
       }
     }
 
@@ -704,44 +705,44 @@ export function PracticePage(): React.ReactElement {
   };
 
   const uploadTakeNow = async (opts?: { replaceOldSongTakes?: boolean; targetTake?: PendingTakeState }) => {
-    const t = opts?.targetTake || takeRef.current;
-    if (!t || t.done || uploadingRef.current) return;
+    const tk = opts?.targetTake || takeRef.current;
+    if (!tk || tk.done || uploadingRef.current) return;
     if (!apiClient.isLoggedIn()) {
-      setRecMsg({ text: '로그인하면 녹음을 계정에 올릴 수 있어요. 파일로 저장해 둘 수 있어요', err: true });
+      setRecMsg({ text: t('practice.recLoginPrompt'), err: true });
       return;
     }
 
     uploadingRef.current = true;
     setUploadingTake(true);
-    setRecMsg({ text: '녹음 올리는 중…', err: false });
+    setRecMsg({ text: t('practice.recUploading'), err: false });
 
     try {
-      let targetSong = t.song;
-      if (!targetSong && stRef.current.videoId === t.videoId) {
+      let targetSong = tk.song;
+      if (!targetSong && stRef.current.videoId === tk.videoId) {
         targetSong = await ensureAccountSong();
-        t.song = targetSong;
+        tk.song = targetSong;
       }
       if (!targetSong) {
-        throw new Error('곡 정보가 없어요. 곡 추가 후 다시 올려 주세요');
+        throw new Error(t('practice.errNoSongInfo'));
       }
 
       const uploaded = await apiClient.takes.upload(
         {
           songId: targetSong.id,
-          date: t.date,
-          recordedAt: t.recordedAt,
-          a: t.a,
-          b: t.b,
-          rate: t.rate,
-          durationSec: t.seconds,
-          mime: t.mime,
+          date: tk.date,
+          recordedAt: tk.recordedAt,
+          a: tk.a,
+          b: tk.b,
+          rate: tk.rate,
+          durationSec: tk.seconds,
+          mime: tk.mime,
           replaceOldSongTakes: opts?.replaceOldSongTakes === true ? true : undefined,
         },
-        t.blob
+        tk.blob
       );
 
       const nextTake: PendingTakeState = {
-        ...t,
+        ...tk,
         song: targetSong,
         done: true,
         serverTake: uploaded,
@@ -752,8 +753,8 @@ export function PracticePage(): React.ReactElement {
       setSrReloadKey((k) => k + 1);
       setRecMsg({
         text: opts?.replaceOldSongTakes
-          ? `이전 곡 서버 녹음을 교체하고 계정에 저장됨 ${t.time} · ${formatPlayerTime(t.seconds)}`
-          : `계정에 저장됨 ${t.time} · ${formatPlayerTime(t.seconds)}`,
+          ? t('practice.recReplaceSaved', { time: tk.time, sec: formatPlayerTime(tk.seconds) })
+          : t('practice.recSaved', { time: tk.time, sec: formatPlayerTime(tk.seconds) }),
         err: false,
       });
     } catch (e: any) {
@@ -764,20 +765,20 @@ export function PracticePage(): React.ReactElement {
         setRecMsg({
           text:
             e.message ||
-            `무료 플랜은 ${limitNum}곡까지 녹음을 저장할 수 있어요`,
+            t('practice.recFreePlanLimit', { limit: limitNum }),
           err: true,
         });
       } else if (e && e.status === 404) {
-        const clearedTake: PendingTakeState = { ...t, song: null };
+        const clearedTake: PendingTakeState = { ...tk, song: null };
         takeRef.current = clearedTake;
         setTakeState(clearedTake);
-        if (stRef.current.videoId === t.videoId) {
+        if (stRef.current.videoId === tk.videoId) {
           stRef.current.song = null;
           setSong(null);
         }
-        setRecMsg({ text: '계정에서 지워진 곡이에요. 다시 올리기를 누르면 새로 만들어요', err: true });
+        setRecMsg({ text: t('practice.recDeletedFromAccount'), err: true });
       } else {
-        setRecMsg({ text: (e && e.message) || '녹음 업로드 실패', err: true });
+        setRecMsg({ text: (e && e.message) || t('practice.recUploadFailed'), err: true });
       }
     } finally {
       uploadingRef.current = false;
@@ -787,17 +788,17 @@ export function PracticePage(): React.ReactElement {
 
   const handleConnectDriveFromPlayer = async () => {
     if (!apiClient.isLoggedIn()) {
-      setRecMsg({ text: '먼저 Google 계정으로 로그인해 주세요.', err: true });
+      setRecMsg({ text: t('practice.loginGoogleFirst'), err: true });
       return;
     }
     setBusyDriveConnect(true);
-    setRecMsg({ text: 'Google Drive 저장소를 연결하는 중…', err: false });
+    setRecMsg({ text: t('practice.connectingDrive'), err: false });
     try {
       await drive.enableDriveStorage();
       await auth.fetchMe();
       setTakeLimitModalOpen(false);
       setRecMsg({
-        text: '✓ Google Drive 저장소가 연결되었어요. 이제 곡 수 제한 없이 녹음이 저장됩니다.',
+        text: t('practice.driveConnected'),
         err: false,
       });
       if (takeRef.current && !takeRef.current.done) {
@@ -805,7 +806,7 @@ export function PracticePage(): React.ReactElement {
       }
     } catch (err: any) {
       setRecMsg({
-        text: (err && err.message) || 'Google Drive 저장소 연결에 실패했어요.',
+        text: (err && err.message) || t('practice.driveConnectFailed'),
         err: true,
       });
     } finally {
@@ -821,13 +822,13 @@ export function PracticePage(): React.ReactElement {
       !navigator.mediaDevices.getUserMedia ||
       typeof window.MediaRecorder === 'undefined'
     ) {
-      setRecMsg({ text: '이 브라우저는 녹음을 지원하지 않아요', err: true });
+      setRecMsg({ text: t('practice.recNotSupported'), err: true });
       return;
     }
     if (
       takeRef.current &&
       !takeRef.current.done &&
-      !window.confirm('아직 계정에 못 올린 녹음이 있어요. 버리고 새로 녹음할까요?')
+      !window.confirm(t('practice.confirmDiscardUnsavedRec'))
     ) {
       return;
     }
@@ -841,8 +842,8 @@ export function PracticePage(): React.ReactElement {
       setRecMsg({
         text:
           e && e.name === 'NotAllowedError'
-            ? '마이크 권한이 필요해요. 노션 안에서 열었다면 브라우저에서 직접 여세요'
-            : '마이크를 열지 못했어요',
+            ? t('practice.micPermissionNeeded')
+            : t('practice.micOpenFailed'),
         err: true,
       });
       return;
@@ -914,7 +915,7 @@ export function PracticePage(): React.ReactElement {
     setRecording(true);
     setRecElapsedSec(0);
     mr.start(1000);
-    setRecMsg({ text: '녹음 중', err: false });
+    setRecMsg({ text: t('practice.recRecording'), err: false });
   };
 
   const handleToggleRec = () => {
@@ -944,7 +945,7 @@ export function PracticePage(): React.ReactElement {
     } catch (e: any) {
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
       setSongsList([]);
-      setSongsErr((e && e.message) || '곡 목록을 불러오지 못했어요');
+      setSongsErr((e && e.message) || t('practice.songsLoadFailed'));
     }
   };
 
@@ -988,7 +989,7 @@ export function PracticePage(): React.ReactElement {
       if (updated && Array.isArray(updated.categoryIds)) apply(updated.categoryIds);
     } catch (e: any) {
       apply(ids);
-      setSyncMsg({ text: (e && e.message) || '분류를 저장하지 못했어요', err: true });
+      setSyncMsg({ text: (e && e.message) || t('practice.categorySaveFailed'), err: true });
     } finally {
       setCatSaving(false);
     }
@@ -996,7 +997,7 @@ export function PracticePage(): React.ReactElement {
 
   // ---------- 초기화, YouTube API 로드, 인터벌, 키보드 단축키 ----------
   useEffect(() => {
-    document.title = '연습 플레이어';
+    document.title = t('practice.documentTitle');
     const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
 
     const prevReady = win.onYouTubeIframeAPIReady;
@@ -1021,7 +1022,7 @@ export function PracticePage(): React.ReactElement {
         }
       };
       s.onerror = () => {
-        setSyncMsg({ text: '유튜브 플레이어를 불러오지 못했어요', err: true });
+        setSyncMsg({ text: t('practice.ytLoadFailed'), err: true });
       };
       document.head.appendChild(s);
     }
@@ -1053,14 +1054,14 @@ export function PracticePage(): React.ReactElement {
           .then((r) => {
             if (!r) return;
             if (r.status === 'done') {
-              setSyncMsg({ text: `기기 기록 ${r.created}곡을 계정으로 옮겼어요`, err: false });
+              setSyncMsg({ text: t('practice.migratedCount', { count: r.created }), err: false });
               setSongsList(null);
             } else if (r.status === 'failed') {
               setSyncMsg({ text: r.message, err: true });
             }
           })
           .catch((err: any) => {
-            setSyncMsg({ text: (err && err.message) || '기기 기록 이관 실패', err: true });
+            setSyncMsg({ text: (err && err.message) || t('practice.migrateFailed'), err: true });
           });
       }
     })();
@@ -1206,13 +1207,13 @@ export function PracticePage(): React.ReactElement {
           }
           stRef.current.song = fetched;
           setSong(fetched);
-          setSyncMsg({ text: fetched ? '계정 기록 불러옴' : '계정에 없는 곡', err: false });
+          setSyncMsg({ text: fetched ? t('practice.accountRecordLoaded') : t('practice.notInAccount'), err: false });
         })
         .catch((e: any) => {
           if (mySeq !== songReqSeqRef.current || auth.getUser()?.id !== activeUid || stRef.current.videoId !== vid) {
             return;
           }
-          setSyncMsg({ text: (e && e.message) || '계정 기록 확인 실패', err: true });
+          setSyncMsg({ text: (e && e.message) || t('practice.checkAccountRecordFailed'), err: true });
         });
     }
   }, [activeUid]);
@@ -1271,14 +1272,16 @@ export function PracticePage(): React.ReactElement {
   const displayTitle = song
     ? song.title
     : videoId
-      ? getVideoTitle() || '연습 플레이어'
-      : '연습 플레이어';
-  const displaySync = syncMsg.text || (song ? '계정 연결됨' : '');
+      ? getVideoTitle() || t('practice.defaultTitle')
+      : t('practice.defaultTitle');
+  const displaySync = syncMsg.text || (song ? t('practice.accountConnected') : '');
   const hasBothPoints = pointA != null && pointB != null;
   const loopDurationText = hasBothPoints
-    ? `${(pointB! - pointA!).toFixed(1)}초${loopOn && loops ? ` · ${loops}회` : ''}`
+    ? (loopOn && loops
+        ? t('practice.loopSecWithLoops', { sec: (pointB! - pointA!).toFixed(1), loops })
+        : t('practice.loopSec', { sec: (pointB! - pointA!).toFixed(1) }))
     : '';
-  const saveBtnLabel = apiClient.isLoggedIn() && videoId && !song ? '곡 추가' : '저장';
+  const saveBtnLabel = apiClient.isLoggedIn() && videoId && !song ? t('practice.btnAddSong') : t('practice.btnSave');
 
   // 분류가 하나라도 있으면 서랍을 분류 폴더로 묶는다. 한 곡이 여러 폴더에 나올 수 있고, 남는 곡은 "미분류"
   const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -1293,7 +1296,7 @@ export function PracticePage(): React.ReactElement {
             songs: songsList.filter((x) => (x.categoryIds || []).includes(c.id)),
           }));
           const rest = songsList.filter((x) => !(x.categoryIds || []).some((id) => known.has(id)));
-          if (rest.length > 0) out.push({ id: UNCATEGORIZED_FOLDER, name: '미분류', songs: rest });
+          if (rest.length > 0) out.push({ id: UNCATEGORIZED_FOLDER, name: t('practice.uncategorized'), songs: rest });
           return out;
         })()
       : null;
@@ -1338,7 +1341,7 @@ export function PracticePage(): React.ReactElement {
     }
     const id = videoIdFrom(rawVal);
     if (!id) {
-      setSyncMsg({ text: '유튜브 링크를 읽지 못했어요', err: true });
+      setSyncMsg({ text: t('practice.ytUrlReadFailed'), err: true });
       return;
     }
     clearFn();
@@ -1371,13 +1374,13 @@ export function PracticePage(): React.ReactElement {
                   aria-controls="songCatPop"
                   onClick={() => setCatPopOpen((v) => !v)}
                 >
-                  {songCategoryIds.length > 0 ? `분류 ${songCategoryIds.length}` : '분류'}
+                  {songCategoryIds.length > 0 ? t('practice.categoryCount', { count: songCategoryIds.length }) : t('practice.categoryLabel')}
                 </button>
                 {catPopOpen && (
-                  <div className={styles.ppCatPop} id="songCatPop" role="dialog" aria-label="이 곡의 분류">
-                    <p className={styles.ppCatPopTitle}>이 곡의 분류</p>
+                  <div className={styles.ppCatPop} id="songCatPop" role="dialog" aria-label={t('practice.songCatPopTitle')}>
+                    <p className={styles.ppCatPopTitle}>{t('practice.songCatPopTitle')}</p>
                     {sortedCategories.length === 0 ? (
-                      <p className={`note ${styles.ppSongNote}`}>아직 분류가 없어요. 홈의 + 버튼에서 만들 수 있어요.</p>
+                      <p className={`note ${styles.ppSongNote}`}>{t('practice.songCatEmpty')}</p>
                     ) : (
                       <ul className={styles.ppCatList}>
                         {sortedCategories.map((c) => (
@@ -1407,7 +1410,7 @@ export function PracticePage(): React.ReactElement {
               aria-controls="lib"
               onClick={() => (libOpen ? closeDrawer() : openDrawer())}
             >
-              곡 목록
+              {t('practice.tabSongsList')}
             </button>
           </div>
         </header>
@@ -1420,9 +1423,9 @@ export function PracticePage(): React.ReactElement {
               </div>
               <div className={`pp-empty ${styles.ppEmpty}`} id="emptyState" hidden={Boolean(videoId)}>
                 <p>
-                  <b>연습할 영상을 고르세요</b>
+                  <b>{t('practice.pickVideoPrompt')}</b>
                 </p>
-                <p className="note">곡 목록에서 고르거나, 유튜브 링크를 붙여넣으세요.</p>
+                <p className="note">{t('practice.pickVideoSub')}</p>
                 <form
                   className={`pp-url ${styles.ppUrlForm}`}
                   id="urlForm"
@@ -1435,12 +1438,12 @@ export function PracticePage(): React.ReactElement {
                     placeholder="https://youtu.be/…"
                     inputMode="url"
                     autoComplete="off"
-                    aria-label="유튜브 링크"
+                    aria-label={t('practice.ariaYoutubeUrl')}
                     value={urlInput1}
                     onChange={(e) => setUrlInput1(e.target.value)}
                   />
                   <button className="pillBtn" type="submit">
-                    열기
+                    {t('practice.btnOpen')}
                   </button>
                 </form>
               </div>
@@ -1486,7 +1489,7 @@ export function PracticePage(): React.ReactElement {
                   max={1000}
                   step={1}
                   value={fillPermille}
-                  aria-label="재생 위치"
+                  aria-label={t('practice.ariaSeekPosition')}
                   onChange={(e) => {
                     seekingRef.current = true;
                     const perm = Number(e.target.value);
@@ -1519,10 +1522,10 @@ export function PracticePage(): React.ReactElement {
             </div>
           </section>
 
-          <section className={`pp-ctl ${styles.ppCtl}`} aria-label="연습 조작">
+          <section className={`pp-ctl ${styles.ppCtl}`} aria-label={t('practice.ariaPracticeControls')}>
             <div className={`pp-group ${styles.ppGroup}`}>
-              <div className={`pp-lab ${styles.ppLab}`}>속도</div>
-              <div className={`pp-seg ${styles.ppSeg}`} id="rates" role="group" aria-label="재생 속도">
+              <div className={`pp-lab ${styles.ppLab}`}>{t('practice.labSpeed')}</div>
+              <div className={`pp-seg ${styles.ppSeg}`} id="rates" role="group" aria-label={t('practice.ariaPlaySpeed')}>
                 {RATES.map((r) => (
                   <button
                     key={r}
@@ -1540,7 +1543,7 @@ export function PracticePage(): React.ReactElement {
 
             <div className={`pp-group ${styles.ppGroup}`}>
               <div className={`pp-lab ${styles.ppLab}`}>
-                <span>구간 반복 · 시작 전 여유</span>
+                <span>{t('practice.secLoopLead')}</span>
                 <span id="loopInfo" className={`pp-loopinfo ${styles.ppLoopInfo}`}>
                   {loopDurationText}
                 </span>
@@ -1552,7 +1555,7 @@ export function PracticePage(): React.ReactElement {
                     className={`pp-nudge ${styles.ppNudge}`}
                     data-pt="a"
                     data-d="-0.2"
-                    aria-label="A 0.2초 앞으로"
+                    aria-label={t('practice.ariaStepForwardA')}
                     onClick={() => handleNudge('a', -0.2)}
                   >
                     −
@@ -1571,7 +1574,7 @@ export function PracticePage(): React.ReactElement {
                     className={`pp-nudge ${styles.ppNudge}`}
                     data-pt="a"
                     data-d="0.2"
-                    aria-label="A 0.2초 뒤로"
+                    aria-label={t('practice.ariaStepBackA')}
                     onClick={() => handleNudge('a', 0.2)}
                   >
                     +
@@ -1583,7 +1586,7 @@ export function PracticePage(): React.ReactElement {
                     className={`pp-nudge ${styles.ppNudge}`}
                     data-pt="b"
                     data-d="-0.2"
-                    aria-label="B 0.2초 앞으로"
+                    aria-label={t('practice.ariaStepForwardB')}
                     onClick={() => handleNudge('b', -0.2)}
                   >
                     −
@@ -1602,7 +1605,7 @@ export function PracticePage(): React.ReactElement {
                     className={`pp-nudge ${styles.ppNudge}`}
                     data-pt="b"
                     data-d="0.2"
-                    aria-label="B 0.2초 뒤로"
+                    aria-label={t('practice.ariaStepBackB')}
                     onClick={() => handleNudge('b', 0.2)}
                   >
                     +
@@ -1618,15 +1621,15 @@ export function PracticePage(): React.ReactElement {
                   aria-pressed={loopOn}
                   onClick={handleToggleLoop}
                 >
-                  {loopOn ? '반복 중' : '반복'}
+                  {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
                 </button>
-                <div className={`pp-seg pp-lead ${styles.ppSeg}`} id="leads" role="group" aria-label="반복 전 여유">
+                <div className={`pp-seg pp-lead ${styles.ppSeg}`} id="leads" role="group" aria-label={t('practice.ariaLeadSec')}>
                   {LEADS.map((s) => (
                     <button
                       key={s}
                       type="button"
                       className={styles.ppLeadBtn}
-                      aria-label={`반복 전 여유 ${s}초`}
+                      aria-label={t('practice.ariaLeadSecUnit', { s })}
                       aria-pressed={leadSec === s}
                       onClick={() => {
                         stRef.current.lead = s;
@@ -1634,7 +1637,7 @@ export function PracticePage(): React.ReactElement {
                         json.set('ulp:lead', s);
                       }}
                     >
-                      {s}초
+                      {t('practice.secUnit', { s })}
                     </button>
                   ))}
                 </div>
@@ -1642,7 +1645,7 @@ export function PracticePage(): React.ReactElement {
                   type="button"
                   className={`pp-icon ${styles.ppIcon}`}
                   id="clearBtn"
-                  aria-label="구간 지우기"
+                  aria-label={t('practice.ariaClearLoop')}
                   onClick={handleClearLoop}
                 >
                   ✕
@@ -1652,9 +1655,9 @@ export function PracticePage(): React.ReactElement {
 
             <div className={`pp-group ${styles.ppGroup}`}>
               <div className={`pp-lab ${styles.ppLab}`}>
-                <span>녹음 · 오늘 연습 기록에 올라가요</span>
+                <span>{t('practice.secRecToday')}</span>
                 <span className={styles.ppDriveBadge} id="recDriveBadge" hidden={!activeUid || !isDrive}>
-                  ✓ Google Drive 무제한 저장 중
+                  {t('practice.driveUnlimitedActive')}
                 </span>
               </div>
 
@@ -1665,7 +1668,7 @@ export function PracticePage(): React.ReactElement {
                 hidden={!activeUid || isDrive}
               >
                 <span id="recDriveBannerText">
-                  Google Drive 미연결 시 가장 최근 연습 곡 1곡만 서버에 녹음할 수 있어요.
+                  {t('practice.driveNotConnectedNotice')}
                 </span>
                 <button
                   type="button"
@@ -1674,7 +1677,7 @@ export function PracticePage(): React.ReactElement {
                   disabled={busyDriveConnect}
                   onClick={handleConnectDriveFromPlayer}
                 >
-                  Google Drive 연결 (무제한 저장)
+                  {t('practice.btnConnectDrive')}
                 </button>
               </div>
 
@@ -1684,11 +1687,11 @@ export function PracticePage(): React.ReactElement {
                   className={`pp-toggle pp-rec ${styles.ppToggle} ${styles.ppRecBtn}`}
                   id="recBtn"
                   aria-pressed={recording}
-                  aria-label={recording ? '녹음 멈추고 올리기' : '녹음 시작'}
+                  aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
                   disabled={!recording && (!videoId || uploadingTake)}
                   onClick={handleToggleRec}
                 >
-                  {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : '● 녹음'}
+                  {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
                 </button>
                 <button
                   type="button"
@@ -1697,7 +1700,7 @@ export function PracticePage(): React.ReactElement {
                   hidden={!(take && !take.done && !uploadingTake && !recording)}
                   onClick={() => void uploadTakeNow()}
                 >
-                  다시 올리기
+                  {t('practice.btnReupload')}
                 </button>
                 <a
                   className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
@@ -1710,7 +1713,7 @@ export function PracticePage(): React.ReactElement {
                   }
                   hidden={!take || recording}
                 >
-                  파일 저장
+                  {t('practice.btnSaveFile')}
                 </a>
               </div>
               <SafeAudio
@@ -1734,7 +1737,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="backBtn"
-                aria-label="5초 뒤로"
+                aria-label={t('practice.ariaRewind')}
                 onClick={() => handleSkip(-5)}
               >
                 −5
@@ -1743,7 +1746,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="startBtn"
-                aria-label="구간 처음으로"
+                aria-label={t('practice.ariaRestartSegment')}
                 onClick={jumpToLoopStart}
               >
                 ⏮
@@ -1752,7 +1755,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn pp-play ${styles.ppTbtn} ${styles.ppPlayBtn}`}
                 id="playBtn"
-                aria-label={playing ? '일시정지' : '재생'}
+                aria-label={playing ? t('practice.ariaPause') : t('practice.ariaPlay')}
                 onClick={handleTogglePlay}
               >
                 {playing ? '❚❚' : '▶'}
@@ -1761,7 +1764,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="fwdBtn"
-                aria-label="5초 앞으로"
+                aria-label={t('practice.ariaForward')}
                 onClick={() => handleSkip(5)}
               >
                 +5
@@ -1770,7 +1773,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
                 id="saveBtn"
-                aria-label="저장"
+                aria-label={t('practice.btnSave')}
                 disabled={!videoId}
                 onClick={() => void saveProgressNow('manual')}
               >
@@ -1778,13 +1781,13 @@ export function PracticePage(): React.ReactElement {
               </button>
             </div>
             <p className={`note pp-hint ${styles.ppHint}`} id="kbdHint">
-              키보드: Space 재생 · 1~4 속도 · [ ] A·B · L 반복 · R 구간 처음 · M 녹음
+              {t('practice.shortcutsHint')}
             </p>
           </section>
         </div>
 
         {Boolean(videoId) && (
-          <section id="songRecord" className={styles.songRecord} aria-label="이 곡의 연습 기록">
+          <section id="songRecord" className={styles.songRecord} aria-label={t('practice.ariaSongRecord')}>
             <SongRecordPanel
               songId={song?.id ?? null}
               loggedIn={Boolean(activeUid) && apiClient.isLoggedIn()}
@@ -1797,12 +1800,12 @@ export function PracticePage(): React.ReactElement {
       {/* 우측 곡 목록 서랍 */}
       <aside className={`pp-lib ${styles.ppLib}`} id="lib" hidden={!libOpen}>
         <div className={`pp-lib-head ${styles.ppLibHead}`}>
-          <b>연습 곡</b>
+          <b>{t('practice.titleSongDrawer')}</b>
           <button
             type="button"
             className={`pp-icon ${styles.ppIcon}`}
             id="libClose"
-            aria-label="닫기"
+            aria-label={t('practice.ariaClose')}
             onClick={closeDrawer}
           >
             ✕
@@ -1817,27 +1820,27 @@ export function PracticePage(): React.ReactElement {
             type="url"
             id="urlInput2"
             className={styles.ppUrlInput}
-            placeholder="유튜브 링크 붙여넣기"
+            placeholder={t('practice.phYoutubeUrlDrawer')}
             inputMode="url"
             autoComplete="off"
-            aria-label="유튜브 링크"
+            aria-label={t('practice.ariaYoutubeUrl')}
             value={urlInput2}
             onChange={(e) => setUrlInput2(e.target.value)}
           />
           <button className="pillBtn" type="submit">
-            열기
+            {t('practice.btnOpen')}
           </button>
         </form>
         <ul className={`pp-songs ${styles.ppSongs}`} id="songs">
           {!apiClient.isLoggedIn() ? (
-            <li className={`note ${styles.ppSongNote}`}>로그인하면 내 연습 곡이 여기 보여요.</li>
+            <li className={`note ${styles.ppSongNote}`}>{t('practice.drawerLoginPrompt')}</li>
           ) : songsList === null ? (
-            <li className={`note ${styles.ppSongNote}`}>불러오는 중…</li>
+            <li className={`note ${styles.ppSongNote}`}>{t('practice.loading')}</li>
           ) : songsErr ? (
             <li className={`note ${styles.ppSongNote}`}>{songsErr}</li>
           ) : songsList.length === 0 ? (
             <li className={`note ${styles.ppSongNote}`}>
-              아직 곡이 없어요. 링크를 붙여넣어 열고 곡 추가를 누르세요.
+              {t('practice.drawerEmptySongs')}
             </li>
           ) : folders ? (
             folders.map((f) => {
@@ -1859,7 +1862,7 @@ export function PracticePage(): React.ReactElement {
                   {isOpen && (
                     <ul className={`${styles.ppSongs} ${styles.ppFolderSongs}`}>
                       {f.songs.length === 0 ? (
-                        <li className={`note ${styles.ppSongNote}`}>이 분류에 곡이 없어요</li>
+                        <li className={`note ${styles.ppSongNote}`}>{t('practice.drawerEmptyCategory')}</li>
                       ) : (
                         f.songs.map(renderSongItem)
                       )}
@@ -1889,10 +1892,10 @@ export function PracticePage(): React.ReactElement {
       >
         <div className={`pp-modal-card ${styles.modalCard}`}>
           <h2 className={styles.modalTitle} id="takeLimitTitle">
-            무료 녹음 저장 한도 안내
+            {t('practice.limitModalTitle')}
           </h2>
           <p className={styles.modalDesc} id="takeLimitDesc">
-            무료 플랜은 {takeLimitCount}곡까지 녹음을 저장할 수 있어요. 다른 곡에 저장된 서버 녹음을 지우고 이 곡의 녹음으로 바꾸거나, 취소 후 파일 저장 버튼으로 기기에 직접 보관할 수 있어요.
+            {t('practice.limitModalDesc', { takeLimitCount })}
           </p>
           <div className={`pp-modal-actions ${styles.modalActions}`}>
             <button
@@ -1903,7 +1906,7 @@ export function PracticePage(): React.ReactElement {
               disabled={busyDriveConnect || uploadingTake}
               onClick={handleConnectDriveFromPlayer}
             >
-              Google Drive 연결하고 무제한 저장 (권장)
+              {t('practice.limitModalConnectDrive')}
             </button>
             <button
               type="button"
@@ -1911,11 +1914,11 @@ export function PracticePage(): React.ReactElement {
               id="btnTakeLimitReplaceOld"
               disabled={busyDriveConnect || uploadingTake}
               onClick={() => {
-                if (!window.confirm('다른 곡에 저장된 서버 녹음을 모두 지우고 이 곡의 녹음을 저장할까요?')) return;
+                if (!window.confirm(t('practice.confirmReplaceServerTakes'))) return;
                 void uploadTakeNow({ replaceOldSongTakes: true });
               }}
             >
-              다른 곡 녹음 지우고 이 곡 녹음 저장
+              {t('practice.btnReplaceServerTakes')}
             </button>
             <button
               type="button"
@@ -1924,12 +1927,12 @@ export function PracticePage(): React.ReactElement {
               onClick={() => {
                 setTakeLimitModalOpen(false);
                 setRecMsg({
-                  text: "업로드 보류됨 · '다시 올리기'를 누르거나 '파일 저장'으로 기기에 보관하세요",
+                  text: t('practice.uploadPendingFileSaveNotice'),
                   err: false,
                 });
               }}
             >
-              취소 (파일로 직접 저장 가능)
+              {t('practice.btnCancelSaveFile')}
             </button>
           </div>
         </div>

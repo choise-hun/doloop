@@ -4,16 +4,17 @@ import { SafeAudio } from '../common/SafeAudio';
 import { apiClient, SongSessionDto, TakeDto } from '../../lib/apiClient';
 import { drive } from '../../lib/drive';
 import { safeAudioUrl } from '../../lib/security';
+import { t } from '../../lib/i18n.mts';
 import styles from './SongRecordParts.module.css';
 
 export function fmtDuration(sec?: number | null): string {
   const n = Number(sec) || 0;
-  if (n <= 0) return '0분';
-  if (n < 60) return `${n}초`;
-  if (n < 3600) return `${Math.round(n / 60)}분`;
+  if (n <= 0) return t('record.durZero');
+  if (n < 60) return t('record.durSec', { n });
+  if (n < 3600) return t('record.durMin', { m: Math.round(n / 60) });
   const h = Math.floor(n / 3600);
   const m = Math.round((n % 3600) / 60);
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+  return m > 0 ? t('record.durHourMin', { h, m }) : t('record.durHour', { h });
 }
 
 export function fmtTakeMeta(take: TakeDto): string {
@@ -29,7 +30,7 @@ export function fmtTakeMeta(take: TakeDto): string {
     }
   }
   let res = timeStr ? `${timeStr} · ` : '';
-  res += `${take.durationSec || 0}초`;
+  res += t('record.takeSec', { sec: take.durationSec || 0 });
   if (take.rate != null) {
     res += ` · ${take.rate}×`;
   }
@@ -74,7 +75,7 @@ export function TakeItemRow({
     }
     setLoadingPlay(true);
     if (take.storage === 'drive') {
-      setRowMsg('드라이브에서 음원 로드 중...');
+      setRowMsg(t('record.loadingDriveAudio'));
       try {
         const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
         const valid = safeAudioUrl(blobUrl);
@@ -83,17 +84,17 @@ export function TakeItemRow({
           setAudioVisible(true);
           setRowMsg('');
         } else {
-          setRowMsg('주소 발급 실패');
+          setRowMsg(t('record.urlIssueFailed'));
         }
       } catch (err: any) {
-        setRowMsg((err && err.message) || '재생 실패');
+        setRowMsg((err && err.message) || t('record.playFailed'));
       } finally {
         setLoadingPlay(false);
       }
       return;
     }
 
-    setRowMsg('주소 요청 중...');
+    setRowMsg(t('record.requestingUrl'));
     try {
       const r = await apiClient.takes.getUrl(take.id);
       const valid = r && r.url ? safeAudioUrl(r.url) : '';
@@ -104,17 +105,17 @@ export function TakeItemRow({
       } else {
         setAudioUrl('');
         setAudioVisible(true);
-        setRowMsg('주소 발급 실패');
+        setRowMsg(t('record.urlIssueFailed'));
       }
     } catch (err: any) {
-      setRowMsg((err && err.message) || '재생 실패');
+      setRowMsg((err && err.message) || t('record.playFailed'));
     } finally {
       setLoadingPlay(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('이 녹음을 삭제할까요?')) return;
+    if (!window.confirm(t('record.confirmDeleteTake'))) return;
     setDeleting(true);
     try {
       await apiClient.takes.remove(take.id);
@@ -122,7 +123,7 @@ export function TakeItemRow({
       setAudioVisible(false);
       onDeleted(take.id);
     } catch (err: any) {
-      window.alert((err && err.message) || '녹음 삭제에 실패했어요');
+      window.alert((err && err.message) || t('record.deleteTakeFailed'));
       setDeleting(false);
     }
   };
@@ -138,7 +139,7 @@ export function TakeItemRow({
             checked={abChecked}
             onChange={(e) => onToggleAb && onToggleAb(take.id, e.target.checked)}
           />
-          <span>비교 선택</span>
+          <span>{t('record.abSelect')}</span>
         </label>
       )}
       <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
@@ -148,7 +149,7 @@ export function TakeItemRow({
         disabled={loadingPlay}
         onClick={() => void handlePlay()}
       >
-        ▶ 듣기
+        {t('record.btnListen')}
       </button>
       <button
         type="button"
@@ -156,7 +157,7 @@ export function TakeItemRow({
         disabled={deleting}
         onClick={() => void handleDelete()}
       >
-        삭제
+        {t('record.btnDelete')}
       </button>
       <span className={`meta ${styles.meta}`}>{rowMsg}</span>
       <SafeAudio
@@ -252,7 +253,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
           const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
           if (!isSlotValid()) return;
           const valid = safeAudioUrl(blobUrl);
-          if (!valid) throw new Error('유효하지 않은 오디오 주소예요');
+          if (!valid) throw new Error(t('record.invalidAudioUrl'));
           if (!isSlotValid()) return;
           audioEl['src'] = valid;
           audioEl.dataset.takeId = take.id;
@@ -262,7 +263,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
           if (!isSlotValid()) return;
           const valid = r && r.url ? safeAudioUrl(r.url) : '';
           if (!valid) {
-            window.alert('녹음 재생 주소를 받지 못했어요');
+            window.alert(t('record.cannotGetPlayUrl'));
             return;
           }
           if (!isSlotValid()) return;
@@ -272,7 +273,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
         }
       } catch (err: any) {
         if (isSlotValid()) {
-          window.alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+          window.alert((err && err.message) || t('record.cannotGetPlayUrl'));
         }
       } finally {
         if (myToken === abReqSeqRef.current) {
@@ -289,17 +290,18 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
   return (
     <div className={`panel ${styles.panel}`} id={prefId(idPrefix, 'abPanel')} hidden={!abPair}>
       <div className={`head-row ${styles.headRow}`}>
-        <h4 className={`h3 ${styles.h3}`}>녹음 A/B 비교 듣기</h4>
-        <span className={`meta ${styles.meta}`}>과거 녹음과 최근 녹음 교차 비교</span>
+        <h4 className={`h3 ${styles.h3}`}>{t('record.abHeaderTitle')}</h4>
+        <span className={`meta ${styles.meta}`}>{t('record.abHeaderDesc')}</span>
       </div>
       <div className={`ab-slots ${styles.abSlots}`}>
         <div className={`ab-slot ${styles.abSlot}`} id={prefId(idPrefix, 'abSlotA')}>
           <span className={`meta ${styles.meta}`} id={prefId(idPrefix, 'abLabelA')}>
             {abPair
-              ? `A (과거 녹음) · ${abPair[0].recordedAt.slice(0, 16).replace('T', ' ')} · ${
-                  abPair[0].durationSec || 0
-                }초`
-              : 'A (과거 녹음)'}
+              ? t('record.abLabelA', {
+                  date: abPair[0].recordedAt.slice(0, 16).replace('T', ' '),
+                  sec: abPair[0].durationSec || 0,
+                })
+              : t('record.abLabelAFallback')}
           </span>
           <button
             type="button"
@@ -308,7 +310,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
             disabled={abBusySlot === 'A'}
             onClick={() => abPair && void handlePlayAbSlot('A', abPair[0])}
           >
-            ▶ 재생
+            {t('record.btnPlay')}
           </button>
           <audio
             ref={audioARef}
@@ -322,10 +324,11 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
         <div className={`ab-slot ${styles.abSlot}`} id={prefId(idPrefix, 'abSlotB')}>
           <span className={`meta ${styles.meta}`} id={prefId(idPrefix, 'abLabelB')}>
             {abPair
-              ? `B (최근 녹음) · ${abPair[1].recordedAt.slice(0, 16).replace('T', ' ')} · ${
-                  abPair[1].durationSec || 0
-                }초`
-              : 'B (최근 녹음)'}
+              ? t('record.abLabelB', {
+                  date: abPair[1].recordedAt.slice(0, 16).replace('T', ' '),
+                  sec: abPair[1].durationSec || 0,
+                })
+              : t('record.abLabelBFallback')}
           </span>
           <button
             type="button"
@@ -334,7 +337,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
             disabled={abBusySlot === 'B'}
             onClick={() => abPair && void handlePlayAbSlot('B', abPair[1])}
           >
-            ▶ 재생
+            {t('record.btnPlay')}
           </button>
           <audio
             ref={audioBRef}
@@ -379,21 +382,21 @@ export function SessionTimeline({
   return (
     <div id={tlId}>
       {loading ? (
-        <p className={`empty ${styles.empty}`}>불러오는 중…</p>
+        <p className={`empty ${styles.empty}`}>{t('record.loading')}</p>
       ) : sessions.length === 0 ? (
-        <p className={`empty ${styles.empty}`}>아직 연습 세션 기록이 없어요.</p>
+        <p className={`empty ${styles.empty}`}>{t('record.emptySessions')}</p>
       ) : (
         <>
           {visibleSessions.map((s) => {
             let leftText = s.date;
-            if (s.segment) leftText += ` · 구간 ${s.segment}`;
+            if (s.segment) leftText += t('record.sessionSegment', { seg: s.segment });
             if (s.rate != null) leftText += ` · ${s.rate}×`;
             return (
               <div key={s.id} className={`tl-row ${styles.tlRow}`}>
                 <div className={`tl-meta ${styles.tlMeta}`}>
                   <span>{leftText}</span>
                   <span className={`meta ${styles.meta}`}>
-                    {s.minutes}분 ({s.loops || 0}회)
+                    {t('record.sessionDurationLoops', { m: s.minutes, loops: s.loops || 0 })}
                   </span>
                 </div>
                 <progress className={`tl-bar ${styles.tlBar}`} max={maxTimelineSec} value={s.seconds || 0} />
@@ -408,7 +411,7 @@ export function SessionTimeline({
                 className={`ghost mini ${styles.ghostMini}`}
                 onClick={() => setExpanded(true)}
               >
-                더 보기
+                {t('record.btnMore')}
               </button>
             </div>
           )}

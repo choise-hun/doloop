@@ -1,4 +1,5 @@
 // frontend/src/lib/drive.ts
+import { t } from './i18n.mts';
 import { auth, MeProfile } from './auth';
 import { apiClient, TakeDto, TakeUploadMeta } from './apiClient';
 
@@ -68,12 +69,12 @@ function createDriveModule() {
 
     const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
     if (typeof win.google === 'undefined' || !win.google.accounts || !win.google.accounts.oauth2) {
-      throw new Error('Google Identity Services가 로드되지 않았습니다.');
+      throw new Error(t('drive.gisNotLoaded'));
     }
 
     const clientId = (options.clientId && String(options.clientId).trim()) || getClientId();
     if (!clientId) {
-      throw new Error('public/config.js에 googleClientId가 설정되지 않았습니다.');
+      throw new Error(t('drive.clientIdNotConfigured'));
     }
 
     return new Promise<string>((resolve, reject) => {
@@ -83,7 +84,7 @@ function createDriveModule() {
           scope: 'https://www.googleapis.com/auth/drive.file',
           callback: (resp: any) => {
             if (resp.error) {
-              reject(new Error(resp.error_description || resp.error || 'Google 인증에 실패했습니다.'));
+              reject(new Error(resp.error_description || resp.error || t('drive.authFailed')));
               return;
             }
             inMemoryToken = resp.access_token;
@@ -92,7 +93,7 @@ function createDriveModule() {
             resolve(inMemoryToken as string);
           },
           error_callback: (err: any) => {
-            reject(new Error((err && (err.message || err.type)) || 'Google 인증 오류가 발생했습니다.'));
+            reject(new Error((err && (err.message || err.type)) || t('drive.authErrorOccurred')));
           },
         });
         tokenClient.requestAccessToken({ prompt: options.prompt || '' });
@@ -140,7 +141,7 @@ function createDriveModule() {
     }
 
     const query = encodeURIComponent(
-      "name = 'ULeveLP 녹음' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+      "name = 'ULeveLP 녹음' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" // i18n-keep: 구글 드라이브 고정 폴더명(D5-4)
     );
     const searchRes = await fetch(
       'https://www.googleapis.com/drive/v3/files?q=' + query + '&fields=files(id,name)&spaces=drive',
@@ -149,7 +150,7 @@ function createDriveModule() {
       }
     );
     if (!searchRes.ok) {
-      throw new Error('Drive 폴더를 검색하지 못했습니다 (' + searchRes.status + ')');
+      throw new Error(t('drive.searchFolderFailed', { status: searchRes.status }));
     }
     const searchData = await searchRes.json();
     if (searchData && Array.isArray(searchData.files) && searchData.files.length > 0) {
@@ -163,19 +164,19 @@ function createDriveModule() {
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: JSON.stringify({
-        name: 'ULeveLP 녹음',
+        name: 'ULeveLP 녹음', // i18n-keep: 구글 드라이브 고정 폴더명(D5-4)
         mimeType: 'application/vnd.google-apps.folder',
       }),
     });
     if (!createRes.ok) {
-      throw new Error('Drive 폴더를 생성하지 못했습니다 (' + createRes.status + ')');
+      throw new Error(t('drive.createFolderFailed', { status: createRes.status }));
     }
     const created = await createRes.json();
     return created.id;
   }
 
   async function uploadBlob(blob: Blob, name?: string, mime?: string, folderId?: string | null): Promise<string> {
-    if (!blob) throw new Error('업로드할 파일이 없습니다.');
+    if (!blob) throw new Error(t('drive.noFileToUpload'));
     const token = await requestToken();
     const contentType = mime || 'audio/mp4';
     const fileName = name || 'take-' + Date.now() + '.m4a';
@@ -219,7 +220,7 @@ function createDriveModule() {
         } catch {
           /* ignore */
         }
-        throw new Error((errData.error && errData.error.message) || 'Drive 업로드 실패 (' + res.status + ')');
+        throw new Error((errData.error && errData.error.message) || t('drive.uploadFailed', { status: res.status }));
       }
       const data = await res.json();
       return data.id;
@@ -241,12 +242,12 @@ function createDriveModule() {
     });
 
     if (!initRes.ok) {
-      throw new Error('Drive 세션 시작 실패 (' + initRes.status + ')');
+      throw new Error(t('drive.sessionStartFailed', { status: initRes.status }));
     }
 
     const locationUrl = initRes.headers.get('Location');
     if (!locationUrl || !locationUrl.startsWith('https://www.googleapis.com/')) {
-      throw new Error('유효하지 않은 Drive 업로드 주소입니다.');
+      throw new Error(t('drive.invalidUploadUrl'));
     }
 
     const uploadRes = await fetch(locationUrl, {
@@ -259,7 +260,7 @@ function createDriveModule() {
     });
 
     if (!uploadRes.ok) {
-      throw new Error('Drive 파일 전송 실패 (' + uploadRes.status + ')');
+      throw new Error(t('drive.fileTransferFailed', { status: uploadRes.status }));
     }
     const uploadedData = await uploadRes.json();
     return uploadedData.id;
@@ -294,7 +295,7 @@ function createDriveModule() {
   }
 
   async function fetchMediaObjectUrl(fileId: string): Promise<string> {
-    if (!fileId) throw new Error('파일 ID가 필요합니다.');
+    if (!fileId) throw new Error(t('drive.fileIdReq'));
     const token = await requestToken();
     const res = await fetch(
       'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media',
@@ -305,7 +306,7 @@ function createDriveModule() {
       }
     );
     if (!res.ok) {
-      throw new Error('Drive 녹음 파일을 불러오지 못했습니다 (' + res.status + ')');
+      throw new Error(t('drive.loadFileFailed', { status: res.status }));
     }
     const blob = await res.blob();
     return URL.createObjectURL(blob);
@@ -316,7 +317,7 @@ function createDriveModule() {
     if (D && D.notionSync && typeof D.notionSync.status === 'function') {
       const sync = await D.notionSync.status();
       if (sync && sync.enabled) {
-        throw new Error('노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다.');
+        throw new Error(t('drive.notionConflict'));
       }
     }
   }

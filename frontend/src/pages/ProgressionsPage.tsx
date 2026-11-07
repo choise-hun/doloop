@@ -378,7 +378,7 @@ export function ProgressionsPage(): React.ReactElement {
                 <select id="progSort" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
                   {(Object.keys(SORT_LABEL) as SortBy[]).map((k) => (
                     <option key={k} value={k}>
-                      {t(SORT_LABEL[k])}
+                      {SORT_LABEL[k]}
                     </option>
                   ))}
                 </select>

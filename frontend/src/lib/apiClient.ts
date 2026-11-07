@@ -1,4 +1,5 @@
 // frontend/src/lib/apiClient.ts
+import { t } from './i18n.mts';
 import { auth, ApiClientError, KeySummaryDto, MeProfile, ProfilePatchInput } from './auth';
 
 export interface SongDto {
@@ -217,7 +218,7 @@ export interface NoteDetailDto extends NoteSummaryDto {
 export interface ProgressionChordDto {
   symbol: string;
   roman: string;
-  source?: '화면' | '말함' | '추정' | string;
+  source?: '화면' | '말함' | '추정' | string; // i18n-keep: 서버 타입 유니언(D5-1)
   timestamp?: string;
 }
 
@@ -226,7 +227,7 @@ export interface ProgressionDto {
   kind: 'reference' | 'analysis';
   origin: 'ai' | 'manual';
   route: 'video' | 'note' | 'manual';
-  evidence: '화면' | '말함' | '추정' | null;
+  evidence: '화면' | '말함' | '추정' | null; // i18n-keep: 서버 타입 유니언(D5-1)
   title: string;
   part: string;
   artist: string;
@@ -234,7 +235,7 @@ export interface ProgressionDto {
   channel: string;
   releaseDate: string | null;
   key: string | null;
-  instrument: '건반' | '기타' | null;
+  instrument: '건반' | '기타' | null; // i18n-keep: 서버 타입 유니언(D5-1)
   chords: ProgressionChordDto[];
   moods: string[];
   genres: string[];
@@ -521,7 +522,7 @@ function isLoggedIn(): boolean {
 
 function requireLogin(): void {
   if (!isLoggedIn()) {
-    const err: ApiClientError = new Error('로그인이 필요해요');
+    const err: ApiClientError = new Error(t('api.loginReq'));
     err.code = 'NOT_LOGGED_IN';
     err.status = 401;
     throw err;
@@ -686,7 +687,7 @@ function saveProgress(
     }).then(async (res) => {
       const data = res.status === 204 ? null : await res.json().catch(() => null);
       if (!res.ok) {
-        const msg = (data && (data.message || data.error)) || '요청 처리에 실패했어요 (' + res.status + ')';
+        const msg = (data && (data.message || data.error)) || t('api.reqFailedStatus', { status: res.status });
         const err: ApiClientError = new Error(msg);
         err.status = res.status;
         err.code = data && data.code ? data.code : '';
@@ -837,12 +838,12 @@ async function runLocalMigration(): Promise<LocalMigrationResult> {
     const items: typeof own = [];
     const confirmFn = typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm : () => true;
     if (own.length > 0) {
-      const ok = confirmFn('이 기기에서 연습하던 기록 ' + own.length + '곡을 계정으로 옮길까요?');
+      const ok = confirmFn(t('api.confirmMigrateOwn', { count: own.length }));
       if (ok) items.push(...own);
     }
     if (filteredSister.length > 0) {
       const ok = confirmFn(
-        '같은 기기의 guitar-practice 기록 ' + filteredSister.length + '곡도 가져올까요? (원래 기록은 그대로 남아요)'
+        t('api.confirmMigrateSister', { count: filteredSister.length })
       );
       if (ok) items.push(...filteredSister);
     }
@@ -874,7 +875,7 @@ async function runLocalMigration(): Promise<LocalMigrationResult> {
       status: 'failed',
       created: 0,
       skipped: 0,
-      message: (e && e.message) || '기기 기록을 옮기지 못했어요',
+      message: (e && e.message) || t('api.migrateFailed'),
     };
   } finally {
     migrating = false;
@@ -899,7 +900,7 @@ async function exportZip(includeAudio?: boolean): Promise<{ blob: Blob; filename
     } catch {
       /* ignore */
     }
-    const msg = (errData && (errData.message || errData.error)) || '내보내기에 실패했어요 (' + res.status + ')';
+    const msg = (errData && (errData.message || errData.error)) || t('api.exportFailedStatus', { status: res.status });
     const err: ApiClientError = new Error(msg);
     err.status = res.status;
     err.code = (errData && errData.code) || 'EXPORT_ERROR';
@@ -1282,7 +1283,7 @@ async function downloadTakeBlob(takeId: string): Promise<Blob> {
     } catch {
       /* ignore */
     }
-    const msg = (errData && (errData.message || errData.error)) || '다운로드 실패 (' + res.status + ')';
+    const msg = (errData && (errData.message || errData.error)) || t('api.downloadFailedStatus', { status: res.status });
     const err: ApiClientError = new Error(msg);
     err.status = res.status;
     err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';

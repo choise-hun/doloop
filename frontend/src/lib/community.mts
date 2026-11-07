@@ -1,4 +1,5 @@
 // frontend/src/lib/community.mts
+import { t } from './i18n.mts';
 // M2-23 커뮤니티·큐레이션·재생목록 가져오기 순수 함수 (DOM·React·apiClient 의존 없음 — 명세 §2·§3-2)
 
 export type Lang = 'ko' | 'en' | 'ja';
@@ -47,7 +48,7 @@ export function folderSubtitle(artists: unknown, itemCount: unknown): string {
     .map((a) => a.trim());
   if (list.length === 0) return '';
   const count = typeof itemCount === 'number' && Number.isFinite(itemCount) ? itemCount : 0;
-  return list.join(', ') + (count > list.length ? ' 등' : '');
+  return list.join(', ') + (count > list.length ? t('community.etcSuffix') : '');
 }
 
 /** 문자열만, 최대 4. 4 미만이면 앞 1개만(모자이크는 4장일 때만) */
@@ -118,8 +119,8 @@ export function durationText(sec: unknown): string {
   const totalMin = Math.floor(n / 60);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h <= 0) return `${m}분`;
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+  if (h <= 0) return t('community.minutesUnit', { m });
+  return m > 0 ? t('community.hoursMinutesUnit', { h, m }) : t('community.hoursUnit', { h });
 }
 
 /** "2026-11-14", 못 읽으면 "" (KST 기준) */
