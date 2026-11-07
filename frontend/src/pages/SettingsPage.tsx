@@ -31,7 +31,7 @@ function notionDbIdFromInput(raw: string): string {
 
 export function SettingsPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '설정 · ULeveLP';
+    document.title = '설정 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
@@ -59,7 +59,7 @@ export function SettingsPage(): React.ReactElement {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 외부 연동 키 상태
-  const [notionStatusText, setNotionStatusText] = useState('미등록');
+  const [notionStatusText, setNotionStatusText] = useState(() => t('settings.ntnUnregistered'));
   const [notionHasKey, setNotionHasKey] = useState(false);
   const [ntnToken, setNtnToken] = useState('');
   const [ntnSongsDb, setNtnSongsDb] = useState('');
@@ -156,7 +156,7 @@ export function SettingsPage(): React.ReactElement {
     setPreviewItems([]);
     setNxMsg({ text: '', kind: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setNotionStatusText('미등록');
+    setNotionStatusText(t('settings.ntnUnregistered'));
     setNotionHasKey(false);
     setNtnToken('');
     setNtnSongsDb('');
@@ -176,14 +176,14 @@ export function SettingsPage(): React.ReactElement {
 
     if (ntn) {
       setNotionHasKey(true);
-      setNotionStatusText(`설정됨 (끝 4자리 ${ntn.hint || ''} · ${(ntn.updatedAt || '').slice(0, 10)})`);
+      setNotionStatusText(t('settings.ntnConfigured', { hint: ntn.hint || '', date: (ntn.updatedAt || '').slice(0, 10) }));
       const cfg = ntn.config || {};
       if (cfg.songsDb) setNtnSongsDb(String(cfg.songsDb));
       if (cfg.sessionsDb) setNtnSessionsDb(String(cfg.sessionsDb));
       setNtnNotesDb(cfg.notesDb ? String(cfg.notesDb) : '');
     } else {
       setNotionHasKey(false);
-      setNotionStatusText('미등록');
+      setNotionStatusText(t('settings.ntnUnregistered'));
       setNtnToken('');
       setNtnSongsDb('');
       setNtnSessionsDb('');
@@ -201,8 +201,8 @@ export function SettingsPage(): React.ReactElement {
       setSyncStatusError('');
     } catch (e: any) {
       if (activeUid !== uid || mySeq !== syncReqSeqRef.current) return;
-      setSyncStatusError('연동 상태를 불러오지 못했어요.');
-      setSyncMsg({ text: (e && e.message) || '연동 상태를 불러오지 못했어요.', kind: 'err' });
+      setSyncStatusError(t('settings.syncLoadErr'));
+      setSyncMsg({ text: (e && e.message) || t('settings.syncLoadErr'), kind: 'err' });
     }
   };
 
@@ -219,7 +219,7 @@ export function SettingsPage(): React.ReactElement {
       })
       .catch((e: any) => {
         if (activeUid !== auth.getUser()?.id || myKeySeq !== keysReqSeqRef.current) return;
-        const msg = (e && e.message) || '연동 키 목록을 불러오지 못했어요.';
+        const msg = (e && e.message) || t('settings.keyLoadErr');
         setNtnKeyMsg({ text: msg, kind: 'err' });
       });
 
@@ -255,14 +255,14 @@ export function SettingsPage(): React.ReactElement {
   const nextGrantText = (() => {
     if (!creditSummary || !(creditSummary.monthlyGrant > 0)) return '';
     const day = kstDay(creditSummary.nextGrantAt);
-    return day ? `다음 지급 ${day} · ${creditSummary.monthlyGrant}크레딧` : '';
+    return day ? t('settings.creditNext', { day, grant: creditSummary.monthlyGrant }) : '';
   })();
   // M1-3e 유예: 무료로 바꿨어도 주기 끝까지 Pro — 끝나는 날과 그때 사라질 월 지급분
   const graceText = (() => {
     const day = kstDay(creditSummary?.monthlyExpiresAt);
     if (!day) return '';
-    const left = meCredits.monthly > 0 ? ` · 남은 월 지급 ${meCredits.monthly}크레딧은 그때 사라져요` : '';
-    return `${day}에 무료 플랜으로 바뀌어요${left}`;
+    const left = meCredits.monthly > 0 ? t('settings.creditGraceLoss', { left: meCredits.monthly }) : '';
+    return t('settings.creditGraceChange', { day, left });
   })();
 
   // 프로필 및 쿼터 계산
@@ -282,11 +282,11 @@ export function SettingsPage(): React.ReactElement {
   // 실시간 동기화 상태 문자열
   const formatSyncText = (): string => {
     if (syncStatusError) return syncStatusError;
-    if (!syncState.enabled) return '연동 꺼짐';
-    let txt = `실시간 연동 켜짐 · 대기 ${syncState.pending || 0}건 · 실패 ${syncState.failed || 0}건`;
+    if (!syncState.enabled) return t('settings.syncOff');
+    let txt = t('settings.syncOn', { pending: syncState.pending || 0, failed: syncState.failed || 0 });
     const parts: string[] = [];
-    if (syncState.lastPushAt) parts.push('마지막 보냄: ' + syncState.lastPushAt.slice(0, 19).replace('T', ' '));
-    if (syncState.lastPullAt) parts.push('마지막 가져옴: ' + syncState.lastPullAt.slice(0, 19).replace('T', ' '));
+    if (syncState.lastPushAt) parts.push(t('settings.syncLastPush') + syncState.lastPushAt.slice(0, 19).replace('T', ' '));
+    if (syncState.lastPullAt) parts.push(t('settings.syncLastPull') + syncState.lastPullAt.slice(0, 19).replace('T', ' '));
     if (parts.length > 0) txt += ` (${parts.join(', ')})`;
     return txt;
   };
@@ -296,14 +296,14 @@ export function SettingsPage(): React.ReactElement {
       <div className={styles.headerBlock} data-align-group="col: left">
         <h1 className={`page-title ${styles.pageTitle}`}>Setting</h1>
         <p className={`page-sub ${styles.pageSub}`}>
-          구글 계정으로 로그인하면 연습 기록과 녹음을 어디서나 이어갈 수 있어요.
+          {t('settings.pageSub')}
         </p>
       </div>
 
       {/* 1. 계정 및 Google Drive 저장소 */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="account" aria-labelledby="hAccount">
-        <h2 id="hAccount">계정</h2>
-        <p id="accDesc">Google 계정으로 로그인하면 노션 설정 없이도 연습 곡과 녹음을 바로 저장할 수 있어요.</p>
+        <h2 id="hAccount">{t('settings.secAccount')}</h2>
+        <p id="accDesc">{t('settings.accDesc')}</p>
 
         <div id="accGuest" className={styles.row} hidden={signedIn}>
           <button
@@ -316,11 +316,11 @@ export function SettingsPage(): React.ReactElement {
               try {
                 await auth.signIn(window.location.href);
               } catch (e: any) {
-                setAccMsg({ text: (e && e.message) || '로그인을 시작하지 못했어요.', kind: 'err' });
+                setAccMsg({ text: (e && e.message) || t('settings.loginFailed'), kind: 'err' });
               }
             }}
           >
-            Google로 로그인
+            {t('settings.loginGoogle')}
           </button>
           <SafeLink
             className="pillBtn"
@@ -330,41 +330,41 @@ export function SettingsPage(): React.ReactElement {
             rel="noopener"
             hidden={!embedded}
           >
-            새 창에서 로그인 ↗
+            {t('settings.loginBlank')}
           </SafeLink>
         </div>
 
         <div className={styles.stack} id="accUser" hidden={!signedIn}>
           <p>
-            로그인 계정: <b id="accEmail">{email}</b>{' '}
+            {t('settings.accEmailLabel')} <b id="accEmail">{email}</b>{' '}
             <span id="accName" className="hint">
               {nameSuffix}
             </span>
           </p>
           <div className={styles.field} id="accQuota">
             <span className={styles.lab}>
-              녹음 저장 공간 (<span id="quotaText">{quotaText}</span>)
+              {t('settings.quotaTitle')} (<span id="quotaText">{quotaText}</span>)
             </span>
             <progress className={`tl-bar ${styles.quotaBar}`} id="quotaBar" max={quota} value={used} />
           </div>
 
           <div className={styles.panel} id="driveStoragePanel">
-            <h3>Google Drive 녹음 저장소</h3>
+            <h3>{t('settings.driveTitle')}</h3>
             <p className="hint">
-              녹음 오디오를 개인 Google Drive의 <b>ULeveLP 녹음</b> 폴더에 직접 저장해요. 서비스 저장 공간(200MB)을 차지하지 않아요.
+              {t('settings.driveHintPre')}<b>{t('settings.driveHintBold')}</b>{t('settings.driveHintPost')}
             </p>
             <p className="hint" id="driveProviderText">
               {authState.me
                 ? isDrive
-                  ? 'Google Drive 저장소 사용 중 (폴더: ULeveLP 녹음)'
-                  : '기본 클라우드 저장소(200MB 쿼터) 사용 중'
+                  ? t('settings.driveUsing')
+                  : t('settings.driveDefault')
                 : ''}
             </p>
             <p className={`msg${driveMsg.kind ? ' ' + driveMsg.kind : ''}`} id="driveStatusMsg" role="status">
               {driveMsg.text}
             </p>
             <p className="msg err" id="driveConflictNotice" role="status" hidden={!syncState.enabled}>
-              노션 실시간 연동이 켜져 있는 동안에는 Google Drive 저장소를 사용할 수 없습니다.
+              {t('settings.driveConflictNotice')}
             </p>
             <div className={styles.row}>
               <button
@@ -378,11 +378,11 @@ export function SettingsPage(): React.ReactElement {
                   setBusyDrive(true);
                   try {
                     await drive.enableDriveStorage();
-                    setDriveMsg({ text: '✓ Google Drive 저장소로 전환되었어요.', kind: 'ok' });
+                    setDriveMsg({ text: t('settings.driveEnableSuccess'), kind: 'ok' });
                     await auth.fetchMe();
                   } catch (err: any) {
                     setDriveMsg({
-                      text: (err && err.message) || 'Google Drive 저장소 전환에 실패했어요.',
+                      text: (err && err.message) || t('settings.driveEnableFail'),
                       kind: 'err',
                     });
                   } finally {
@@ -390,7 +390,7 @@ export function SettingsPage(): React.ReactElement {
                   }
                 }}
               >
-                Google Drive 저장소 사용
+                {t('settings.driveEnableBtn')}
               </button>
               <button
                 className="ghostBtn"
@@ -403,16 +403,16 @@ export function SettingsPage(): React.ReactElement {
                   setBusyDrive(true);
                   try {
                     await drive.disableDriveStorage();
-                    setDriveMsg({ text: '✓ 기본 저장소로 전환되었어요.', kind: 'ok' });
+                    setDriveMsg({ text: t('settings.driveDisableSuccess'), kind: 'ok' });
                     await auth.fetchMe();
                   } catch (err: any) {
-                    setDriveMsg({ text: (err && err.message) || '기본 저장소 전환에 실패했어요.', kind: 'err' });
+                    setDriveMsg({ text: (err && err.message) || t('settings.driveDisableFail'), kind: 'err' });
                   } finally {
                     setBusyDrive(false);
                   }
                 }}
               >
-                기본 저장소로 전환
+                {t('settings.driveDisableBtn')}
               </button>
               <button
                 className="ghostBtn"
@@ -421,26 +421,26 @@ export function SettingsPage(): React.ReactElement {
                 hidden={!isDrive}
                 disabled={busyDrive || syncState.enabled}
                 onClick={async () => {
-                  if (!window.confirm('기본 저장소에 저장된 기존 녹음들을 Google Drive로 이전할까요?')) return;
+                  if (!window.confirm(t('settings.driveMigrateConfirm'))) return;
                   setBusyDrive(true);
-                  setDriveMsg({ text: '녹음 파일 이전 중...', kind: '' });
+                  setDriveMsg({ text: t('settings.driveMigrateStart'), kind: '' });
                   try {
                     const res = await drive.migrateAllToDrive((p) => {
-                      setDriveMsg({ text: `이전 진행 중... (${p.current} / ${p.total})`, kind: '' });
+                      setDriveMsg({ text: t('settings.driveMigrateProgress', { current: p.current, total: p.total }), kind: '' });
                     });
                     setDriveMsg({
-                      text: `✓ 이전 완료: ${res.migrated}개 성공, ${res.skipped}개 건너뜀`,
+                      text: t('settings.driveMigrateDone', { migrated: res.migrated, skipped: res.skipped }),
                       kind: 'ok',
                     });
                     await auth.fetchMe();
                   } catch (err: any) {
-                    setDriveMsg({ text: (err && err.message) || '녹음 파일 이전에 실패했어요.', kind: 'err' });
+                    setDriveMsg({ text: (err && err.message) || t('settings.driveMigrateFail'), kind: 'err' });
                   } finally {
                     setBusyDrive(false);
                   }
                 }}
               >
-                기존 녹음 전체를 Drive로 이전
+                {t('settings.driveMigrateBtn')}
               </button>
             </div>
           </div>
@@ -455,32 +455,32 @@ export function SettingsPage(): React.ReactElement {
                 setBusyAuth(true);
                 try {
                   await auth.signOut();
-                  setAccMsg({ text: '✓ 로그아웃했어요', kind: 'ok' });
+                  setAccMsg({ text: t('settings.logoutSuccess'), kind: 'ok' });
                 } catch (e: any) {
-                  setAccMsg({ text: (e && e.message) || '로그아웃 중 오류가 발생했어요.', kind: 'err' });
+                  setAccMsg({ text: (e && e.message) || t('settings.logoutFail'), kind: 'err' });
                 } finally {
                   setBusyAuth(false);
                 }
               }}
             >
-              로그아웃
+              {t('settings.logoutBtn')}
             </button>
           </div>
 
           <details>
-            <summary>계정 삭제 (모든 연습 기록·녹음·연동 키 영구 삭제)</summary>
+            <summary>{t('settings.delAccSummary')}</summary>
             <div className={`${styles.stackTight} ${styles.detailsBody}`}>
               <p className="hint">
-                계정을 삭제하면 서비스에 저장된 모든 곡, 연습 기록, 녹음 오디오 파일, 외부 API 키가 즉시 삭제되며 복구할 수 없어요.
+                {t('settings.delAccDesc')}
               </p>
               <label className={styles.field}>
                 <span className={styles.lab}>
-                  확인 문구 (<b>삭제합니다</b> 입력)
+                  {t('settings.deleteConfirmPre')}<b>{t('settings.deleteConfirmWord')}</b>{t('settings.deleteConfirmPost')}
                 </span>
                 <input
                   className="inpField"
                   id="delConfirm"
-                  placeholder="삭제합니다"
+                  placeholder={t('settings.deleteConfirmWord')}
                   autoComplete="off"
                   value={delConfirm}
                   onChange={(e) => setDelConfirm(e.target.value)}
@@ -493,24 +493,24 @@ export function SettingsPage(): React.ReactElement {
                   id="btnDeleteAcc"
                   disabled={busyAuth}
                   onClick={async () => {
-                    if (delConfirm.trim() !== '삭제합니다') {
-                      setAccMsg({ text: '확인 문구로 "삭제합니다"를 정확히 입력해 주세요.', kind: 'err' });
+                    if (delConfirm.trim() !== t('settings.deleteConfirmWord')) {
+                      setAccMsg({ text: t('settings.deleteConfirmErr', { word: t('settings.deleteConfirmWord') }), kind: 'err' });
                       return;
                     }
                     setBusyAuth(true);
-                    setAccMsg({ text: '계정 삭제 처리 중…', kind: '' });
+                    setAccMsg({ text: t('settings.delAccProgress'), kind: '' });
                     try {
                       await auth.deleteAccount(delConfirm.trim());
                       setDelConfirm('');
-                      setAccMsg({ text: '✓ 계정이 삭제되었어요.', kind: 'ok' });
+                      setAccMsg({ text: t('settings.delAccSuccess'), kind: 'ok' });
                     } catch (e: any) {
-                      setAccMsg({ text: (e && e.message) || '계정 삭제에 실패했어요.', kind: 'err' });
+                      setAccMsg({ text: (e && e.message) || t('settings.delAccFail'), kind: 'err' });
                     } finally {
                       setBusyAuth(false);
                     }
                   }}
                 >
-                  계정 영구 삭제
+                  {t('settings.delAccBtn')}
                 </button>
               </div>
             </div>
@@ -521,18 +521,18 @@ export function SettingsPage(): React.ReactElement {
           {accMsg.text}
         </p>
         <p className="hint">
-          <SafeLink href="privacy.html">개인정보처리방침</SafeLink>
+          <SafeLink href="privacy.html">{t('settings.privacyLink')}</SafeLink>
         </p>
       </section>
 
       {/* 2. 데이터 백업 */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="nx" aria-labelledby="hNx">
-        <h2 id="hNx">데이터 백업</h2>
-        <p>서비스에 저장된 데이터를 ZIP으로 백업할 수 있어요.</p>
+        <h2 id="hNx">{t('settings.secNx')}</h2>
+        <p>{t('settings.nxDesc')}</p>
         <div className={styles.panel}>
-          <h3>데이터 내보내기</h3>
+          <h3>{t('settings.nxExportTitle')}</h3>
           <p className="hint">
-            서비스에 저장된 모든 곡, 연습 기록, 학습 영상 노트와 녹음 오디오를 ZIP으로 다운로드해요.
+            {t('settings.nxExportDesc')}
           </p>
           <label className={styles.checkRow}>
             <input
@@ -541,7 +541,7 @@ export function SettingsPage(): React.ReactElement {
               checked={exportAudio}
               onChange={(e) => setExportAudio(e.target.checked)}
             />
-            <span>녹음 오디오 파일(.m4a 등) 함께 포함</span>
+            <span>{t('settings.nxExportAudio')}</span>
           </label>
           <div className={styles.row}>
             <button
@@ -551,12 +551,12 @@ export function SettingsPage(): React.ReactElement {
               disabled={busyNx}
               onClick={async () => {
                 if (!activeUid) {
-                  setNxMsg({ text: '로그인 후 내보낼 수 있어요.', kind: 'err' });
+                  setNxMsg({ text: t('settings.nxLoginReq'), kind: 'err' });
                   return;
                 }
                 const reqUid = activeUid;
                 setBusyNx(true);
-                setNxMsg({ text: 'ZIP 내보내는 중…', kind: '' });
+                setNxMsg({ text: t('settings.nxExportProgress'), kind: '' });
                 try {
                   const res = await apiClient.nx.exportZip(exportAudio);
                   if (auth.getUser()?.id !== reqUid) return;
@@ -568,16 +568,16 @@ export function SettingsPage(): React.ReactElement {
                   a.click();
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
-                  setNxMsg({ text: '✓ 내보내기를 완료했어요.', kind: 'ok' });
+                  setNxMsg({ text: t('settings.nxExportDone'), kind: 'ok' });
                 } catch (e: any) {
                   if (auth.getUser()?.id !== reqUid) return;
-                  setNxMsg({ text: (e && e.message) || '내보내기 중 오류가 발생했어요.', kind: 'err' });
+                  setNxMsg({ text: (e && e.message) || t('settings.nxExportFail'), kind: 'err' });
                 } finally {
                   setBusyNx(false);
                 }
               }}
             >
-              백업 ZIP 다운로드
+              {t('settings.nxExportBtn')}
             </button>
           </div>
         </div>
@@ -589,11 +589,11 @@ export function SettingsPage(): React.ReactElement {
 
       {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="credits" aria-labelledby="hCredits">
-        <h2 id="hCredits">AI 분석 크레딧</h2>
-        <p>학습 노트·코드 진행 영상 분석에 크레딧을 써요. 분석이 실패하면 예약한 크레딧은 모두 돌아와요.</p>
+        <h2 id="hCredits">{t('settings.secCredits')}</h2>
+        <p>{t('settings.creditsDesc')}</p>
         <div className={styles.panel}>
           <div className={styles.cardHead}>
-            <h3 data-align-group="creditHead: center-y">남은 크레딧</h3>
+            <h3 data-align-group="creditHead: center-y">{t('settings.creditsRemaining')}</h3>
             {signedIn && meTier && (
               <span className={`${styles.badge}${aiAllowed ? ' ' + styles.badgeOk : ''}`} id="creditTier" data-align-group="creditHead: center-y">
                 {tierLabel(meTier)}
@@ -602,11 +602,11 @@ export function SettingsPage(): React.ReactElement {
           </div>
           {!signedIn ? (
             <p className="hint" id="creditMsg">
-              로그인하면 남은 크레딧을 볼 수 있어요.
+              {t('settings.creditsLoginReq')}
             </p>
           ) : !aiAllowed ? (
             <p className="hint" id="creditMsg">
-              AI 영상 분석(학습 노트·코드 진행)은 Pro 플랜부터 쓸 수 있어요.
+              {t('settings.creditsProOnly')}
             </p>
           ) : (
             <>
@@ -614,10 +614,10 @@ export function SettingsPage(): React.ReactElement {
                 <b id="creditTotal" className={styles.creditTotal}>
                   {meCredits.monthly + meCredits.purchased}
                 </b>{' '}
-                크레딧
+                {t('settings.creditsUnit')}
               </p>
               <p className="hint" id="creditBuckets">
-                월 지급 {meCredits.monthly} · 구매 {meCredits.purchased}
+                {t('settings.creditsBuckets', { monthly: meCredits.monthly, purchased: meCredits.purchased })}
               </p>
               {nextGrantText && (
                 <p className="hint" id="creditNext">
@@ -707,15 +707,15 @@ export function SettingsPage(): React.ReactElement {
 
       {/* 4. 화면 모드 */}
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" aria-labelledby="hScreen">
-        <h2 id="hScreen">화면</h2>
-        <div className={`seg-pill ${styles.segPill}`} role="group" aria-label="화면 모드">
+        <h2 id="hScreen">{t('settings.secScreen')}</h2>
+        <div className={`seg-pill ${styles.segPill}`} role="group" aria-label={t('settings.screenAria')}>
           {(
             [
-              ['', '시스템'],
-              ['light', '라이트'],
-              ['dark', '다크'],
+              ['', 'settings.screenThemeSys'],
+              ['light', 'settings.screenThemeLight'],
+              ['dark', 'settings.screenThemeDark'],
             ] as const
-          ).map(([val, label]) => (
+          ).map(([val, labelKey]) => (
             <button
               key={val || 'sys'}
               type="button"
@@ -727,7 +727,7 @@ export function SettingsPage(): React.ReactElement {
                 setThemeVal(val);
               }}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
@@ -741,83 +741,83 @@ export function SettingsPage(): React.ReactElement {
           open={advOpen}
           onToggle={(e) => setAdvOpen((e.currentTarget as HTMLDetailsElement).open)}
         >
-          <summary id="hAdvanced">고급 설정 › 웹/노션 연동 (선택)</summary>
+          <summary id="hAdvanced">{t('settings.advSummary')}</summary>
           <div className={styles.advBody}>
             <p className="hint">
-              노션 연동은 더 이상 새 기능이 붙지 않아요(곡·연습 기록·녹음·노트만, 코드 진행은 보내지 않아요). 이미 쓰고 있다면 여기서 관리하세요.
+              {t('settings.advDesc')}
             </p>
             <div className={styles.panel}>
-              <h3>노션 템플릿</h3>
+              <h3>{t('settings.templateTitle')}</h3>
               <div className={styles.row}>
                 <SafeLink className="ghostBtn" id="btnNotionTemplate" href={templateHref} external>
-                  공식 노션 템플릿 복제하기 ↗
+                  {t('settings.templateCloneBtn')}
                 </SafeLink>
               </div>
             </div>
             {/* 노션 연동 카드 */}
             <div className={styles.panel} id="notion">
               <div className={styles.cardHead}>
-                <h3>노션 연동</h3>
+                <h3>{t('settings.ntnCardTitle')}</h3>
                 <span className={`${styles.badge}${notionHasKey ? ' ' + styles.badgeOk : ''}`} id="notionKeyStatus">
                   {notionStatusText}
                 </span>
               </div>
               <ol className={`hint ${styles.guide}`} id="ntnGuide">
                 <li>
-                  <SafeLink href={templateHref} external>공식 노션 템플릿</SafeLink>을 열고 오른쪽 위 <b>복제</b>를 눌러 내 노션에 가져와요.
+                  <SafeLink href={templateHref} external>{t('settings.ntnGuideCloneLink')}</SafeLink>{t('settings.ntnGuideClonePost')}
                 </li>
                 <li>
-                  <SafeLink href="https://www.notion.so/my-integrations" external>notion.so/my-integrations</SafeLink>에서 새 통합을 만들고 토큰(ntn_…)을 복사해 아래에 붙여넣어요.
+                  <SafeLink href="https://www.notion.so/my-integrations" external>notion.so/my-integrations</SafeLink>{t('settings.ntnGuideTokenPost')}
                 </li>
-                <li>복제한 페이지 오른쪽 위 <b>···</b> → <b>연결</b> → 방금 만든 통합을 추가해요.</li>
+                <li>{t('settings.ntnGuideConnectPre')}<b>{t('settings.ntnGuideConnectDots')}</b>{t('settings.ntnGuideConnectArrow')}<b>{t('settings.ntnGuideConnectWord')}</b>{t('settings.ntnGuideConnectPost')}</li>
                 <li>
-                  페이지 안 DB(<b>연습 곡</b>·<b>연습 기록</b>·<b>학습 영상 노트</b>) 제목을 눌러 전체 페이지로 연 뒤, 주소창 링크를 복사해 아래 칸에 각각 붙여넣어요. 링크 그대로 넣어도 돼요.
+                  {t('settings.ntnGuideDbPre')}<b>{t('settings.ntnGuideDbSongs')}</b>{t('settings.ntnGuideDbDotOne')}<b>{t('settings.ntnGuideDbSessions')}</b>{t('settings.ntnGuideDbDotTwo')}<b>{t('settings.ntnGuideDbNotes')}</b>{t('settings.ntnGuideDbPost')}
                 </li>
-                <li><b>노션 키 저장</b> → <b>연결 확인</b>을 눌러요.</li>
+                <li><b>{t('settings.ntnGuideVerifySave')}</b>{t('settings.ntnGuideVerifyArrow')}<b>{t('settings.ntnGuideVerifyCheck')}</b>{t('settings.ntnGuideVerifyPost')}</li>
               </ol>
               <label className={styles.field}>
-                <span className={styles.lab}>노션 통합 토큰 (ntn_...)</span>
+                <span className={styles.lab}>{t('settings.ntnTokenLab')}</span>
                 <input
                   className="inpField"
                   id="ntnToken"
                   type="password"
-                  placeholder="ntn_… (비워두면 기존 키 유지)"
+                  placeholder={t('settings.ntnTokenPh')}
                   autoComplete="off"
                   value={ntnToken}
                   onChange={(e) => setNtnToken(e.target.value)}
                 />
               </label>
               <label className={styles.field}>
-                <span className={styles.lab}>연습 곡 데이터베이스 ID</span>
+                <span className={styles.lab}>{t('settings.ntnSongsDbLab')}</span>
                 <input
                   className="inpField"
                   id="ntnSongsDb"
                   type="text"
-                  placeholder="DB 링크 또는 32자리 ID"
+                  placeholder={t('settings.ntnSongsDbPh')}
                   autoComplete="off"
                   value={ntnSongsDb}
                   onChange={(e) => setNtnSongsDb(e.target.value)}
                 />
               </label>
               <label className={styles.field}>
-                <span className={styles.lab}>연습 기록 데이터베이스 ID</span>
+                <span className={styles.lab}>{t('settings.ntnSessionsDbLab')}</span>
                 <input
                   className="inpField"
                   id="ntnSessionsDb"
                   type="text"
-                  placeholder="DB 링크 또는 32자리 ID"
+                  placeholder={t('settings.ntnSessionsDbPh')}
                   autoComplete="off"
                   value={ntnSessionsDb}
                   onChange={(e) => setNtnSessionsDb(e.target.value)}
                 />
               </label>
               <label className={styles.field}>
-                <span className={styles.lab}>학습 영상 노트 데이터베이스 ID (선택)</span>
+                <span className={styles.lab}>{t('settings.ntnNotesDbLab')}</span>
                 <input
                   className="inpField"
                   id="ntnNotesDb"
                   type="text"
-                  placeholder="DB 링크 또는 32자리 ID (선택)"
+                  placeholder={t('settings.ntnNotesDbPh')}
                   autoComplete="off"
                   value={ntnNotesDb}
                   onChange={(e) => setNtnNotesDb(e.target.value)}
@@ -831,12 +831,12 @@ export function SettingsPage(): React.ReactElement {
                   disabled={busyNtnKey}
                   onClick={async () => {
                     if (!activeUid) {
-                      setNtnKeyMsg({ text: '로그인 후 키를 저장할 수 있어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: t('settings.ntnSaveLoginReq'), kind: 'err' });
                       return;
                     }
                     const reqUid = activeUid;
                     setBusyNtnKey(true);
-                    setNtnKeyMsg({ text: '저장 중…', kind: '' });
+                    setNtnKeyMsg({ text: t('settings.ntnSaving'), kind: '' });
                     keysReqSeqRef.current++;
                     try {
                       const dto = await apiClient.integrations.saveNotion({
@@ -849,24 +849,24 @@ export function SettingsPage(): React.ReactElement {
                       setNtnToken('');
                       if (dto) {
                         setNotionHasKey(true);
-                        setNotionStatusText(`설정됨 (끝 4자리 ${dto.hint || ''} · ${(dto.updatedAt || '').slice(0, 10)})`);
+                        setNotionStatusText(t('settings.ntnConfigured', { hint: dto.hint || '', date: (dto.updatedAt || '').slice(0, 10) }));
                         if (dto.config) {
                           if (dto.config.songsDb) setNtnSongsDb(String(dto.config.songsDb));
                           if (dto.config.sessionsDb) setNtnSessionsDb(String(dto.config.sessionsDb));
                           setNtnNotesDb(dto.config.notesDb ? String(dto.config.notesDb) : '');
                         }
                       }
-                      setNtnKeyMsg({ text: '✓ 노션 키를 저장했어요.', kind: 'ok' });
+                      setNtnKeyMsg({ text: t('settings.ntnSaveSuccess'), kind: 'ok' });
                       void loadSyncStatusForUid(reqUid);
                     } catch (e: any) {
                       if (auth.getUser()?.id !== reqUid) return;
-                      setNtnKeyMsg({ text: (e && e.message) || '노션 키 저장에 실패했어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: (e && e.message) || t('settings.ntnSaveFail'), kind: 'err' });
                     } finally {
                       setBusyNtnKey(false);
                     }
                   }}
                 >
-                  노션 키 저장
+                  {t('settings.ntnSaveBtn')}
                 </button>
                 <button
                   className="ghostBtn"
@@ -875,32 +875,35 @@ export function SettingsPage(): React.ReactElement {
                   disabled={busyNtnKey}
                   onClick={async () => {
                     if (!activeUid) {
-                      setNtnKeyMsg({ text: '로그인 후 연결을 확인할 수 있어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: t('settings.ntnCheckLoginReq'), kind: 'err' });
                       return;
                     }
                     const reqUid = activeUid;
                     setBusyNtnKey(true);
-                    setNtnKeyMsg({ text: '연결 확인 중…', kind: '' });
+                    setNtnKeyMsg({ text: t('settings.ntnChecking'), kind: '' });
                     keysReqSeqRef.current++;
                     try {
                       const r = await apiClient.integrations.check('notion');
                       if (auth.getUser()?.id !== reqUid) return;
                       const notesPart = r.notesTitle ? ` · ${r.notesTitle}` : '';
                       setNtnKeyMsg({
-                        text: `✓ 연결 성공 (${r.songsTitle || ''} · ${r.sessionsTitle || ''}${notesPart} · 파일 ${
-                          r.maxUploadMB || 5
-                        }MB까지)`,
+                        text: t('settings.ntnCheckSuccess', {
+                          songs: r.songsTitle || '',
+                          sessions: r.sessionsTitle || '',
+                          notes: notesPart,
+                          max: r.maxUploadMB || 5,
+                        }),
                         kind: 'ok',
                       });
                     } catch (e: any) {
                       if (auth.getUser()?.id !== reqUid) return;
-                      setNtnKeyMsg({ text: (e && e.message) || '노션 연결 확인에 실패했어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: (e && e.message) || t('settings.ntnCheckFail'), kind: 'err' });
                     } finally {
                       setBusyNtnKey(false);
                     }
                   }}
                 >
-                  연결 확인
+                  {t('settings.ntnCheckBtn')}
                 </button>
                 <button
                   className="ghostBtn"
@@ -909,34 +912,34 @@ export function SettingsPage(): React.ReactElement {
                   disabled={busyNtnKey}
                   onClick={async () => {
                     if (!activeUid) {
-                      setNtnKeyMsg({ text: '로그인 후 연결을 해제할 수 있어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: t('settings.ntnDelLoginReq'), kind: 'err' });
                       return;
                     }
                     const reqUid = activeUid;
                     setBusyNtnKey(true);
-                    setNtnKeyMsg({ text: '연결 해제 중…', kind: '' });
+                    setNtnKeyMsg({ text: t('settings.ntnDelProgress'), kind: '' });
                     keysReqSeqRef.current++;
                     try {
                       await apiClient.integrations.remove('notion');
                       if (auth.getUser()?.id !== reqUid) return;
                       setNotionHasKey(false);
-                      setNotionStatusText('미등록');
+                      setNotionStatusText(t('settings.ntnUnregistered'));
                       setNtnToken('');
                       setNtnSongsDb('');
                       setNtnSessionsDb('');
                       setNtnNotesDb('');
                       setSyncState({ enabled: false, pending: 0, failed: 0 });
-                      setNtnKeyMsg({ text: '✓ 노션 연동을 해제했어요.', kind: 'ok' });
+                      setNtnKeyMsg({ text: t('settings.ntnDelSuccess'), kind: 'ok' });
                       void loadSyncStatusForUid(reqUid);
                     } catch (e: any) {
                       if (auth.getUser()?.id !== reqUid) return;
-                      setNtnKeyMsg({ text: (e && e.message) || '노션 연동 해제에 실패했어요.', kind: 'err' });
+                      setNtnKeyMsg({ text: (e && e.message) || t('settings.ntnDelFail'), kind: 'err' });
                     } finally {
                       setBusyNtnKey(false);
                     }
                   }}
                 >
-                  연결 해제
+                  {t('settings.ntnDelBtn')}
                 </button>
               </div>
               <p className={`msg${ntnKeyMsg.kind ? ' ' + ntnKeyMsg.kind : ''}`} id="ntnKeyMsg" role="status">
@@ -948,7 +951,7 @@ export function SettingsPage(): React.ReactElement {
                   {formatSyncText()}
                 </p>
                 <p className="hint" id="syncErrorText" hidden={!syncState.lastError}>
-                  {syncState.lastError ? `오류: ${syncState.lastError}` : ''}
+                  {syncState.lastError ? t('settings.syncErrLabel', { err: syncState.lastError }) : ''}
                 </p>
                 <div className={styles.row}>
                   <button
@@ -959,33 +962,38 @@ export function SettingsPage(): React.ReactElement {
                     disabled={busySync}
                     onClick={async () => {
                       if (!activeUid) {
-                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        setSyncMsg({ text: t('settings.syncLoginReq'), kind: 'err' });
                         return;
                       }
                       const reqUid = activeUid;
                       setBusySync(true);
-                      setSyncMsg({ text: '기존 노션 데이터를 이관하고 연동을 켜는 중…', kind: '' });
+                      setSyncMsg({ text: t('settings.syncEnabling'), kind: '' });
                       try {
                         syncReqSeqRef.current++;
                         const res = await apiClient.notionSync.enable();
                         if (auth.getUser()?.id !== reqUid) return;
                         const quotaPart = res.skippedTakesByQuota
-                          ? `, 용량 초과 건너뜀 ${res.skippedTakesByQuota}개`
+                          ? t('settings.syncQuotaSkipped', { n: res.skippedTakesByQuota })
                           : '';
                         setSyncMsg({
-                          text: `✓ 연동이 켜졌어요 (곡 ${res.importedSongs}개, 세션 ${res.importedSessions}개, 녹음 ${res.importedTakes}개 이관${quotaPart})`,
+                          text: t('settings.syncEnableDone', {
+                            songs: res.importedSongs,
+                            sessions: res.importedSessions,
+                            takes: res.importedTakes,
+                            quota: quotaPart,
+                          }),
                           kind: 'ok',
                         });
                         await loadSyncStatusForUid(reqUid);
                       } catch (e: any) {
                         if (auth.getUser()?.id !== reqUid) return;
-                        setSyncMsg({ text: (e && e.message) || '연동 켜기에 실패했어요.', kind: 'err' });
+                        setSyncMsg({ text: (e && e.message) || t('settings.syncEnableFail'), kind: 'err' });
                       } finally {
                         setBusySync(false);
                       }
                     }}
                   >
-                    연동 켜기 (노션 데이터 이관)
+                    {t('settings.syncEnableBtn')}
                   </button>
                   <button
                     className="ghostBtn"
@@ -995,27 +1003,27 @@ export function SettingsPage(): React.ReactElement {
                     disabled={busySync}
                     onClick={async () => {
                       if (!activeUid) {
-                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        setSyncMsg({ text: t('settings.syncLoginReq'), kind: 'err' });
                         return;
                       }
                       const reqUid = activeUid;
                       setBusySync(true);
-                      setSyncMsg({ text: '연동을 끄는 중…', kind: '' });
+                      setSyncMsg({ text: t('settings.syncDisabling'), kind: '' });
                       try {
                         syncReqSeqRef.current++;
                         await apiClient.notionSync.disable();
                         if (auth.getUser()?.id !== reqUid) return;
-                        setSyncMsg({ text: '✓ 연동을 껐어요.', kind: 'ok' });
+                        setSyncMsg({ text: t('settings.syncDisableDone'), kind: 'ok' });
                         await loadSyncStatusForUid(reqUid);
                       } catch (e: any) {
                         if (auth.getUser()?.id !== reqUid) return;
-                        setSyncMsg({ text: (e && e.message) || '연동 끄기에 실패했어요.', kind: 'err' });
+                        setSyncMsg({ text: (e && e.message) || t('settings.syncDisableFail'), kind: 'err' });
                       } finally {
                         setBusySync(false);
                       }
                     }}
                   >
-                    연동 끄기
+                    {t('settings.syncDisableBtn')}
                   </button>
                   <button
                     className="ghostBtn"
@@ -1024,30 +1032,30 @@ export function SettingsPage(): React.ReactElement {
                     disabled={busySync}
                     onClick={async () => {
                       if (!activeUid) {
-                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        setSyncMsg({ text: t('settings.syncLoginReq'), kind: 'err' });
                         return;
                       }
                       const reqUid = activeUid;
                       setBusySync(true);
-                      setSyncMsg({ text: '노션에서 변경사항을 가져오는 중…', kind: '' });
+                      setSyncMsg({ text: t('settings.syncPulling'), kind: '' });
                       try {
                         syncReqSeqRef.current++;
                         const res = await apiClient.notionSync.pull();
                         if (auth.getUser()?.id !== reqUid) return;
                         setSyncMsg({
-                          text: `✓ 노션에서 가져왔어요 (곡 ${res.updatedSongs}개, 세션 ${res.updatedSessions}개 갱신)`,
+                          text: t('settings.syncPullDone', { songs: res.updatedSongs, sessions: res.updatedSessions }),
                           kind: 'ok',
                         });
                         await loadSyncStatusForUid(reqUid);
                       } catch (e: any) {
                         if (auth.getUser()?.id !== reqUid) return;
-                        setSyncMsg({ text: (e && e.message) || '노션에서 가져오기에 실패했어요.', kind: 'err' });
+                        setSyncMsg({ text: (e && e.message) || t('settings.syncPullFail'), kind: 'err' });
                       } finally {
                         setBusySync(false);
                       }
                     }}
                   >
-                    지금 노션에서 가져오기
+                    {t('settings.syncPullBtn')}
                   </button>
                   <button
                     className="ghostBtn"
@@ -1056,30 +1064,30 @@ export function SettingsPage(): React.ReactElement {
                     disabled={busySync}
                     onClick={async () => {
                       if (!activeUid) {
-                        setSyncMsg({ text: '로그인이 필요해요.', kind: 'err' });
+                        setSyncMsg({ text: t('settings.syncLoginReq'), kind: 'err' });
                         return;
                       }
                       const reqUid = activeUid;
                       setBusySync(true);
-                      setSyncMsg({ text: '노션으로 변경사항을 보내는 중…', kind: '' });
+                      setSyncMsg({ text: t('settings.syncPushing'), kind: '' });
                       try {
                         syncReqSeqRef.current++;
                         const res = await apiClient.notionSync.push();
                         if (auth.getUser()?.id !== reqUid) return;
                         setSyncMsg({
-                          text: `✓ 노션으로 보냈어요 (처리 ${res.processed}건, 실패 ${res.failed}건)`,
+                          text: t('settings.syncPushDone', { processed: res.processed, failed: res.failed }),
                           kind: 'ok',
                         });
                         await loadSyncStatusForUid(reqUid);
                       } catch (e: any) {
                         if (auth.getUser()?.id !== reqUid) return;
-                        setSyncMsg({ text: (e && e.message) || '노션으로 보내기에 실패했어요.', kind: 'err' });
+                        setSyncMsg({ text: (e && e.message) || t('settings.syncPushFail'), kind: 'err' });
                       } finally {
                         setBusySync(false);
                       }
                     }}
                   >
-                    지금 노션으로 보내기
+                    {t('settings.syncPushBtn')}
                   </button>
                 </div>
                 <p className={`msg${syncMsg.kind ? ' ' + syncMsg.kind : ''}`} id="syncMsg" role="status">
@@ -1089,10 +1097,10 @@ export function SettingsPage(): React.ReactElement {
             </div>
 
             <div className={styles.panel}>
-              <h3>노션 백업 가져오기</h3>
-              <p className="hint">노션에서 내보낸 Markdown &amp; CSV 백업 ZIP 파일을 올려 곡과 연습 기록을 복원해요.</p>
+              <h3>{t('settings.nxImportTitle')}</h3>
+              <p className="hint">{t('settings.nxImportDesc')}</p>
               <label className={styles.field}>
-                <span className={styles.lab}>노션 백업 ZIP 파일 (Markdown &amp; CSV 내보내기 파일)</span>
+                <span className={styles.lab}>{t('settings.nxImportLab')}</span>
                 <input
                   ref={fileInputRef}
                   className={styles.fileInput}
@@ -1110,40 +1118,45 @@ export function SettingsPage(): React.ReactElement {
                   disabled={busyNx}
                   onClick={async () => {
                     if (!activeUid) {
-                      setNxMsg({ text: '로그인 후 가져올 수 있어요.', kind: 'err' });
+                      setNxMsg({ text: t('settings.nxImportLoginReq'), kind: 'err' });
                       return;
                     }
                     if (!importFile) {
-                      setNxMsg({ text: 'ZIP 파일을 선택해 주세요.', kind: 'err' });
+                      setNxMsg({ text: t('settings.nxImportSelectZip'), kind: 'err' });
                       return;
                     }
                     const reqUid = activeUid;
                     setBusyNx(true);
-                    setNxMsg({ text: 'ZIP 분석 중…', kind: '' });
+                    setNxMsg({ text: t('settings.nxImportAnalyzing'), kind: '' });
                     try {
                       const r = await apiClient.nx.previewNotionZip(importFile);
                       if (auth.getUser()?.id !== reqUid) return;
                       setPreviewToken(r.previewToken);
                       const errSuffix =
-                        Array.isArray(r.errors) && r.errors.length > 0 ? ` (오류 ${r.errors.length}건)` : '';
+                        Array.isArray(r.errors) && r.errors.length > 0 ? t('settings.nxImportErrCount', { count: r.errors.length }) : '';
                       setPreviewSummary(
-                        `신규 곡 ${r.newSongs || 0}개 · 갱신 곡 ${r.updatedSongs || 0}개 · 연습 기록 ${
-                          r.sessions || 0
-                        }건 · 녹음 ${r.takes || 0}건${errSuffix}`
+                        t('settings.nxImportSummary', {
+                          newSongs: r.newSongs || 0,
+                          updatedSongs: r.updatedSongs || 0,
+                          sessions: r.sessions || 0,
+                          takes: r.takes || 0,
+                          errSuffix,
+                        })
                       );
                       const rows: Array<{ text: string; isErr?: boolean }> = [];
                       if (Array.isArray(r.songsSample)) {
                         r.songsSample.forEach((s: any) => {
-                          const tag = s.isNew ? '[신규] ' : '[갱신] ';
+                          const tag = s.isNew ? t('settings.nxImportNewTag') : t('settings.nxImportUpdateTag');
                           rows.push({
-                            text: `${tag}${s.title || '(제목 없음)'}${s.artist ? ' · ' + s.artist : ''}`,
+                            text: `${tag}${s.title || t('settings.nxImportUntitled')}${s.artist ? ' · ' + s.artist : ''}`,
                           });
                         });
                       }
                       if (Array.isArray(r.errors)) {
                         r.errors.forEach((er: any) => {
+                          const rowPart = er.row != null ? t('settings.nxImportRowSuffix', { row: er.row }) : '';
                           rows.push({
-                            text: `[오류] ${er.file || '파일'} ${er.row != null ? er.row + '행: ' : ''}${er.reason || ''}`,
+                            text: `${t('settings.nxImportErrTag')}${er.file || t('settings.nxImportDefaultFile')} ${rowPart}${er.reason || ''}`,
                             isErr: true,
                           });
                         });
@@ -1154,13 +1167,13 @@ export function SettingsPage(): React.ReactElement {
                       if (auth.getUser()?.id !== reqUid) return;
                       setPreviewToken(null);
                       setPreviewItems([]);
-                      setNxMsg({ text: (e && e.message) || '미리보기 중 오류가 발생했어요.', kind: 'err' });
+                      setNxMsg({ text: (e && e.message) || t('settings.nxImportPreviewFail'), kind: 'err' });
                     } finally {
                       setBusyNx(false);
                     }
                   }}
                 >
-                  가져오기 미리보기
+                  {t('settings.nxImportPreviewBtn')}
                 </button>
               </div>
 
@@ -1183,19 +1196,22 @@ export function SettingsPage(): React.ReactElement {
                     disabled={busyNx}
                     onClick={async () => {
                       if (!previewToken) {
-                        setNxMsg({ text: '미리보기 내역이 없습니다. 다시 ZIP을 선택해 주세요.', kind: 'err' });
+                        setNxMsg({ text: t('settings.nxImportNoPreview'), kind: 'err' });
                         return;
                       }
                       const reqUid = activeUid;
                       setBusyNx(true);
-                      setNxMsg({ text: '가져오기 반영 중…', kind: '' });
+                      setNxMsg({ text: t('settings.nxImportApplying'), kind: '' });
                       try {
                         const r = await apiClient.nx.confirmNotionZip(previewToken);
                         if (auth.getUser()?.id !== reqUid) return;
                         setNxMsg({
-                          text: `✓ 가져오기를 완료했어요 (신규 곡 ${r.createdSongs || 0}개, 갱신 ${
-                            r.updatedSongs || 0
-                          }개, 기록 ${r.upsertedSessions || 0}건, 녹음 ${r.importedTakes || 0}건)`,
+                          text: t('settings.nxImportDone', {
+                            created: r.createdSongs || 0,
+                            updated: r.updatedSongs || 0,
+                            sessions: r.upsertedSessions || 0,
+                            takes: r.importedTakes || 0,
+                          }),
                           kind: 'ok',
                         });
                         setPreviewToken(null);
@@ -1204,13 +1220,13 @@ export function SettingsPage(): React.ReactElement {
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       } catch (e: any) {
                         if (auth.getUser()?.id !== reqUid) return;
-                        setNxMsg({ text: (e && e.message) || '가져오기 확정 중 오류가 발생했어요.', kind: 'err' });
+                        setNxMsg({ text: (e && e.message) || t('settings.nxImportConfirmFail'), kind: 'err' });
                       } finally {
                         setBusyNx(false);
                       }
                     }}
                   >
-                    가져오기 확정
+                    {t('settings.nxImportConfirmBtn')}
                   </button>
                   <button
                     className="ghostBtn"
@@ -1220,22 +1236,22 @@ export function SettingsPage(): React.ReactElement {
                     onClick={() => {
                       setPreviewToken(null);
                       setPreviewItems([]);
-                      setNxMsg({ text: '가져오기를 취소했어요.', kind: '' });
+                      setNxMsg({ text: t('settings.nxImportCancelled'), kind: '' });
                     }}
                   >
-                    취소
+                    {t('settings.nxImportCancelBtn')}
                   </button>
                 </div>
               </div>
             </div>
 
           <div className={styles.panel} id="links">
-            <h3 id="hLinks">노션 바로가기</h3>
+            <h3 id="hLinks">{t('settings.linksTitle')}</h3>
             <p>
-              첫 화면의 NOTION과 NOTES 페이지에서 여는 링크예요. 노션에서 페이지 <b>링크 복사</b>로 가져오세요. 비워 두면 숨겨져요.
+              {t('settings.linksDescPre')}<b>{t('settings.linksDescBold')}</b>{t('settings.linksDescPost')}
             </p>
             <label className={styles.field}>
-              <span className={styles.lab}>악기 연습 페이지</span>
+              <span className={styles.lab}>{t('settings.linksPracticeLab')}</span>
               <input
                 className="inpField"
                 id="nlPractice"
@@ -1247,7 +1263,7 @@ export function SettingsPage(): React.ReactElement {
               />
             </label>
             <label className={styles.field}>
-              <span className={styles.lab}>학습 영상 노트 데이터베이스</span>
+              <span className={styles.lab}>{t('settings.linksNotesLab')}</span>
               <input
                 className="inpField"
                 id="nlNotes"
@@ -1266,10 +1282,10 @@ export function SettingsPage(): React.ReactElement {
                 onClick={() => {
                   raw.set('ulp:notion-practice', nlPractice.trim());
                   raw.set('ulp:notion-notes', nlNotes.trim());
-                  setNlMsg('✓ 저장했어요');
+                  setNlMsg(t('settings.linksSaved'));
                 }}
               >
-                저장
+                {t('settings.linksSaveBtn')}
               </button>
             </div>
             <p className={`msg${nlMsg ? ' ok' : ''}`} id="nlMsg" role="status">

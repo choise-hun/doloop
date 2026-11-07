@@ -1,92 +1,92 @@
 // frontend/src/pages/PrivacyPage.tsx
 import React, { useEffect } from 'react';
 import { AppShell } from '../components/layout/AppShell';
+import { t } from '../lib/i18n.mts';
 import styles from './SettingsPage.module.css';
 
 export function PrivacyPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '개인정보처리방침 · ULeveLP';
+    document.title = '개인정보처리방침 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   return (
     <AppShell variant="narrow" activeNav="privacy">
       <div className={styles.headerBlock} data-align-group="col: left">
         <h1 className={`page-title ${styles.pageTitle}`}>Privacy</h1>
-        <p className={`page-sub ${styles.pageSub}`}>ULeveLP 개인정보처리방침</p>
+        <p className={`page-sub ${styles.pageSub}`}>{t('privacy.pageSub')}</p>
       </div>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH1">
-        <h2 id="privH1">1. 수집하는 개인정보 항목</h2>
-        <p>ULeveLP는 사용자의 원활한 악기 연습 지원 및 다중 기기 동기화를 위해 최소한의 정보를 수집합니다:</p>
+        <h2 id="privH1">{t('privacy.secCollectTitle')}</h2>
+        <p>{t('privacy.secCollectIntro')}</p>
         <ul>
           <li>
-            <b>계정 정보:</b> Google OAuth 로그인 시 Supabase Auth를 경유하여 수집되는 이메일 주소 및 표시 이름.
+            <b>{t('privacy.secCollectAccountLabel')}</b>{t('privacy.secCollectAccountText')}
           </li>
           <li>
-            <b>서비스 이용 데이터:</b> 사용자가 직접 등록한 연습 곡 정보(유튜브 영상 ID, 곡명, 아티스트), 연습 세션 기록(연습 일시, 시간, 반복 횟수, 연습 구간, 재생 배속, 메모).
+            <b>{t('privacy.secCollectUsageLabel')}</b>{t('privacy.secCollectUsageText')}
           </li>
           <li>
-            <b>오디오 녹음:</b> 사용자가 연습 도중 직접 녹음한 오디오 파일.
+            <b>{t('privacy.secCollectRecordLabel')}</b>{t('privacy.secCollectRecordText')}
           </li>
           <li>
-            <b>외부 연동 키:</b> 사용자가 직접 등록한 Notion 토큰·DB ID(서버 마스터 키 기반 AES-256-GCM 암호화 보관).
+            <b>{t('privacy.secCollectKeyLabel')}</b>{t('privacy.secCollectKeyText')}
           </li>
           <li>
-            <b>이용 플랜·크레딧:</b> 이용 플랜(무료·Pro·Pro+), AI 분석 크레딧 잔액과 지급·사용 기록(분석 작업별 예약·정산·반환량, 사용 토큰 수).
+            <b>{t('privacy.secCollectPlanLabel')}</b>{t('privacy.secCollectPlanText')}
           </li>
         </ul>
       </section>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH2">
-        <h2 id="privH2">2. 개인정보의 이용 목적</h2>
-        <p>수집한 정보는 다음 목적 이외의 용도로 사용되지 않습니다:</p>
+        <h2 id="privH2">{t('privacy.secPurposeTitle')}</h2>
+        <p>{t('privacy.secPurposeIntro')}</p>
         <ul>
-          <li>다중 기기 간 연습 진행 위치, 연습 구간, 연습 시간 및 녹음 파일의 실시간 동기화.</li>
-          <li>사용자가 선택적으로 요청한 Notion 데이터베이스 실시간 동기화.</li>
+          <li>{t('privacy.secPurposeSync')}</li>
+          <li>{t('privacy.secPurposeNotion')}</li>
           <li>
-            사용자가 선택적으로 요청한 학습 영상 분석 및 지판/건반 다이어그램 생성. 분석은 서비스가 운영하는 Google Gemini API로 처리하며, 이때
-            영상 주소·분석 구간·메모가 Google에 전달됩니다.
+            {t('privacy.secPurposeGemini')}
           </li>
-          <li>AI 분석 크레딧의 지급·차감·반환 관리.</li>
+          <li>{t('privacy.secPurposeCredits')}</li>
         </ul>
       </section>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH3">
-        <h2 id="privH3">3. 개인정보의 보관 및 제3자 제공</h2>
-        <p>ULeveLP는 사용자의 개인정보를 외부에 판매하거나 무단으로 제3자에게 제공하지 않습니다:</p>
+        <h2 id="privH3">{t('privacy.secStorageTitle')}</h2>
+        <p>{t('privacy.secStorageIntro')}</p>
         <ul>
           <li>
-            <b>보관 장소:</b> 서비스 데이터베이스(PostgreSQL) 및 스토리지(Supabase Storage 비공개 버킷 <code>takes</code> 또는 사용자가 선택한 본인 Google Drive).
+            <b>{t('privacy.secStoragePlaceLabel')}</b>{t('privacy.secStoragePlacePre')}<code>takes</code>{t('privacy.secStoragePlacePost')}
           </li>
           <li>
-            <b>암호화 보호:</b> 모든 외부 연동 시크릿은 AES-256-GCM 알고리즘으로 암호화되어 안전하게 보관됩니다.
+            <b>{t('privacy.secStorageCryptoLabel')}</b>{t('privacy.secStorageCryptoText')}
           </li>
         </ul>
       </section>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH4">
-        <h2 id="privH4">4. 개인정보의 열람 및 영구 삭제 권리</h2>
-        <p>사용자는 언제든지 자신의 개인정보를 열람하거나 영구 삭제를 요구할 수 있습니다:</p>
+        <h2 id="privH4">{t('privacy.secDeleteTitle')}</h2>
+        <p>{t('privacy.secDeleteIntro')}</p>
         <ul>
           <li>
-            사용자는 <b>SETTING → 계정 → 계정 삭제</b> 메뉴에서 <code>&quot;삭제합니다&quot;</code>를 입력하여 언제든 즉시 탈퇴할 수 있습니다.
+            {t('privacy.secDeleteGuidePre')}<b>{t('privacy.secDeleteGuideBold')}</b>{t('privacy.secDeleteGuideMid')}<code>{t('privacy.secDeleteGuideCode')}</code>{t('privacy.secDeleteGuidePost')}
           </li>
           <li>
-            탈퇴 즉시 해당 사용자의 모든 데이터베이스 레코드, 스토리지에 보관된 녹음 오디오 파일, 암호화된 API 연동 키가 지체 없이 영구 파기됩니다.
+            {t('privacy.secDeleteImmediate')}
           </li>
         </ul>
       </section>
 
       <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" aria-labelledby="privH5">
-        <h2 id="privH5">5. 커뮤니티 공개 범위</h2>
+        <h2 id="privH5">{t('privacy.secCommunityTitle')}</h2>
         <ul>
-          <li>커뮤니티 기능은 선택 사항이며, 사용자가 직접 공개한 항목만 다른 사용자에게 보입니다.</li>
-          <li>공개 폴더: 사용자가 정한 공개 제목과 커뮤니티 이름, 곡의 YouTube 영상 ID·영상 제목·채널명, 추천 구간·배속·순서가 공개됩니다. 곡 메모·연습 상태·사용자가 고친 곡 제목은 공개되지 않습니다.</li>
-          <li>자동 연동을 켠 폴더는 원본 분류가 바뀔 때 공개본도 바로 바뀝니다. 설정에서 끄면 마지막 공개본이 남고, 비공개로 바꾸면 내려갑니다.</li>
-          <li>학습 기록 공유를 켜면 최근 12주의 날짜별 연습 시간, 연속 연습 일수, 이번 주 합계, 오늘 연습한 곡(YouTube 영상 제목·채널명)과 시간·반복 수가 공개됩니다. 연습 메모는 공개되지 않습니다.</li>
-          <li>이메일·로그인 계정 이름·닉네임은 공개되지 않으며, 커뮤니티에서는 사용자가 정한 커뮤니티 이름만 보입니다.</li>
-          <li>AI 학습 노트, 코드 진행, 녹음 파일은 어떤 경우에도 공개되지 않습니다.</li>
-          <li>좋아요·팔로우 수는 개수만 공개됩니다. 신고 내용은 운영자만 봅니다. 유료 플랜이 끝나면 공개 폴더와 학습 기록 공유가 멈춥니다.</li>
+          <li>{t('privacy.secCommunityOptional')}</li>
+          <li>{t('privacy.secCommunityFolder')}</li>
+          <li>{t('privacy.secCommunityAutosync')}</li>
+          <li>{t('privacy.secCommunityStreak')}</li>
+          <li>{t('privacy.secCommunityPrivacy')}</li>
+          <li>{t('privacy.secCommunityStrictPrivate')}</li>
+          <li>{t('privacy.secCommunityStatsOnly')}</li>
         </ul>
       </section>
     </AppShell>
