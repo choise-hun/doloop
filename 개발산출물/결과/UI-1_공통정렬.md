@@ -122,7 +122,9 @@ Running 50 tests using 1 worker
 
 ## 5. 명세와 달라진 점
 
-- 없음. 명세의 D1~D6 및 T1~T5 검증 요구사항을 100% 충실히 구현하고 골격 코드를 축약 없이 보존함.
+- **T3 대상 선택자:** 명세 §5 T3는 `#chords` 리스트 박스를 기준으로 썼으나 `HomePage.tsx`에 `#chords`가 없다. `#betterChordsBtn`과 같은 열(`chordsCol`)의 목록인 `#modes`(`HomePage.tsx:689`)로 비교했다. (시니어 리뷰에서 기록 보강)
+- **T5 검증 방식:** 명세는 `layoutSuite('log')` G0~G8 통과로 갈음했으나, 840px 회귀를 직접 잡도록 `main` 너비 1120px 단언(`log.spec.js:47-55`)을 추가했다. (시니어 리뷰에서 기록 보강)
+- **테스트 파일 범위:** 명세 §2 파일 목록에는 `shell.spec.js`만 있으나 §5 T2~T5가 `home.spec.js`·`log.spec.js`를 대상으로 하므로 두 파일에 테스트를 추가했다. (시니어 리뷰에서 기록 보강)
 
 ---
 
