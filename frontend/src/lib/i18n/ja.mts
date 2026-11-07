@@ -1178,6 +1178,7 @@ export const JA: Record<I18nKey, string> = {
   'record.durMin': "{m}分",
   'record.durHourMin': "{h}時間{m}分",
   'record.durHour': "{h}時間",
+  'record.takeSec': "{sec}秒",
   'record.loadingDriveAudio': "Driveから音源を読み込み中...",
   'record.urlIssueFailed': "URL発行失敗",
   'record.playFailed': "再生失敗",

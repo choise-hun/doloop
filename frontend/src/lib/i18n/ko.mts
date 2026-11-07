@@ -1195,6 +1195,7 @@ export const KO = {
   'record.durMin': "{m}분",
   'record.durHourMin': "{h}시간 {m}분",
   'record.durHour': "{h}시간",
+  'record.takeSec': "{sec}초",
   'record.loadingDriveAudio': "드라이브에서 음원 로드 중...",
   'record.urlIssueFailed': "주소 발급 실패",
   'record.playFailed': "재생 실패",

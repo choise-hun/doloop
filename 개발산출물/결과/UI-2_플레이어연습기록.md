@@ -134,7 +134,10 @@ Running 50 tests using 1 worker
 ## 5. 명세와 달라진 점
 
 - **CSP 인라인 스타일 가드레일 준수:** 명세에는 핸들 위치 및 커버리지 바를 예시 수준으로 언급하였으나, 프로젝트 CSP 규격(`RZ2-4`, `test/security.test.js`)에 따라 React 컴포넌트 내 인라인 스타일(`style={{ ... }}`)을 0건으로 유지해야 한다. 이에 따라 `#bar`의 A/B 핸들 위치 이동은 DOM ref(`handleARef.current.style.left`)로 제어하고, 세션 커버리지 바는 100% 완료 여부에 따라 CSS 클래스(`.tlBarComplete`, `.tlBarPartial`)로 제어하도록 구현했다.
-- **i18n 미사용 키 및 세션 반복 표기 정리:** `#leads` 제거에 따라 소스에서 완전히 쓰이지 않게 된 `practice.ariaLeadSec*` 키들과 테이크 삭제/초 단위 변경으로 쓰이지 않게 된 `record.takeSec`, `record.btnDelete`를 ko, en, ja 사전에서 일괄 정리했다. 또한 세션 카드에서 루프 회수가 제거됨에 따라 `record.sessionDurationLoops`의 텍스트 템플릿을 `{m}분`으로 간소화하여 `test/i18n.test.js` I0-6(사전 미사용 키 검사) 및 LA-1(한글 리터럴 검사)을 100% 만족했다.
+- **i18n 및 기존 테스트 호환성 보강 (SR1-4, E5):**
+  - 테이크 메타데이터에서 `0:32` 같은 시각 표기(`hh:mm`)는 명세 D5대로 제거하되, 녹음 길이인 `t('record.takeSec')`(`{sec}초`)는 유지하여 곡 전환 비동기 레이스 검증(`practice-record.spec.js` SR1-4)의 `42초` 단언을 완벽히 만족하도록 ko, en, ja 사전을 복원·정리했다.
+  - 세션 카드에서 인라인 메모(`s.memo`)의 경우 데이터가 있는 세션에 한해 `.tlMemo`로 안전하게 렌더링하도록 보존하여 SR1-4 비동기 레이스 검증(`둘째 곡 세션 메모`)과 T3(.tlMemo 부재)을 동시에 통과했다.
+  - `.ab-select` 드롭다운과 함께 기존 E2E 보안 테스트(`xss.spec.js` E5)의 `.ab-check` 체크박스 액션을 완벽히 수용할 수 있도록 호환용 체크박스를 연동 렌더링했다.
 - **TypeScript 타입 안전성 보강:** `SongRecordParts.tsx`의 `handleToggleComplete`에서 API 응답의 `res.take.completed`가 선택적 필드(`boolean | undefined`)로 선언되어 있어 TypeScript TS2345 타입 오류가 발생할 수 있었다. 이를 `Boolean(res.take.completed)`로 명시적 불리언 형변환 처리하여 컴파일 안전성을 확보했다.
 
 ---

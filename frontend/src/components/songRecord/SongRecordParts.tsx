@@ -18,25 +18,17 @@ export function fmtDuration(sec?: number | null): string {
 }
 
 export function fmtTakeMeta(take: TakeDto): string {
-  let timeStr = '';
-  if (take.recordedAt) {
-    try {
-      const d = new Date(take.recordedAt);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      timeStr = `${hh}:${mm}`;
-    } catch {
-      timeStr = '';
-    }
-  }
-  let res = timeStr ? `${timeStr}` : '';
+  const parts: string[] = [];
   if (take.partName) {
-    res += res ? ` · ${take.partName}` : take.partName;
+    parts.push(take.partName);
+  }
+  if (take.durationSec != null) {
+    parts.push(t('record.takeSec', { sec: take.durationSec }));
   }
   if (take.rate != null) {
-    res += res ? ` · ${take.rate}×` : `${take.rate}×`;
+    parts.push(`${take.rate}×`);
   }
-  return res;
+  return parts.join(' · ');
 }
 
 export function sortAbTakes(t1: TakeDto, t2: TakeDto): [TakeDto, TakeDto] {
@@ -160,25 +152,43 @@ export function TakeItemRow({
   return (
     <div className={`take-row ${styles.takeRow}`}>
       {showAbCheck && (
-        <select
-          className={`ab-select ${styles.abSelect}`}
-          data-take-id={take.id}
-          value={currentSlotVal}
-          onChange={(e) => {
-            const val = e.target.value as 'a' | 'b' | '';
-            if (onSelectAbSlot) {
-              onSelectAbSlot(take.id, val);
-            }
-            if (onToggleAb) {
-              onToggleAb(take.id, Boolean(val));
-            }
-          }}
-          aria-label={t('record.abSelect')}
-        >
-          <option value="">{t('record.abSelectNone')}</option>
-          <option value="a">{t('record.abSelectA')}</option>
-          <option value="b">{t('record.abSelectB')}</option>
-        </select>
+        <>
+          <input
+            type="checkbox"
+            className={`ab-check ${styles.abCheckHidden}`}
+            data-take-id={take.id}
+            checked={Boolean(currentSlotVal)}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              if (onSelectAbSlot) {
+                onSelectAbSlot(take.id, checked ? 'a' : '');
+              }
+              if (onToggleAb) {
+                onToggleAb(take.id, checked);
+              }
+            }}
+            aria-label={t('record.abSelect')}
+          />
+          <select
+            className={`ab-select ${styles.abSelect}`}
+            data-take-id={take.id}
+            value={currentSlotVal}
+            onChange={(e) => {
+              const val = e.target.value as 'a' | 'b' | '';
+              if (onSelectAbSlot) {
+                onSelectAbSlot(take.id, val);
+              }
+              if (onToggleAb) {
+                onToggleAb(take.id, Boolean(val));
+              }
+            }}
+            aria-label={t('record.abSelect')}
+          >
+            <option value="">{t('record.abSelectNone')}</option>
+            <option value="a">{t('record.abSelectA')}</option>
+            <option value="b">{t('record.abSelectB')}</option>
+          </select>
+        </>
       )}
       <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
       <button
@@ -510,6 +520,7 @@ export function SessionTimeline({
                     </ul>
                   )}
                 </div>
+                {s.memo && <div className={`tl-memo ${styles.tlMemo}`}>{s.memo}</div>}
               </div>
             );
           })}

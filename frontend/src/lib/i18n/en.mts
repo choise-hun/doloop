@@ -1178,6 +1178,7 @@ export const EN: Record<I18nKey, string> = {
   'record.durMin': "{m}m",
   'record.durHourMin': "{h}h {m}m",
   'record.durHour': "{h}h",
+  'record.takeSec': "{sec}s",
   'record.loadingDriveAudio': "Loading audio from Drive...",
   'record.urlIssueFailed': "Failed to get audio URL",
   'record.playFailed': "Playback failed",

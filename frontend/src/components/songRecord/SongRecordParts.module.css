@@ -291,6 +291,15 @@
   color: var(--muted);
 }
 
+.abCheckHidden {
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  margin: 0;
+  pointer-events: auto;
+}
+
 /* UI-2: 테이크 AB 셀렉트 및 완료 토글 버튼 */
 .abSelect {
   height: 28px;
