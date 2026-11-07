@@ -5,7 +5,7 @@ import { SafeAudio } from '../components/common/SafeAudio';
 import { SafeLink } from '../components/common/SafeLink';
 import { SongRecordPanel } from '../components/songRecord/SongRecordPanel';
 import { auth, useAuth } from '../lib/auth';
-import { apiClient, CategoryDto, SongDto, TakeDto } from '../lib/apiClient';
+import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto } from '../lib/apiClient';
 import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { drive } from '../lib/drive';
@@ -15,7 +15,6 @@ import { t } from '../lib/i18n.mts';
 import styles from './PracticePage.module.css';
 
 export const RATES: ReadonlyArray<number> = [0.25, 0.5, 0.75, 1];
-export const LEADS: ReadonlyArray<number> = [0, 1, 2];
 export const AUTOSAVE_MS = 30000;
 export const REC_MAX_SEC = 30 * 60;
 export const REC_TYPES: ReadonlyArray<string> = [
@@ -119,10 +118,18 @@ export function PracticePage(): React.ReactElement {
   const [pointA, setPointA] = useState<number | null>(null);
   const [pointB, setPointB] = useState<number | null>(null);
   const [loopOn, setLoopOn] = useState(false);
-  const [leadSec, setLeadSec] = useState<number>(() => {
-    const saved = Number(json.get('ulp:lead', 1));
-    return LEADS.includes(saved) ? saved : 1;
-  });
+  const [waitTimerOn, setWaitTimerOn] = useState(false);
+  const [countdownSec, setCountdownSec] = useState<number | null>(null);
+  const countdownTimerRef = useRef<number | null>(null);
+
+  const [presets, setPresets] = useState<SongPresetDto[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const presetReqSeqRef = useRef<number>(0);
+
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const handleARef = useRef<HTMLDivElement | null>(null);
+  const handleBRef = useRef<HTMLDivElement | null>(null);
+
   const [rate, setRateState] = useState<number>(1);
   const [availRates, setAvailRates] = useState<number[]>([0.25, 0.5, 0.75, 1]);
   const [loops, setLoops] = useState(0);
@@ -182,7 +189,7 @@ export function PracticePage(): React.ReactElement {
     a: null as number | null,
     b: null as number | null,
     loopOn: false,
-    lead: leadSec,
+    waitTimerOn: false,
     rate: 1,
     loops: 0,
     dirty: false,
@@ -196,7 +203,7 @@ export function PracticePage(): React.ReactElement {
     a: pointA,
     b: pointB,
     loopOn,
-    lead: leadSec,
+    waitTimerOn,
     rate,
     loops,
     dirty,
@@ -421,16 +428,66 @@ export function PracticePage(): React.ReactElement {
     }
   };
 
+  const startCountdownAndPlay = (targetTime: number) => {
+    if (countdownTimerRef.current) {
+      window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    // 50ms 감시 타이머·단축키는 마운트 시점 클로저라 상태 대신 stRef로 읽는다
+    if (!stRef.current.waitTimerOn) {
+      seekGuardUntilRef.current = Date.now() + 400;
+      try {
+        playerRef.current?.seekTo?.(targetTime, true);
+        playerRef.current?.playVideo?.();
+        setCurrentTime(targetTime);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    let remain = 10;
+    setCountdownSec(remain);
+    try {
+      playerRef.current?.pauseVideo?.();
+      playerRef.current?.seekTo?.(targetTime, true);
+      setCurrentTime(targetTime);
+    } catch {
+      /* ignore */
+    }
+    countdownTimerRef.current = window.setInterval(() => {
+      remain -= 1;
+      if (remain <= 0) {
+        if (countdownTimerRef.current) {
+          window.clearInterval(countdownTimerRef.current);
+          countdownTimerRef.current = null;
+        }
+        setCountdownSec(null);
+        seekGuardUntilRef.current = Date.now() + 400;
+        try {
+          playerRef.current?.playVideo?.();
+        } catch {
+          /* ignore */
+        }
+      } else {
+        setCountdownSec(remain);
+      }
+    }, 1000);
+  };
+
   const jumpToLoopStart = () => {
     if (!playerRef.current || !stRef.current.ready) return;
     const cur = stRef.current;
-    const to = cur.a != null ? Math.max(0, cur.a - cur.lead) : 0;
-    seekGuardUntilRef.current = Date.now() + 400;
-    try {
-      playerRef.current.seekTo(to, true);
-      setCurrentTime(to);
-    } catch {
-      /* ignore */
+    const to = cur.a != null ? cur.a : 0;
+    if (cur.waitTimerOn && cur.playing) {
+      startCountdownAndPlay(to);
+    } else {
+      seekGuardUntilRef.current = Date.now() + 400;
+      try {
+        playerRef.current.seekTo(to, true);
+        setCurrentTime(to);
+      } catch {
+        /* ignore */
+      }
     }
   };
 
@@ -578,7 +635,7 @@ export function PracticePage(): React.ReactElement {
           ? base.pos
           : 0;
     if (nextLoopOn && nextA != null && nextB != null && (startSec < nextA - 3 || startSec >= nextB)) {
-      startSec = Math.max(0, nextA - stRef.current.lead);
+      startSec = Math.max(0, nextA);
     }
 
     startAtRef.current = startSec;
@@ -658,7 +715,7 @@ export function PracticePage(): React.ReactElement {
     setLoops(0);
     if (next) {
       const t = safePlayerTime();
-      if (t < cur.a - cur.lead - 0.5 || t >= cur.b) {
+      if (t < cur.a - 0.5 || t >= cur.b) {
         jumpToLoopStart();
       }
     }
@@ -674,6 +731,145 @@ export function PracticePage(): React.ReactElement {
     setLoopOn(false);
     setLoops(0);
     markDirty({ a: null, b: null });
+  };
+
+  // ---------- 프리셋 및 드래그 핸들 (UI-2) ----------
+  useEffect(() => {
+    if (!song || !apiClient.isLoggedIn()) {
+      setPresets([]);
+      setSelectedPresetId('');
+      return;
+    }
+    const token = ++presetReqSeqRef.current;
+    apiClient.songs
+      .listPresets(song.id)
+      .then((res) => {
+        if (token !== presetReqSeqRef.current) return;
+        setPresets(res.presets || []);
+      })
+      .catch(() => {
+        if (token !== presetReqSeqRef.current) return;
+        setPresets([]);
+      });
+  }, [song?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) {
+        window.clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleSavePreset = async () => {
+    if (!song || pointA == null || pointB == null) return;
+    const name = window.prompt(t('practice.presetPrompt'))?.trim();
+    if (!name) return;
+    const existing = presets.find((p) => p.name === name);
+    let merge = true;
+    if (existing) {
+      const ok = window.confirm(t('practice.presetMergeConfirm'));
+      if (!ok) return;
+      merge = true;
+    }
+    const token = ++presetReqSeqRef.current;
+    try {
+      const res = await apiClient.songs.putPreset(song.id, {
+        name,
+        a: pointA,
+        b: pointB,
+        rate,
+        merge,
+      });
+      if (token !== presetReqSeqRef.current) return;
+      setPresets((prev) => {
+        const idx = prev.findIndex((p) => p.name === name);
+        return idx >= 0 ? [...prev.slice(0, idx), res.preset, ...prev.slice(idx + 1)] : [...prev, res.preset];
+      });
+      setSelectedPresetId(res.preset.id);
+    } catch (err: any) {
+      if (token === presetReqSeqRef.current) window.alert(err.message || 'Error');
+    }
+  };
+
+  const handleSelectPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    const p = presets.find((it) => it.id === presetId);
+    if (!p) return;
+    setPointA(p.a);
+    setPointB(p.b);
+    stRef.current.a = p.a;
+    stRef.current.b = p.b;
+    if (p.rate) {
+      handleSetRate(p.rate);
+    }
+    stRef.current.dirty = true;
+    setDirty(true);
+  };
+
+  const handleDeletePreset = async () => {
+    if (!song || !selectedPresetId) return;
+    const ok = window.confirm(t('practice.presetDeleteConfirm'));
+    if (!ok) return;
+    const token = ++presetReqSeqRef.current;
+    try {
+      await apiClient.songs.deletePreset(song.id, selectedPresetId);
+      if (token !== presetReqSeqRef.current) return;
+      setPresets((prev) => prev.filter((p) => p.id !== selectedPresetId));
+      setSelectedPresetId('');
+    } catch (err: any) {
+      if (token === presetReqSeqRef.current) window.alert(err.message || 'Error');
+    }
+  };
+
+  useEffect(() => {
+    if (duration <= 0) return;
+    if (handleARef.current && pointA != null) {
+      const pctA = Math.max(0, Math.min(100, (pointA / duration) * 100));
+      handleARef.current.style.left = `calc(${pctA}% - 6px)`;
+    }
+    if (handleBRef.current && pointB != null) {
+      const pctB = Math.max(0, Math.min(100, (pointB / duration) * 100));
+      handleBRef.current.style.left = `calc(${pctB}% - 6px)`;
+    }
+  }, [pointA, pointB, duration]);
+
+  const handleDragStart = (handle: 'a' | 'b', e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const barEl = barRef.current;
+    if (!barEl || duration <= 0) return;
+
+    const onMouseMove = (moveEv: MouseEvent) => {
+      const rect = barEl.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const ratio = Math.max(0, Math.min(1, (moveEv.clientX - rect.left) / rect.width));
+      const nextTime = Math.round(ratio * duration * 10) / 10;
+      if (handle === 'a') {
+        const curB = stRef.current.b;
+        const validA = curB != null ? Math.min(nextTime, curB - 0.1) : nextTime;
+        const clampedA = Math.max(0, Math.round(validA * 10) / 10);
+        setPointA(clampedA);
+        stRef.current.a = clampedA;
+      } else {
+        const curA = stRef.current.a;
+        const validB = curA != null ? Math.max(nextTime, curA + 0.1) : nextTime;
+        const clampedB = Math.min(duration, Math.round(validB * 10) / 10);
+        setPointB(clampedB);
+        stRef.current.b = clampedB;
+      }
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      stRef.current.dirty = true;
+      setDirty(true);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
   const handleTogglePlay = () => {
@@ -1453,7 +1649,7 @@ export function PracticePage(): React.ReactElement {
               <span className={`pp-time ${styles.ppTime}`} id="tNow">
                 {formatPlayerTime(currentTime)}
               </span>
-              <div className={`pp-bar ${styles.ppBar}`} id="bar">
+              <div className={`pp-bar ${styles.ppBar}`} id="bar" ref={barRef}>
                 <svg
                   className={`pp-bar-svg ${styles.ppBarSvg}`}
                   viewBox="0 0 1000 44"
@@ -1481,6 +1677,30 @@ export function PracticePage(): React.ReactElement {
                     rx={0}
                   />
                 </svg>
+                {pointA != null && (
+                  <div
+                    id="barHandleA"
+                    data-handle="a"
+                    className={styles.barHandle}
+                    ref={handleARef}
+                    onMouseDown={(e) => handleDragStart('a', e)}
+                    role="slider"
+                    aria-label="A Handle"
+                    aria-valuenow={pointA}
+                  />
+                )}
+                {pointB != null && (
+                  <div
+                    id="barHandleB"
+                    data-handle="b"
+                    className={styles.barHandle}
+                    ref={handleBRef}
+                    onMouseDown={(e) => handleDragStart('b', e)}
+                    role="slider"
+                    aria-label="B Handle"
+                    aria-valuenow={pointB}
+                  />
+                )}
                 <input
                   type="range"
                   id="seek"
@@ -1623,24 +1843,22 @@ export function PracticePage(): React.ReactElement {
                 >
                   {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
                 </button>
-                <div className={`pp-seg pp-lead ${styles.ppSeg}`} id="leads" role="group" aria-label={t('practice.ariaLeadSec')}>
-                  {LEADS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={styles.ppLeadBtn}
-                      aria-label={t('practice.ariaLeadSecUnit', { s })}
-                      aria-pressed={leadSec === s}
-                      onClick={() => {
-                        stRef.current.lead = s;
-                        setLeadSec(s);
-                        json.set('ulp:lead', s);
-                      }}
-                    >
-                      {t('practice.secUnit', { s })}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
+                  id="btnWaitTimer"
+                  aria-pressed={waitTimerOn}
+                  onClick={() => {
+                    setWaitTimerOn((v) => !v);
+                    if (countdownTimerRef.current) {
+                      window.clearInterval(countdownTimerRef.current);
+                      countdownTimerRef.current = null;
+                      setCountdownSec(null);
+                    }
+                  }}
+                >
+                  {countdownSec != null ? `-${countdownSec}s` : t('practice.waitTimer')}
+                </button>
                 <button
                   type="button"
                   className={`pp-icon ${styles.ppIcon}`}
@@ -1650,6 +1868,46 @@ export function PracticePage(): React.ReactElement {
                 >
                   ✕
                 </button>
+              </div>
+            </div>
+
+            <div className={`pp-group ${styles.ppGroup} ${styles.presetSection}`} id="presetSection">
+              <div className={`pp-lab ${styles.ppLab}`}>{t('practice.presetSelect')}</div>
+              <div className={styles.ppPresetRow}>
+                <select
+                  id="presetSelect"
+                  className={styles.presetSelect}
+                  value={selectedPresetId}
+                  onChange={(e) => handleSelectPreset(e.target.value)}
+                  aria-label={t('practice.presetSelect')}
+                >
+                  <option value="">{t('practice.presetSelect')}</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({formatPlayerTime(p.a)}–{formatPlayerTime(p.b)}){p.completed ? ' ✓' : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  id="btnSavePreset"
+                  className={`pillBtn ${styles.btnSavePreset}`}
+                  disabled={pointA == null || pointB == null}
+                  onClick={handleSavePreset}
+                >
+                  {t('practice.presetSave')}
+                </button>
+                {selectedPresetId ? (
+                  <button
+                    type="button"
+                    id="btnDeletePreset"
+                    className={`ghostBtn ${styles.btnSavePreset}`}
+                    onClick={handleDeletePreset}
+                    aria-label={t('practice.presetDeleteConfirm')}
+                  >
+                    ✕
+                  </button>
+                ) : null}
               </div>
             </div>
 

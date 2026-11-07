@@ -18,6 +18,7 @@ export interface SongDto {
   categoryIds: string[];
   totalSeconds: number;
   resumeUrl: string;
+  durationSec: number;
 }
 
 export interface CategoryDto {
@@ -26,6 +27,36 @@ export interface CategoryDto {
   sortOrder: number;
   onHome: boolean;
   songCount: number;
+}
+
+export interface SongPresetDto {
+  id: string;
+  songId: string;
+  name: string;
+  a: number;
+  b: number;
+  rate: number;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PresetListResponse {
+  presets: SongPresetDto[];
+}
+
+export interface PresetEnvelope {
+  ok: boolean;
+  preset: SongPresetDto;
+}
+
+export interface UpsertPresetInput {
+  name: string;
+  a: number;
+  b: number;
+  rate?: number;
+  completed?: boolean;
+  merge?: boolean;
 }
 
 export interface TakeDto {
@@ -41,6 +72,8 @@ export interface TakeDto {
   storage: 'supabase' | 'drive' | string;
   storageKey: string;
   memo: string;
+  partName?: string;
+  completed?: boolean;
 }
 
 export interface SongSessionDto {
@@ -54,12 +87,15 @@ export interface SongSessionDto {
   segment: string;
   rate: number | null;
   memo: string;
+  partStats?: unknown;
+  coveragePct?: number;
 }
 
 export interface SongDetailResponse {
   song: SongDto;
   sessions: SongSessionDto[];
   takes: TakeDto[];
+  presets?: SongPresetDto[];
 }
 
 export interface SessionSummaryDto {
@@ -646,6 +682,36 @@ async function removeSong(songId: string): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+async function listPresets(songId: string): Promise<PresetListResponse> {
+  requireLogin();
+  const path = '/api/v1/songs/' + encodeURIComponent(songId) + '/presets';
+  return await getAuthRef().apiFetch(path);
+}
+
+async function putPreset(
+  songId: string,
+  input: UpsertPresetInput
+): Promise<PresetEnvelope> {
+  requireLogin();
+  const path = '/api/v1/songs/' + encodeURIComponent(songId) + '/presets';
+  return await getAuthRef().apiFetch(path, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+async function deletePreset(songId: string, presetId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  const path =
+    '/api/v1/songs/' +
+    encodeURIComponent(songId) +
+    '/presets/' +
+    encodeURIComponent(presetId);
+  return await getAuthRef().apiFetch(path, {
+    method: 'DELETE',
+  });
+}
+
 function saveProgress(
   body: SaveProgressInput,
   opts?: { keepalive?: boolean }
@@ -811,6 +877,18 @@ async function removeTake(takeId: string): Promise<{ ok: boolean }> {
   const path = '/api/v1/takes/' + encodeURIComponent(takeId);
   return await getAuthRef().apiFetch(path, {
     method: 'DELETE',
+  });
+}
+
+async function toggleTakeComplete(
+  takeId: string,
+  completed: boolean
+): Promise<{ ok: boolean; take: TakeDto }> {
+  requireLogin();
+  const path = '/api/v1/takes/' + encodeURIComponent(takeId) + '/complete';
+  return await getAuthRef().apiFetch(path, {
+    method: 'PATCH',
+    body: JSON.stringify({ completed }),
   });
 }
 
@@ -1517,6 +1595,9 @@ export const apiClient = {
     remove: removeSong,
     importPreview: importPlaylistPreview,
     importPlaylist,
+    listPresets,
+    putPreset,
+    deletePreset,
   },
   categories: {
     list: listCategories,
@@ -1551,6 +1632,8 @@ export const apiClient = {
     upload: uploadTake,
     getUrl: getTakeUrl,
     remove: removeTake,
+    complete: toggleTakeComplete,
+    toggleComplete: toggleTakeComplete,
     registerDrive: registerDriveTake,
     downloadBlob: downloadTakeBlob,
     migrateToDrive: migrateTakeToDrive,

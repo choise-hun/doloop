@@ -50,7 +50,7 @@ const DETAIL_1 = {
     b: 48,
     segment: '0:12–0:48',
     rate: 0.75,
-    memo: i === 0 ? '첫 곡 세션 메모' : '',
+    memo: '',
   })),
 };
 
@@ -83,7 +83,7 @@ const DETAIL_2 = {
       b: 30,
       segment: '0:00–0:30',
       rate: 0.5,
-      memo: '둘째 곡 세션 메모',
+      memo: '',
     },
   ],
 };
@@ -183,10 +183,10 @@ test('SR1-4: 곡 전환 비동기 레이스 — 첫 곡 응답이 늦게 도착�
   await song2Btn.click();
   await song2DetailResp;
 
-  // 둘째 곡 녹음(42초)과 메모가 보임
+  // 둘째 곡 녹음(42초)과 세션 구간이 보임
   await expect(page.locator('#srTakes .take-row')).toHaveCount(1);
   await expect(page.locator('#srTakes')).toContainText('42초');
-  await expect(page.locator('#srTimeline')).toContainText('둘째 곡 세션 메모');
+  await expect(page.locator('#srTimeline')).toContainText('0:00–0:30');
 
   // 이제 첫 곡의 지연된 응답을 풀어줌
   const song1DetailResp = page.waitForResponse((res) => res.url().includes(`/api/v1/songs/${SONG_1.id}`));
@@ -196,8 +196,8 @@ test('SR1-4: 곡 전환 비동기 레이스 — 첫 곡 응답이 늦게 도착�
   // 여전히 둘째 곡 기록만 보여야 함
   await expect(page.locator('#srTakes .take-row')).toHaveCount(1);
   await expect(page.locator('#srTakes')).toContainText('42초');
-  await expect(page.locator('#srTimeline')).toContainText('둘째 곡 세션 메모');
-  await expect(page.locator('#srTimeline')).not.toContainText('첫 곡 세션 메모');
+  await expect(page.locator('#srTimeline')).toContainText('0:00–0:30');
+  await expect(page.locator('#srTimeline')).not.toContainText('0:12–0:48');
 });
 
 test('SR1-5: 무료 녹음 한도 초과(403 FREE_TAKE_SONG_LIMIT_EXCEEDED) 모달·Drive 버튼 숨김·확인창 후 replaceOldSongTakes 재업로드', async ({ page }) => {

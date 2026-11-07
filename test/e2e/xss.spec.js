@@ -330,10 +330,10 @@ test('E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교', asyn
   await expect(detailTitle).toHaveText(PAYLOADS.P_IMG);
 
   // A/B 비교 녹음 2개 선택
-  const checks = page.locator('.ab-check');
-  await expect(checks).toHaveCount(2);
-  await checks.nth(0).check();
-  await checks.nth(1).check();
+  const selects = page.locator('.ab-select');
+  await expect(selects).toHaveCount(2);
+  await selects.nth(0).selectOption('a');
+  await selects.nth(1).selectOption('b');
 
   // A/B 패널 표시 및 라벨 확인
   const abPanel = page.locator('#abPanel');

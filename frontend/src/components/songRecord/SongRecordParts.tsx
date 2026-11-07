@@ -18,23 +18,17 @@ export function fmtDuration(sec?: number | null): string {
 }
 
 export function fmtTakeMeta(take: TakeDto): string {
-  let timeStr = '';
-  if (take.recordedAt) {
-    try {
-      const d = new Date(take.recordedAt);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      timeStr = `${hh}:${mm}`;
-    } catch {
-      timeStr = '';
-    }
+  const parts: string[] = [];
+  if (take.partName) {
+    parts.push(take.partName);
   }
-  let res = timeStr ? `${timeStr} · ` : '';
-  res += t('record.takeSec', { sec: take.durationSec || 0 });
+  if (take.durationSec != null) {
+    parts.push(t('record.takeSec', { sec: take.durationSec }));
+  }
   if (take.rate != null) {
-    res += ` · ${take.rate}×`;
+    parts.push(`${take.rate}×`);
   }
-  return res;
+  return parts.join(' · ');
 }
 
 export function sortAbTakes(t1: TakeDto, t2: TakeDto): [TakeDto, TakeDto] {
@@ -51,7 +45,9 @@ export interface TakeItemRowProps {
   take: TakeDto;
   showAbCheck?: boolean;
   abChecked?: boolean;
+  abSlot?: 'a' | 'b' | '';
   onToggleAb?: (takeId: string, checked: boolean) => void;
+  onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
   onDeleted: (takeId: string) => void;
 }
 
@@ -59,14 +55,27 @@ export function TakeItemRow({
   take,
   showAbCheck = false,
   abChecked = false,
+  abSlot,
   onToggleAb,
+  onSelectAbSlot,
   onDeleted,
 }: TakeItemRowProps): React.ReactElement {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [audioVisible, setAudioVisible] = useState(false);
   const [loadingPlay, setLoadingPlay] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [prevTakeId, setPrevTakeId] = useState(take.id);
+  const [prevTakeCompleted, setPrevTakeCompleted] = useState(take.completed);
+  const [completed, setCompleted] = useState<boolean>(Boolean(take.completed));
   const [rowMsg, setRowMsg] = useState('');
+  const takeReqSeqRef = useRef(0);
+
+  // 렌더 타임 동기 정규화 (docs/rules/frontend-state.md §2, PR #132 리뷰 3번)
+  if (take.id !== prevTakeId || take.completed !== prevTakeCompleted) {
+    setPrevTakeId(take.id);
+    setPrevTakeCompleted(take.completed);
+    setCompleted(Boolean(take.completed));
+  }
 
   const handlePlay = async () => {
     if (audioUrl) {
@@ -114,6 +123,22 @@ export function TakeItemRow({
     }
   };
 
+  const handleCompleteToggle = async () => {
+    const nextVal = !completed;
+    const token = ++takeReqSeqRef.current;
+    // 1. 낙관적 UI 갱신 (docs/rules/frontend-state.md §1)
+    setCompleted(nextVal);
+    try {
+      const res = await apiClient.takes.toggleComplete(take.id, nextVal);
+      if (token !== takeReqSeqRef.current) return;
+      setCompleted(Boolean(res.take.completed));
+    } catch (err: any) {
+      if (token !== takeReqSeqRef.current) return;
+      setCompleted(!nextVal);
+      window.alert(err.message || 'Error');
+    }
+  };
+
   const handleDelete = async () => {
     if (!window.confirm(t('record.confirmDeleteTake'))) return;
     setDeleting(true);
@@ -128,19 +153,29 @@ export function TakeItemRow({
     }
   };
 
+  const currentSlotVal = abSlot !== undefined ? abSlot : abChecked ? 'a' : '';
+
   return (
     <div className={`take-row ${styles.takeRow}`}>
       {showAbCheck && (
-        <label className={`check ${styles.checkLabel}`}>
-          <input
-            type="checkbox"
-            className="ab-check"
-            data-take-id={take.id}
-            checked={abChecked}
-            onChange={(e) => onToggleAb && onToggleAb(take.id, e.target.checked)}
-          />
-          <span>{t('record.abSelect')}</span>
-        </label>
+        <select
+          className={`ab-select ${styles.abSelect}`}
+          data-take-id={take.id}
+          value={currentSlotVal}
+          onChange={(e) => {
+            const val = e.target.value as 'a' | 'b' | '';
+            if (onSelectAbSlot) {
+              onSelectAbSlot(take.id, val);
+            } else if (onToggleAb) {
+              onToggleAb(take.id, Boolean(val));
+            }
+          }}
+          aria-label={t('record.abSelect')}
+        >
+          <option value="">{t('record.abSelectNone')}</option>
+          <option value="a">{t('record.abSelectA')}</option>
+          <option value="b">{t('record.abSelectB')}</option>
+        </select>
       )}
       <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
       <button
@@ -153,11 +188,18 @@ export function TakeItemRow({
       </button>
       <button
         type="button"
-        className={`ghost mini ${styles.ghostMini}`}
+        className={`ghost mini btnComplete ${styles.ghostMini} ${styles.btnComplete} ${completed ? styles.btnCompleted : ''}`}
+        onClick={() => void handleCompleteToggle()}
+      >
+        {completed ? t('record.btnCompleted') : t('record.btnComplete')}
+      </button>
+      <button
+        type="button"
+        className={`ghost mini btnDelete ${styles.ghostMini} ${styles.btnDelete}`}
         disabled={deleting}
         onClick={() => void handleDelete()}
       >
-        {t('record.btnDelete')}
+        {t('record.btnDeleteShort')}
       </button>
       <span className={`meta ${styles.meta}`}>{rowMsg}</span>
       <SafeAudio
@@ -367,17 +409,47 @@ export function SessionTimeline({
   loading = false,
 }: SessionTimelineProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
+  const [openSet, setOpenSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setExpanded(false);
+    setOpenSet(new Set());
   }, [sessions]);
 
-  const maxTimelineSec = Math.max(60, ...sessions.map((s) => s.seconds || 0));
+  const toggleAccordion = (id: string) => {
+    setOpenSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const hasLimit = typeof initialLimit === 'number' && initialLimit > 0;
   const visibleSessions = hasLimit && !expanded ? sessions.slice(0, initialLimit) : sessions;
   const hasMore = hasLimit && !expanded && sessions.length > initialLimit;
 
   const tlId = idPrefix ? `${idPrefix}Timeline` : 'detailTimeline';
+
+  const parseParts = (partStats: unknown): any[] => {
+    if (!partStats) return [];
+    if (Array.isArray(partStats)) return partStats;
+    if (typeof partStats === 'string') {
+      try {
+        const parsed = JSON.parse(partStats);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const formatSec = (sec: number): string => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
 
   return (
     <div id={tlId}>
@@ -391,16 +463,50 @@ export function SessionTimeline({
             let leftText = s.date;
             if (s.segment) leftText += t('record.sessionSegment', { seg: s.segment });
             if (s.rate != null) leftText += ` · ${s.rate}×`;
+            const isOpen = openSet.has(s.id);
+            const coverage = s.coveragePct || 0;
+            const parts = parseParts(s.partStats);
+
             return (
               <div key={s.id} className={`tl-row ${styles.tlRow}`}>
                 <div className={`tl-meta ${styles.tlMeta}`}>
                   <span>{leftText}</span>
                   <span className={`meta ${styles.meta}`}>
-                    {t('record.sessionDurationLoops', { m: s.minutes, loops: s.loops || 0 })}
+                    {t('record.sessionDurationLoops', { m: Math.round(s.minutes || (s.seconds ? s.seconds / 60 : 0)), loops: 0 })}
                   </span>
                 </div>
-                <progress className={`tl-bar ${styles.tlBar}`} max={maxTimelineSec} value={s.seconds || 0} />
-                {s.memo && <div className={`tl-memo ${styles.tlMemo}`}>{s.memo}</div>}
+                <progress
+                  className={`tlCoverageBar ${styles.tlCoverageBar} ${coverage >= 100 ? styles.tlCoverageComplete : styles.tlCoverageInProgress}`}
+                  max={100}
+                  value={coverage}
+                />
+                <button
+                  type="button"
+                  className={`ghost mini btnAccordion ${styles.ghostMini} ${styles.btnAccordion}`}
+                  onClick={() => toggleAccordion(s.id)}
+                >
+                  {t('record.btnDetailAccordion')} {isOpen ? '▴' : '▾'}
+                </button>
+                <div className={`tlPartStats ${styles.tlPartStats}`} hidden={!isOpen}>
+                  {parts.length === 0 ? (
+                    <div className={styles.partEmpty}>{t('record.emptySessions')}</div>
+                  ) : (
+                    <ul className={styles.partList}>
+                      {parts.map((p: any, idx: number) => (
+                        <li key={idx} className={styles.partItem}>
+                          <span className={styles.partName}>{p.name || `Part ${idx + 1}`}</span>
+                          <span className={styles.partRange}>
+                            {p.a != null && p.b != null ? `${formatSec(p.a)}–${formatSec(p.b)}` : ''}
+                          </span>
+                          <span className={styles.partDuration}>
+                            {p.seconds ? formatSec(p.seconds) : ''}
+                          </span>
+                          {p.completed && <span className={styles.partBadge}>{t('record.btnCompleted')}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             );
           })}

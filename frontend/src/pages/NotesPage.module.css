@@ -234,49 +234,101 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  padding: 24px 26px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 24px;
 }
 
-.noteCardHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+@media (max-width: 640px) {
+  .noteCard {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 10px;
+  }
 }
 
 .noteCardTitle {
-  font-size: 16px;
   font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
   color: var(--ink);
   text-decoration: none;
 }
 
-.noteCardTitle:hover {
+.noteCardTitle a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.noteCardTitle a:hover {
   text-decoration: underline;
 }
 
 .noteCardMeta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.noteCardHeadline {
-  margin: 0;
-  font-size: 14px;
+.noteCardMeta b {
+  font-weight: 500;
   color: var(--ink);
+  letter-spacing: 0.04em;
 }
 
-.noteCardActs {
+.tag {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 2px 8px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 12px;
+  background: transparent;
+}
+
+.noteCardDesc {
+  grid-column: 1 / -1;
+  font-size: 14.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.noteActions {
+  grid-column: 1 / -1;
   display: flex;
+  gap: 28px;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+  margin-top: 8px;
+}
+
+.link {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.link.sub {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.arrow {
+  font-weight: 400;
 }
 
 .empty {
