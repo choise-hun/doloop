@@ -405,7 +405,7 @@ export function LogPage(): React.ReactElement {
   // A/B 선택된 테이크 계산 (주니어 체크리스트 58·59행, PR #43 리뷰 1번)
   const detailTakes = detailData?.takes || [];
   const abPair: [TakeDto, TakeDto] | null =
-    abSelected.length === 2
+    Boolean(abSelected[0] && abSelected[1])
       ? (() => {
           const t1 = detailTakes.find((t) => t.id === abSelected[0]);
           const t2 = detailTakes.find((t) => t.id === abSelected[1]);
@@ -823,29 +823,62 @@ export function LogPage(): React.ReactElement {
               {detailTakes.length === 0 ? (
                 <p className={`empty ${styles.empty}`}>{t('log.emptyTakes')}</p>
               ) : (
-                detailTakes.map((t) => (
-                  <TakeItemRow
-                    key={t.id}
-                    take={t}
-                    showAbCheck
-                    abChecked={abSelected.includes(t.id)}
-                    onToggleAb={(takeId, checked) => {
-                      setAbSelected((prev) => {
-                        if (checked) {
-                          const next = prev.length >= 2 ? [...prev.slice(1), takeId] : [...prev, takeId];
-                          return next;
-                        }
-                        return prev.filter((id) => id !== takeId);
-                      });
-                    }}
-                    onDeleted={(takeId) => {
-                      setAbSelected((prev) => prev.filter((id) => id !== takeId));
-                      setDetailData((prev) =>
-                        prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev
-                      );
-                    }}
-                  />
-                ))
+                detailTakes.map((t) => {
+                  const slot: 'a' | 'b' | '' =
+                    abSelected[0] === t.id ? 'a' : abSelected[1] === t.id ? 'b' : '';
+                  return (
+                    <TakeItemRow
+                      key={t.id}
+                      take={t}
+                      showAbCheck
+                      abChecked={abSelected.includes(t.id)}
+                      abSlot={slot}
+                      onSelectAbSlot={(takeId, nextSlot) => {
+                        setAbSelected((prev) => {
+                          let slotA = prev[0] || '';
+                          let slotB = prev[1] || '';
+                          if (!nextSlot) {
+                            if (slotA === takeId) slotA = '';
+                            if (slotB === takeId) slotB = '';
+                          } else if (nextSlot === 'a') {
+                            if (slotB === takeId) slotB = '';
+                            slotA = takeId;
+                          } else if (nextSlot === 'b') {
+                            if (slotA === takeId) slotA = '';
+                            slotB = takeId;
+                          }
+                          return (slotA || slotB) ? [slotA, slotB] : [];
+                        });
+                      }}
+                      onToggleAb={(takeId, checked) => {
+                        setAbSelected((prev) => {
+                          let slotA = prev[0] || '';
+                          let slotB = prev[1] || '';
+                          if (checked) {
+                            if (!slotA) {
+                              slotA = takeId;
+                            } else if (!slotB) {
+                              slotB = takeId;
+                            } else {
+                              slotA = slotB;
+                              slotB = takeId;
+                            }
+                          } else {
+                            if (slotA === takeId) slotA = '';
+                            if (slotB === takeId) slotB = '';
+                          }
+                          return (slotA || slotB) ? [slotA, slotB] : [];
+                        });
+                      }}
+                      onDeleted={(takeId) => {
+                        setAbSelected((prev) => prev.filter((id) => id !== takeId));
+                        setDetailData((prev) =>
+                          prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev
+                        );
+                      }}
+                    />
+                  );
+                })
               )}
             </div>
 

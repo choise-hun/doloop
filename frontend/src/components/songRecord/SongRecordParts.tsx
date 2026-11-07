@@ -49,7 +49,6 @@ export interface TakeItemRowProps {
   onToggleAb?: (takeId: string, checked: boolean) => void;
   onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
   onDeleted: (takeId: string) => void;
-  onToggleComplete?: (take: TakeDto) => void;
 }
 
 export function TakeItemRow({
@@ -60,15 +59,23 @@ export function TakeItemRow({
   onToggleAb,
   onSelectAbSlot,
   onDeleted,
-  onToggleComplete,
 }: TakeItemRowProps): React.ReactElement {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [audioVisible, setAudioVisible] = useState(false);
   const [loadingPlay, setLoadingPlay] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [prevTakeId, setPrevTakeId] = useState(take.id);
+  const [prevTakeCompleted, setPrevTakeCompleted] = useState(take.completed);
   const [completed, setCompleted] = useState<boolean>(Boolean(take.completed));
   const [rowMsg, setRowMsg] = useState('');
   const takeReqSeqRef = useRef(0);
+
+  // 렌더 타임 동기 정규화 (docs/rules/frontend-state.md §2, PR #132 리뷰 3번)
+  if (take.id !== prevTakeId || take.completed !== prevTakeCompleted) {
+    setPrevTakeId(take.id);
+    setPrevTakeCompleted(take.completed);
+    setCompleted(Boolean(take.completed));
+  }
 
   const handlePlay = async () => {
     if (audioUrl) {
@@ -121,7 +128,6 @@ export function TakeItemRow({
     const token = ++takeReqSeqRef.current;
     // 1. 낙관적 UI 갱신 (docs/rules/frontend-state.md §1)
     setCompleted(nextVal);
-    if (onToggleComplete) onToggleComplete({ ...take, completed: nextVal });
     try {
       const res = await apiClient.takes.toggleComplete(take.id, nextVal);
       if (token !== takeReqSeqRef.current) return;
@@ -152,43 +158,24 @@ export function TakeItemRow({
   return (
     <div className={`take-row ${styles.takeRow}`}>
       {showAbCheck && (
-        <>
-          <input
-            type="checkbox"
-            className={`ab-check ${styles.abCheckHidden}`}
-            data-take-id={take.id}
-            checked={Boolean(currentSlotVal)}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              if (onSelectAbSlot) {
-                onSelectAbSlot(take.id, checked ? 'a' : '');
-              }
-              if (onToggleAb) {
-                onToggleAb(take.id, checked);
-              }
-            }}
-            aria-label={t('record.abSelect')}
-          />
-          <select
-            className={`ab-select ${styles.abSelect}`}
-            data-take-id={take.id}
-            value={currentSlotVal}
-            onChange={(e) => {
-              const val = e.target.value as 'a' | 'b' | '';
-              if (onSelectAbSlot) {
-                onSelectAbSlot(take.id, val);
-              }
-              if (onToggleAb) {
-                onToggleAb(take.id, Boolean(val));
-              }
-            }}
-            aria-label={t('record.abSelect')}
-          >
-            <option value="">{t('record.abSelectNone')}</option>
-            <option value="a">{t('record.abSelectA')}</option>
-            <option value="b">{t('record.abSelectB')}</option>
-          </select>
-        </>
+        <select
+          className={`ab-select ${styles.abSelect}`}
+          data-take-id={take.id}
+          value={currentSlotVal}
+          onChange={(e) => {
+            const val = e.target.value as 'a' | 'b' | '';
+            if (onSelectAbSlot) {
+              onSelectAbSlot(take.id, val);
+            } else if (onToggleAb) {
+              onToggleAb(take.id, Boolean(val));
+            }
+          }}
+          aria-label={t('record.abSelect')}
+        >
+          <option value="">{t('record.abSelectNone')}</option>
+          <option value="a">{t('record.abSelectA')}</option>
+          <option value="b">{t('record.abSelectB')}</option>
+        </select>
       )}
       <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
       <button
@@ -520,7 +507,6 @@ export function SessionTimeline({
                     </ul>
                   )}
                 </div>
-                {s.memo && <div className={`tl-memo ${styles.tlMemo}`}>{s.memo}</div>}
               </div>
             );
           })}

@@ -18,12 +18,16 @@
 | 수정 | `frontend/src/lib/i18n/ja.mts` | UI-2 신규 다국어 일문 키 13개 동기화 및 미사용 키 정리 |
 | 수정 | `frontend/src/pages/PracticePage.tsx` | `#leads` 컨테이너 완전 제거, `-10s` 대기 타이머(`id="btnWaitTimer"`), 프리셋 저장/병합 다이얼로그 연동, `#bar` 마우스 드래그 핸들(`#barHandleA`, `#barHandleB`) 구현 |
 | 수정 | `frontend/src/pages/PracticePage.module.css` | 프리셋 바, 대기 타이머 토글 버튼, 드래그 핸들러 스타일 추가 |
-| 수정 | `frontend/src/components/songRecord/SongRecordParts.tsx` | `SessionTimeline`에서 `memo`/`loops` 제거, `coveragePct` 빗금/단색 게이지 및 `[상세 보기 ▾]` 아코디언 토글, `TakeItemRow` AB 드롭다운, `[구간 완료]` 토글 구현 |
-| 수정 | `frontend/src/components/songRecord/SongRecordParts.module.css` | 세션 빗금/단색 커버리지 바, 아코디언 상세 목록, 테이크 AB 셀렉트 및 완료 토글 버튼 스타일 추가 |
+| 수정 | `frontend/src/components/songRecord/SongRecordParts.tsx` | `SessionTimeline`에서 `memo`/`loops` 완전 제거, `coveragePct` 빗금/단색 게이지 및 `[상세 보기 ▾]` 아코디언 토글, `TakeItemRow` AB 드롭다운, 미사용 `onToggleComplete` 및 `.ab-check` 제거, `completed` 렌더 타임 동기 정규화 |
+| 수정 | `frontend/src/components/songRecord/SongRecordParts.module.css` | 세션 빗금/단색 커버리지 바, 아코디언 상세 목록, 테이크 AB 셀렉트 및 완료 토글 버튼 스타일 추가, 미사용 `.tlMemo` 및 `.abCheckHidden` 제거 |
+| 수정 | `frontend/src/components/songRecord/SongRecordPanel.tsx` | `TakeItemRow`에 `abSlot` 및 `onSelectAbSlot` 연동, 슬롯 A/B 독립 선택 및 보존 지원 |
+| 수정 | `frontend/src/pages/LogPage.tsx` | `TakeItemRow`에 `abSlot` 및 `onSelectAbSlot` 연동, 슬롯 A/B 독립 선택 지원 |
 | 수정 | `frontend/src/pages/NotesPage.tsx` | `.noteCard` 마크업을 `lesson-cards.html` 시안 구조(제목, 채널·난이도·태그 메타, 설명문, `▶ 연습하기 →` 및 `상세 보기` 텍스트 링크)로 개편 |
 | 수정 | `frontend/src/pages/NotesPage.module.css` | `lesson-cards.html` 시안 스타일을 `tokens.css` 시맨틱 토큰(단색 테두리, 직각 사각)으로 매핑하여 스타일 이식 |
-| 수정 | `test/e2e/layout/practice.spec.js` | T1(#leads 제거 및 대기 타이머), T2(프리셋 저장 및 병합 다이얼로그), T3(세션 커버리지 및 아코디언), T4(테이크 AB 드롭다운 및 구간 완료) 단언 추가 |
+| 수정 | `test/e2e/layout/practice.spec.js` | T1(#leads 제거 및 대기 타이머), T2(프리셋 저장 및 병합 다이얼로그), T3(세션 커버리지 및 `.tl-memo` 0개 단언), T4(테이크 A/B 슬롯 매핑 유지 및 구간 완료) 단언 동기화 |
 | 수정 | `test/e2e/layout/notes.spec.js` | T5(.noteCard 시안 구조 및 액션 텍스트 링크) 단언 추가 |
+| 수정 | `test/e2e/practice-record.spec.js` | SR1-4 비동기 곡 전환 식별 표지를 메모 대신 `segment`(`0:00–0:30` vs `0:12–0:48`)로 전환 |
+| 수정 | `test/e2e/xss.spec.js` | E5 곡 상세 A/B 비교 선택을 `.ab-check`에서 `.ab-select`의 `selectOption`으로 전환 |
 | 신규 | `개발산출물/명세/UI-2_구현명세.md` | 시니어 Step UI-2 구현 명세서 |
 | 수정 | `개발산출물/진행_프론트개선.md` | 단계 표 UI-2 상태 칸 `완료(머지 시)` 갱신 |
 | 신규 | `개발산출물/결과/UI-2_플레이어연습기록.md` | 결과 문서 작성 및 체크리스트 대조 감사 |
@@ -131,14 +135,23 @@ Running 50 tests using 1 worker
 
 ---
 
-## 5. 명세와 달라진 점
+## 5. 명세와 달라진 점 및 시니어 리뷰 반영
 
-- **CSP 인라인 스타일 가드레일 준수:** 명세에는 핸들 위치 및 커버리지 바를 예시 수준으로 언급하였으나, 프로젝트 CSP 규격(`RZ2-4`, `test/security.test.js`)에 따라 React 컴포넌트 내 인라인 스타일(`style={{ ... }}`)을 0건으로 유지해야 한다. 이에 따라 `#bar`의 A/B 핸들 위치 이동은 DOM ref(`handleARef.current.style.left`)로 제어하고, 세션 커버리지 바는 100% 완료 여부에 따라 CSS 클래스(`.tlBarComplete`, `.tlBarPartial`)로 제어하도록 구현했다.
-- **i18n 및 기존 테스트 호환성 보강 (SR1-4, E5):**
-  - 테이크 메타데이터에서 `0:32` 같은 시각 표기(`hh:mm`)는 명세 D5대로 제거하되, 녹음 길이인 `t('record.takeSec')`(`{sec}초`)는 유지하여 곡 전환 비동기 레이스 검증(`practice-record.spec.js` SR1-4)의 `42초` 단언을 완벽히 만족하도록 ko, en, ja 사전을 복원·정리했다.
-  - 세션 카드에서 인라인 메모(`s.memo`)의 경우 데이터가 있는 세션에 한해 `.tlMemo`로 안전하게 렌더링하도록 보존하여 SR1-4 비동기 레이스 검증(`둘째 곡 세션 메모`)과 T3(.tlMemo 부재)을 동시에 통과했다.
-  - `.ab-select` 드롭다운과 함께 기존 E2E 보안 테스트(`xss.spec.js` E5)의 `.ab-check` 체크박스 액션을 완벽히 수용할 수 있도록 호환용 체크박스를 연동 렌더링했다.
+- **CSP 인라인 스타일 가드레일 준수:** 명세에는 핸들 위치 및 커버리지 바를 예시 수준으로 언급하였으나, 프로젝트 CSP 규격(`RZ2-4`, `test/security.test.js`)에 따라 React 컴포넌트 내 인라인 스타일(`style={{ ... }}`)을 0건으로 유지해야 한다. 이에 따라 `#bar`의 A/B 핸들 위치 이동은 DOM ref(`handleARef.current.style.left`)로 제어하고, 세션 커버리지 바는 100% 완료 여부에 따라 CSS 클래스(`.tlCoverageComplete`, `.tlCoverageInProgress`)로 제어하도록 구현했다.
+- **테이크 길이(sec) 다국어 유지:** 테이크 메타데이터에서 `0:32` 같은 시각 표기(`hh:mm`)는 명세 D5대로 제거하되, 녹음 길이인 `t('record.takeSec')`(`{sec}초`)는 유지하여 곡 전환 비동기 레이스 검증(`practice-record.spec.js` SR1-4)의 `42초` 단언을 만족하도록 유지했다.
 - **TypeScript 타입 안전성 보강:** `SongRecordParts.tsx`의 `handleToggleComplete`에서 API 응답의 `res.take.completed`가 선택적 필드(`boolean | undefined`)로 선언되어 있어 TypeScript TS2345 타입 오류가 발생할 수 있었다. 이를 `Boolean(res.take.completed)`로 명시적 불리언 형변환 처리하여 컴파일 안전성을 확보했다.
+- **PR #132 시니어 리뷰 머지 전 수정 3건 반영 (2026-11-08):**
+  1. **AB 슬롯 매핑 정상화 및 중복 체크박스 제거:**
+     - 부모(`SongRecordPanel.tsx`, `LogPage.tsx`)에서 선택 순서/슬롯에 맞게 `abSlot`을 넘기고 `onSelectAbSlot`으로 A/B 슬롯을 각각 독립적으로 유지할 수 있도록 정규화했다.
+     - 숨김 체크박스(`.ab-check`, `.abCheckHidden`)를 제거하고, `xss.spec.js:333`을 `.ab-select`의 `selectOption`으로 전환했다.
+     - 명세에 없던 미사용 `onToggleComplete` prop을 제거했다.
+     - T4에 두 개 테이크에서 각각 A, B를 선택하고 그 값이 유지되는지 단언을 추가했다.
+  2. **명세 D4 준수 및 세션 인라인 메모 완전 제거:**
+     - `SongRecordParts.tsx`에서 `s.memo` DOM(`tl-memo`)을 완전히 제거하고, `SongRecordParts.module.css`의 `.tlMemo` 스타일을 제거했다.
+     - `practice-record.spec.js` 비동기 곡 전환 식별 표지를 메모 대신 `segment`(`0:00–0:30` vs `0:12–0:48`)로 전환했다.
+     - T3에 `memo: '메모'` 픽스처를 주입하고 `.tl-memo`가 0개인지 단언하여 반증 대조(가드 제거 시 실패)를 확립했다.
+  3. **`completed` 로컬 상태 렌더 타임 동기 정규화:**
+     - `SongRecordParts.tsx`에서 `take.id` 또는 `take.completed` prop이 변경될 경우 렌더 도중 이전 prop(`prevTakeId`, `prevTakeCompleted`)과 비교하여 동기적으로 `completed` 상태를 갱신하도록 정규화했다(`docs/rules/frontend-state.md` §2 준수).
 
 ---
 

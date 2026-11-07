@@ -211,7 +211,7 @@ test('T3: 세션 커버리지 게이지 바 및 아코디언 상세 목록', asy
           b: 40,
           segment: '0:10–0:40',
           rate: 1,
-          memo: '',
+          memo: '메모',
           coveragePct: 75,
           partStats: [
             { name: 'Part A', a: 10, b: 25, rate: 1, completed: true, seconds: 150, loops: 3 },
@@ -226,7 +226,7 @@ test('T3: 세션 커버리지 게이지 바 및 아코디언 상세 목록', asy
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#songRecord').waitFor();
 
-  await expect(page.locator('.tlMemo')).toHaveCount(0);
+  await expect(page.locator('.tl-memo')).toHaveCount(0);
   const covBar = page.locator('.tlCoverageBar').first();
   await expect(covBar).toBeVisible();
 
@@ -270,8 +270,12 @@ test('T4: 테이크 .ab-select 매핑 및 구간 완료 토글', async ({ page }
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#srTakes').waitFor();
 
-  const abSelect = page.locator('#srTakes .ab-select').first();
-  await expect(abSelect).toBeVisible();
+  const abSelects = page.locator('#srTakes .ab-select');
+  await expect(abSelects).toHaveCount(2);
+  await abSelects.nth(0).selectOption('a');
+  await abSelects.nth(1).selectOption('b');
+  await expect(abSelects.nth(0)).toHaveValue('a');
+  await expect(abSelects.nth(1)).toHaveValue('b');
 
   const btnComp = page.locator('#srTakes .btnComplete').first();
   await expect(btnComp).toBeVisible();
