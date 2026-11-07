@@ -10,6 +10,8 @@ module.exports = defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3000',
     headless: true,
+    locale: 'ko-KR',
+    timezoneId: 'Asia/Seoul',
   },
   projects: [
     {

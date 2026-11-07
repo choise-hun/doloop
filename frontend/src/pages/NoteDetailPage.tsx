@@ -6,7 +6,7 @@ import { SanitizedSvg } from '../components/common/SanitizedSvg';
 import { auth, useAuth } from '../lib/auth';
 import { apiClient, NoteDetailDto } from '../lib/apiClient';
 import { safeUrl } from '../lib/security';
-import { NOTE_FORM_TAGS } from './NotesPage';
+import { NOTE_FORM_TAGS, noteTagLabel } from './NotesPage';
 import { t } from '../lib/i18n.mts';
 import { buildNoteMarkdown, notePracticeHref } from '../lib/noteMarkdown.mts';
 import styles from './NoteDetailPage.module.css';
@@ -241,9 +241,9 @@ export function NoteDetailPage(): React.ReactElement {
               {note?.difficulty || ''}
             </span>
             <span id="noteTags">
-              {tags.map((t) => (
-                <span key={t} className={`badge ${styles.badge}`}>
-                  {t}
+              {tags.map((tag) => (
+                <span key={tag} className={`badge ${styles.badge}`}>
+                  {noteTagLabel(tag)}
                 </span>
               ))}
             </span>
@@ -493,17 +493,17 @@ export function NoteDetailPage(): React.ReactElement {
           <div>
             <span className="lab">{t('note.labTag')}</span>
             <div className={`tags ${styles.tagsGroup}`} id="editTags" role="group" aria-label={t('note.ariaEditTags')}>
-              {NOTE_FORM_TAGS.map((t) => (
+              {NOTE_FORM_TAGS.map((tag) => (
                 <button
-                  key={t}
+                  key={tag}
                   type="button"
                   className={styles.tagBtn}
-                  aria-pressed={editTags.includes(t)}
+                  aria-pressed={editTags.includes(tag)}
                   onClick={() =>
-                    setEditTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+                    setEditTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]))
                   }
                 >
-                  {t}
+                  {noteTagLabel(tag)}
                 </button>
               ))}
             </div>
