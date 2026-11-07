@@ -8,6 +8,11 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 
+let i18nMod;
+test.before(async () => {
+  i18nMod = await import('../frontend/src/lib/i18n.mts');
+});
+
 function readText(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), 'utf8').replace(/\r\n/g, '\n');
 }
@@ -64,7 +69,7 @@ function loadProgressionsModule(storageMap = new Map()) {
   const exportsObj = {};
   const ctx = vm.createContext({
     exports: exportsObj,
-    __require: () => secFake,
+    __require: (reqPath) => (reqPath && reqPath.includes('i18n') ? i18nMod : secFake),
     Date,
     Math,
     Number,
