@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const CT = require('../public/lib/theory.js');
-const GE = require('../public/lib/voicing.js');
+const CT = require('../frontend/src/lib/engine/theory.mjs').default;
+const GE = require('../frontend/src/lib/engine/voicing.mjs').default;
 const { routes } = require('../server.js');
 
 const q = (o) => new URLSearchParams(o);

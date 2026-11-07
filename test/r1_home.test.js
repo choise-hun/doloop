@@ -148,39 +148,15 @@ test('R1-H3: 홈 취향 코드 진행은 서버 진행 목록을 쓴다 — 노�
   assert.ok(!homeTsx.includes('apiClient.notes.get('), '홈이 노트 상세를 읽지 않아야 함');
 });
 
-test('R1-H4: public/data.js 및 apiClient.ts의 listLocalSongs 최신순 정렬 검증', () => {
+test('R1-H4: apiClient.ts의 listLocalSongs 최신순 정렬 검증', () => {
   const apiSrc = readText('frontend/src/lib/apiClient.ts');
   assert.ok(apiSrc.includes('export function listLocalSongs'), 'apiClient.ts에 listLocalSongs export가 있어야 함');
-
-  const store = new Map([
-    ['ulp:v:aaaaaaaaaaa', JSON.stringify({ pos: 10, a: null, b: null, rate: 1, date: '2026-11-01' })],
-    ['ulp:v:bbbbbbbbbbb', JSON.stringify({ pos: 30, a: 15, b: 45, rate: 0.75, date: '2026-11-03' })],
-  ]);
-  const keys = Array.from(store.keys());
-  const sandbox = {
-    window: { ULAuth: { getSession: () => null } },
-    localStorage: {
-      get length() {
-        return keys.length;
-      },
-      key: (i) => keys[i] || null,
-      getItem: (k) => (store.has(k) ? store.get(k) : null),
-    },
-    Blob,
-    FormData,
-    URLSearchParams,
-    encodeURIComponent,
-  };
-  vm.runInNewContext(readText('public/data.js'), sandbox);
-  const list = sandbox.window.ULData.listLocalSongs();
-  assert.equal(list.length, 2);
-  assert.equal(list[0].videoId, 'bbbbbbbbbbb');
-  assert.equal(list[0].a, 15);
-  assert.equal(list[1].videoId, 'aaaaaaaaaaa');
+  assert.ok(apiSrc.includes("readLocal('ulp:v:')"), 'ulp:v: 접두어 로컬 곡만 조회해야 함');
+  assert.ok(apiSrc.includes('y.date.localeCompare(x.date)'), 'date 최신순 정렬이 포함되어야 함');
 });
 
-test('R1-H5: HomePage.module.css & public/site.css 순백(#ffffff/#fff) 0건 및 중간 곡률 0건', () => {
-  const files = ['frontend/src/pages/HomePage.module.css', 'public/site.css'];
+test('R1-H5: HomePage.module.css 순백(#ffffff/#fff) 0건 및 중간 곡률 0건', () => {
+  const files = ['frontend/src/pages/HomePage.module.css'];
   const allowedRadius = new Set(['0', '0px', '50%', '9999px', 'var(--radius-pill)', 'var(--radius-card)']);
 
   for (const file of files) {
@@ -194,10 +170,9 @@ test('R1-H5: HomePage.module.css & public/site.css 순백(#ffffff/#fff) 0건 및
   }
 });
 
-test('R1-H6: HomePage.tsx, App.tsx, public/index.html 핵심 위젯 ID 및 7개 모드 구성 검증', () => {
+test('R1-H6: HomePage.tsx, App.tsx 핵심 위젯 ID 및 7개 모드 구성 검증', () => {
   const homeTsx = readText('frontend/src/pages/HomePage.tsx');
   const appTsx = readText('frontend/src/App.tsx');
-  const pubIndex = readText('public/index.html');
 
   assert.ok(appTsx.includes('<HomePage />'), 'App.tsx가 <HomePage />를 렌더링해야 함');
   for (const id of [
@@ -213,276 +188,10 @@ test('R1-H6: HomePage.tsx, App.tsx, public/index.html 핵심 위젯 ID 및 7개 
     'progRefBox',
     'progArchBox',
     'btnRandRef',
+    'progScope',
+    'progRefPlay',
+    'progTasteLink',
   ]) {
     assert.ok(homeTsx.includes(`id="${id}"`), `HomePage.tsx 누락 ID: ${id}`);
-    assert.ok(pubIndex.includes(`id="${id}"`), `public/index.html 누락 ID: ${id}`);
   }
-  // CH-6: React 홈 오른쪽 카드는 취향 요약(랜덤 버튼 대신 통계 링크), 왼쪽 카드에 연주하기·범위 토글. 옛 화면(public)은 그대로
-  for (const id of ['progScope', 'progRefPlay', 'progTasteLink']) {
-    assert.ok(homeTsx.includes(`id="${id}"`), `HomePage.tsx 누락 ID: ${id}`);
-  }
-  assert.ok(pubIndex.includes('id="btnRandArch"'), 'public/index.html 누락 ID: btnRandArch');
-});
-
-test('R1-H7 & R1-H8: public/home.js 비로그인/로그인 위젯 바인딩·랜덤 진행·계정 전환 레이스 방어 검증', async () => {
-  const elements = new Map();
-  function makeEl(id) {
-    const el = {
-      id,
-      value: '',
-      hidden: false,
-      textContent: '',
-      innerHTML: '',
-      className: '',
-      href: '',
-      src: '',
-      target: '',
-      rel: '',
-      dataset: {},
-      children: [],
-      listeners: {},
-      classList: {
-        toggle(cls, force) {
-          if (force) el.className = (el.className + ' ' + cls).trim();
-        },
-      },
-      addEventListener(ev, fn) {
-        el.listeners[ev] = fn;
-      },
-      appendChild(child) {
-        el.children.push(child);
-        return child;
-      },
-      replaceChildren() {
-        el.children = [];
-      },
-      click() {},
-    };
-    return el;
-  }
-
-  for (const id of [
-    'go', 'goUrl', 'goPick', 'goThumb', 'goPlay', 'goNote', 'goMsg',
-    'weeklyStreakCard', 'streakDays', 'streakChallengeBar', 'streakChallengeText', 'streakDots',
-    'recentSongCard', 'recentSongGo', 'recentSongBody', 'recentSongEmpty', 'recentSongThumb', 'recentSongTitle', 'recentSongSegment', 'recentSongResume',
-    'modes', 'songs',
-    'recentNoteCard', 'recentNoteBody', 'recentNoteEmpty', 'recentNoteThumb', 'recentNoteTitle', 'recentNoteHeadline', 'recentNoteLink',
-    'progRefBox', 'progRefKey', 'progRefChords', 'progRefTitle', 'btnRandRef',
-    'progArchBox', 'progArchKey', 'progArchChords', 'progArchTitle', 'btnRandArch',
-    'notionBig', 'notionLinks', 'nlPractice', 'nlNotes', 'copy',
-  ]) {
-    elements.set(id, makeEl(id));
-  }
-
-  let authChangeCb = null;
-  let currentUser = null;
-  let delayedSongsResolve = null;
-
-  const sandbox = {
-    document: {
-      getElementById: (id) => elements.get(id) || null,
-      createElement: (tag) => makeEl(tag),
-    },
-    UL: {
-      raw: {
-        get: (k) => (k === 'ulp:tab' ? 'ds' : ''),
-        set: () => {},
-      },
-      json: {
-        get: (_k, d) => d,
-        set: () => {},
-      },
-      videoIdFrom: (v) => (/^[\w-]{11}$/.test(String(v || '').trim()) ? String(v).trim() : null),
-      thumb: (id) => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg',
-      esc: (s) => String(s ?? ''),
-      safeUrl: (u) => (String(u || '').startsWith('https://') ? String(u) : ''),
-    },
-    window: {
-      ULAuth: {
-        getUser: () => currentUser,
-        onChange: (cb) => {
-          authChangeCb = cb;
-          cb({ user: currentUser });
-        },
-      },
-      ULData: {
-        isLoggedIn: () => !!currentUser,
-        listLocalSongs: () => [{ videoId: 'jNQXAC9IVRw', pos: 12, a: 5, b: 20, rate: 0.75, date: '2026-11-03' }],
-        songs: {
-          list: () =>
-            new Promise((resolve) => {
-              delayedSongsResolve = resolve;
-            }),
-        },
-        sessions: {
-          list: async () => ({ calendar: [], sessions: [] }),
-        },
-        notes: {
-          list: async () => [],
-        },
-      },
-    },
-    Date,
-    Math,
-    Number,
-    String,
-    Array,
-    Set,
-    encodeURIComponent,
-    isFinite,
-  };
-  sandbox.window.document = sandbox.document;
-  sandbox.window.UL = sandbox.UL;
-
-  vm.runInNewContext(readText('public/home.js'), sandbox);
-
-  // R1-H7: 비로그인 초기 상태 확인
-  assert.ok(elements.get('modes').innerHTML.includes('7 · 더블 스탑 연습'));
-  assert.ok(elements.get('modes').innerHTML.includes('<li class="cur"><a href="chords.html#ds">'));
-  assert.ok(elements.get('songs').innerHTML.includes('로그인하면 내 연습 곡이 여기 보여요'));
-  assert.equal(elements.get('recentSongBody').hidden, false);
-  assert.equal(elements.get('recentSongSegment').textContent, '00:05 ~ 00:20 구간 연습 중 · 0.75×');
-
-  // 랜덤 진행 버튼 클릭 시 텍스트 변경 확인
-  const prevRef = elements.get('progRefChords').textContent;
-  elements.get('btnRandRef').listeners.click();
-  assert.notEqual(elements.get('progRefChords').textContent, prevRef);
-
-  // R1-H8: 사용자 A 로그인 후 곡 응답 도착 전 로그아웃 시 지연 응답 무시 검증
-  currentUser = { id: 'user-a' };
-  authChangeCb({ user: currentUser });
-  assert.ok(elements.get('songs').innerHTML.includes('불러오는 중…'));
-
-  // 응답 도착 전 로그아웃
-  currentUser = null;
-  authChangeCb({ user: null });
-  assert.ok(elements.get('songs').innerHTML.includes('로그인하면 내 연습 곡이 여기 보여요'));
-
-  // 뒤늦게 사용자 A의 곡 목록 응답 도착
-  delayedSongsResolve([{ id: 's1', videoId: 'dQw4w9WgXcQ', title: 'Secret Song A', status: '연습중', rate: 1, lastDate: '2026-11-03' }]);
-  await new Promise((r) => setTimeout(r, 10));
-
-  // 사용자 A의 곡이 렌더링되지 않고 비로그인 상태 유지
-  assert.ok(!elements.get('songs').innerHTML.includes('Secret Song A'));
-  assert.ok(elements.get('songs').innerHTML.includes('로그인하면 내 연습 곡이 여기 보여요'));
-});
-
-test('R1-H9 (PR #38 리뷰 반영): 로그인 시 notes.list + notes.get 상세 조회를 통해 사용자 노트 진행이 코드 진행 카드로 연동됨을 검증', async () => {
-  const elements = new Map();
-  function makeEl(id) {
-    const el = {
-      id,
-      value: '',
-      hidden: false,
-      textContent: '',
-      innerHTML: '',
-      className: '',
-      href: '',
-      src: '',
-      dataset: {},
-      children: [],
-      listeners: {},
-      classList: { toggle() {} },
-      addEventListener(ev, fn) { el.listeners[ev] = fn; },
-      appendChild(child) { el.children.push(child); return child; },
-      replaceChildren() { el.children = []; },
-      click() {},
-    };
-    return el;
-  }
-
-  for (const id of [
-    'go', 'goUrl', 'goPick', 'goThumb', 'goPlay', 'goNote', 'goMsg',
-    'weeklyStreakCard', 'streakDays', 'streakChallengeBar', 'streakChallengeText', 'streakDots',
-    'recentSongCard', 'recentSongGo', 'recentSongBody', 'recentSongEmpty', 'recentSongThumb', 'recentSongTitle', 'recentSongSegment', 'recentSongResume',
-    'modes', 'songs',
-    'recentNoteCard', 'recentNoteBody', 'recentNoteEmpty', 'recentNoteThumb', 'recentNoteTitle', 'recentNoteHeadline', 'recentNoteLink',
-    'progRefBox', 'progRefKey', 'progRefChords', 'progRefTitle', 'btnRandRef',
-    'progArchBox', 'progArchKey', 'progArchChords', 'progArchTitle', 'btnRandArch',
-    'notionBig', 'notionLinks', 'nlPractice', 'nlNotes', 'copy',
-  ]) {
-    elements.set(id, makeEl(id));
-  }
-
-  const currentUser = { id: 'user-note-owner' };
-  let getNoteCalled = false;
-
-  const sandbox = {
-    document: {
-      getElementById: (id) => elements.get(id) || null,
-      createElement: (tag) => makeEl(tag),
-    },
-    UL: {
-      raw: { get: () => '', set: () => {} },
-      json: { get: (_k, d) => d, set: () => {} },
-      videoIdFrom: (v) => String(v || '').trim(),
-      thumb: (id) => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg',
-      esc: (s) => String(s ?? ''),
-      safeUrl: (u) => (String(u || '').startsWith('https://') ? String(u) : ''),
-    },
-    window: {
-      ULAuth: {
-        getUser: () => currentUser,
-        onChange: (cb) => {
-          cb({ user: currentUser });
-        },
-      },
-      ULData: {
-        isLoggedIn: () => true,
-        listLocalSongs: () => [],
-        songs: {
-          list: async () => [],
-        },
-        sessions: {
-          list: async () => ({ calendar: [], sessions: [] }),
-        },
-        notes: {
-          list: async () => [
-            { id: 'note-jazz-1', videoId: 'jNQXAC9IVRw', title: '재즈 보이싱 특강', channel: '재즈피아노' },
-          ],
-          get: async (id) => {
-            getNoteCalled = true;
-            return {
-              id,
-              videoId: 'jNQXAC9IVRw',
-              title: '재즈 보이싱 특강',
-              tags: ['편곡'], // 편곡 -> REFERENCE
-              analysis: {
-                harmony: {
-                  progressions: [
-                    {
-                      name: '재즈 투파이브원 순환',
-                      key: 'Bb Major',
-                      chords: [{ symbol: 'Cm9' }, { symbol: 'F13' }, { symbol: 'BbM9' }],
-                    },
-                  ],
-                },
-              },
-            };
-          },
-        },
-      },
-    },
-    Date,
-    Math,
-    Number,
-    String,
-    Array,
-    Set,
-    encodeURIComponent,
-    isFinite,
-  };
-  sandbox.window.document = sandbox.document;
-  sandbox.window.UL = sandbox.UL;
-
-  vm.runInNewContext(readText('public/home.js'), sandbox);
-
-  // 비동기 노트 목록 및 상세 조회 완료 대기
-  await new Promise((r) => setTimeout(r, 50));
-
-  assert.ok(getNoteCalled, 'D.notes.get이 호출되어 상세 분석을 가져와야 함');
-  assert.equal(elements.get('progRefChords').textContent, 'Cm9 - F13 - BbM9');
-  assert.ok(elements.get('progRefTitle').textContent.includes('출처: AI'));
-  assert.equal(elements.get('progRefChords').href, 'note.html?id=note-jazz-1');
-  assert.equal(elements.get('progRefKey').textContent, 'Bb Major');
 });
