@@ -36,7 +36,7 @@
 | 파일 | 변경 내용 요약 |
 | --- | --- |
 | `test/engine.test.js` | `require('../public/lib/theory.js')`·`voicing.js`를 `require('../frontend/src/lib/engine/theory.mjs').default`·`voicing.mjs`로 교체 |
-| `test/security.test.js` | 스캔 대상에서 삭제된 구 `public/*.html`·`public/*.js`를 제거하고 현행 `frontend/index.html` 및 `public/config.js`를 스캔하도록 정리, 구 파일 전용 `STORAGE_KEY_ALLOWLIST` 항목 제거 |
+| `test/security.test.js` | 스캔 대상에서 삭제된 구 `public/*.html`·`public/*.js`를 제거하고 현행 `frontend/index.html` 및 `public/config.js`를 스캔하도록 정리, 구 파일 전용 `STORAGE_KEY_ALLOWLIST` 항목 제거. **(PR #127 Codex P2 리뷰 반영)** `frontend/src/**` 활성 React 소스 파일(`.ts`, `.tsx`, `.mts`) 및 `dist/assets` 번들에 대한 (c)~(g) 보안 정적 검사(XSS 싱크, 위험 URL 스킴, eval/Function/문자열 타이머, `SECRET_PATTERNS` 비밀 키 누출, 스토리지 키 접두어) 스위트 추가 |
 | `test/r0_core.test.js` | `R0-T1`에서 삭제된 `public/*.css` 파일 대조 대신 `frontend/src/styles/tokens.css`의 핵심 디자인 토큰(`:root`, `[data-theme="light"]`, `:root:lang(ja)`) 존재 및 CSS 변수 선언을 검증하도록 전환 |
 | `test/r1_home.test.js` | `R1-H2`·`R1-H4`의 `public/home.js`·`public/data.js` 파일 읽기 단언을 `HomePage.tsx`·`apiClient.ts`·`useAuth.ts` 기준으로 정리 |
 | `test/r1_settings_notes.test.js` | `R1-D2`·`R1-N1`·`R1-N3`의 `public/drive.js`·`public/notes.js`·`public/note.js` 참조를 제거하고 `driveClient.ts`·`NotesPage.tsx`·`NoteDetailPage.tsx` 검증만 유지 (`R1-C1`의 `public/config.js` 검증은 그대로 유지) |
@@ -85,3 +85,17 @@
 ## 4. 명세와 달라진 점
 
 - 없음 (`개발산출물/완료/진행_레거시정리.md` §2-2의 삭제 대상 28개 및 수정 대상 9개 파일 목록과 100% 일치).
+
+---
+
+## 5. PR #127 리뷰 잔손질 내역
+
+- **Codex P2 리뷰 코멘트 반영:** `public/*.js` 삭제 후 `security.test.js`가 `public/config.js` 및 `frontend/index.html`만 스캔하여 실제 배포 소스인 React 코드의 보안 검사가 축소되었다는 지적을 수용.
+- `test/security.test.js`에 `frontend/src/**` 활성 코드(.ts/.tsx/.mts) 및 빌드 산출물(`dist/assets/*.js`)을 검사하는 6개 테스트 추가:
+  - (c) React XSS 싱크(`dangerouslySetInnerHTML`, `.innerHTML`, `.outerHTML`, `document.write`) 없음
+  - (d) 하드코딩된 위험한 URL 스킴(`javascript:`, `vbscript:`) 없음
+  - (e) `eval`, `Function` 생성자, 문자열 `setTimeout`/`setInterval` 없음
+  - (f) `SECRET_PATTERNS` 비밀 키 누출 전수 검사
+  - (g) `localStorage`/`sessionStorage` 키 접두어(`ulp:`, `sb-`) 규칙 검증
+  - (f) `dist/assets` 빌드 번들 내 비밀 키 누출 검사
+- 검증: `npm test` 380개 테스트 전수 통과 확인.

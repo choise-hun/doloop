@@ -465,6 +465,104 @@ test('frontend/index.html 및 public/config.js를 실제로 읽었다', () => {
   assert.ok(pub.some((f) => f.name === 'public/config.js'));
 });
 
+// ================= React 활성 소스 (frontend/src) 보안 검사 (PR #127 Codex 리뷰 반영) =================
+
+const reactSrcFiles = walk(path.join(ROOT, 'frontend', 'src'))
+  .filter((p) => /\.(?:ts|tsx|mts|css)$/.test(p))
+  .map((p) => ({
+    name: path.relative(ROOT, p).split(path.sep).join('/'),
+    text: fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'),
+  }));
+
+test('(c) frontend/src: React XSS 싱크(dangerouslySetInnerHTML·innerHTML·outerHTML·document.write) 없음', () => {
+  const violations = [];
+  for (const f of reactSrcFiles) {
+    if (f.name.endsWith('.css')) continue;
+    f.text.split('\n').forEach((line, idx) => {
+      if (/\bdangerouslySetInnerHTML\s*=/.test(line)) violations.push(`${f.name}:${idx + 1} -> dangerouslySetInnerHTML 할당 금지`);
+      if (/\.innerHTML\s*=/.test(line)) violations.push(`${f.name}:${idx + 1} -> innerHTML 대입 금지`);
+      if (/\.outerHTML\s*=/.test(line)) violations.push(`${f.name}:${idx + 1} -> outerHTML 대입 금지`);
+      if (/document\.write(?:ln)?\s*\(/.test(line)) violations.push(`${f.name}:${idx + 1} -> document.write 금지`);
+    });
+  }
+  assert.deepEqual(violations, []);
+});
+
+test('(d) frontend/src: 하드코딩된 위험한 URL 스킴(javascript:·vbscript:) 없음', () => {
+  const violations = [];
+  for (const f of reactSrcFiles) {
+    if (f.name.endsWith('.css')) continue;
+    f.text.split('\n').forEach((line, idx) => {
+      // security.ts의 URL 정화/차단 로직 및 JSDoc 주석은 허용
+      if (f.name === 'frontend/src/lib/security.ts' && (line.includes('//') || line.includes('/*') || line.includes('* ') || line.includes("javascript:"))) {
+        return;
+      }
+      if (/javascript:/i.test(line) || /vbscript:/i.test(line)) {
+        violations.push(`${f.name}:${idx + 1} -> 위험한 URL 스킴 감지: ${line.trim()}`);
+      }
+    });
+  }
+  assert.deepEqual(violations, []);
+});
+
+test('(e) frontend/src: eval·Function 생성자·문자열 setTimeout/setInterval 없음', () => {
+  const violations = [];
+  for (const f of reactSrcFiles) {
+    if (f.name.endsWith('.css')) continue;
+    f.text.split('\n').forEach((line, idx) => {
+      if (/\beval\s*\(/.test(line)) violations.push(`${f.name}:${idx + 1} -> eval 호출 금지`);
+      if (/\bnew\s+Function\b/.test(line) || /\bFunction\s*\(/.test(line)) violations.push(`${f.name}:${idx + 1} -> Function 생성자 금지`);
+      if (/(?:setTimeout|setInterval)\s*\(\s*['"`]/.test(line)) violations.push(`${f.name}:${idx + 1} -> 문자열 타이머 금지`);
+    });
+  }
+  assert.deepEqual(violations, []);
+});
+
+test('(f) frontend/src: 비밀 값 모양 없음 (SECRET_PATTERNS 전수 검사)', () => {
+  const violations = [];
+  for (const f of reactSrcFiles) {
+    f.text.split('\n').forEach((line, idx) => {
+      SECRET_PATTERNS.forEach((re) => {
+        if (re.test(line)) violations.push(`${f.name}:${idx + 1} -> 비밀 값 패턴 감지: ${line.trim()}`);
+      });
+    });
+  }
+  assert.deepEqual(violations, []);
+});
+
+test('(g) frontend/src: 저장소 키는 ulp: 또는 sb- 접두어 사용', () => {
+  const violations = [];
+  const validPrefixes = ['ulp:', 'sb-'];
+  for (const f of reactSrcFiles) {
+    if (f.name.endsWith('.css') || f.name === 'frontend/src/lib/security.ts') continue;
+    f.text.split('\n').forEach((line, idx) => {
+      const m = line.match(/(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\s*\(\s*(['"`])([^'"`]+)\1/);
+      if (m) {
+        const key = m[2];
+        if (!validPrefixes.some((p) => key.startsWith(p))) {
+          violations.push(`${f.name}:${idx + 1} -> 허용되지 않은 저장소 키: ${key}`);
+        }
+      }
+    });
+  }
+  assert.deepEqual(violations, []);
+});
+
+if (fs.existsSync(path.join(ROOT, 'dist', 'assets'))) {
+  test('(f) dist/assets: 빌드 번들에 비밀 값 모양 없음 (SECRET_PATTERNS)', () => {
+    const assetFiles = walk(path.join(ROOT, 'dist', 'assets')).filter((p) => p.endsWith('.js'));
+    const violations = [];
+    for (const file of assetFiles) {
+      const rel = path.relative(ROOT, file);
+      const text = fs.readFileSync(file, 'utf8');
+      SECRET_PATTERNS.forEach((re) => {
+        if (re.test(text)) violations.push(`${rel} -> 비밀 값 패턴 감지: ${re}`);
+      });
+    }
+    assert.deepEqual(violations, []);
+  });
+}
+
 test('허용 목록에 안 쓰이는 항목이 없다 (지운 코드의 허용 항목은 같이 뺀다)', () => {
   const stale = [
     ...HTML_ALLOW.filter((e) => !res.allowUsed.has(e)).map((e) => 'HTML_ALLOW ' + e.file + ' ' + e.expr),
