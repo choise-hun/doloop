@@ -4,6 +4,8 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: './test/e2e',
+  // Keep AV-3 real-account sessions and evidence outside Playwright cleanup.
+  outputDir: './test-results/playwright',
   timeout: 30000,
   retries: 0,
   workers: 1,

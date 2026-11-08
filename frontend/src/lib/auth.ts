@@ -97,6 +97,9 @@ function createAuthModule() {
   let currentSession: SupabaseSessionLike | null = null;
   let currentMe: MeProfile | null = null;
   let lastFetchedUid: string | null = null;
+  let signingOut = false;
+  let authGeneration = 0;
+  let profileSeq = 0;
   const listeners = new Set<(state: AuthState) => void>();
 
   function isConfigured(): boolean {
@@ -173,20 +176,49 @@ function createAuthModule() {
     });
   }
 
+  function acceptSession(session: SupabaseSessionLike | null): void {
+    if ((currentSession?.user?.id ?? null) !== (session?.user?.id ?? null)) {
+      authGeneration++;
+      profileSeq++;
+      currentMe = null;
+      lastFetchedUid = null;
+      clearKeysCache();
+      syncLangFromProfile(null);
+    }
+    currentSession = session;
+  }
+
+  function obsoleteRequest(): Error {
+    const error = new Error('Profile request is no longer current');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  function profileRequest() {
+    const uid = currentSession?.user?.id;
+    const generation = authGeneration;
+    const seq = ++profileSeq;
+    return { uid, valid: () => Boolean(uid && generation === authGeneration &&
+      seq === profileSeq && uid === currentSession?.user?.id) };
+  }
+
   async function getAccessToken(): Promise<string> {
-    if (!client) return '';
+    if (!client || signingOut) return '';
+    const generation = authGeneration;
     try {
       const { data } = await client.auth.getSession();
-      currentSession = data ? data.session || null : null;
-      return currentSession ? currentSession.access_token : '';
+      if (generation !== authGeneration) return '';
+      acceptSession(data?.session || null);
+      return currentSession?.access_token || '';
     } catch {
-      return currentSession ? currentSession.access_token : '';
+      return generation === authGeneration ? currentSession?.access_token || '' : '';
     }
   }
 
-  async function apiFetch<T = any>(path: string, opts?: RequestInit): Promise<T> {
+  async function requestApi<T = any>(path: string, opts?: RequestInit, isCurrent?: () => boolean): Promise<T> {
     const options = opts || {};
     const token = await getAccessToken();
+    if (isCurrent && !isCurrent()) throw obsoleteRequest();
     const headers: Record<string, string> = Object.assign({}, (options.headers as Record<string, string>) || {});
     if (token) headers.Authorization = 'Bearer ' + token;
     if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
@@ -206,6 +238,10 @@ function createAuthModule() {
     return data as T;
   }
 
+  async function apiFetch<T = any>(path: string, opts?: RequestInit): Promise<T> {
+    return requestApi<T>(path, opts);
+  }
+
   async function fetchMe(): Promise<MeProfile | null> {
     if (!currentSession || !currentSession.access_token) {
       currentMe = null;
@@ -215,14 +251,17 @@ function createAuthModule() {
       notify();
       return null;
     }
-    const uid = currentSession.user ? currentSession.user.id : null;
+    const request = profileRequest();
+    const uid = request.uid;
     if (currentMe && uid && currentMe.id !== uid) {
       currentMe = null;
       clearKeysCache();
       syncLangFromProfile(null);
     }
     try {
-      const me = await apiFetch<MeProfile>('/api/v1/me');
+      const me = await requestApi<MeProfile>('/api/v1/me', undefined, request.valid);
+      if (!request.valid()) return null;
+      if (me?.id !== uid) throw obsoleteRequest();
       syncLangFromProfile(me?.locale ?? null);
       currentMe = me;
       lastFetchedUid = uid || (me ? me.id : null);
@@ -230,6 +269,7 @@ function createAuthModule() {
       notify();
       return me;
     } catch {
+      if (!request.valid()) return null;
       currentMe = null;
       lastFetchedUid = null;
       clearKeysCache();
@@ -258,11 +298,16 @@ function createAuthModule() {
   }
 
   async function signOut(): Promise<void> {
+    signingOut = true;
+    authGeneration++;
+    profileSeq++;
     clearKeysCache();
     syncLangFromProfile(null);
     currentMe = null;
     currentSession = null;
     lastFetchedUid = null;
+    const generation = authGeneration;
+    notify();
     if (client) {
       try {
         await client.auth.signOut({ scope: 'local' });
@@ -270,24 +315,35 @@ function createAuthModule() {
         /* 네트워크 오류 무시 */
       }
     }
-    try {
-      localStorage.removeItem('ulp:auth');
-    } catch {
-      /* 저장 불가 무시 */
+    // The SDK must read the stored session to revoke its refresh token first.
+    if (generation === authGeneration) {
+      signingOut = false;
+      try {
+        localStorage.removeItem('ulp:auth');
+      } catch {
+        /* 저장 불가 무시 */
+      }
     }
-    notify();
   }
 
   async function updateProfile(patch: ProfilePatchInput): Promise<MeProfile> {
-    const updated = await apiFetch<MeProfile>('/api/v1/me', {
-      method: 'PATCH',
-      body: JSON.stringify(patch || {}),
-    });
-    currentMe = updated;
-    lastFetchedUid = updated ? updated.id : lastFetchedUid;
-    saveKeysCache(updated);
-    notify();
-    return updated;
+    const request = profileRequest();
+    try {
+      const updated = await requestApi<MeProfile>('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch || {}),
+      }, request.valid);
+      if (!request.valid() || updated?.id !== request.uid) throw obsoleteRequest();
+      currentMe = updated;
+      lastFetchedUid = updated.id;
+      syncLangFromProfile(updated.locale ?? null);
+      saveKeysCache(updated);
+      notify();
+      return updated;
+    } catch (error) {
+      if (!request.valid()) throw obsoleteRequest();
+      throw error;
+    }
   }
 
   async function deleteAccount(confirmText: string): Promise<{ ok: boolean }> {
@@ -317,21 +373,11 @@ function createAuthModule() {
       notify();
       return;
     }
-    try {
-      const { data } = await client.auth.getSession();
-      currentSession = data ? data.session || null : null;
-      notify();
-      if (currentSession) {
-        await fetchMe();
-      }
-    } catch {
-      notify();
-    }
-
     client.auth.onAuthStateChange((event, session) => {
       const prevUid = currentSession && currentSession.user ? currentSession.user.id : null;
       const nextUid = session && session.user ? session.user.id : null;
-      currentSession = session || null;
+      if (session) signingOut = false;
+      acceptSession(session || null);
 
       if (event === 'SIGNED_OUT' || !session) {
         currentMe = null;
@@ -360,6 +406,15 @@ function createAuthModule() {
         void fetchMe();
       }
     });
+    try {
+      await getAccessToken();
+      notify();
+      if (currentSession) {
+        await fetchMe();
+      }
+    } catch {
+      notify();
+    }
   }
 
   void init();
