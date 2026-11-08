@@ -52,11 +52,21 @@ for (const action of ['like', 'follow', 'clone', 'report']) {
         else await page.locator({ like: '#folderLike', follow: '#folderFollow', clone: '#folderClone' }[action]).click();
         expect(calls).toBe(1);
         if (transition === 'account') {
-          await page.evaluate(() => window.__supabaseAuthListener('SIGNED_OUT', null));
+          await page.evaluate(() => {
+            // Keep the SDK token lookup consistent with the emitted auth event.
+            window.ULAuth.getClient().auth.getSession = async () => ({ data: { session: null } });
+            window.__supabaseAuthListener('SIGNED_OUT', null);
+          });
           await expect(page.locator('#discover')).toHaveCount(0);
           const id = '00000000-0000-4000-8000-000000000099';
           await page.route('**/api/v1/me', route => route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, id, email: 'b@example.com' } }));
-          await page.evaluate(id => window.__supabaseAuthListener('SIGNED_IN', { access_token: 'b-token', user: { id, email: 'b@example.com' } }), id);
+          await page.evaluate(id => {
+            const session = { access_token: 'b-token', user: { id, email: 'b@example.com' } };
+            window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
+            window.__supabaseAuthListener('SIGNED_IN', session);
+          }, id);
+          await expect.poll(() => page.evaluate(() => window.ULAuth.getMe()?.id)).toBe(id);
+          expect(await page.evaluate(async () => (await window.ULAuth.getClient().auth.getSession()).data.session.user.id)).toBe(id);
           await expect(page.locator('#discover')).toBeVisible();
         } else await page.locator('#folderClose').click();
         await open(page, transition === 'other-folder' ? B : A);

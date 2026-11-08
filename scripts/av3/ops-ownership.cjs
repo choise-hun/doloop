@@ -1,0 +1,52 @@
+'use strict';
+const {fs,path,assert,chromium,expect,DIR,actor,api,goto,shot,noWrite,rows,literal}=require('./support.cjs');
+const report={startedAt:new Date().toISOString(),checks:[]};
+(async()=>{
+ const browser=await chromium.launch();
+ try{
+  const A=await actor(browser,'A'),B=await actor(browser,'B'),O=await actor(browser,'O');
+  const reason='AV3 local curation and ownership check';
+  const month=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()).slice(0,7);
+  const curated=await api(O,'POST','/api/v1/admin/shared-folders',{kind:'curated',titleI18n:{ko:'AV3 로컬 큐레이션'},reason},201);
+  await api(O,'PUT',`/api/v1/admin/shared-folders/${curated.id}/items`,{items:[{videoId:'M7lc1UVf-VE',a:10,b:13,rate:.75,noteI18n:{ko:'로컬 검수'}}],reason});
+  assert.equal((await api(B,'GET','/api/v1/curation/home')).curated.some(f=>f.id===curated.id),false);
+  await api(O,'PATCH',`/api/v1/admin/shared-folders/${curated.id}`,{isPublic:true,reason});
+  assert.equal((await api(B,'GET','/api/v1/curation/home')).curated.some(f=>f.id===curated.id),true);
+  const monthly=await api(O,'POST','/api/v1/admin/shared-folders',{kind:'monthly_pick',month,titleI18n:{ko:'AV3 로컬 이달의 곡'},reason},201);
+  await api(O,'PUT',`/api/v1/admin/shared-folders/${monthly.id}/items`,{items:[{videoId:'M7lc1UVf-VE',a:10,b:13,rate:.75}],reason});
+  await api(O,'PATCH',`/api/v1/admin/shared-folders/${monthly.id}`,{isPublic:true,reason});
+  assert.equal((await api(B,'GET','/api/v1/curation/home')).monthlyPick.folder.id,monthly.id);
+  await noWrite(()=>api(O,'POST','/api/v1/admin/shared-folders',{kind:'monthly_pick',month,titleI18n:{ko:'중복 검수'},reason},409));
+  const six=['dQw4w9WgXcQ','9bZkp7q19f0','kJQP7kiw5Fk','fJ9rUzIMcZQ','M7lc1UVf-VE','aqz-KE-bpKQ'].map(videoId=>({videoId}));
+  await noWrite(()=>api(O,'PUT',`/api/v1/admin/shared-folders/${monthly.id}/items`,{items:six,reason},400));
+  await noWrite(()=>api(B,'PATCH',`/api/v1/admin/shared-folders/${curated.id}`,{isPublic:false,reason},403));
+  await goto(B,'/index.html');
+  await expect(B.page.locator('#discover [data-row="curated"]')).toBeVisible();
+  await expect(B.page.locator('#discover [data-row="monthly"]')).toBeVisible();
+  await shot(B,'local-curation-monthly-home');
+  report.checks.push({name:'local owner curation/monthly draft/public and home',status:'pass',duplicateMonth409:true,sixItems400NoWrite:true,nonOwner403NoWrite:true});
+  const note=rows(`SELECT id FROM notes WHERE user_id=${literal(A.id)} LIMIT 1`)[0];
+  assert.ok(note,'real Gemini note must exist');
+  await noWrite(()=>api(B,'GET',`/api/v1/notes/${note.id}`,undefined,404));
+  await noWrite(()=>api(B,'PATCH',`/api/v1/notes/${note.id}`,{memo:'unauthorized'},404));
+  const job=rows(`SELECT id FROM analysis_jobs WHERE user_id=${literal(A.id)} LIMIT 1`)[0];
+  await noWrite(()=>api(B,'GET',`/api/v1/notes/jobs/${job.id}`,undefined,404));
+  const s=rows(`SELECT id FROM sessions WHERE user_id=${literal(A.id)} LIMIT 1`)[0];
+  assert.ok(s);await noWrite(()=>api(B,'PATCH',`/api/v1/sessions/${s.id}`,{memo:'unauthorized'},404));
+  const ownNotes=await api(B,'GET','/api/v1/notes');assert.equal(JSON.stringify(ownNotes).includes(note.id),false);
+  const ownLedger=await api(B,'GET','/api/v1/credits/ledger');assert.equal(JSON.stringify(ownLedger).includes(job.id),false);
+  report.checks.push({name:'real note/job/session/ledger ownership',status:'pass',noteGet404:true,notePatch404:true,job404:true,sessionPatch404:true,otherLedgerHidden:true});
+  await goto(A,'/notes.html');
+  const noteLink=A.page.locator(`#notesList a[href="note.html?id=${note.id}"]`).first();
+  await expect(noteLink).toBeVisible();
+  await shot(A,'real-Gemini-note-list');
+  await noteLink.click();
+  await expect(A.page).toHaveURL(new RegExp('/note\\.html\\?id='+note.id));
+  await expect(A.page.locator('#noteContent')).toBeVisible();
+  await expect(A.page.locator('#noteHeadline')).not.toBeEmpty();
+  await shot(A,'real-Gemini-note-detail');
+  report.checks.push({name:'real Gemini note list and detail navigation',status:'pass'});
+  report.status='pass';
+ }catch(error){report.status='fail';report.error=error.message.split('\n')[0];process.exitCode=1;}
+ finally{fs.writeFileSync(path.join(DIR,'ops-ownership.json'),JSON.stringify(report,null,2),{mode:0o600});console.log(JSON.stringify(report));await browser.close()}
+})().catch(error=>{console.error(error.message);process.exitCode=1});

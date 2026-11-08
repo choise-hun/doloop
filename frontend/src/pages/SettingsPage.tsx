@@ -111,6 +111,7 @@ export function SettingsPage(): React.ReactElement {
 
   const handleToggleAutosync = async () => {
     if (!canCommunityWrite || commBusyRef.current.has('autosync')) return;
+    const generation = auth.getSessionGeneration();
     commBusyRef.current.add('autosync');
     setCommErr(null);
     const prev = currentAutosync;
@@ -118,8 +119,10 @@ export function SettingsPage(): React.ReactElement {
     setOptAutosync(next);
     try {
       const updated = await auth.updateProfile({ shareAutosync: next });
+      if (generation !== auth.getSessionGeneration()) return;
       setOptAutosync(typeof updated?.shareAutosync === 'boolean' ? updated.shareAutosync : next);
     } catch (e) {
+      if (generation !== auth.getSessionGeneration() || (e as Error)?.name === 'AbortError') return;
       setOptAutosync(prev);
       setCommErr(communityErrorKey(e));
     } finally {
@@ -129,6 +132,7 @@ export function SettingsPage(): React.ReactElement {
 
   const handleTogglePracticeLog = async () => {
     if (!canCommunityWrite || !hasPublicName || commBusyRef.current.has('practiceLog')) return;
+    const generation = auth.getSessionGeneration();
     commBusyRef.current.add('practiceLog');
     setCommErr(null);
     const prev = currentPracticeLog;
@@ -136,8 +140,10 @@ export function SettingsPage(): React.ReactElement {
     setOptPracticeLog(next);
     try {
       const updated = await auth.updateProfile({ sharePracticeLog: next });
+      if (generation !== auth.getSessionGeneration()) return;
       setOptPracticeLog(typeof updated?.sharePracticeLog === 'boolean' ? updated.sharePracticeLog : next);
     } catch (e) {
+      if (generation !== auth.getSessionGeneration() || (e as Error)?.name === 'AbortError') return;
       setOptPracticeLog(prev);
       setCommErr(communityErrorKey(e));
     } finally {
@@ -159,21 +165,22 @@ export function SettingsPage(): React.ReactElement {
   }, []);
 
   const [langChoice, setLangChoiceState] = useState<LangChoice>(() => getLangChoice());
-  const pendingLocaleRef = useRef<LocaleCode | null | undefined>(undefined);
+  const pendingLocaleRef = useRef<{ locale: LocaleCode | null; generation: number } | undefined>(undefined);
   const syncingLocaleRef = useRef(false);
   useEffect(() => onLangChange(() => setLangChoiceState(getLangChoice())), []);
   const handleLangChange = (next: LangChoice) => {
     setLangChoiceState(next);
     setLang(next);
     if (!user) return;
-    pendingLocaleRef.current = next === 'auto' ? null : next;
+    pendingLocaleRef.current = { locale: next === 'auto' ? null : next, generation: auth.getSessionGeneration() };
     if (syncingLocaleRef.current) return;
     syncingLocaleRef.current = true;
     void (async () => {
       while (pendingLocaleRef.current !== undefined) {
         const target = pendingLocaleRef.current;
         pendingLocaleRef.current = undefined;
-        try { await apiClient.me.update({ locale: target }); }
+        if (target.generation !== auth.getSessionGeneration()) continue;
+        try { await apiClient.me.update({ locale: target.locale }); }
         catch (err) { console.warn('[i18n] locale sync failed:', err); }
       }
       syncingLocaleRef.current = false;
@@ -407,13 +414,16 @@ export function SettingsPage(): React.ReactElement {
                 hidden={isDrive}
                 disabled={busyDrive || syncState.enabled}
                 onClick={async () => {
+                  const generation = auth.getSessionGeneration();
                   setDriveMsg({ text: '', kind: '' });
                   setBusyDrive(true);
                   try {
                     await drive.enableDriveStorage();
+                    if (generation !== auth.getSessionGeneration()) return;
                     setDriveMsg({ text: t('settings.driveEnableSuccess'), kind: 'ok' });
                     await auth.fetchMe();
                   } catch (err: any) {
+                    if (generation !== auth.getSessionGeneration() || err?.name === 'AbortError') return;
                     setDriveMsg({
                       text: (err && err.message) || t('settings.driveEnableFail'),
                       kind: 'err',
@@ -432,13 +442,16 @@ export function SettingsPage(): React.ReactElement {
                 hidden={!isDrive}
                 disabled={busyDrive}
                 onClick={async () => {
+                  const generation = auth.getSessionGeneration();
                   setDriveMsg({ text: '', kind: '' });
                   setBusyDrive(true);
                   try {
                     await drive.disableDriveStorage();
+                    if (generation !== auth.getSessionGeneration()) return;
                     setDriveMsg({ text: t('settings.driveDisableSuccess'), kind: 'ok' });
                     await auth.fetchMe();
                   } catch (err: any) {
+                    if (generation !== auth.getSessionGeneration() || err?.name === 'AbortError') return;
                     setDriveMsg({ text: (err && err.message) || t('settings.driveDisableFail'), kind: 'err' });
                   } finally {
                     setBusyDrive(false);
