@@ -54,3 +54,16 @@ Git 처리: 관련 검증·비밀값 제외 확인 후 논리 단위 커밋·pus
 - 새 CI 실패가 있어 해당 8건만 로컬 보강 검증 후 커밋·push·PR CI 재확인한다. 성공했던 실계정/외부 분석/로그인은 반복하지 않는다.
 
 - 보강 결과: `npx playwright test test/e2e/av2-community.spec.js --grep account --output=test-results/playwright` **8 통과**(기존 8 실패 분기). 로그 `test-results/av3-closeout/av2-account.txt`, diff 검사 통과.
+
+## 사용자 추가 지시 — PR 리뷰와 규칙 (2026-11-09)
+
+- CI 중 도착한 PR 리뷰도 참고하고 처리 방법을 규칙에 반영하도록 사용자 승인. 리뷰/라인/일반 코멘트를 조회했으며 댓글 전송/리액션/resolve/추가 리뷰 호출은 하지 않는다.
+- [P1 세션 참조](https://github.com/choise-hun/doloop/pull/141#discussion_r4508006407), [P2 독립 PATCH](https://github.com/choise-hun/doloop/pull/141#discussion_r4508006409), 리뷰 커밋 `6565948`: 현재 소스에도 유효. 인증 SDK의 동일 uid 새 객체는 정상이며 참조 비교가 현재 오류/완료 처리를 버린다. 공통 seq의 전송 전 검사도 다른 필드 PATCH를 취소한다.
+- 새 로컬 차단 2건을 회귀로 검증할 때까지 최종 통과 확정을 보류한다. 명세 보강: 기존 공개 함수 시그니처 유지, 읽기 전용 `auth.getSessionGeneration(): number` 추가해 설정 토글/언어 큐/Drive 완료는 세대로 판별. 프로필 PATCH는 호출 시 계정 세대를 보관하고 순차 실행 직전 세대 확인→요청 순번 할당→토큰 조회/전송/응답 가드. 같은 계정의 독립 PATCH는 순차 저장/각 현재 실패 반환, 계정 변경 후 대기 요청은 전송하지 않음. GET↔실행 중 PATCH의 최신 순서 규칙 유지.
+- docs/문서_운영 §5에 리뷰 확인 시점·대상 커밋 대조·반영/미반영/이미 해소/범위 밖 기록·실패 회귀·최신 CI·댓글 권한 경계를 추가. AGENTS/CLAUDE/GEMINI는 공통 규칙을 참조한다.
+
+- P1/P2 실패 회귀: `review-unit-before.txt` 기존26 pass/추가3 fail, `review-callers-before.txt` 새 화면6 fail. 세대 조회가 없던 회귀1과 겹친 PATCH 순차성2를 포함한다.
+- PATCH 계정 경계 보강 회귀도 새 계정이 이전 응답 대기열에 막히는 1 fail을 확인했다(`review-queue-session-before.txt`). uid 전환/로그아웃 때 큐를 분리하고, 이전 queued 작업은 세대 검사로 전송하지 않도록 수정했다.
+- 현재 `node --test test/auth-races.test.js` 30 pass, `npm test` 403 pass/0 fail/skip/cancel, build 성공. 관련 화면71 pass(세대/직렬화 보강), 최종 큐 분리 뒤 AV2/AVF3 영향 범위만 추가 검사 중. 기존 실계정 통합은 보강 전 근거로 구별하고 재로그인/분석을 반복하지 않는다.
+
+- 최종 영향 검사: build 성공, AV2 40+AVF3 14 = **54 통과**. 두 독립 설정의 성공/첫 실패 연속 저장을 실제 auth 모듈+mock 서버 값/화면으로 단언했다. 리뷰 P1/P2 모두 반영·관련 로컬 회귀 통과하여 로컬 판정을 통과로 복원한다. 최신 게시 CI는 별도 확인한다.

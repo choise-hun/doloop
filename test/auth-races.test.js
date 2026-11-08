@@ -76,3 +76,39 @@ test('same uid session refresh preserves an in-flight profile request',async()=>
  const h=await setup();const p=h.auth.fetchMe();await tick();const pending=h.requests.shift();h.refresh();h.reply(pending,'A');
  assert.equal((await p).id,'A');assert.equal(h.auth.getMe().id,'A');
 });
+
+test('session generation survives same uid refresh and changes across logout and return',async()=>{
+ const h=await setup();const before=h.auth.getSessionGeneration();h.refresh();
+ assert.equal(h.auth.getSessionGeneration(),before);
+ await h.auth.signOut();assert.notEqual(h.auth.getSessionGeneration(),before);
+ const loggedOut=h.auth.getSessionGeneration();await h.change('A');
+ assert.notEqual(h.auth.getSessionGeneration(),loggedOut);
+});
+for(const ok of [true,false])test(`independent PATCH calls serialize and preserve ${ok?'success':'failure'} before the next write`,async()=>{
+ const h=await setup(),gate=defer(),sdk=h.auth.getClient().auth,original=sdk.getSession;
+ let lookups=0;sdk.getSession=()=>++lookups===1?gate.promise:original();
+ const first=h.auth.updateProfile({shareAutosync:false}).then(value=>({value}),error=>({error}));
+ await tick();const second=h.auth.updateProfile({sharePracticeLog:false}).then(value=>({value}),error=>({error}));
+ await tick();assert.equal(h.requests.length,0,'second write must wait for first token lookup/write');
+ gate.resolve({data:{session:{user:{id:'A'},access_token:'refreshed-A'}}});await tick();
+ const one=h.requests.shift();assert.deepEqual(JSON.parse(one.opts.body),{shareAutosync:false});
+ h.reply(one,'A',ok);const result=await first;
+ if(ok)assert.equal(result.value.id,'A');else assert.equal(result.error.status,500);
+ await tick();const two=h.requests.shift();assert.deepEqual(JSON.parse(two.opts.body),{sharePracticeLog:false});
+ two.d.resolve({ok:true,status:200,json:async()=>({id:'A',shareAutosync:!ok,sharePracticeLog:false})});
+ assert.equal((await second).value.sharePracticeLog,false);assert.equal(h.auth.getMe().shareAutosync,!ok);
+ assert.equal(h.requests.length,0);
+});
+
+test('account change releases the new session queue and discards queued previous writes',async()=>{
+ const h=await setup();
+ const first=h.auth.updateProfile({shareAutosync:false}).then(value=>({value}),error=>({error}));
+ await tick();const old=h.requests.shift();
+ const queued=h.auth.updateProfile({sharePracticeLog:false}).then(value=>({value}),error=>({error}));
+ await h.change('B');
+ const current=h.auth.updateProfile({locale:'ja'}).then(value=>({value}),error=>({error}));
+ await tick();assert.equal(h.requests.length,1,'new account must not wait for the old account response');
+ h.reply(h.requests.shift(),'B');assert.equal((await current).value.id,'B');
+ h.reply(old,'A');assert.equal((await first).error.name,'AbortError');assert.equal((await queued).error.name,'AbortError');
+ assert.equal(h.requests.length,0);assert.equal(h.auth.getMe().id,'B');
+});

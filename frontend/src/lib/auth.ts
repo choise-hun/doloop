@@ -100,6 +100,7 @@ function createAuthModule() {
   let signingOut = false;
   let authGeneration = 0;
   let profileSeq = 0;
+  let profilePatchQueue: Promise<void> = Promise.resolve();
   const listeners = new Set<(state: AuthState) => void>();
 
   function isConfigured(): boolean {
@@ -180,6 +181,7 @@ function createAuthModule() {
     if ((currentSession?.user?.id ?? null) !== (session?.user?.id ?? null)) {
       authGeneration++;
       profileSeq++;
+      profilePatchQueue = Promise.resolve();
       currentMe = null;
       lastFetchedUid = null;
       clearKeysCache();
@@ -301,6 +303,7 @@ function createAuthModule() {
     signingOut = true;
     authGeneration++;
     profileSeq++;
+    profilePatchQueue = Promise.resolve();
     clearKeysCache();
     syncLangFromProfile(null);
     currentMe = null;
@@ -327,23 +330,33 @@ function createAuthModule() {
   }
 
   async function updateProfile(patch: ProfilePatchInput): Promise<MeProfile> {
-    const request = profileRequest();
-    try {
-      const updated = await requestApi<MeProfile>('/api/v1/me', {
-        method: 'PATCH',
-        body: JSON.stringify(patch || {}),
-      }, request.valid);
-      if (!request.valid() || updated?.id !== request.uid) throw obsoleteRequest();
-      currentMe = updated;
-      lastFetchedUid = updated.id;
-      syncLangFromProfile(updated.locale ?? null);
-      saveKeysCache(updated);
-      notify();
-      return updated;
-    } catch (error) {
-      if (!request.valid()) throw obsoleteRequest();
-      throw error;
-    }
+    const generation = authGeneration;
+    const uid = currentSession?.user?.id;
+    const isSessionCurrent = () => Boolean(uid && generation === authGeneration && uid === currentSession?.user?.id);
+    const pending = profilePatchQueue.then(async () => {
+      // Independent settings writes must all reach the server, in order.
+      if (!isSessionCurrent()) throw obsoleteRequest();
+      const request = profileRequest();
+      try {
+        const updated = await requestApi<MeProfile>('/api/v1/me', {
+          method: 'PATCH',
+          body: JSON.stringify(patch || {}),
+        }, request.valid);
+        if (!request.valid() || updated?.id !== request.uid) throw obsoleteRequest();
+        currentMe = updated;
+        lastFetchedUid = updated.id;
+        syncLangFromProfile(updated.locale ?? null);
+        saveKeysCache(updated);
+        notify();
+        return updated;
+      } catch (error) {
+        if (!request.valid()) throw obsoleteRequest();
+        throw error;
+      }
+    });
+    // Release the queue after either outcome; the caller still receives the error.
+    profilePatchQueue = pending.then(() => undefined, () => undefined);
+    return pending;
   }
 
   async function deleteAccount(confirmText: string): Promise<{ ok: boolean }> {
@@ -425,6 +438,7 @@ function createAuthModule() {
     stripHash,
     getClient: () => client,
     getSession: () => currentSession,
+    getSessionGeneration: () => authGeneration,
     getUser: () => (currentSession ? currentSession.user : null),
     getMe: () => currentMe,
     getAccessToken,
