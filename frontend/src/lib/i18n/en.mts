@@ -1242,7 +1242,7 @@ export const EN: Record<I18nKey, string> = {
   'notes.tagMixing': "Mixing",
   'notes.tagTab': "TAB",
   // UI-2 — Player preset, timer, session accordion, take complete
-  'practice.waitTimer': '-10s Wait',
+  'practice.waitTimer': '0s',
   'practice.presetSave': 'Save Preset',
   'practice.presetSelect': 'Select Preset',
   'practice.presetPrompt': 'Enter preset name',
@@ -1255,4 +1255,13 @@ export const EN: Record<I18nKey, string> = {
   'record.abSelectNone': 'No AB',
   'record.abSelectA': 'Slot A',
   'record.abSelectB': 'Slot B',
+  // UI-3 — 플레이어 정렬 및 UI 정밀 교정
+  'practice.pointStart': 'Start',
+  'practice.pointEnd': 'End',
+  'practice.waitLeadNone': 'No Wait',
+  'practice.waitLeadSec': '{sec}s Wait',
+  'practice.clearLoopConfirm': 'Clear the set loop points (start/end)?',
+  'practice.presetUpdate': 'Overwrite with Current',
+  'practice.presetUpdateConfirm': 'Overwrite selected preset with current range ({range})?',
+  'practice.driveConnectedShort': 'Drive Linked',
 };

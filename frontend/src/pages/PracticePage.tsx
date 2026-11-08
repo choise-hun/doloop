@@ -118,6 +118,7 @@ export function PracticePage(): React.ReactElement {
   const [pointA, setPointA] = useState<number | null>(null);
   const [pointB, setPointB] = useState<number | null>(null);
   const [loopOn, setLoopOn] = useState(false);
+  const [waitLeadSec, setWaitLeadSec] = useState<number>(0);
   const [waitTimerOn, setWaitTimerOn] = useState(false);
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
@@ -189,6 +190,7 @@ export function PracticePage(): React.ReactElement {
     a: null as number | null,
     b: null as number | null,
     loopOn: false,
+    waitLeadSec: 0,
     waitTimerOn: false,
     rate: 1,
     loops: 0,
@@ -203,6 +205,7 @@ export function PracticePage(): React.ReactElement {
     a: pointA,
     b: pointB,
     loopOn,
+    waitLeadSec,
     waitTimerOn,
     rate,
     loops,
@@ -434,7 +437,8 @@ export function PracticePage(): React.ReactElement {
       countdownTimerRef.current = null;
     }
     // 50ms 감시 타이머·단축키는 마운트 시점 클로저라 상태 대신 stRef로 읽는다
-    if (!stRef.current.waitTimerOn) {
+    const curWait = stRef.current.waitLeadSec || (stRef.current.waitTimerOn ? 10 : 0);
+    if (!curWait || curWait <= 0) {
       seekGuardUntilRef.current = Date.now() + 400;
       try {
         playerRef.current?.seekTo?.(targetTime, true);
@@ -445,7 +449,7 @@ export function PracticePage(): React.ReactElement {
       }
       return;
     }
-    let remain = 10;
+    let remain = curWait;
     setCountdownSec(remain);
     try {
       playerRef.current?.pauseVideo?.();
@@ -722,6 +726,10 @@ export function PracticePage(): React.ReactElement {
   };
 
   const handleClearLoop = () => {
+    if (stRef.current.a != null || stRef.current.b != null) {
+      const ok = window.confirm(t('practice.clearLoopConfirm'));
+      if (!ok) return;
+    }
     stRef.current.a = null;
     stRef.current.b = null;
     stRef.current.loopOn = false;
@@ -730,6 +738,7 @@ export function PracticePage(): React.ReactElement {
     setPointB(null);
     setLoopOn(false);
     setLoops(0);
+    setSelectedPresetId('');
     markDirty({ a: null, b: null });
   };
 
@@ -788,6 +797,29 @@ export function PracticePage(): React.ReactElement {
         return idx >= 0 ? [...prev.slice(0, idx), res.preset, ...prev.slice(idx + 1)] : [...prev, res.preset];
       });
       setSelectedPresetId(res.preset.id);
+    } catch (err: any) {
+      if (token === presetReqSeqRef.current) window.alert(err.message || 'Error');
+    }
+  };
+
+  const handleUpdatePreset = async () => {
+    if (!song || pointA == null || pointB == null || !selectedPresetId) return;
+    const curPreset = presets.find((p) => p.id === selectedPresetId);
+    if (!curPreset) return;
+    const rangeStr = `${formatPlayerTime(pointA)}–${formatPlayerTime(pointB)}`;
+    const ok = window.confirm(t('practice.presetUpdateConfirm', { range: rangeStr }));
+    if (!ok) return;
+    const token = ++presetReqSeqRef.current;
+    try {
+      const res = await apiClient.songs.putPreset(song.id, {
+        name: curPreset.name,
+        a: pointA,
+        b: pointB,
+        rate,
+        merge: false,
+      });
+      if (token !== presetReqSeqRef.current) return;
+      setPresets((prev) => prev.map((p) => (p.id === selectedPresetId ? res.preset : p)));
     } catch (err: any) {
       if (token === presetReqSeqRef.current) window.alert(err.message || 'Error');
     }
@@ -1600,7 +1632,7 @@ export function PracticePage(): React.ReactElement {
             )}
             <button
               type="button"
-              className="ghostBtn pp-lib-btn"
+              className={`ghostBtn pp-lib-btn ${styles.ppLibBtn}`}
               id="libBtn"
               aria-expanded={libOpen}
               aria-controls="lib"
@@ -1786,7 +1818,7 @@ export function PracticePage(): React.ReactElement {
                     id="setA"
                     onClick={() => handleSetPoint('a')}
                   >
-                    <small>A</small>
+                    <small>{t('practice.pointStart')}</small>
                     <span id="aTime">{formatPlayerTime(pointA, true)}</span>
                   </button>
                   <button
@@ -1817,7 +1849,7 @@ export function PracticePage(): React.ReactElement {
                     id="setB"
                     onClick={() => handleSetPoint('b')}
                   >
-                    <small>B</small>
+                    <small>{t('practice.pointEnd')}</small>
                     <span id="bTime">{formatPlayerTime(pointB, true)}</span>
                   </button>
                   <button
@@ -1843,22 +1875,62 @@ export function PracticePage(): React.ReactElement {
                 >
                   {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
                 </button>
-                <button
-                  type="button"
-                  className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
-                  id="btnWaitTimer"
-                  aria-pressed={waitTimerOn}
-                  onClick={() => {
-                    setWaitTimerOn((v) => !v);
-                    if (countdownTimerRef.current) {
-                      window.clearInterval(countdownTimerRef.current);
-                      countdownTimerRef.current = null;
-                      setCountdownSec(null);
+                <div className={styles.waitWrap}>
+                  <select
+                    id="waitSelect"
+                    className={styles.waitSelect}
+                    value={waitLeadSec}
+                    onChange={(e) => {
+                      const sec = Number(e.target.value);
+                      setWaitLeadSec(sec);
+                      setWaitTimerOn(sec > 0);
+                      stRef.current.waitLeadSec = sec;
+                      stRef.current.waitTimerOn = sec > 0;
+                      if (countdownTimerRef.current) {
+                        window.clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                        setCountdownSec(null);
+                      }
+                    }}
+                    aria-label={t('practice.secLoopLead')}
+                  >
+                    <option value={0}>{t('practice.waitLeadNone')}</option>
+                    <option value={3}>{t('practice.waitLeadSec', { sec: 3 })}</option>
+                    <option value={5}>{t('practice.waitLeadSec', { sec: 5 })}</option>
+                    <option value={10}>{t('practice.waitLeadSec', { sec: 10 })}</option>
+                  </select>
+                  <button
+                    type="button"
+                    className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
+                    id="btnWaitTimer"
+                    aria-pressed={waitLeadSec > 0 || waitTimerOn}
+                    aria-label={
+                      countdownSec != null
+                        ? `-${countdownSec}s`
+                        : waitLeadSec > 0
+                          ? t('practice.waitLeadSec', { sec: waitLeadSec })
+                          : t('practice.waitLeadNone')
                     }
-                  }}
-                >
-                  {countdownSec != null ? `-${countdownSec}s` : t('practice.waitTimer')}
-                </button>
+                    onClick={() => {
+                      const next = waitLeadSec > 0 ? 0 : 3;
+                      setWaitLeadSec(next);
+                      setWaitTimerOn(next > 0);
+                      stRef.current.waitLeadSec = next;
+                      stRef.current.waitTimerOn = next > 0;
+                      if (countdownTimerRef.current) {
+                        window.clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                        setCountdownSec(null);
+                      }
+                    }}
+                  >
+                    {countdownSec != null
+                      ? `-${countdownSec}s`
+                      : waitLeadSec > 0
+                        ? `${waitLeadSec}s`
+                        : t('practice.waitTimer')}
+                  </button>
+                </div>
                 <button
                   type="button"
                   className={`pp-icon ${styles.ppIcon}`}
@@ -1872,8 +1944,16 @@ export function PracticePage(): React.ReactElement {
             </div>
 
             <div className={`pp-group ${styles.ppGroup} ${styles.presetSection}`} id="presetSection">
-              <div className={`pp-lab ${styles.ppLab}`}>{t('practice.presetSelect')}</div>
-              <div className={styles.ppPresetRow}>
+              <div className={`pp-lab ${styles.ppLab}`}>
+                <span>{t('practice.presetSelect')}</span>
+                {selectedPresetId && (
+                  <span className={styles.presetBadge}>
+                    {presets.find((p) => p.id === selectedPresetId)?.completed ? '✓ ' : ''}
+                    {formatPlayerTime(pointA)}–{formatPlayerTime(pointB)}
+                  </span>
+                )}
+              </div>
+              <div className={styles.presetCard}>
                 <select
                   id="presetSelect"
                   className={styles.presetSelect}
@@ -1888,34 +1968,62 @@ export function PracticePage(): React.ReactElement {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  id="btnSavePreset"
-                  className={`pillBtn ${styles.btnSavePreset}`}
-                  disabled={pointA == null || pointB == null}
-                  onClick={handleSavePreset}
-                >
-                  {t('practice.presetSave')}
-                </button>
-                {selectedPresetId ? (
-                  <button
-                    type="button"
-                    id="btnDeletePreset"
-                    className={`ghostBtn ${styles.btnSavePreset}`}
-                    onClick={handleDeletePreset}
-                    aria-label={t('practice.presetDeleteConfirm')}
-                  >
-                    ✕
-                  </button>
-                ) : null}
+                <div className={styles.presetActionRow}>
+                  {selectedPresetId ? (
+                    <>
+                      <button
+                        type="button"
+                        id="btnUpdatePreset"
+                        className={`ghostBtn ${styles.presetBtn}`}
+                        disabled={pointA == null || pointB == null}
+                        onClick={handleUpdatePreset}
+                      >
+                        {t('practice.presetUpdate')}
+                      </button>
+                      <button
+                        type="button"
+                        id="btnSavePreset"
+                        className={`ghostBtn ${styles.presetBtn}`}
+                        disabled={pointA == null || pointB == null}
+                        onClick={handleSavePreset}
+                      >
+                        {t('practice.presetSave')}
+                      </button>
+                      <button
+                        type="button"
+                        id="btnDeletePreset"
+                        className={`ghostBtn ${styles.presetDeleteBtn}`}
+                        onClick={handleDeletePreset}
+                        aria-label={t('practice.presetDeleteConfirm')}
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      id="btnSavePreset"
+                      className={`ghostBtn ${styles.presetBtn}`}
+                      disabled={pointA == null || pointB == null}
+                      onClick={handleSavePreset}
+                    >
+                      {t('practice.presetSave')}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className={`pp-group ${styles.ppGroup}`}>
               <div className={`pp-lab ${styles.ppLab}`}>
                 <span>{t('practice.secRecToday')}</span>
-                <span className={styles.ppDriveBadge} id="recDriveBadge" hidden={!activeUid || !isDrive}>
-                  {t('practice.driveUnlimitedActive')}
+                <span
+                  className={styles.ppDriveBadge}
+                  id="recDriveBadge"
+                  hidden={!activeUid || !isDrive}
+                  title={t('practice.driveUnlimitedActive')}
+                >
+                  {t('practice.driveConnectedShort')}
                 </span>
               </div>
 

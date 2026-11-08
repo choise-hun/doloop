@@ -1242,7 +1242,7 @@ export const JA: Record<I18nKey, string> = {
   'notes.tagMixing': "ミキシング",
   'notes.tagTab': "TAB",
   // UI-2 — プレイヤー プリセット・タイマー・セッション アコーディオン・テイク完了
-  'practice.waitTimer': '-10s 待機',
+  'practice.waitTimer': '0s',
   'practice.presetSave': 'プリセット保存',
   'practice.presetSelect': 'プリセット選択',
   'practice.presetPrompt': 'プリセット名を入力してください',
@@ -1255,4 +1255,13 @@ export const JA: Record<I18nKey, string> = {
   'record.abSelectNone': 'AB 未選択',
   'record.abSelectA': 'スロット A',
   'record.abSelectB': 'スロット B',
+  // UI-3 — 플레이어 정렬 및 UI 정밀 교정
+  'practice.pointStart': '開始',
+  'practice.pointEnd': '終了',
+  'practice.waitLeadNone': '待機なし',
+  'practice.waitLeadSec': '{sec}秒待機',
+  'practice.clearLoopConfirm': '設定された繰り返し区間(開始・終了)を解除しますか？',
+  'practice.presetUpdate': '現在の区間で上書き',
+  'practice.presetUpdateConfirm': '選択したプリセットを現在の区間({range})で上書きしますか？',
+  'practice.driveConnectedShort': 'Drive 連携中',
 };
