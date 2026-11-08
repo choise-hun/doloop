@@ -1,8 +1,9 @@
 # AV-2 — AV-F1·AV-F2 수정과 회귀 검증
 
 - 날짜/환경: 2026-11-08 / mac / Codex, Node v24.16.0, Chromium Playwright 1.51.1.
+- 구현 커밋: `349e1d9`, [main PR #140](https://github.com/choise-hun/doloop/pull/140). 수정·회귀·전체 코드 CI 완료, 사용자 머지 대기. 최종 문서 head는 동일 PR checks에서 확인.
 - 기준: PR #137 `ab5495f`·#138 `0d8b5bb` 실제 머지 확인 후 `origin/main` `0d8b5bb`에서 `fix/av2-community` 착수. 종료 멘트 로컬 변경은 별도 `3319d97` / [PR #139](https://github.com/choise-hun/doloop/pull/139), 문서 CI ok 성공·앱 테스트 정책 skip.
-- 승인·수정 명세·재개: [진행 기록](../진행_AV2_결함수정.md). 신규 API/DB/기능/배포 없음.
+- 승인·수정 명세·재개: [진행 기록](../완료/진행_AV2_결함수정.md). 신규 API/DB/기능/배포 없음.
 
 ## 1. 원인과 방어 조건
 
@@ -67,9 +68,9 @@ PNG를 직접 읽어 홈/커뮤니티 폴더/LOG와 시트 네 폭, 홈/커뮤�
 
 | 수준 | 확인·제한 |
 | --- | --- |
-| 구현 | AV-F1/F2와 네 mutation/read/상위 patch 가드 구현. 커밋/PR·CI는 게시 뒤 기록 |
+| 구현 | AV-F1/F2와 네 mutation/read/상위 patch 가드 구현. `349e1d9` / [PR #140](https://github.com/choise-hun/doloop/pull/140). [전체 코드 CI](https://github.com/choise-hun/doloop/actions/runs/42474768825) 성공: Node 22·24·Kotlin·Docker·전체 Playwright 408개·CI ok |
 | 화면 연결 | 기존 홈/커뮤니티 카드→시트 동선, 현재 시트 성공/실패·무료 담기 차단·정상 rollback·로그아웃 숨김 유지 |
-| 통합 검증 | 이번 화면은 mock 인증/API. 로컬 Kotlin/격리 DB 테스트는 서버 불변으로 재실행하지 않음. CI의 전체 Kotlin 결과는 별도 기록 |
+| 통합 검증 | 이번 화면은 mock 인증/API. 로컬 Kotlin/격리 DB 테스트는 서버 불변으로 재실행하지 않음. CI 전체 Kotlin 성공(코드 CI run 42474768825) |
 | 운영 확인 | 배포·운영 로그인·실 OAuth/YouTube·실제 서버+격리 DB 연속 A/B 여정 미실행. AV-3 입력으로 남김 |
 
 AV-1 §7의 서버 취소/동시성/거절 후 DB 전체 불변·실 외부 연동·운영 콘텐츠 확인은 AV-3 범위다. 이번 수정 결과로 통합·운영 인수 완료를 선언하지 않는다.
