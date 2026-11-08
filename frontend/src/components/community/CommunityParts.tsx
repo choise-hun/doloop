@@ -57,17 +57,29 @@ export function FolderCard({ folder, onOpen }: FolderCardProps) {
         <CoverArt coverVideoIds={folder.coverVideoIds} />
       </div>
       <div className={styles.cardTitleBand}>
-        <span className={styles.cardTitleText} data-layout-ignore="G3: 카드 제목 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+        <span className={styles.cardTitleText}
+          data-layout-ignore={
+            'G3: 카드 제목 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+          }
+        >
           {title}
         </span>
       </div>
       <div className={styles.cardMetaArea}>
-        <p className={styles.cardSubtitle} data-layout-ignore="G3: 카드 부제 두 줄 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+        <p className={styles.cardSubtitle}
+          data-layout-ignore={
+            'G3: 카드 부제 두 줄 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+          }
+        >
           {sub || '\u00A0'}
         </p>
         <div className={styles.cardFooter}>
           {isCreator ? (
-            <span className={styles.creatorBadge} data-layout-ignore="G3: 배지 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+            <span className={styles.creatorBadge}
+              data-layout-ignore={
+                'G3: 배지 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+              }
+            >
               {badgeText}
             </span>
           ) : (
@@ -99,16 +111,28 @@ export function SongCard({ item }: SongCardProps) {
         <img className={styles.coverImg} src={thumb(item.videoId)} alt="" loading="lazy" />
       </div>
       <div className={styles.cardTitleBand}>
-        <span className={styles.cardTitleText} data-layout-ignore="G3: 카드 제목 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+        <span className={styles.cardTitleText}
+          data-layout-ignore={
+            'G3: 카드 제목 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+          }
+        >
           {title}
         </span>
       </div>
       <div className={styles.cardMetaArea}>
-        <p className={styles.cardSubtitle} data-layout-ignore="G3: 카드 부제 두 줄 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+        <p className={styles.cardSubtitle}
+          data-layout-ignore={
+            'G3: 카드 부제 두 줄 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+          }
+        >
           {sub || '\u00A0'}
         </p>
         <div className={styles.cardFooter}>
-          <span className={styles.segBadge} data-layout-ignore="G3: 구간 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+          <span className={styles.segBadge}
+            data-layout-ignore={
+              'G3: 구간 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+            }
+          >
             {seg}
           </span>
         </div>
@@ -191,7 +215,11 @@ export function LogCard({ log }: LogCardProps) {
         <div className={styles.logUserGroup}>
           <strong className={styles.logUserName}>{log.user.publicName}</strong>
           {isCreator ? (
-            <span className={styles.creatorBadge} data-layout-ignore="G3: 배지 말줄임"> // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+            <span className={styles.creatorBadge}
+              data-layout-ignore={
+                'G3: 배지 말줄임' // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+              }
+            >
               {badgeText}
             </span>
           ) : null}

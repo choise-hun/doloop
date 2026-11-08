@@ -26,10 +26,11 @@ layoutSuite({
     }
     if (state === 'curation') {
       await expect(page.locator('#discover [data-row]')).toHaveCount(4);
+      await expect(page.locator('#discover')).not.toContainText('i18n-keep');
     }
   },
   options: { forbidColors: ['--link'] },
-  dark: 'userData',
+  dark: 'curation',
 });
 
 // H6 홈 모듈 CSS에 링크 파란색 토큰 없음 (전역 a 색을 홈에서 덮는다)

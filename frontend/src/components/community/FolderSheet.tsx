@@ -1,7 +1,7 @@
 // frontend/src/components/community/FolderSheet.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { apiClient, type PublicFolderDto, type PublicFolderItemDto } from '../../lib/apiClient';
-import type { MeProfile } from '../../lib/auth';
+import { auth, type MeProfile } from '../../lib/auth';
 import {
   communityErrorKey,
   i18nPick,
@@ -20,7 +20,20 @@ export interface FolderSheetProps {
   onPatchFolder?: (id: string, patch: Partial<PublicFolderDto>) => void;
 }
 
-export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderSheetProps) {
+export function FolderSheet(props: FolderSheetProps) {
+  if (!props.folderId || !props.me?.id) return null;
+  // 닫기·동일 폴더 재열기·계정 전환마다 상태와 중복 요청 잠금을 분리한다.
+  return <FolderSheetSession key={JSON.stringify([props.me.id, props.folderId])} {...props} />;
+}
+
+function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderSheetProps) {
+  const active = useRef(false);
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+  // auth 갱신과 React commit 사이에 완료된 응답도 이전 계정에 반영하지 않는다.
+  const isCurrent = () => active.current && me?.id === auth.getMe()?.id;
   const sheetSeq = useRef(0);
   const busy = useRef(new Set<string>());
 
@@ -37,6 +50,7 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
   const [reportDetail, setReportDetail] = useState('');
 
   function patchFolder(id: string, patch: Partial<PublicFolderDto>) {
+    if (!isCurrent()) return;
     setDetail((prev) =>
       prev && prev.folder.id === id ? { ...prev, folder: { ...prev.folder, ...patch } } : prev,
     );
@@ -49,35 +63,39 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
     setErr(null); setMsg(null); setOkMsg(''); setReportOpen(false); setReportDetail('');
     if (!folderId) return;
     apiClient.community.folder(folderId).then((d) => {
-      if (my !== sheetSeq.current) return; setDetail(d);
+      if (my !== sheetSeq.current || !isCurrent()) return; setDetail(d);
       const owner = d.folder.owner;
       if (owner && owner.id !== me?.id) apiClient.community.user(owner.id)
-        .then((u) => { if (my === sheetSeq.current) setFollow({ on: u.followingByMe, count: u.followerCount }); })
-        .catch(() => { if (my === sheetSeq.current) setFollow(null); });   // 팔로우 버튼만 숨김
-    }).catch((e) => { if (my === sheetSeq.current) setErr(communityErrorKey(e)); });
-  }, [folderId]);
+        .then((u) => { if (my === sheetSeq.current && isCurrent()) setFollow({ on: u.followingByMe, count: u.followerCount }); })
+        .catch(() => { if (my === sheetSeq.current && isCurrent()) setFollow(null); });   // 팔로우 버튼만 숨김
+    }).catch((e) => { if (my === sheetSeq.current && isCurrent()) setErr(communityErrorKey(e)); });
+    return () => { ++sheetSeq.current; };
+  }, [folderId, me?.id]);
 
   // S2 좋아요(팔로우 같음) — 낙관적 + 되돌림, 요청 중 재클릭 무시
   async function toggleLike(f: PublicFolderDto) {
-    if (busy.current.has(f.id)) return; busy.current.add(f.id);
+    if (!isCurrent() || busy.current.has(f.id)) return; busy.current.add(f.id);
     const prev = { liked: f.likedByMe, count: f.likeCount };
     patchFolder(f.id, { likedByMe: !prev.liked, likeCount: prev.count + (prev.liked ? -1 : 1) });
     try { const r = await apiClient.community.setLike(f.id, !prev.liked);
+          if (!isCurrent()) return;
           patchFolder(f.id, { likedByMe: r.liked, likeCount: r.likeCount }); }   // 서버 값이 최종
-    catch (e) { patchFolder(f.id, { likedByMe: prev.liked, likeCount: prev.count }); setMsg(communityErrorKey(e)); }
+    catch (e) { if (!isCurrent()) return; patchFolder(f.id, { likedByMe: prev.liked, likeCount: prev.count }); setMsg(communityErrorKey(e)); }
     finally { busy.current.delete(f.id); }
   }
 
   async function toggleFollow(ownerId: string) {
     const key = `follow:${ownerId}`;
-    if (!follow || busy.current.has(key)) return;
+    if (!isCurrent() || !follow || busy.current.has(key)) return;
     busy.current.add(key);
     const prev = { on: follow.on, count: follow.count };
     setFollow({ on: !prev.on, count: prev.count + (prev.on ? -1 : 1) });
     try {
       const r = await apiClient.community.setFollow(ownerId, !prev.on);
+      if (!isCurrent()) return;
       setFollow({ on: r.following, count: r.followerCount });
     } catch (e) {
+      if (!isCurrent()) return;
       setFollow(prev);
       setMsg(communityErrorKey(e));
     } finally {
@@ -86,6 +104,7 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
   }
 
   async function handleClone(f: PublicFolderDto) {
+    if (!isCurrent()) return;
     setMsg(null);
     setOkMsg('');
     if (!me?.limits?.communityWrite) {
@@ -97,6 +116,7 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
     busy.current.add(key);
     try {
       const r = await apiClient.community.clone(f.id);
+      if (!isCurrent()) return;
       patchFolder(f.id, { cloneCount: f.cloneCount + 1 });
       setOkMsg(
         t('folder.cloneDone', {
@@ -106,6 +126,7 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
         }),
       );
     } catch (e) {
+      if (!isCurrent()) return;
       setMsg(communityErrorKey(e));
     } finally {
       busy.current.delete(key);
@@ -114,6 +135,7 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
 
   async function handleReportSubmit(e: React.FormEvent, f: PublicFolderDto) {
     e.preventDefault();
+    if (!isCurrent()) return;
     setMsg(null);
     setOkMsg('');
     const key = `report:${f.id}`;
@@ -121,9 +143,11 @@ export function FolderSheet({ folderId, me, onClose, onPatchFolder }: FolderShee
     busy.current.add(key);
     try {
       await apiClient.community.report(f.id, reportReason, reportDetail.trim() || undefined);
+      if (!isCurrent()) return;
       setReportOpen(false);
       setOkMsg(t('folder.reportDone'));
     } catch (errObj) {
+      if (!isCurrent()) return;
       setMsg(communityErrorKey(errObj));
     } finally {
       busy.current.delete(key);

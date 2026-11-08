@@ -30,6 +30,7 @@ layoutSuite({
   states: [{ name: 'communityPro', mock: LOG_COMMUNITY_PRO }],
   ready: async (page) => {
     await page.locator('#pane-community').waitFor();
+    await expect(page.locator('#pane-community')).not.toContainText('i18n-keep');
     await expect(page.locator('#pane-community [data-row]')).toHaveCount(5);
     await expect(page.locator('#mySharesPanel [data-share-row]')).toHaveCount(2);
   },
@@ -53,4 +54,16 @@ test('UI-1 T5 1120px 레이아웃 검증: LogPage 메인 컨테이너 최대 너
   const box = await main.boundingBox();
   expect(box).not.toBeNull();
   expect(Math.abs(box.width - 1120)).toBeLessThanOrEqual(1);
+});
+
+// LOG creator 배지에도 JSX 주석이 사용자 텍스트로 노출되지 않아야 한다.
+layoutSuite({
+  name: 'log-creators', path: '/log.html#community',
+  states: [{ name: 'logs', mock: LOG_COMMUNITY_PRO }],
+  ready: async (page) => {
+    await page.locator('#chipLog').click();
+    await expect(page.locator('[data-user-id]').first()).toBeVisible();
+    await expect(page.locator('#pane-community')).not.toContainText('i18n-keep');
+  },
+  dark: 'logs',
 });
