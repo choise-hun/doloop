@@ -1,4 +1,6 @@
-# AV-3 마감 및 게시
+# AV-3 마감 및 게시 — 완료
+
+> 현재: 제품·검수·리뷰 보강·규칙 게시 및 CI 성공. 최종 판정은 결과/AV3_마감.md, 게시 상세는 아래 최종 완료 절. 이전 다음 행동은 당시 실행 이력이다. 다음 작업은 사용자 PR #141 머지 후 계획 CH-A 선택이며 AV 재검수를 반복하지 않는다.
 
 ## 목표·입력·승인
 
@@ -67,3 +69,12 @@ Git 처리: 관련 검증·비밀값 제외 확인 후 논리 단위 커밋·pus
 - 현재 `node --test test/auth-races.test.js` 30 pass, `npm test` 403 pass/0 fail/skip/cancel, build 성공. 관련 화면71 pass(세대/직렬화 보강), 최종 큐 분리 뒤 AV2/AVF3 영향 범위만 추가 검사 중. 기존 실계정 통합은 보강 전 근거로 구별하고 재로그인/분석을 반복하지 않는다.
 
 - 최종 영향 검사: build 성공, AV2 40+AVF3 14 = **54 통과**. 두 독립 설정의 성공/첫 실패 연속 저장을 실제 auth 모듈+mock 서버 값/화면으로 단언했다. 리뷰 P1/P2 모두 반영·관련 로컬 회귀 통과하여 로컬 판정을 통과로 복원한다. 최신 게시 CI는 별도 확인한다.
+
+## 최종 완료 (2026-11-09 KST)
+
+- 리뷰 수정 `bf17535`, 규칙 반영 `6576eea` push 성공. 최신 [제품/규칙 CI 42530210412](https://github.com/choise-hun/doloop/actions/runs/42530210412) **success**: Node22/24 각403 fail/skip0, E2E422 pass, Kotlin 전체(실 Netty LiveBoundary4 PASSED), Docker 빌드/health/SPA smoke, CI ok 모두 성공. 원시 CI 로그는 ignored `test-results/av3-closeout/ci-42530210412.log`에 보존.
+- 중간 `f07514c` run 42529599268은 새 코드 push로 cancelled. 최초 run의406 pass/8 fail·중간 cancelled·최신422 pass를 구분한다. 최신 소스 성공을 과거 실패의 성공으로 바꾸지 않는다.
+- 리뷰 중/CI 종료 후 조회: 지적2건 모두 현재 코드에 반영·검증. 추가 지적 없음. 봇 리뷰는 `6565948` 대상이며 최신 커밋 자동 재리뷰 완료를 주장하지 않는다. 답글/리액션/스레드 resolve/추가 리뷰 요청 없음.
+- PR #141 OPEN/MERGEABLE, base main, 사용자 머지 대기. 코드/규칙 작업 완료. 최종 결과 문서 게시만 남겨 이 기록을 완료/로 이동한다. 문서 후속 CI는 이전6576eea CI success를 근거로 docs-only skip이 정상임을 구별한다.
+- 최종 로컬 판정: **AV-3 로컬 기능 검수 통과**, 현재 실제 로컬 차단 없음. 운영 인수·출시 조건/증거 유실 한계는 마감 결과 유지. CH-A 미착수. 머지·배포·운영 쓰기·재로그인·추가 유료 분석 없음.
+- 최종 PR 범위 42파일 UTF-8 BOM 없음/LF·비밀값 패턴/인증자료 제외 검사 통과. 기존 GEMINI의 공개 `noreply` 공동저자 예시는 기존 main과 동일한 비밀값 아님을 확인했다. 문서 링크·git diff/status를 게시 직전/후 확인한다.
