@@ -88,7 +88,7 @@ test('CM-3 시트·좋아요: 카드 클릭 → #folderLike 클릭 시 낙관적
   if (process.env.LAYOUT_SHOTS === '1') {
     const outDir = path.join(process.cwd(), 'test-results/layout-shots');
     fs.mkdirSync(outDir, { recursive: true });
-    for (const w of [1280, 390]) {
+    for (const w of [390, 768, 1150, 1280]) {
       await page.setViewportSize({ width: w, height: 900 });
       await page.screenshot({ path: path.join(outDir, `folder-sheet-${w}.png`), fullPage: false });
     }
