@@ -2,6 +2,23 @@
 import type { I18nKey } from '../i18n.mts';
 
 export const EN: Record<I18nKey, string> = {
+  'profile.namesTitle': "My names",
+  'profile.displayNameLabel': "Display name",
+  'profile.displayNameHint': "Only you can see this name. Up to 100 characters.",
+  'profile.displayNameFormat': "Use up to 100 characters for your display name.",
+  'profile.saved': "Saved.",
+  'profile.saveFailed': "Could not save your name. Please try again.",
+  'profile.nameRefreshFailed': "Your name was saved, but the latest profile could not be loaded. Please reload it.",
+  'profile.meUnavailable': "Could not load your profile. Please try again.",
+  'profile.editLink': "Edit my names",
+  'profile.summaryTitle': "Public profile summary",
+  'profile.summaryHint': "Your tier is account information. Your community name, creator details, bio and follower count are public profile information.",
+  'profile.tierLabel': "My tier",
+  'profile.tierUnknown': "Tier unavailable",
+  'profile.followers': "Followers: {count}",
+  'profile.summaryLoading': "Loading public profile…",
+  'profile.summaryEmpty': "Set a community name to view your public profile.",
+  'profile.summaryFailed': "Could not load your public profile.",
   'chords.keyboardScaleCount': '{from}–{to} · {count} notes',
   'chords.keyboardClear': 'Clear notes',
   'chords.keyboardToneContext': 'Tones in the selected chord',

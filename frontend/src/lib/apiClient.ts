@@ -1594,9 +1594,9 @@ async function communityReport(
   });
 }
 
-async function communityUser(userId: string): Promise<CommunityUserDto> {
+async function communityUser(userId: string, options?: { signal?: AbortSignal }): Promise<CommunityUserDto> {
   requireLogin();
-  return await getAuthRef().apiFetch('/api/v1/community/users/' + encodeURIComponent(userId));
+  return await getAuthRef().apiFetch('/api/v1/community/users/' + encodeURIComponent(userId), { signal: options?.signal });
 }
 
 async function communitySetFollow(userId: string, on: boolean): Promise<{ following: boolean; followerCount: number }> {
@@ -1623,12 +1623,13 @@ async function communityLogs(
 }
 
 async function communitySetPublicName(
-  name: string
+  name: string, options?: { signal?: AbortSignal }
 ): Promise<{ publicName: string | null; changedAt: string | null; nextChangeAt: string | null }> {
   requireLogin();
   return await getAuthRef().apiFetch('/api/v1/community/me/public-name', {
     method: 'PUT',
     body: JSON.stringify({ publicName: name }),
+    signal: options?.signal,
   });
 }
 

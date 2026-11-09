@@ -1,9 +1,9 @@
 // frontend/src/components/community/PublicNameForm.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../lib/apiClient';
 import { auth, type MeProfile } from '../../lib/auth';
 import { communityErrorKey, kstDate } from '../../lib/community.mts';
-import { t } from '../../lib/i18n.mts';
+import { t, type I18nKey } from '../../lib/i18n.mts';
 import styles from './Community.module.css';
 
 export interface PublicNameFormProps {
@@ -12,77 +12,95 @@ export interface PublicNameFormProps {
   submitId?: string;
   inputRef?: React.Ref<HTMLInputElement>;
   onSaved?: (publicName: string) => void;
+  disabled?: boolean;
+  acquireSave?: () => (() => void) | null;
 }
 
 export function PublicNameForm({
-  me,
-  inputId = 'publicNameInput',
-  submitId = 'publicNameSaveBtn',
-  inputRef,
-  onSaved,
+  me, inputId = 'publicNameInput', submitId = 'publicNameSaveBtn', inputRef, onSaved,
+  disabled = false, acquireSave,
 }: PublicNameFormProps) {
-  const [name, setName] = useState(me?.publicName ?? '');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
-
+  const identityNow = () => `${auth.getUser()?.id ?? ''}:${auth.getSessionGeneration()}`;
+  const identity = identityNow();
+  const matching = Boolean(me && me.id === auth.getUser()?.id);
+  const serverName = matching ? me?.publicName ?? '' : '';
+  const [draft, setDraft] = useState({ identity, serverName, value: serverName });
+  const name = matching && draft.identity === identity && draft.serverName === serverName ? draft.value : serverName;
+  const [err, setErr] = useState<{ identity: string; key: I18nKey; vars?: Record<string, string> } | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  const operation = useRef<{ identity: string; controller: AbortController; release: () => void } | null>(null);
+  const mounted = useRef(false);
   useEffect(() => {
-    setName(me?.publicName ?? '');
-    setErr(null);
-  }, [me?.id, me?.publicName]);
+    mounted.current = true;
+    const cancel = () => {
+      const old = operation.current;
+      operation.current = null;
+      old?.controller.abort();
+      old?.release();
+    };
+    const unsubscribe = auth.onChange(() => {
+      if (operation.current && operation.current.identity !== identityNow()) {
+        cancel();
+        setPending(null);
+      }
+    });
+    return () => { mounted.current = false; unsubscribe(); cancel(); };
+  }, []);
+  useEffect(() => { setDraft({ identity, serverName, value: serverName }); }, [identity, serverName, matching]);
+  const busy = pending === identity;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (disabled || !matching || operation.current || identityNow() !== identity || auth.getMe()?.id !== me?.id) return;
     setErr(null);
     const val = name.trim();
     if (/\s/.test(val) || val.length < 2 || val.length > 20) {
-      setErr({ key: 'community.err.nameFormat' });
+      setErr({ identity, key: 'community.err.nameFormat' });
       return;
     }
-    setBusy(true);
+    const release = acquireSave ? acquireSave() : () => {};
+    if (!release) return;
+    const action = { identity, controller: new AbortController(), release };
+    operation.current = action;
+    const valid = () => mounted.current && operation.current === action && identityNow() === identity;
+    setPending(identity);
     try {
-      const res = await apiClient.community.setPublicName(val);
-      await auth.fetchMe().catch(() => null);
-      if (res.publicName) onSaved?.(res.publicName);
-    } catch (errObj) {
-      setErr(communityErrorKey(errObj));
+      const res = await apiClient.community.setPublicName(val, { signal: action.controller.signal });
+      if (!valid()) return;
+      const refreshed = await auth.fetchMe();
+      if (!valid()) return;
+      if (!res.publicName || refreshed?.id !== me?.id || refreshed?.publicName !== res.publicName ||
+          auth.getMe()?.id !== refreshed.id || auth.getMe()?.publicName !== res.publicName) {
+        setErr({ identity, key: 'profile.nameRefreshFailed' });
+        return;
+      }
+      onSaved?.(res.publicName);
+    } catch (error) {
+      if (valid() && !(error instanceof Error && error.name === 'AbortError')) {
+        const mapped = communityErrorKey(error); // 기존 매퍼는 사전에 존재하는 community/playlist/folder 키를 반환한다.
+        setErr({ identity, key: mapped.key as I18nKey, vars: mapped.vars });
+      }
     } finally {
-      setBusy(false);
+      if (valid()) { operation.current = null; setPending(null); action.release(); }
     }
   }
 
-  const lockDate = me?.publicNameNextChangeAt ? kstDate(me.publicNameNextChangeAt) : '';
-
+  const lockDate = matching && me?.publicNameNextChangeAt ? kstDate(me.publicNameNextChangeAt) : '';
+  const locked = disabled || busy || !matching;
   return (
     <form className={styles.nameForm} onSubmit={(e) => void handleSubmit(e)} noValidate>
       <div className={styles.nameField}>
-        <label className={styles.fieldLab} htmlFor={inputId}>
-          {t('community.nameLabel')}
-        </label>
+        <label className={styles.fieldLab} htmlFor={inputId}>{t('community.nameLabel')}</label>
         <p className={styles.fieldHint}>{t('community.nameHint')}</p>
       </div>
       <div className={styles.nameInputRow}>
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="text"
-          className={`inpField ${styles.nameInput}`}
-          value={name}
-          maxLength={30}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button type="submit" id={submitId} className="pillBtn" disabled={busy}>
-          {t('community.nameSave')}
-        </button>
+        <input ref={inputRef} id={inputId} type="text" className={`inpField ${styles.nameInput}`}
+          value={name} maxLength={30} disabled={locked}
+          onChange={(e) => setDraft({ identity, serverName, value: e.target.value })} />
+        <button type="submit" id={submitId} className="pillBtn" disabled={locked}>{t('community.nameSave')}</button>
       </div>
-      {lockDate ? (
-        <p className={styles.fieldHint}>{t('community.nameLocked', { date: lockDate })}</p>
-      ) : null}
-      {err ? (
-        <p role="alert" className={`msg err ${styles.formMsg}`}>
-          {t(err.key as any, err.vars)}
-        </p>
-      ) : null}
+      {lockDate ? <p className={styles.fieldHint}>{t('community.nameLocked', { date: lockDate })}</p> : null}
+      {err?.identity === identity ? <p role="alert" className={`msg err ${styles.formMsg}`}>{t(err.key, err.vars)}</p> : null}
     </form>
   );
 }
