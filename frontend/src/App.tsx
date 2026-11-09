@@ -13,6 +13,7 @@ import { NoteDetailPage } from './pages/NoteDetailPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ProgressionsPage } from './pages/ProgressionsPage';
 import { CommunityPage } from './pages/CommunityPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ export function App(): React.ReactElement {
           <Route path="/settings.html" element={<SettingsPage />} />
           <Route path="/privacy.html" element={<PrivacyPage />} />
           <Route path="/community.html" element={<CommunityPage />} />
+          <Route path="/profile.html" element={<ProfilePage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

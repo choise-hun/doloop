@@ -6,7 +6,7 @@ import { t, type I18nKey } from '../../lib/i18n.mts';
 import { BetaBadge } from '../common/BetaBadge';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
-export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy';
+export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy' | 'profile';
 
 // 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
 const MAIN_NAV: Array<{ key: ActiveNavKey; labelKey: I18nKey; href: string | null }> = [
@@ -145,12 +145,13 @@ export function AppShell({
             {t('nav.settings')}
           </a>
           <a
-            href="settings.html#account"
+            href={signedInUser ? 'profile.html' : 'settings.html#account'}
             id="navAuth"
             data-nav-auth="1"
             data-auth-state={signedInUser ? 'signed-in' : 'signed-out'}
             className={styles.navItem}
             aria-label={navAriaLabel}
+            aria-current={signedInUser && activeNav === 'profile' ? 'page' : undefined}
             target={!signedInUser && embedded ? '_blank' : undefined}
             rel={!signedInUser && embedded ? 'noopener' : undefined}
             onClick={handleAuthClick}
