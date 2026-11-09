@@ -1,6 +1,6 @@
 # PF 진행 — 프로필 진입 분리 및 내 게시물 관리
 
-> 최신 상태(2026-11-09): PF-1 PR #150 머지 및 main 동기화 확인. **PF-2 4단계 주니어 로컬 최종 검증 완료 (전체 45 passed, 회귀 160 passed, auth 30 passed, npm 416 passed, gradlew 45s passed, 4폭 25장 Q1~Q9 전수 ○, Ktor 3001 smoke 통과, 승인 9파일 663줄 상한 충족)**. 로컬 미커밋 상태 유지 (`step/PF-2`). 현재 사실·재개는 §8을 따른다. Git 게시·CI·배포 미실행. §1~4의 PF-1 및 §6~7의 시니어 실행 기록은 당시 근거로 보존한다.
+> 최신 상태(2026-11-10): PF-2 Git 게시 및 PR 검증 완료 ([PR #151](https://github.com/choise-hun/doloop/pull/151), CI 7개 통과, Codex 리뷰 지적 0건). 사용자 머지 대기. 머지 후 PF-3 상세 명세 및 구현으로 진행한다. 로컬 작업 브랜치 `step/PF-2`. 현재 사실·재개는 §8·§9를 따른다. 머지·배포는 사용자 권한으로 미실행 유지. §1~4의 PF-1 및 §6~7의 시니어 실행 기록은 당시 근거로 보존한다.
 
 ## 1. 목표·입력·승인 경계
 
@@ -255,26 +255,46 @@ Red PF2-07은 이동 계약 실패이며 경합 구간까지 실행된 Red/변�
 | `git diff --check`, `git status --short`, `git diff --stat origin/main -- frontend/ test/` | 공백 오류 0건, 승인 9개 파일 정확 일치, **663 변경줄 (+592/-71, 700줄 상한 충족)** | UTF-8 BOM 없음/LF 유지 |
 
 ### 8.3 미실행 및 한계
-- Git 커밋·원격 push·신규 main PR 생성·최신 CI 감시 (사용자 지시: 로컬 작업만. 게시 미승인).
 - 실제 Supabase OAuth 인증 서버 및 프로덕션 원격 DB 환경 연결 (실제 외부 인증/DB 환경 부재로 mock E2E와 명확히 분리하여 미실행으로 기록).
 - PF-3 (내 폴더·개별 게시물 상태 확인 및 공유 철회) 구현.
+- PR 머지 및 운영 배포 (사용자 권한).
 
-### 8.4 다음 단계 안내
-PF-2의 로컬 구현·검증·결과 보고서(`개발산출물/결과/PF-2.md`) 작성이 완료되었으며, 사용자의 Git 게시 승인 후 다음 세션에서 커밋·push·신규 main PR 생성 및 최신 CI/리뷰 확인을 진행한다.
+### 8.4 Git 게시 및 CI/리뷰 확인 — 2026-11-10
 
-다음 세션 시작 멘트(사용자 Git 게시 승인용):
+- 승인 근거: 2026-11-10 사용자 “Gemini(주니어) — PF-2 Git 게시 및 PR 검증”.
+- Git 처리:
+  - 커밋: `00d6440` `feat(profile): 이름 편집 이동·공개 요약 및 전수 검증` (PF-2 승인 9개 파일 및 관련 명세/결과/진행 문서 포함).
+  - 원격 push: `origin/step/PF-2` 신규 브랜치 push 성공.
+  - PR 생성: [PR #151](https://github.com/choise-hun/doloop/pull/151) (`main` <- `step/PF-2`).
+  - CI 감시 (`gh pr checks 151 --watch`): 7개 체크 전수 통과 (0 failed, 7 successful, 0 cancelled).
+    - `CI/CI ok (pull_request)`: 4s (성공)
+    - `CI/Detect code changes`: 7s (성공)
+    - `CI/Docker build & smoke test`: 2m 13s (성공)
+    - `CI/E2E XSS & CSP (Playwright, spa)`: 8m 25s (성공)
+    - `CI/Kotlin test (JDK 21)`: 3m 32s (성공)
+    - `CI/Test (Node 22)`: 52s (성공)
+    - `CI/Test (Node 24)`: 50s (성공)
+  - 리뷰 코멘트 확인:
+    - `gh api repos/choise-hun/doloop/pulls/151/reviews`: `[]` (리뷰 없음)
+    - `gh api repos/choise-hun/doloop/pulls/151/comments`: `[]` (인라인 코멘트 없음)
+    - `gh api repos/choise-hun/doloop/issues/151/comments`: Codex Review Summary `has_any_findings: false`, `status: completed` (지적 0건)
+- **미실행 유지:** PR 머지 및 운영 배포(사용자 권한), PF-3 기능 구현, 실제 네트워크 OAuth.
+
+## 9. PF-2 마감과 PF-3 연결
+
+PF-2의 구현·검증·PR 게시 이력은 §7·§8과 [결과/PF-2.md](결과/PF-2.md)에 보존한다. PR #151 사용자 머지 후 main 안전 동기화를 확인하고 PF-3(프로필 내 폴더·개별 게시물 상태 확인 및 공유 철회) 세부 명세 작성으로 진행한다.
+
+다음 단계 시작 멘트(사용자 PR #151 머지 후 활용용):
 
 ```text
-# Gemini(주니어) — PF-2 Git 게시 및 PR 검증
-[필수 가드레일: docs/문서_운영.md §5·§6 및 개발산출물/협업_시니어주니어.md 준수]
-목표: 로컬 검증이 완료된 PF-2의 Git 커밋·원격 push·신규 main PR 생성 및 최신 CI/리뷰를 확인한다.
-입력: 개발산출물/진행_PF.md §8, 개발산출물/결과/PF-2.md.
-선행 조건: step/PF-2의 로컬 변경 및 사용자 문서를 보존한다.
-범위: 승인 9파일·핵심 5파일·663변경줄. 불필요한 코드 수정을 추가하지 않는다.
+# GPT-6.1 Sol (시니어) — PF-3 세부 명세 작성
+[필수 가드레일: docs/문서_운영.md §4·§5·§6 및 개발산출물/협업_시니어주니어.md 준수]
+목표: 프로필 내 폴더·개별 게시물 관리 및 공유 철회의 계약/배치/검증 명세를 작성한다.
+입력: 계획/상용_서비스_계획.md #9 PF, 개발산출물/진행_PF.md §3·§8, 개발산출물/결과/PF-2.md.
+선행 조건: PR #151 머지 확인 및 main 안전 동기화(git switch main && git pull --ff-only).
+범위: 명세 작성과 실제 코드 근거 조사. 소스/테스트 구현 및 빌드/테스트 실행 금지 (Tool Lock 준수).
 완료 기준:
-1. 커밋: feat(profile): 이름 편집 이동·공개 요약 및 전수 검증
-2. 원격 push (step/PF-2) 및 main 대상 신규 PR 생성
-3. gh pr checks --watch로 CI 통과 확인
-4. Codex 리뷰 코멘트 확인 및 진행/결과 갱신
-Git 처리: 커밋·push·신규 main PR 생성·최신 CI/리뷰 확인까지 수행. 머지·배포는 사용자가 직접 한다.
+1. 개발산출물/명세/PF-3_구현명세.md 작성 (Locked Contracts, 가드↔단언, Q표, 검증 명령)
+2. 개발산출물/진행_PF.md 갱신
+Git 처리: 로컬 문서 작업만. 커밋·push·PR·머지·배포 금지.
 ```

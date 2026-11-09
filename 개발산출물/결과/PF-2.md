@@ -1,6 +1,6 @@
 # PF-2 결과 보고서 — 내 이름 편집 이동 및 공개 요약
 
-> 본 문서는 PF-2 시니어 핵심 구현(0단계) 및 주니어 최종 로컬 검증(4단계)의 실제 실행 증거와 한계를 기록한다. 커밋·push·PR·CI·머지·배포는 로컬 검증 범위에서 수행하지 않았다.
+> 본 문서는 PF-2 시니어 핵심 구현(0단계), 주니어 최종 로컬 검증(4단계), 그리고 Git 게시 및 PR 검증의 실제 실행 증거와 한계를 기록한다. PR 머지 및 운영 배포는 사용자 권한으로 미실행을 유지한다.
 
 - 작성: 2026-11-09 / 주니어(Gemini). 기준 `step/PF-2` (베이스 main=`5ed638835959c035b216a7237782902a96e48a96`).
 - 명세: [PF-2 구현 명세](../명세/PF-2_구현명세.md).
@@ -8,6 +8,7 @@
 - 승인 근거:
   - 2026-11-09 사용자 승인: “PF-2 명세와 PF-2 한정 9파일 예외를 승인한다. 핵심 5파일·총 700변경줄 이내에서 구현하고 표적 테스트 1~2개의 Red/Green 및 4단계 주니어 인계 기록까지 로컬로 진행한다.”
   - 2026-11-09 사용자 승인: “Gemini(주니어) — PF-2 4단계 로컬 최종 검증. 미검증 테스트 보강·전체 회귀·4폭 시각 검토·인계 기록 완성. 로컬 작업만. 커밋·push·PR·CI·머지·배포 금지.”
+  - 2026-11-10 사용자 승인: “Gemini(주니어) — PF-2 Git 게시 및 PR 검증. 커밋: feat(profile): 이름 편집 이동·공개 요약 및 전수 검증, 원격 push (step/PF-2) 및 main 대상 신규 PR 생성, gh pr checks --watch로 CI 통과 확인, Codex 리뷰 코멘트 확인 및 진행/결과 갱신.”
 
 ---
 
@@ -84,6 +85,29 @@
 
 ## 5. 미실행 및 한계
 
-1. **Git 게시 미실행:** 본 세션의 사용자 승인 경계에 따라 커밋, 원격 push, 신규 main PR 생성, 최신 CI 감시는 수행하지 않았으며 로컬 작업 상태(`step/PF-2`, 미커밋)를 유지한다.
-2. **실제 외부 네트워크/DB 통합 미실행:** 실제 Supabase OAuth 인증 서버 및 프로덕션 원격 DB 연결 환경이 갖춰지지 않은 로컬 개발 환경이므로, 실제 사용자 A/B 간 DB 저장 격리 검증은 미실행으로 남기며 mock E2E 및 로컬 격리 테스트의 통과 결과와 엄격히 구분한다.
-3. **PF-3 기능 미실행:** 내 폴더·개별 게시물 상태 확인 및 공유 철회는 계획된 후속 Step(PF-3)의 범위이다.
+1. **실제 외부 네트워크/DB 통합 미실행:** 실제 Supabase OAuth 인증 서버 및 프로덕션 원격 DB 연결 환경이 갖춰지지 않은 로컬 개발 환경이므로, 실제 사용자 A/B 간 DB 저장 격리 검증은 미실행으로 남기며 mock E2E 및 로컬 격리 테스트의 통과 결과와 엄격히 구분한다.
+2. **PF-3 기능 미실행:** 내 폴더·개별 게시물 상태 확인 및 공유 철회는 계획된 후속 Step(PF-3)의 범위이다.
+3. **PR 머지 및 운영 배포 미실행:** PR 머지 및 프로덕션 배포는 사용자 권한이며 본 작업 범위에서 수행하지 않는다.
+
+---
+
+## 6. Git 게시 및 CI/리뷰 확인 — 2026-11-10
+
+- **승인 근거:** 2026-11-10 사용자 “Gemini(주니어) — PF-2 Git 게시 및 PR 검증”.
+- **Git 처리:**
+  - 커밋: `00d6440` `feat(profile): 이름 편집 이동·공개 요약 및 전수 검증` (승인 9개 파일 및 관련 명세/결과/진행 문서 포함).
+  - 원격 push: `origin/step/PF-2` 브랜치 push 성공.
+  - PR 생성: [PR #151](https://github.com/choise-hun/doloop/pull/151) (`main` <- `step/PF-2`).
+  - CI 감시 (`gh pr checks 151 --watch`): 7개 체크 전수 통과 (0 failed, 7 successful, 0 cancelled).
+    - `CI/CI ok (pull_request)`: 4s (성공)
+    - `CI/Detect code changes`: 7s (성공)
+    - `CI/Docker build & smoke test`: 2m 13s (성공)
+    - `CI/E2E XSS & CSP (Playwright, spa)`: 8m 25s (성공)
+    - `CI/Kotlin test (JDK 21)`: 3m 32s (성공)
+    - `CI/Test (Node 22)`: 52s (성공)
+    - `CI/Test (Node 24)`: 50s (성공)
+  - 리뷰 코멘트 확인:
+    - `gh api repos/choise-hun/doloop/pulls/151/reviews`: `[]` (리뷰 없음)
+    - `gh api repos/choise-hun/doloop/pulls/151/comments`: `[]` (인라인 코멘트 없음)
+    - `gh api repos/choise-hun/doloop/issues/151/comments`: Codex Review Summary `has_any_findings: false`, `status: completed` (지적 0건)
+- **미실행 유지:** PR 머지 및 운영 배포(사용자 권한), PF-3 기능 구현, 실제 네트워크 OAuth.
