@@ -22,17 +22,27 @@ export interface MeProfile {
     notion: KeySummaryDto | null;
   };
   // M1-2a·M1-3b: 실제 티어(override 반영)·한도·크레딧 잔액. AI 분석 가능 여부는 limits.ai로만 판단한다
-  tier?: 'free' | 'pro' | 'pro_plus' | string;
-  limits?: TierLimitsDto;
-  credits?: { monthly: number; purchased: number };
-  // M1-4a·M1-4b·M2-23: 커뮤니티·크리에이터·공유 설정
-  isCreator?: boolean;
-  creatorBadge?: string | null;
-  shareAutosync?: boolean;
-  sharePracticeLog?: boolean;
-  publicName?: string | null;
-  publicNameNextChangeAt?: string | null;
-  locale?: LocaleCode | null;
+  tier: 'free' | 'pro' | 'pro_plus' | string;
+  billingTier: string;
+  tierOverrideUntil: string | null;
+  limits: TierLimitsDto;
+  usage: TierUsageDto;
+  credits: { monthly: number; purchased: number };
+  isCreator: boolean;
+  creatorBadge: string | null;
+  creatorBio: string;
+  shareAutosync: boolean;
+  sharePracticeLog: boolean;
+  publicName: string | null;
+  publicNameNextChangeAt: string | null;
+  locale: LocaleCode | null;
+}
+
+export interface TierUsageDto {
+  songs: number;
+  categories: number;
+  takeBytes: number;
+  takeSongs: number;
 }
 
 export interface TierLimitsDto {

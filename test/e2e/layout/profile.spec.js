@@ -192,8 +192,7 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
       '#btnLogout',
       '#community',
       '#hCommunity',
-      '#settingsPublicNameInput',
-      '#settingsPublicNameSave',
+      '#settingsProfileLink',
       '#commAutosync',
       '#commPracticeLog',
     ]) {
@@ -471,4 +470,293 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await expect(page.locator('#profileLogout')).toBeEnabled();
   });
 
+});
+
+// PF-2 표적: 화면 이동 및 세대별 저장 잠금, 토큰 대기 중 실제 전송 취소.
+test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저장을 해제하지 않음', async ({ page }) => {
+  let profile = { ...USER_WITH_NAMES.me, tier: 'pro', billingTier: 'free' };
+  const patches = [];
+  const names = [];
+  let summaries = 0;
+  await mockApp(page, USER_WITH_NAMES);
+  await page.route('**/api/v1/me', route => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      profile = { ...profile, ...patches[patches.length - 1] };
+    }
+    return route.fulfill({ json: profile });
+  });
+  await page.route('**/api/v1/community/me/public-name', route => {
+    names.push(route.request().postDataJSON());
+    profile = { ...profile, publicName: names[names.length - 1].publicName };
+    return route.fulfill({ json: { publicName: profile.publicName, changedAt: null, nextChangeAt: null } });
+  });
+  await page.route('**/api/v1/community/users/*', route => {
+    summaries++;
+    return route.fulfill({ json: {
+      id: USER_WITH_NAMES.me.id, publicName: profile.publicName, isCreator: true,
+      creatorBadge: 'Creator', creatorBio: '소개', followerCount: 0,
+    } });
+  });
+  await page.goto('/settings.html');
+  await expect(page.locator('#settingsPublicNameInput, #settingsPublicNameSave')).toHaveCount(0);
+  await page.locator('#settingsProfileLink').click();
+  await expect(page).toHaveURL(/profile\.html#profileNames$/);
+  await expect(page.locator('#profileNames')).toHaveAttribute('data-align-group', 'profileCol:left; profileEdges:right');
+  await expect(page.locator('#profileSummary')).toHaveAttribute('data-align-group', 'profileCol:left; profileEdges:right');
+  await expect(page.locator('#profileFollowers')).toHaveText('팔로워 0명');
+  await expect(page.locator('#profileTier')).toContainText('Pro');
+  await page.locator('#profileDisplayNameInput').fill('  내 이름  ');
+  await page.locator('#profileDisplayNameInput').press('Enter');
+  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('저장했어요.');
+  await expect(page.locator('#profileDisplayName')).toHaveText('내 이름');
+  await expect(page.locator('#profileDisplayNameInput')).toHaveValue('내 이름');
+  expect(patches).toEqual([{ displayName: '내 이름' }]);
+  expect(await page.evaluate(() => window.ULAuth.getMe().displayName)).toBe('내 이름');
+  expect(summaries).toBe(1);
+  await page.locator('#profilePublicNameSave').click(); // 같은 이름 no-op도 요약은 한 번만 재확인
+  await expect.poll(() => summaries).toBe(2);
+  await expect(page.locator('#profilePublicNameSave')).toBeEnabled();
+  await page.locator('#profilePublicNameInput').fill('publicNew');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileSummaryName')).toHaveText('publicNew');
+  expect(names).toEqual([{ publicName: 'gildong' }, { publicName: 'publicNew' }]);
+  expect(summaries).toBe(3);
+  await page.evaluate(() => {
+    window.__saves = [];
+    window.ULData.community.setPublicName = () => new Promise((resolve, reject) => window.__saves.push({ resolve, reject }));
+  });
+  await page.locator('#profilePublicNameInput').fill('oldName');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileDisplayNameSave')).toBeDisabled();
+  await page.evaluate(() => {
+    const session = window.ULAuth.getSession();
+    window.__supabaseAuthListener('SIGNED_OUT', null);
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  });
+  await expect(page.locator('#profilePublicNameInput')).toHaveValue('publicNew');
+  await page.locator('#profilePublicNameInput').fill('newName');
+  await page.locator('#profilePublicNameSave').click();
+  await page.evaluate(() => window.__saves[0].reject(new Error('OLD_PRIVATE_ERROR')));
+  await expect(page.locator('#profilePublicNameSave')).toBeDisabled();
+  await expect(page.locator('#profileDisplayNameInput')).toBeDisabled();
+  await expect(page.locator('#profileNames [role=alert]')).toHaveCount(0);
+  await page.evaluate(() => window.__saves[1].reject(new Error('CURRENT_ERROR')));
+  await expect(page.locator('#profilePublicNameSave')).toBeEnabled();
+  await expect(page.locator('#profilePublicNameInput')).toHaveValue('newName');
+  await expect(page.locator('#profileNames [role=alert]')).toBeVisible();
+});
+
+test('PF2-08 공용 폼: 토큰 조회 중 A→B 전환 시 이전 PUT 전송 0회', async ({ page }) => {
+  let puts = 0;
+  let switched = false;
+  const bId = '00000000-0000-4000-8000-000000000002';
+  await mockApp(page, { ...USER_WITH_NAMES, me: { ...USER_WITH_NAMES.me, publicName: null } });
+  await page.route('**/api/v1/me', route => route.fulfill({ json: {
+    ...USER_WITH_NAMES.me, id: switched ? bId : USER_WITH_NAMES.me.id, publicName: null,
+  } }));
+  await page.route('**/api/v1/community/me/public-name', route => {
+    puts++;
+    return route.fulfill({ json: { publicName: 'nameFromA' } });
+  });
+  await page.goto('/community.html');
+  await expect(page.locator('#communityBannerNameInput')).toBeVisible();
+  await page.evaluate(() => {
+    const client = window.ULAuth.getClient();
+    client.auth.getSession = () => new Promise(resolve => { window.__releaseToken = resolve; });
+    const save = window.ULData.community.setPublicName;
+    window.ULData.community.setPublicName = (...args) => save(...args).finally(() => { window.__saveSettled = true; });
+  });
+  await page.locator('#communityBannerNameInput').fill('nameFromA');
+  await page.locator('#communityBannerNameSave').click();
+  await expect.poll(() => page.evaluate(() => typeof window.__releaseToken)).toBe('function');
+  switched = true;
+  await page.evaluate(bId => {
+    const session = { access_token: 'fake-b-token', user: { id: bId, email: 'b@example.com' } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+    window.__releaseToken({ data: { session } });
+  }, bId);
+  await expect.poll(() => page.evaluate(() => window.__saveSettled)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.ULAuth.getMe()?.id)).toBe(bId);
+  await expect(page.locator('#communityBannerNameInput')).toHaveValue('');
+  expect(puts).toBe(0);
+});
+
+test('PF2-02/03 표시 이름 빈 값·101자 가드 및 공개 이름 형식·서버 오류 매핑', async ({ page }) => {
+  const patches = [];
+  let namePuts = 0;
+  await mockApp(page, USER_WITH_NAMES);
+  await page.route('**/api/v1/me', route => {
+    if (route.request().method() === 'PATCH') {
+      const data = route.request().postDataJSON();
+      patches.push(data);
+      if (data.displayName === 'fail500') return route.fulfill({ status: 500, json: { error: 'INTERNAL' } });
+      return route.fulfill({ json: { ...USER_WITH_NAMES.me, displayName: data.displayName } });
+    }
+    return route.fulfill({ json: USER_WITH_NAMES.me });
+  });
+  await page.route('**/api/v1/community/me/public-name', route => {
+    namePuts++;
+    const body = route.request().postDataJSON();
+    if (body.publicName === 'takenName') {
+      return route.fulfill({ status: 409, json: { code: 'PUBLIC_NAME_TAKEN', message: 'Already taken' } });
+    }
+    if (body.publicName === 'tooSoon') {
+      return route.fulfill({ status: 409, json: {
+        code: 'PUBLIC_NAME_CHANGE_TOO_SOON', message: 'Too soon',
+        detail: { nextChangeAt: '2026-11-10T00:00:00Z' },
+      } });
+    }
+    return route.fulfill({ json: { publicName: body.publicName } });
+  });
+  await page.goto('/profile.html#profileNames');
+  await page.locator('#profileDisplayNameInput').fill('');
+  await page.locator('#profileDisplayNameSave').click();
+  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('저장했어요.');
+  await expect(page.locator('#profileDisplayName')).toHaveCount(0);
+  expect(patches[0]).toEqual({ displayName: '' });
+
+  await page.locator('#profileDisplayNameInput').evaluate(el => el.removeAttribute('maxLength'));
+  await page.locator('#profileDisplayNameInput').fill('a'.repeat(101));
+  await page.locator('#profileDisplayNameSave').click();
+  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('표시 이름은 100자 이내로 입력해 주세요.');
+  expect(patches.length).toBe(1);
+
+  await page.locator('#profileDisplayNameInput').fill('fail500');
+  await page.locator('#profileDisplayNameSave').click();
+  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('이름을 저장하지 못했어요. 다시 시도해 주세요.');
+  await expect(page.locator('#profileDisplayNameInput')).toHaveValue('fail500');
+
+  for (const bad of ['a', 'a'.repeat(21), 'bad name']) {
+    await page.locator('#profilePublicNameInput').fill(bad);
+    await page.locator('#profilePublicNameSave').click();
+    await expect(page.locator('#profileNames [role=alert]')).toHaveText('2~20자, 띄어쓰기 없이 입력해 주세요');
+    expect(namePuts).toBe(0);
+  }
+
+  await page.locator('#profilePublicNameInput').fill('takenName');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileNames [role=alert]')).toHaveText('이미 쓰는 이름이에요');
+  expect(namePuts).toBe(1);
+
+  await page.locator('#profilePublicNameInput').fill('tooSoon');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileNames [role=alert]')).toContainText('2026-11-10부터 바꿀 수 있어요');
+  expect(namePuts).toBe(2);
+});
+
+test('PF2-04/05/06 요약 경계·null/500 재시도 및 PUT 후 /me 실패 가드', async ({ page }) => {
+  let summaryCalls = 0;
+  let summaryStatus = 500;
+  let meStatus = 200;
+  let currentPublicName = null;
+  const proUser = {
+    ...USER_WITH_NAMES.me,
+    tier: 'pro_plus',
+    billingTier: 'free',
+    publicName: null,
+  };
+  await mockApp(page, { ...USER_WITH_NAMES, me: proUser });
+  await page.route('**/api/v1/community/users/*', route => {
+    summaryCalls++;
+    if (summaryStatus === 500) return route.fulfill({ status: 500, json: { error: 'SUMMARY_FAIL' } });
+    return route.fulfill({ json: {
+      id: USER_WITH_NAMES.me.id, publicName: currentPublicName, isCreator: false,
+      creatorBadge: '', creatorBio: '', followerCount: 42,
+    } });
+  });
+  await page.route('**/api/v1/community/me/public-name', route => {
+    currentPublicName = route.request().postDataJSON().publicName;
+    return route.fulfill({ json: { publicName: currentPublicName } });
+  });
+  await page.route('**/api/v1/me', route => {
+    if (meStatus === 500) return route.fulfill({ status: 500, json: { error: 'ME_FAIL' } });
+    return route.fulfill({ json: { ...proUser, publicName: currentPublicName } });
+  });
+
+  // 1. publicName=null 시 빈 안내 및 요약 호출 0회
+  await page.goto('/profile.html#profileSummary');
+  await expect(page.locator('#profileTier')).toContainText('Pro+');
+  await expect(page.locator('#profileSummaryStatus')).toHaveText('커뮤니티 이름을 정하면 공개 프로필을 확인할 수 있어요.');
+  expect(summaryCalls).toBe(0);
+
+  // 2. 공개 이름 설정 후 요약 500 실패 시 재시도 버튼 노출
+  await page.locator('#profilePublicNameInput').fill('starUser');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileSummaryStatus')).toHaveText('공개 프로필을 불러오지 못했어요.');
+  await expect(page.locator('#profileSummaryRetry')).toBeVisible();
+
+  // 3. 재시도 성공 시 42명 표시 및 creatorBadge 없음, 개인 정보 미노출
+  summaryStatus = 200;
+  await page.locator('#profileSummaryRetry').click();
+  await expect(page.locator('#profileFollowers')).toHaveText('팔로워 42명');
+  await expect(page.locator('#profileCreator')).toHaveCount(0);
+  await expect(page.locator('#profilePublicSummary')).not.toContainText('tester@example.com');
+  await expect(page.locator('#profilePublicSummary')).not.toContainText('홍길동');
+
+  // 4. PUT 200 뒤 /me 500 시 nameRefreshFailed
+  meStatus = 500;
+  await page.locator('#profilePublicNameInput').fill('updatedName');
+  await page.locator('#profilePublicNameSave').click();
+  await expect(page.locator('#profileNames [role=alert]')).toHaveText('이름은 저장했지만 최신 정보를 확인하지 못했어요. 다시 불러와 주세요.');
+});
+
+test('PF2-09/11 XSS 방어 및 두 폼 동시 제출 상호 잠금', async ({ page }) => {
+  const xssUser = {
+    ...USER_WITH_NAMES,
+    me: { ...USER_WITH_NAMES.me, displayName: '<script>alert(1)</script>', publicName: 'safeName' },
+  };
+  await mockApp(page, xssUser);
+  await page.route('**/api/v1/community/users/*', route => route.fulfill({ json: {
+    id: xssUser.me.id, publicName: 'safeName', isCreator: true,
+    creatorBadge: '<img src=x onerror=alert(2)>', creatorBio: '<b id="injected">bio</b>', followerCount: 0,
+  } }));
+  await page.goto('/profile.html#profileNames');
+
+  await expect(page.locator('#injected')).toHaveCount(0);
+  await expect(page.locator('#profileCreator')).toHaveText('<img src=x onerror=alert(2)>');
+  await expect(page.locator('#profileBio')).toHaveText('<b id="injected">bio</b>');
+  await expect(page.locator('#profileDisplayName')).toHaveText('<script>alert(1)</script>');
+
+  await page.evaluate(() => {
+    window.__pendingPatches = [];
+    window.ULAuth.updateProfile = () => new Promise(resolve => window.__pendingPatches.push(resolve));
+  });
+  await page.locator('#profileDisplayNameInput').fill('newName');
+  await page.locator('#profileDisplayNameSave').click();
+  await expect(page.locator('#profilePublicNameSave')).toBeDisabled();
+  await expect(page.locator('#profilePublicNameInput')).toBeDisabled();
+  await page.evaluate(() => window.__pendingPatches[0]({ displayName: 'newName' }));
+  await expect(page.locator('#profilePublicNameSave')).toBeEnabled();
+});
+
+test('PF2-11 다국어 (en, ja) 이름 및 요약 렌더링', async ({ page }) => {
+  await mockApp(page, {
+    ...USER_WITH_NAMES,
+    local: { 'ulp:lang': 'en' },
+  });
+  await page.route('**/api/v1/community/users/*', route => route.fulfill({ json: {
+    id: USER_WITH_NAMES.me.id, publicName: 'gildong', isCreator: false,
+    creatorBadge: '', creatorBio: '', followerCount: 0,
+  } }));
+  await page.goto('/profile.html#profileNames');
+  await expect(page.locator('#profileNamesTitle')).toHaveText('My names');
+  await expect(page.locator('#profileSummaryTitle')).toHaveText('Public profile summary');
+  await expect(page.locator('#profileFollowers')).toHaveText('Followers: 0');
+});
+
+test('PF2-11 다국어 (ja) 이름 및 요약 렌더링', async ({ page }) => {
+  await mockApp(page, {
+    ...USER_WITH_NAMES,
+    local: { 'ulp:lang': 'ja' },
+  });
+  await page.route('**/api/v1/community/users/*', route => route.fulfill({ json: {
+    id: USER_WITH_NAMES.me.id, publicName: 'gildong', isCreator: false,
+    creatorBadge: '', creatorBio: '', followerCount: 0,
+  } }));
+  await page.goto('/profile.html#profileNames');
+  await expect(page.locator('#profileNamesTitle')).toHaveText('自分の名前');
+  await expect(page.locator('#profileSummaryTitle')).toHaveText('公開プロフィール概要');
+  await expect(page.locator('#profileFollowers')).toHaveText('フォロワー 0人');
 });

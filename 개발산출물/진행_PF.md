@@ -1,5 +1,7 @@
 # PF 진행 — 프로필 진입 분리 및 내 게시물 관리
 
+> 최신 상태(2026-11-10): PF-2 Git 게시 및 PR 검증 완료 ([PR #151](https://github.com/choise-hun/doloop/pull/151), CI 7개 통과, Codex 리뷰 지적 0건). 사용자 머지 대기. 머지 후 PF-3 상세 명세 및 구현으로 진행한다. 로컬 작업 브랜치 `step/PF-2`. 현재 사실·재개는 §8·§9를 따른다. 머지·배포는 사용자 권한으로 미실행 유지. §1~4의 PF-1 및 §6~7의 시니어 실행 기록은 당시 근거로 보존한다.
+
 ## 1. 목표·입력·승인 경계
 
 - 목표: 계획 #9 PF를 3개 이하의 독립 검증 가능한 Step으로 나누고 담당자를 판정한다. 첫 PF-1 상세 명세를 작성하여 사용자 검토를 받는다.
@@ -33,7 +35,7 @@ PF는 하나의 Feature로 유지한다. 각 Step은 사용자가 직접 확인�
 | PF-2 | 내 이름 편집·공개 요약 확인. publicName 폼은 설정에서 프로필로 옮기고 displayName 편집을 제공. /me 타입 누락 정합·자기 공개 요약·실제 티어·크리에이터·팔로워 표시 | **[시니어]** | 잠정 6~7파일, 400~650줄. 기존 사전 키/래퍼 우선 재사용, PF-1 test 파일 확장. 이름 저장→요약 반영·쿨다운·A/B 경합·설정 회귀로 검증 |
 | PF-3 | 프로필에서 내 폴더·개별 게시물 상태 확인과 공유 철회. 기존 폴더 관리/커뮤니티 동선 보존 | **[시니어]** | 잠정 5~7파일, 450~650줄. 기존 폴더 패널·세션 공유 훅/클라이언트·기존 문구 재사용. 페이지 목록→철회→후속 조회·캐시·A/B 검증 |
 
-PF-2/3의 파일·분량은 미착수 계획 추정이며 구현 허용 목록이 아니다. 앞 Step 최종 diff를 본 뒤 바로 다음 Step만 상세화한다. 기존 키로 제품 의미를 정확히 표현할 수 없으면 번역 3파일까지 포함하여 다시 산정한다. **7파일/핵심 로직 5파일/600~700줄 초과 또는 별개 여정 결합이 보이면 상한 위반 상태로 착수하지 않는다.** 인접 범위를 먼저 재조정하며, 부득이한 4번째 Step은 독립 여정과 하한 충족 근거·사용자 검토가 필요하다. 지금은 3개 제안만 승인 요청한다.
+PF-2/3의 파일·분량은 당시 미착수 계획 추정이며 구현 허용 목록이 아니다. PF-2의 실제 조사 후 규모 관문은 §6 및 PF-2 명세 §1.1로 갱신한다. 앞 Step 최종 diff를 본 뒤 바로 다음 Step만 상세화한다. 기존 키로 제품 의미를 정확히 표현할 수 없으면 번역 3파일까지 포함하여 다시 산정한다. **7파일/핵심 로직 5파일/600~700줄 초과 또는 별개 여정 결합이 보이면 상한 위반 상태로 착수하지 않는다.** 인접 범위를 먼저 재조정하며, 부득이한 4번째 Step은 독립 여정과 하한 충족 근거·사용자 검토가 필요하다. 지금은 3개 제안만 승인 요청한다.
 
 ### 3.1 협업 §1.2 판정 질문 적용
 
@@ -131,10 +133,168 @@ PF-2/3의 파일·분량은 미착수 계획 추정이며 구현 허용 목록�
     - `gh api repos/choise-hun/doloop/issues/150/comments`: Codex Review Summary `has_any_findings: false`, `status: completed` (지적 0건)
 - **미실행 유지:** PR 머지 및 운영 배포(사용자 권한), PF-2/3 기능 구현, 실제 네트워크 OAuth.
 
-## 5. 다음 행동과 사용자 머지 안내
+## 5. PF-1 마감과 PF-2 연결
 
-PF-1 작업은 구현부터 PR 검증(커밋·push·PR 생성·최신 CI 통과·리뷰 확인)까지 전수 완료되었다.
-현재 상태는 **사용자 PR #150 머지 대기** 상태이다.
+PF-1의 구현·검증·PR 게시 이력은 §4와 결과/PF-1.md에 보존한다. PR #150의 실제 머지는 이번 PF-2 준비에서 확인했다. PF-2 상세 명세 작성/검토와 다음 행동은 아래 §6을 따른다.
 
-머지 완료 후 다음 작업은 계획 #9 PF의 두 번째 단계인 **PF-2 (내 이름 편집 이동·공개 요약 확인)** 상세 명세 및 구현 검토로 진행된다.
+## 6. PF-2 시니어 명세 — 2026-11-09
 
+### 6.1 목표·입력·승인과 현재 담당
+
+- 사용자 요청: “GPT-6.1 Sol (시니어) — PF-2 세부 명세 작성”. 목표는 이름 편집 이동·공개 요약의 계약/배치/검증 고정이다.
+- 입력: 계획 #9 PF, 요구사항 REQ-4/AC-8, 본 파일 §3, 결과/PF-1.md, 실제 main 코드.
+- 승인 범위: 로컬 명세 및 진행 기록, 읽기 조사, PR #150 머지 확인, main 안전 동기화만. **Tool Lock: 구현/테스트 작성·빌드/테스트 실행 없음. 커밋/push/PR/배포 미승인.** PF-1 게시 승인을 PF-2에 확대하지 않는다.
+- 담당/충돌: 시니어, `개발산출물/명세/PF-2_구현명세.md`와 본 파일만 작성. 다른 에이전트/주니어 작업 위임 없음. 사용자 미커밋 `인수인계_메모.md`, `계획/상용_서비스_계획.md`는 시작 내용 그대로 보존하며 상태가 과거 PF-1 명세 대기로 남아 있음을 구별한다. 이번 현황은 본 절이 기준이다.
+- 계약: [PF-2 상세 명세](명세/PF-2_구현명세.md). PF 3-Step 및 PF-2 시니어 배정 유지. 제품/API 정책의 신규 미확정 항목은 없으며 아래 규모 예외 결정과 구현 승인이 남았다.
+
+### 6.2 실제 명령·결과 / 미실행
+
+| 명령·조회 | 실제 결과 |
+| --- | --- |
+| `git status --short`, `git branch --show-current` | 시작 `step/PF-1`. 사용자 미커밋 문서 2개만 확인 |
+| GitHub get_pr_info, choise-hun/doloop #150 | merged=true, merge `5ed638835959c035b216a7237782902a96e48a96`, 2026-11-09 22:18:04 KST. [PR #150](https://github.com/choise-hun/doloop/pull/150). 본문의 과거 테스트/CI를 이번 실행으로 간주하지 않음 |
+| `git switch main`, `git pull --ff-only` | 성공. `main=origin/main=5ed638835959c035b216a7237782902a96e48a96`. 사용자 문서 유지 |
+| 코드·규칙 읽기/rg/nl | SettingsPage/PublicNameForm/CommunityPage/CommunityPane, auth/apiClient, ProfileService/CommunityService/TierService/라우트/JSON 설정 및 관련 spec 대조. file:line은 PF-2 명세 §2 |
+| 문서 정적 점검 | `git diff --check`, 상대 링크/근거 파일·행 존재, UTF-8 BOM 없음/LF, 사용자 문서 SHA-256 일치 확인. 최종 상세 결과는 §6.4 |
+
+**미실행:** 소스·테스트 수정, Red/Green·변이 실행, npm/Gradle/build/Playwright/Ktor 기동, 실제 OAuth/DB/A↔B 통합, CI/리뷰 재검증, Git 커밋/push/PR, 배포. PF-1 과거 결과를 PF-2 통과로 승격하지 않는다.
+
+### 6.3 고정 계약·규모 관문·다음 행동
+
+- 명세에 Locked Contracts, 설정 폼 ID 이동, /me 전체 필드/nullable, 기존 이름 정책/오류 코드, 공개 요약 경계, 3언어 문구, 4폭 배치, 가드↔단언 표와 다음 검증 명령을 고정했다.
+- 공개 API에는 tier/followingCount/email/displayName 없음. 내 티어는 me.tier, 팔로워는 user 응답 followerCount만 사용. publicName=null은 GET 없이 빈 안내, 이름 있는 사용자 404는 성공/0명으로 둔갑시키지 않는다.
+- 기존 폼 3개 사용처 중 설정만 이동. 공용 폼 저장/재조회 실패·uid/세대·토큰 조회 중 계정 교체·동일 틱 중복·두 이름 동시 저장을 검증 대상으로 삼았다. 전송 전 취소를 위해 기존 API 래퍼에 선택적 signal 전달을 제안했다.
+- **규모 결정 필요:** 최소 9파일(핵심 5+테스트 1+사전 3), 예상 500~700줄. 기존 잠정 6~7파일 및 문서 운영 §4.1 상한 초과. 추천은 PF-2 한정 9파일 예외와 핵심 5파일/700줄 상한 유지 승인. 대안은 PF-2/3 범위 재조정. 번역만 가짜 Step으로 분리하거나 공통 규칙을 임의 변경하지 않는다.
+- 현재 완료는 **명세 작성**이며 사용자 검토/규모 예외/구현 승인 대기로 종료한다. 다음은 승인 후 시니어 0단계 핵심 구현·표적 1~2개 검증이고, 4단계 주니어 전체 검증/게시에는 해당 승인 범위를 별도 기록한다.
+
+다음 단계 시작 멘트(이 코드 블록 자체는 승인 아님):
+
+```text
+# GPT-6.1 Sol (시니어) — PF-2 핵심 구현 및 검증 인계
+개발산출물/프롬프트_템플릿_4단계.md §0과 협업_시니어주니어.md §1.2를 따른다.
+목표: 승인된 PF-2 이름 편집 이동·공개 요약을 구현한다.
+입력: 개발산출물/명세/PF-2_구현명세.md, 개발산출물/진행_PF.md §6.
+선행 조건: 사용자가 명세 및 PF-2 한정 9파일 예외를 명시 승인했는지 먼저 확인한다.
+PR #150 머지 확인 및 main 동기화는 완료했다. 최신 git/열린 PR을 확인하고,
+사용자 미커밋 문서 2개와 PF-2 로컬 명세·진행 기록을 보존한 뒤 main을 안전 동기화한다.
+끝난 PF-1 구현·검증/명세 조사는 반복하지 않는다. 작업 브랜치는 step/PF-2를 사용한다.
+범위: 승인된 명세 §3의 9파일, Locked Contracts·배치·가드↔단언 표.
+완료 기준: 핵심 구현과 중요한 표적 테스트 1~2개의 Red/Green 근거,
+정확한 diff·미실행 검증·4단계 주니어의 후속 행동을 진행 파일에 기록한다.
+Git 처리: 로컬 구현·표적 검증만. 전체 회귀·결과 정리·commit/push/main PR/CI는
+4단계 주니어에게 명시 승인된 범위에서 인계한다. 머지·배포는 하지 않는다.
+```
+
+### 6.4 문서 완료 점검
+
+- 완료 산출물: PF-2 상세 명세 신규 작성, 본 진행 파일의 현재 단계·선행 머지·재개 갱신.
+- 문서 2개 상대 링크의 대상 파일과 명세의 직접 표기된 코드 근거 24개(file:line) 존재를 확인했다. UTF-8 BOM 없음/LF 및 `git diff --check` 통과, 정적 점검 오류 0건. 코드·테스트 실행 검증과 구별한다.
+- 시작 사용자 문서 2개의 SHA-256과 동기화·문서 작성 후 값을 비교하여 2개 모두 일치했다. 사용자 문서는 이번 변경/게시 대상에 포함하지 않는다. 최종 Git은 main=`5ed6388`, 이번 변경은 신규 명세 1개와 진행 파일 1개뿐이며 제품/테스트 diff는 0개다.
+
+
+## 7. PF-2 시니어 핵심 구현·표적 검증 인계 — 2026-11-09
+
+### 7.1 승인·Git·담당
+
+- 사용자 명시 승인: “PF-2 명세와 PF-2 한정 9파일 예외를 승인한다. 핵심 5파일·총 700변경줄 이내에서 구현하고 표적 테스트 1~2개의 Red/Green 및 4단계 주니어 인계 기록까지 로컬로 진행한다.”
+- 커밋·push·PR·CI·머지·배포는 **명시적으로 승인에서 제외**. PF-1 게시 승인을 확대하지 않는다. §6의 미승인/Tool Lock은 명세 작성 당시 이력이며 현재 승인 경계는 본 절이다.
+- 시작 main=`5ed6388`, 사용자 변경은 인수인계 메모·상용 서비스 계획·진행 PF와 untracked PF-2 명세. `git fetch origin` → `git merge --ff-only origin/main`(Already up to date.) → `git switch -c step/PF-2` 성공. HEAD=main=origin/main=`5ed6388` 유지.
+- 시니어가 승인 핵심 5파일·사전 3파일·profile spec 1파일을 구현. 사용자 인수인계/계획은 내용 보존. 명세의 승인/검증 상태와 본 진행 기록만 추가 갱신. 공통 규칙·CSS·서버·DB·의존성·다른 spec 수정 없음.
+
+### 7.2 구현과 가드 근거
+
+- `frontend/src/pages/ProfilePage.tsx:53`: uid+generation에 draft/msg/저장 잠금 귀속. 첫 렌더부터 이전 identity 상태를 숨김. summary는 uid+generation+publicName+retry 키 및 controller 소유권으로 관리하여 이전 요약 재노출 방지. 일치 me 없음/공개 이름 없음/로딩/실패·재시도 분리.
+- `frontend/src/pages/ProfilePage.tsx:95`, `:110`, `:123`: 공개 GET abort·현재 uid 검사, 동기 ref 저장 잠금·소유 작업만 해제, 표시 이름 단독 PATCH 및 trim/100자/빈 값 처리. 공개 이름 변경은 의존 effect, 같은 이름 no-op은 onSaved retry로 각각 GET 한 번. 표시 이름 변경은 공개 GET을 늘리지 않음.
+- `frontend/src/components/community/PublicNameForm.tsx:33`, `:52`: auth.onChange 동기 abort·unmount 취소, 제출 시작/await 후 identity·mounted·작업 객체 가드. PUT 뒤 /me 1회 재확인까지 잠금 유지. null/값 불일치는 nameRefreshFailed, onSaved 금지. 기존 매퍼·DOM·inputRef·기본 ID와 community/home 호출부 보존.
+- `frontend/src/lib/apiClient.ts:1597`, `:1625`: 선택 signal 전달. 토큰 대기 중 취소해도 fetch에 aborted signal이 전달되어 네트워크 전송 차단. auth.ts는 서버 DTO와 맞춘 타입 및 TierUsageDto만 수정하고 런타임·PATCH 큐는 무변경.
+- 설정 이름 폼만 profile 링크로 대체. 프로필 계정→이름→요약 1열·기존 CSS·정렬 그룹 적용. 사전 3개에 명세의 profile 키 17개씩 추가. 공개 요약에 displayName/email fallback·팔로우 호출 없음.
+
+### 7.3 실제 실행·증거 한계
+
+| 명령/단계 | 실제 결과 |
+| --- | --- |
+| 최초 테스트 준비 | `python` 실행 파일 없음 → `python3`로 바로 수정. 첫 Playwright는 테스트 미작성으로 No tests found였으며 제품 Red로 세지 않음 |
+| Red: `npx playwright test test/e2e/layout/profile.spec.js --grep 'PF2-0[78]'` | 2 failed. PF2-07은 settings 옛 폼 ID 기대 0/실제 2. PF2-08은 토큰 대기 A→B 후 PUT 기대 0/실제 1. 기존 구현에서 의도한 실패 확인 |
+| `npm run build` | 최종 tsc 및 Vite 성공(170 modules). 기존 CJS/config.js/번들 크기 경고 있음 |
+| Green: 위 표적 명령 재실행 | 최종 **2 passed (2.4s)**. 추가 검토 수정 후 동일 표적만 재검증 |
+| PF2-07 단언 | 설정→profile#profileNames 실제 이동/정렬 그룹, 표시 이름 trim·단일 PATCH·입력/p/auth.me 일치, tier=pro/billingTier=free→Pro, 팔로워 0명, no-op/변경 PUT payload·각 요약 GET 1회. 같은 uid 로그아웃→재로그인 후 이전 reject/finally가 새 두 폼 잠금·draft·오류를 변경하지 않음 |
+| PF2-08 단언 | 기존 커뮤니티 배너 사용, getSession deferred 중 실제 auth A→B 이벤트, token release 후 save settle·현재 B me·빈 B 입력 및 이전 PUT 총 0회 |
+
+Red PF2-07은 이동 계약 실패이며 경합 구간까지 실행된 Red/변이 검사는 아니다. PF2-08은 실제 브라우저 네트워크 route 기준 전송 차단 재현이다. 서버 정책/실제 DB 보호·전체 PF2-07/08 행렬 통과를 주장하지 않는다. PF1-04는 승인된 이동에 따라 옛 두 ID 기대만 새 링크로 바꾸고 나머지 유지했다.
+
+미실행: PF2-01~11 전수 및 PF2-L 보강/회귀, profile 전체 spec, 4폭·dark 스크린샷/Q1~Q9/G0~G8·A1, 기존 7 spec, auth-races/npm/Gradle 전체, 격리 Ktor 정적 서빙·실제 OAuth/DB A↔B 통합, Git 게시·CI·리뷰·배포. 현재 구현 완료와 표적 mock 화면 연결만 증명했으며 통합·운영 완료가 아니다.
+
+- 최종 정적 점검: 제품/테스트 9파일·핵심 5파일·485변경줄. 이번 세션 문서 포함 변경줄 563(기존 사용자 문서/명세 작성 변경 제외). `git diff --check` 및 UTF-8 BOM 없음/LF 통과. 사용자 인수인계/계획 2개는 저장한 원문과 완전 일치. 열린 main PR 0건, 현재 step/PF-2/HEAD 5ed6388, 미커밋 상태.
+
+### 7.4 다음 행동·권한
+
+- 다음 담당: 4단계 주니어. 상세 명세 §8의 미검증 행렬을 profile.spec.js 안에서 보강하고 §9 전체 명령·4폭 이미지/Q표·격리 런타임/DB 검증을 수행해 결과/PF-2.md에 실제/미실행을 나눈다. 표적 테스트 두 개를 전수 명세 검증으로 취급하지 않는다.
+- 최신 제품/테스트 9파일·핵심 5파일·700변경줄 상한을 유지한다. 추가 검증 코드/범위 내 결함 수정으로 상한에 닿으면 숨기거나 단언을 줄이지 말고 규모 결정 관문으로 돌아간다. 다른 spec에서 옛 이동 계약 의존 발견 시 명세 §9대로 파일·원인·규모 재검토.
+- 전체 회귀·결과 작성은 다음 사용자 실행 지시 범위에서 수행. **커밋/push/신규 main PR/CI 권한은 아직 없음**. 게시 승인이 추가되기 전 Git 게시는 하지 않는다. 승인 후에는 최신 CI와 리뷰를 별도로 확인하되 머지·배포는 사용자가 한다.
+
+## 8. PF-2 4단계 주니어 로컬 최종 검증 완료 — 2026-11-10
+
+### 8.1 승인·Git·담당
+- 승인 근거: 2026-11-09 사용자 “Gemini(주니어) — PF-2 4단계 로컬 최종 검증. 미검증 테스트 보강·전체 회귀·4폭 시각 검토·인계 기록 완성. 로컬 작업만. 커밋·push·PR·CI·머지·배포 금지.”
+- 작업 브랜치: `step/PF-2`, HEAD=main=`5ed6388` 유지. 로컬 작업만 수행하고 커밋·push·PR 생성·CI 감시·머지·배포는 엄격히 금지 유지.
+- 대상 범위: 승인 9개 파일(핵심 5 + 사전 3 + profile spec 1), 핵심 5파일, 총 663 변경줄 (+592/-71)로 700줄 상한 충족.
+
+### 8.2 실제 실행 검증 결과
+
+| 명령·도구 | 실제 결과 | 비고 |
+| --- | --- | --- |
+| `npm run build` | `tsc --noEmit && vite build` 성공 (0 errors, 170 modules) | 타입/사전 3개 정합 완료 |
+| `npx playwright test test/e2e/layout/profile.spec.js` | **45 passed (31.6s)** | layout 25개 + 기능 20개 전수 통과 |
+| `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/profile.spec.js` | **45 passed (33.1s)**, 25장 스크린샷 캡처 생성 완료 | G0~G8 자동 검사 0건, Q1~Q9 전수 ○ 판정 |
+| 7개 유지 회귀 spec (`shell`, `settings`, `avf3-profile-callers`, `community`, `cm-ui`, `i18n-lang`, `xss`) | **160 passed (2.1m)** | 기존 화면·기능·i18n 회귀 0건 |
+| `node --test test/auth-races.test.js` | **30 passed, 0 fail (270ms)** | MeProfile 필드 확장 후 인증 큐·레이스 가드 보존 |
+| `npm test` | **416 passed, 0 failed (3.78s)** | 전체 Node 단위 테스트 100% 통과 |
+| `./gradlew test --rerun-tasks` | **BUILD SUCCESSFUL in 45s** (5 executed) | Testcontainers PostgreSQL 및 Ktor 백엔드 테스트 통과 |
+| `PUBLIC_DIR=/tmp/ulp-ktor-smoke-pf2 PORT=3001 ./gradlew run` & `curl -i http://127.0.0.1:3001/profile.html` | HTTP 200 OK, `text/html; charset=UTF-8`, `<div id="root"></div>` 확인 | Ktor spa.html 서빙 패리티 증명 |
+| Node Playwright Chromium smoke (`http://127.0.0.1:3001/profile.html`) | Status: 200, Title: Profile · ULeveLP, #profileTitle: Profile, 새로고침 후 유지 확인 | 프로세스 안전 종료 및 임시 디렉토리 정리 |
+| `git diff --check`, `git status --short`, `git diff --stat origin/main -- frontend/ test/` | 공백 오류 0건, 승인 9개 파일 정확 일치, **663 변경줄 (+592/-71, 700줄 상한 충족)** | UTF-8 BOM 없음/LF 유지 |
+
+### 8.3 미실행 및 한계
+- 실제 Supabase OAuth 인증 서버 및 프로덕션 원격 DB 환경 연결 (실제 외부 인증/DB 환경 부재로 mock E2E와 명확히 분리하여 미실행으로 기록).
+- PF-3 (내 폴더·개별 게시물 상태 확인 및 공유 철회) 구현.
+- PR 머지 및 운영 배포 (사용자 권한).
+
+### 8.4 Git 게시 및 CI/리뷰 확인 — 2026-11-10
+
+- 승인 근거: 2026-11-10 사용자 “Gemini(주니어) — PF-2 Git 게시 및 PR 검증”.
+- Git 처리:
+  - 커밋: `00d6440` `feat(profile): 이름 편집 이동·공개 요약 및 전수 검증` (PF-2 승인 9개 파일 및 관련 명세/결과/진행 문서 포함).
+  - 원격 push: `origin/step/PF-2` 신규 브랜치 push 성공.
+  - PR 생성: [PR #151](https://github.com/choise-hun/doloop/pull/151) (`main` <- `step/PF-2`).
+  - CI 감시 (`gh pr checks 151 --watch`): 7개 체크 전수 통과 (0 failed, 7 successful, 0 cancelled).
+    - `CI/CI ok (pull_request)`: 4s (성공)
+    - `CI/Detect code changes`: 7s (성공)
+    - `CI/Docker build & smoke test`: 2m 13s (성공)
+    - `CI/E2E XSS & CSP (Playwright, spa)`: 8m 25s (성공)
+    - `CI/Kotlin test (JDK 21)`: 3m 32s (성공)
+    - `CI/Test (Node 22)`: 52s (성공)
+    - `CI/Test (Node 24)`: 50s (성공)
+  - 리뷰 코멘트 확인:
+    - `gh api repos/choise-hun/doloop/pulls/151/reviews`: `[]` (리뷰 없음)
+    - `gh api repos/choise-hun/doloop/pulls/151/comments`: `[]` (인라인 코멘트 없음)
+    - `gh api repos/choise-hun/doloop/issues/151/comments`: Codex Review Summary `has_any_findings: false`, `status: completed` (지적 0건)
+- **미실행 유지:** PR 머지 및 운영 배포(사용자 권한), PF-3 기능 구현, 실제 네트워크 OAuth.
+
+## 9. PF-2 마감과 PF-3 연결
+
+PF-2의 구현·검증·PR 게시 이력은 §7·§8과 [결과/PF-2.md](결과/PF-2.md)에 보존한다. PR #151 사용자 머지 후 main 안전 동기화를 확인하고 PF-3(프로필 내 폴더·개별 게시물 상태 확인 및 공유 철회) 세부 명세 작성으로 진행한다.
+
+다음 단계 시작 멘트(사용자 PR #151 머지 후 활용용):
+
+```text
+# GPT-6.1 Sol (시니어) — PF-3 세부 명세 작성
+[필수 가드레일: docs/문서_운영.md §4·§5·§6 및 개발산출물/협업_시니어주니어.md 준수]
+목표: 프로필 내 폴더·개별 게시물 관리 및 공유 철회의 계약/배치/검증 명세를 작성한다.
+입력: 계획/상용_서비스_계획.md #9 PF, 개발산출물/진행_PF.md §3·§8, 개발산출물/결과/PF-2.md.
+선행 조건: PR #151 머지 확인 및 main 안전 동기화(git switch main && git pull --ff-only).
+범위: 명세 작성과 실제 코드 근거 조사. 소스/테스트 구현 및 빌드/테스트 실행 금지 (Tool Lock 준수).
+완료 기준:
+1. 개발산출물/명세/PF-3_구현명세.md 작성 (Locked Contracts, 가드↔단언, Q표, 검증 명령)
+2. 개발산출물/진행_PF.md 갱신
+Git 처리: 로컬 문서 작업만. 커밋·push·PR·머지·배포 금지.
+```

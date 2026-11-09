@@ -10,7 +10,6 @@ import { communityErrorKey } from '../lib/community.mts';
 import { getLangChoice, onLangChange, setLang, t, type I18nKey, type LangChoice, type LocaleCode } from '../lib/i18n.mts';
 import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
-import { PublicNameForm } from '../components/community/PublicNameForm';
 import commStyles from '../components/community/Community.module.css';
 import styles from './SettingsPage.module.css';
 
@@ -690,11 +689,9 @@ export function SettingsPage(): React.ReactElement {
         >
           <h2 id="hCommunity">{t('community.settingsTitle')}</h2>
           <div className={styles.panel}>
-            <PublicNameForm
-              me={authState.me}
-              inputId="settingsPublicNameInput"
-              submitId="settingsPublicNameSave"
-            />
+            <a id="settingsProfileLink" className="ghostBtn" href="profile.html#profileNames">
+              {t('profile.editLink')}
+            </a>
           </div>
           <div className={styles.panel}>
             <div className={commStyles.commSwitchRow}>

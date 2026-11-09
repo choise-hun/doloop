@@ -2,6 +2,23 @@
 import type { I18nKey } from '../i18n.mts';
 
 export const JA: Record<I18nKey, string> = {
+  'profile.namesTitle': "自分の名前",
+  'profile.displayNameLabel': "表示名",
+  'profile.displayNameHint': "自分だけに表示される名前です。100文字まで入力できます。",
+  'profile.displayNameFormat': "表示名は100文字以内で入力してください。",
+  'profile.saved': "保存しました。",
+  'profile.saveFailed': "名前を保存できませんでした。もう一度お試しください。",
+  'profile.nameRefreshFailed': "名前は保存されましたが、最新情報を確認できませんでした。再読み込みしてください。",
+  'profile.meUnavailable': "自分の情報を読み込めませんでした。再読み込みしてください。",
+  'profile.editLink': "自分の名前を編集",
+  'profile.summaryTitle': "公開プロフィール概要",
+  'profile.summaryHint': "ティアはアカウント情報です。コミュニティ名・クリエイター情報・自己紹介・フォロワー数は公開プロフィール情報です。",
+  'profile.tierLabel': "自分のティア",
+  'profile.tierUnknown': "ティアを確認できません",
+  'profile.followers': "フォロワー {count}人",
+  'profile.summaryLoading': "公開プロフィールを読み込み中…",
+  'profile.summaryEmpty': "コミュニティ名を設定すると公開プロフィールを確認できます。",
+  'profile.summaryFailed': "公開プロフィールを読み込めませんでした。",
   'chords.keyboardScaleCount': '{from}–{to}・{count}音',
   'chords.keyboardClear': '音をクリア',
   'chords.keyboardToneContext': '選択したコードの構成音',
