@@ -77,9 +77,16 @@ allprojects {
 - 판정: **P2 해소, 요청한 로컬 수정·검증 완료**. 프로덕션 입력 가드→400/오류 본문/DB 무변경 및 정상 keyset 단언을 연결했다. 기존 사용자 변경은 보존했고 index tree `e46c227c99c72b089c43996f288b5b4582a7569c`도 유지됐다. 이번 추가 변경은 커서 코드·신규 테스트·진행/결과 문서 4파일이며 추가 staging은 없다. UTF-8(BOM 없음)·LF·문서 상대 링크/코드 블록·git diff --check를 확인했다.
 - 이번 범위는 커서 P2다. 전체 314개 재실행·실외부 YouTube·화면 연결·운영·CI·변이 검사는 미실행이며 이전 전체 통과 기록을 이번 실행으로 바꾸지 않는다. 원시 출력/캐시는 ignored 로컬 자료로 다른 PC에 전달되지 않는다.
 
-## 6. Git 게시 (2026-11-09)
+## 6. Git 게시 및 CI/리뷰 확인 (2026-11-09)
 
 - 사용자 승인(“CM-BE 로컬 구현과 P2 수정을 Git으로 게시한다”)에 따라 제품·테스트 18파일과 CM-BE 문서 3파일(총 21파일)을 선별하여 커밋·push하고 main 대상 PR을 생성했다.
+  - 커밋: `fe68f7b` (`feat(community): CM-BE 개별 세션 공유 구현 및 P2 커서 수정`)
+  - PR: [PR #145](https://github.com/choise-hun/doloop/pull/145) (main 대상)
 - 선행 조건대로 기존 사용자 변경·staged 문서 이동·LLM 작업은 온전히 보존하고 커밋 대상에서 제외했다.
-- 세부 게시 내역, PR 번호, 최신 CI 종료 결과 및 리뷰 판단은 [진행 파일 §8](../진행_CM-BE.md)에 기록한다.
+- 최신 CI 모니터링: GitHub Actions run `42559989948` (Kotlin, Node 22/24, Docker smoke, E2E 등) **전체 통과 (Pass)**.
+- 리뷰 코멘트 조회 및 판단:
+  - `chatgpt-codex-connector[bot]`의 P2 리뷰 ([PR 코멘트](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772)): `AdminService.kt`의 신고 목록 조회 시 동시 cascade 삭제 경합 방어를 위한 JOIN 쿼리 단일화 권장.
+  - 판단: 타당한 개선점이며, PR 게시 및 CI 검증 완료 후 후속 리뷰 반영 또는 다음 단계에서 단일 JOIN으로 개선 처리하기로 기록함.
+- 세부 게시 내역은 [진행 파일 §8](../진행_CM-BE.md)에 기록했다. 머지는 사용자 담당이다.
+
 

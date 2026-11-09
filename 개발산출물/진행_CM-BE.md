@@ -6,7 +6,7 @@
 - 승인: 로컬 구현/테스트 승인(§5) 및 P2 수정 승인(§7)에 이어, 사용자 “CM-BE 로컬 구현과 P2 수정을 Git으로 게시한다. 커밋·push·PR을 승인한다. 머지는 사용자 담당이며 배포는 제외한다” 확인(§8).
 - 담당/변경 파일: [상세 명세](명세/CM-BE_구현명세.md) §2/§10의 제품 11, 테스트 7, CM-BE 문서 3 (총 21파일). 사용자 문서 이동·다른 작업 변경(LLM 작업, 계획/인수인계 메모)은 안전하게 보존.
 - 완료 기준: 변경 선별, 관련 검증 확인, main 대상 PR 생성, 최신 CI 종료와 리뷰 판단 기록.
-- 현재: 제품·테스트 18파일과 CM-BE 문서 3파일(총 21파일) 선별 및 검증 확인 완료, Git 게시(커밋·push·PR 생성·CI 감시) 진행 중. [검토 결과](결과/CM-BE_로컬검토.md) 및 아래 §8을 따른다.
+- 현재: PR #145 생성 및 CI 전체 통과(Pass). 자동 리뷰 1건(AdminService 신고 목록 JOIN 권장) 확인 및 판단 기록 완료. 사용자 머지 대기. [검토 결과](결과/CM-BE_로컬검토.md) 및 아래 §8을 따른다.
 
 ## 1. Git·선행 확인 결과
 
@@ -108,8 +108,20 @@ Git 처리: 커밋·push·PR은 별도 명시 지시 전 실행하지 않는다.
   - CM-BE 문서 (3파일): `개발산출물/명세/CM-BE_구현명세.md`, `개발산출물/결과/CM-BE_로컬검토.md`, `개발산출물/진행_CM-BE.md`
 - 사전 검증: P2 커서 정식 회귀 및 CM-BE 테스트 17개(`TEST-ulevelp.community.Episode*.xml` 5개 파일, failures 0 / errors 0 / skipped 0) 및 격리 PostgresTestContainer V10/26개 테이블 마이그레이션 무결성 통과 확인.
 - 브랜치: `step/cm-be`
-- 커밋: (게시 후 커밋 SHA 기록)
-- PR: (게시 후 PR URL 및 번호 기록)
-- CI: (gh pr checks --watch 모니터링 결과 기록)
-- 리뷰: (PR 리뷰 코멘트 조회 결과 및 판단 기록)
+- 커밋: `fe68f7b` (`feat(community): CM-BE 개별 세션 공유 구현 및 P2 커서 수정`)
+- PR: [PR #145](https://github.com/choise-hun/doloop/pull/145) (main 대상)
+- CI 상태: **전체 통과 (Pass)**
+  - GitHub Actions run `42559989948`
+  - Detect code changes: pass (7s)
+  - Docker build & smoke test: pass (3m 9s)
+  - E2E XSS & CSP (Playwright, spa): pass (6m 21s)
+  - Kotlin test (JDK 21): pass (2m 44s)
+  - Test (Node 22): pass (36s)
+  - Test (Node 24): pass (51s)
+  - CI ok: pass (4s)
+- 리뷰 코멘트 및 판단 기록:
+  - 자동 리뷰: `chatgpt-codex-connector[bot]` P2 1건 등록 ([PR #145 코멘트](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772))
+  - 지적 내용: `AdminService.kt:228-229`의 `episodeReportDto`가 `listEpisodeReports`에서 신고 목록을 읽은 뒤 카드 정보를 단건 `.single()`로 조회하므로, `READ COMMITTED` 격리 수준에서 조회 도중 신고된 곡/사용자가 cascade 삭제될 경우 500 예외가 발생할 수 있어 신고·카드·프로필을 JOIN 쿼리로 한 번에 조회하거나 안전 처리 권장.
+  - 판단: **타당함**. 운영자 신고 목록 조회와 곡/사용자 삭제 경합 시의 잠재 결함이자 N+1 쿼리 개선 포인트임. 현재 PR #145는 승인된 CM-BE 로컬 구현과 P2 커서 수정을 게시하여 CI를 성공적으로 마친 상태이며, 머지는 사용자 담당임. 해당 리뷰 제안(JOIN 단일 쿼리화)은 후속 리뷰 반영 또는 다음 단계에서 적용하기로 판단·기록한다.
+
 
