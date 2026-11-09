@@ -60,7 +60,7 @@ PF-2/3의 파일·분량은 미착수 계획 추정이며 구현 허용 목록�
 - [x] 결과 보고서 `개발산출물/결과/PF-1.md` 작성 및 diff 점검 완료.
 - [x] 시니어 3단계 독립 검증·최소 수정. [결과 §7](결과/PF-1.md#7-시니어-3단계-독립-검증최소-수정--2026-11-09).
 - [x] 4단계 주니어 수정 후 최종 회귀·문서 정리. [결과 §8](결과/PF-1.md#8-4단계-주니어-최종-검증-및-문서-일치--2026-11-09).
-- [ ] Git 커밋·push·PR 생성. (사용자 게시 승인 후 수행 예정).
+- [x] Git 커밋·push·PR 생성 및 최신 CI·리뷰 확인. ([PR #150](https://github.com/choise-hun/doloop/pull/150), 7개 CI checks 통과, Codex 리뷰 0건).
 
 실제 읽기 조사 결과:
 
@@ -109,17 +109,32 @@ PF-2/3의 파일·분량은 미착수 계획 추정이며 구현 허용 목록�
   - `./gradlew test --rerun-tasks`: **BUILD SUCCESSFUL in 46s** (5 executed).
   - `git diff --check`: 공백 오류 0건.
 - 최종 코드 상태: 승인 7개 파일, **687 변경줄 (+683/-4)** (700줄 상한 충족).
-- **미실행 유지:** Git 커밋·push·PR 생성(게시 승인 별도 요청), PF-2/3 기능, Cloud Run 운영 배포, 실제 네트워크 OAuth.
 
-## 5. 다음 행동과 사용자 게시 승인 안내
+### 4.4 Git 게시 및 CI/리뷰 확인 — 2026-11-09
 
-로컬 최종 회귀 검증과 문서 정리가 완료되었다.
-현재 상태는 **Git 게시(커밋·push·main PR 생성) 승인 대기** 상태이다.
+- 승인 근거: 2026-11-09 사용자 “Gemini(주니어) — PF-1 Git 게시 및 PR 검증”.
+- Git 처리:
+  - 커밋: `1fda40f` `feat(profile): 프로필 진입 분리 및 계정 확인·로그아웃 연결` (PF-1 승인 7개 파일 및 관련 명세/결과/진행 문서 포함 10개 파일).
+  - 원격 push: `origin/step/PF-1` 신규 브랜치 push 성공.
+  - PR 생성: [PR #150](https://github.com/choise-hun/doloop/pull/150) (main <- step/PF-1).
+  - CI 감시 (`gh pr checks 150 --watch`): 7개 체크 전수 통과 (0 failed, 7 successful, 0 cancelled).
+    - `CI/CI ok (pull_request)`: 4s (성공)
+    - `CI/Detect code changes`: 6s (성공)
+    - `CI/Docker build & smoke test`: 2m 37s (성공)
+    - `CI/E2E XSS & CSP (Playwright, spa)`: 8m 10s (성공)
+    - `CI/Kotlin test (JDK 21)`: 2m 17s (성공)
+    - `CI/Test (Node 22)`: 55s (성공)
+    - `CI/Test (Node 24)`: 38s (성공)
+  - 리뷰 코멘트 확인:
+    - `gh api repos/choise-hun/doloop/pulls/150/reviews`: `[]` (리뷰 없음)
+    - `gh api repos/choise-hun/doloop/pulls/150/comments`: `[]` (인라인 코멘트 없음)
+    - `gh api repos/choise-hun/doloop/issues/150/comments`: Codex Review Summary `has_any_findings: false`, `status: completed` (지적 0건)
+- **미실행 유지:** PR 머지 및 운영 배포(사용자 권한), PF-2/3 기능 구현, 실제 네트워크 OAuth.
 
-게시 승인이 주어지면 아래 작업이 수행된다:
-1. `step/PF-1` 브랜치에 승인 7파일 및 관련 문서 커밋·push.
-2. main 대상 PR 생성 (기존 열린 PR 없음 확인).
-3. `gh pr checks --watch`로 최신 CI 완료 대기.
-4. 리뷰 코멘트(본문/라인/일반) 확인 및 처리 근거 기록.
-5. 사용자에게 PR 링크 및 최종 머지 안내 보고.
+## 5. 다음 행동과 사용자 머지 안내
+
+PF-1 작업은 구현부터 PR 검증(커밋·push·PR 생성·최신 CI 통과·리뷰 확인)까지 전수 완료되었다.
+현재 상태는 **사용자 PR #150 머지 대기** 상태이다.
+
+머지 완료 후 다음 작업은 계획 #9 PF의 두 번째 단계인 **PF-2 (내 이름 편집 이동·공개 요약 확인)** 상세 명세 및 구현 검토로 진행된다.
 

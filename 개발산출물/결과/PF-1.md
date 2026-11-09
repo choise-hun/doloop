@@ -197,3 +197,33 @@
   - 합계: **687 변경줄 (+683/-4)** (700줄 상한 내)
 - 미실행 범위 유지: Git 커밋·push·PR 생성(게시 승인 대기), PF-2/3 기능, Cloud Run 운영 배포, 실제 네트워크 OAuth.
 
+---
+
+## 9. Git 게시 및 최신 CI·리뷰 검증 완료 — 2026-11-09
+
+### 9.1 Git 처리 및 PR 생성
+- 사용자 승인: “Gemini(주니어) — PF-1 Git 게시 및 PR 검증”.
+- 커밋: `1fda40f` `feat(profile): 프로필 진입 분리 및 계정 확인·로그아웃 연결`
+- 원격 푸시: `origin/step/PF-1` 신규 브랜치 push 완료.
+- PR 생성: [PR #150](https://github.com/choise-hun/doloop/pull/150) (`main` <- `step/PF-1`).
+
+### 9.2 최신 CI 검증 결과 (7개 전수 통과)
+`gh pr checks 150 --watch` 확인 결과:
+- `CI/CI ok (pull_request)`: 4s (성공)
+- `CI/Detect code changes`: 6s (성공)
+- `CI/Docker build & smoke test`: 2m 37s (성공)
+- `CI/E2E XSS & CSP (Playwright, spa)`: 8m 10s (성공)
+- `CI/Kotlin test (JDK 21)`: 2m 17s (성공)
+- `CI/Test (Node 22)`: 55s (성공)
+- `CI/Test (Node 24)`: 38s (성공)
+- **최종 판정:** 0 cancelled, 0 failing, 7 successful, 0 skipped.
+
+### 9.3 리뷰 코멘트 확인 및 처리
+- `gh api repos/choise-hun/doloop/pulls/150/reviews`: `[]` (리뷰 없음)
+- `gh api repos/choise-hun/doloop/pulls/150/comments`: `[]` (인라인 코멘트 없음)
+- `gh api repos/choise-hun/doloop/issues/150/comments`: Codex Review Summary `has_any_findings: false`, `has_unresolved_findings: false`, `status: completed` (지적 사항 0건).
+
+### 9.4 최종 상태 및 머지 안내
+- PF-1은 구현·자체 검토·3단계 시니어 독립 검증·4단계 주니어 최종 회귀·Git 게시·최신 CI 통과·리뷰 확인까지 전수 완료되었다.
+- 사용자 PR 머지 후 다음 작업(PF-2)으로 진행한다. 머지 및 배포는 수행하지 않는다.
+
