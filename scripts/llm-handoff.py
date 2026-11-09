@@ -200,7 +200,10 @@ def run(repo, folder, state):
                     if result.returncode:
                         raise ValueError("Verification failed; inspect verify.txt and rerun after diagnosis")
                 diff = git(repo, "diff", "HEAD", "--", *state["task"]["write_files"])
-                untracked = set(git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
+                raw_untracked = subprocess.check_output([
+                    "git", "-C", str(repo), "ls-files", "-z", "--others", "--exclude-standard"
+                ])
+                untracked = {v for v in raw_untracked.decode("utf-8").split("\0") if v}
                 for path in state["task"]["write_files"]:
                     if path in untracked:
                         diff += f"\nNEW FILE: {path}\n" + (repo / path).read_text(encoding="utf-8")

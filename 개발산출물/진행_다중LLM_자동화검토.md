@@ -50,6 +50,8 @@
 보호 파일 해시를 실행기 상태 저장 이후에 수집하도록 수정했다. 단언을 완화하지 않고 전체 흐름을 재검증했다.
 Windows PowerShell 어댑터의 한글 왕복 검증도 처음에는 실패했다. UTF-8 입출력 중계기를 추가한 뒤
 같은 한글 보존 단언을 포함한 11개 검증이 통과했다.
+PR #146의 Codex P2 리뷰(한글 파일명 시 ls-files 따옴표 이스케이프에 따른 changes.diff 누락) 지적을 반영하여
+`git ls-files -z`와 NUL 분리로 한글 경로를 보존하도록 `scripts/llm-handoff.py`를 수정하고, `scripts/test_llm_handoff.py`에 한글 신규 파일(`결과.txt`) 검증 단언을 추가해 11개 테스트 통과를 재확인했다.
 
 ## 다음 행동·재개 지시
 

@@ -29,7 +29,7 @@ class HandoffTests(unittest.TestCase):
         h.git(self.repo, "add", ".")
         h.git(self.repo, "commit", "-qm", "test fixture")
         self.task = {"id": "fixture", "goal": "Test handoff", "references": ["source.txt"],
-                     "write_files": ["source.txt", "new.txt"],
+                     "write_files": ["source.txt", "new.txt", "결과.txt"],
                      "verify": [[sys.executable, "-c", "print('check passed')"]], "timeout_seconds": 20}
         self.config = self.repo.parent / (self.repo.name + ".json")
         self.config.write_text(json.dumps(self.task), encoding="utf-8")
@@ -50,6 +50,7 @@ class HandoffTests(unittest.TestCase):
         if "이번 역할: implement" in text:
             h.write(repo / "source.txt", "implemented\n")
             h.write(repo / "new.txt", "new implementation\n")
+            h.write(repo / "결과.txt", "한글 결과 내용\n")
         return "# Stage result\nObserved evidence and limitations.\n"
 
     def stage_run(self):
@@ -67,7 +68,8 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(model.call_count, 2)
         self.assertEqual(self.state()["status"], "report_ready")
         self.assertIn("check passed", (self.folder / "verify.txt").read_text())
-        self.assertIn("NEW FILE: new.txt", (self.folder / "changes.diff").read_text())
+        self.assertIn("NEW FILE: new.txt", (self.folder / "changes.diff").read_text(encoding="utf-8"))
+        self.assertIn("NEW FILE: 결과.txt\n한글 결과 내용", (self.folder / "changes.diff").read_text(encoding="utf-8"))
         self.assertEqual(h.git(self.repo, "log", "-1", "--format=%s"), "test fixture")
 
     def test_dirty_init_preserves_changes(self):
