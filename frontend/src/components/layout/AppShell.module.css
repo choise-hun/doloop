@@ -180,7 +180,7 @@
     border-top: 1px solid var(--line);
     font-family: var(--font-display);
     font-weight: 800;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.02em;
   }
 
@@ -194,7 +194,7 @@
     white-space: normal;
     text-align: center;
     word-break: break-word;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.2;
     padding: 4px 2px;
   }

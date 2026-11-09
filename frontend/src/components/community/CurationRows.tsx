@@ -38,6 +38,7 @@ export function CurationRows({
 
   // S1 CurationRows / CommunityPane 읽기 — uid + seq (frontend-state.md §1)
   const seq = useRef(0);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     const my = ++seq.current; const uid = me?.id ?? null;
     setData(null);                                   // D16: 계정 바뀌면 이전 줄 즉시 비움
@@ -53,7 +54,8 @@ export function CurationRows({
         setError(communityErrorKey(e));
       }
     });
-  }, [me?.id, variant]);
+    return () => { seq.current++; };
+  }, [me?.id, variant, retry]);
 
   function handlePatchFolder(id: string, patch: Partial<PublicFolderDto>) {
     setData((prev) => {
@@ -136,6 +138,7 @@ export function CurationRows({
       {error ? (
         <p role="alert" className="msg err">
           {t('community.err.generic')}
+          <button type="button" className="ghost mini" onClick={() => setRetry((n) => n + 1)}>{t('episode.retry')}</button>
         </p>
       ) : null}
 

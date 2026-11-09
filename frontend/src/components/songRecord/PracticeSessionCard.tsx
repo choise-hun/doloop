@@ -1,8 +1,8 @@
 // frontend/src/components/songRecord/PracticeSessionCard.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import styles from './PracticeSessionCard.module.css';
-import { apiClient } from '../../lib/apiClient';
-import { useAuth } from '../../lib/auth';
+import { apiClient, type TakeDto } from '../../lib/apiClient';
+import { auth, useAuth } from '../../lib/auth';
 import type { PracticeSessionCardModel } from '../../lib/episode.mts';
 import { buildEpisodePracticeUrl } from '../../lib/episode.mts';
 import { segText, fmtSec } from '../../lib/community.mts';
@@ -16,13 +16,20 @@ export interface PracticeSessionCardProps {
   session: PracticeSessionCardModel;
   surface?: 'day' | 'player' | 'detail';
   onTakeRemoved?: (sessionId: string, takeId: string) => void;
+  onTakeCompleted?: (take: TakeDto) => void;
   onMemoSaved?: (sessionId: string, memo: string) => void;
 }
 
-export function PracticeSessionCard({
+export function PracticeSessionCard(props: PracticeSessionCardProps): React.ReactElement {
+  const state = useAuth();
+  return <OwnedPracticeSessionCard key={`${state.user?.id}:${props.session.sessionId}`} {...props} />;
+}
+
+function OwnedPracticeSessionCard({
   session,
   surface = 'day',
   onTakeRemoved,
+  onTakeCompleted,
   onMemoSaved,
 }: PracticeSessionCardProps): React.ReactElement {
   const authState = useAuth();
@@ -40,6 +47,11 @@ export function PracticeSessionCard({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const alive = useRef(false);
+  const ownerUid = authState.user?.id;
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const isCurrent = () => alive.current && ownerUid === auth.getUser()?.id;
 
   const shareBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -59,33 +71,39 @@ export function PracticeSessionCard({
     setMemoStatus(t('log.statusSaving'));
     try {
       await apiClient.sessions.updateMemo(session.sessionId, memoVal);
+      if (!isCurrent()) return;
       onMemoSaved?.(session.sessionId, memoVal.trim());
       setMemoStatus(t('log.statusSaved'));
       setTimeout(() => {
+        if (!isCurrent()) return;
         setMemoStatus((cur) => (cur === t('log.statusSaved') ? '' : cur));
       }, 2000);
     } catch (err: any) {
+      if (!isCurrent()) return;
       setMemoStatus(err?.message || t('log.statusSaveFailed'));
     } finally {
-      setSavingMemo(false);
+      if (isCurrent()) setSavingMemo(false);
     }
   };
 
   // 철회 (공유 중지) 핸들러
   const handleWithdraw = async () => {
+    if (withdrawing || shareDialogOpen) return;
     if (!window.confirm(t('episode.share.withdrawConfirm'))) return;
     setWithdrawing(true);
     setActionMsg(null);
     try {
       const res = await apiClient.sessions.withdrawShare(session.sessionId);
+      if (!isCurrent()) return;
       if (res?.ok) {
         removeShare(session.sessionId);
         setActionMsg(t('episode.share.withdrawn'));
       }
     } catch (err: any) {
+      if (!isCurrent()) return;
       setActionMsg(err?.message || t('episode.share.withdrawFailed'));
     } finally {
-      setWithdrawing(false);
+      if (isCurrent()) setWithdrawing(false);
     }
   };
 
@@ -171,7 +189,7 @@ export function PracticeSessionCard({
           </div>
         </div>
       )}
-      {!parts && (
+      {session.partStats === null && (
         <div className={styles.partsUnreadable}>{t('episode.partsUnreadable')}</div>
       )}
 
@@ -182,6 +200,7 @@ export function PracticeSessionCard({
             <TakeItemRow
               key={take.id}
               take={take}
+              onCompleted={onTakeCompleted}
               onDeleted={(takeId) => onTakeRemoved?.(session.sessionId, takeId)}
             />
           ))}
@@ -244,6 +263,7 @@ export function PracticeSessionCard({
             <span className={styles.shareBadgeNone}>{t('episode.share.badgeNone')}</span>
           )}
 
+          {isHidden && isWithdrawn && <span>{t('episode.share.withdrawn')}</span>}
           {/* 공유 행동 버튼 */}
           <div className={styles.shareActs}>
             {isPublished && (
@@ -253,7 +273,7 @@ export function PracticeSessionCard({
                   type="button"
                   data-share-action="edit"
                   className={`ghost mini ${styles.shareActBtn}`}
-                  disabled={!isPaid}
+                  disabled={!isPaid || !hasPublicName || withdrawing || session.partStats === null}
                   onClick={() => setShareDialogOpen(true)}
                   title={!isPaid ? t('episode.share.tipProRequired') : undefined}
                 >
@@ -271,12 +291,12 @@ export function PracticeSessionCard({
               </>
             )}
 
-            {(isPaused || isWithdrawn) && (
+            {!isHidden && (isPaused || isWithdrawn) && (
               <button
                 ref={shareBtnRef}
                 type="button"
                 className={`ghost mini ${styles.shareActBtn}`}
-                disabled={!canRepublish || !isPaid || !hasPublicName}
+                disabled={!canRepublish || !isPaid || !hasPublicName || withdrawing || session.partStats === null}
                 onClick={() => setShareDialogOpen(true)}
                 title={
                   !isPaid
@@ -292,7 +312,7 @@ export function PracticeSessionCard({
               </button>
             )}
 
-            {isHidden && (
+            {isHidden && !isWithdrawn && (
               <button
                 type="button"
                 className={`ghost mini ${styles.withdrawBtn}`}
@@ -309,7 +329,7 @@ export function PracticeSessionCard({
                 type="button"
                 data-share-action="open"
                 className={`cta mini ${styles.shareActBtn}`}
-                disabled={!isPaid || !hasPublicName}
+                disabled={!isPaid || !hasPublicName || session.partStats === null}
                 onClick={() => setShareDialogOpen(true)}
                 title={
                   !isPaid
@@ -332,6 +352,7 @@ export function PracticeSessionCard({
         <EpisodeShareDialog
           session={session}
           existingShare={sharePost}
+          onRefresh={invalidate}
           triggerEl={shareBtnRef.current}
           onClose={() => setShareDialogOpen(false)}
           onSuccess={(newPost) => {

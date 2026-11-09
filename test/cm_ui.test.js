@@ -142,8 +142,8 @@ test('CM-UI 순수 함수 5: normalizePartStats (파트 통계 안전 파싱 및
 
   // null 또는 유효하지 않은 JSON
   assert.deepEqual(normalizePartStats(null), []);
-  assert.deepEqual(normalizePartStats('invalid-json'), []);
-  assert.deepEqual(normalizePartStats({}), []);
+  assert.equal(normalizePartStats('invalid-json'), null);
+  assert.equal(normalizePartStats({}), null);
 });
 
 test('CM-UI 순수 함수 6: classifyEpisodeError (오류 분류 및 매핑)', async () => {
@@ -168,4 +168,12 @@ test('CM-UI 순수 함수 6: classifyEpisodeError (오류 분류 및 매핑)', a
 
   assert.equal(classifyEpisodeError({ status: 500 }).type, 'generic');
   assert.equal(classifyEpisodeError(new Error('Network error')).type, 'generic');
+});
+
+
+test('CM-UI real auth error envelope retains BANNED_WORD detail.field', async () => {
+  const { classifyEpisodeError } = await import('../frontend/src/lib/episode.mts');
+  for (const field of ['title', 'comment', 'partStats.name']) {
+    assert.equal(classifyEpisodeError({ status: 400, code: 'BANNED_WORD', data: { detail: { field } } }).field, field);
+  }
 });

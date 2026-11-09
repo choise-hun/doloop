@@ -1,6 +1,7 @@
 // frontend/src/components/songRecord/EpisodeShareDialog.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './EpisodeShareDialog.module.css';
+import { auth, useAuth } from '../../lib/auth';
 import { apiClient, type MyEpisodeLogDto } from '../../lib/apiClient';
 import {
   type PracticeSessionCardModel,
@@ -17,6 +18,7 @@ export interface EpisodeShareDialogProps {
   triggerEl?: HTMLElement | null;
   onClose: () => void;
   onSuccess: (post: MyEpisodeLogDto) => void;
+  onRefresh?: () => void;
 }
 
 export function EpisodeShareDialog({
@@ -25,12 +27,20 @@ export function EpisodeShareDialog({
   triggerEl,
   onClose,
   onSuccess,
+  onRefresh,
 }: EpisodeShareDialogProps): React.ReactElement {
-  const [title, setTitle] = useState(existingShare?.title || '');
-  const [comment, setComment] = useState(existingShare?.comment || '');
+  const [title, setTitle] = useState(existingShare?.withdrawnAt ? '' : existingShare?.title || '');
+  const [comment, setComment] = useState(existingShare?.withdrawnAt ? '' : existingShare?.comment || '');
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const authState = useAuth();
+  const ownerUid = authState.user?.id;
+  const alive = useRef(false);
+  const busy = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const isCurrent = () => alive.current && ownerUid === auth.getUser()?.id;
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -54,7 +64,7 @@ export function EpisodeShareDialog({
 
       if (e.key === 'Tab' && dialogRef.current) {
         const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
         );
         if (focusable.length === 0) return;
         const first = focusable[0];
@@ -80,12 +90,12 @@ export function EpisodeShareDialog({
 
   const previewTitle = computeEpisodeTitle({
     title,
-    youtubeTitle: session.songTitle || undefined,
+    youtubeTitle: existingShare?.card?.youtubeTitle,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (busy.current || !isCurrent()) return;
 
     if (!consent) {
       setErrorMsg(t('episode.share.consent'));
@@ -95,17 +105,14 @@ export function EpisodeShareDialog({
     let cleanTitle = '';
     let cleanComment = '';
     try {
-      if (title.trim()) {
-        cleanTitle = validateEpisodeText(title, 80, false);
-      }
-      if (comment.trim()) {
-        cleanComment = validateEpisodeText(comment, 500, true);
-      }
+      cleanTitle = validateEpisodeText(title, 80, false);
+      cleanComment = validateEpisodeText(comment, 500, true);
     } catch (err: any) {
-      setErrorMsg(err?.message || t('episode.err.invalid'));
+      setErrorMsg(t('episode.err.invalid'));
       return;
     }
 
+    busy.current = true;
     setSubmitting(true);
     setErrorMsg(null);
 
@@ -114,6 +121,7 @@ export function EpisodeShareDialog({
         title: cleanTitle,
         comment: cleanComment,
       });
+      if (!isCurrent()) return;
       if (res?.post) {
         onSuccess(res.post);
         onClose();
@@ -122,7 +130,14 @@ export function EpisodeShareDialog({
         setErrorMsg(t('episode.share.unknownResult'));
       }
     } catch (err: any) {
+      if (!isCurrent()) return;
+      if (!err?.status || err.status >= 500) {
+        setErrorMsg(t('episode.share.unknownResult'));
+        onRefresh?.();
+        return;
+      }
       const classified = classifyEpisodeError(err);
+      if (['moderation_hidden', 'not_found', 'unauthorized'].includes(classified.type)) onRefresh?.();
       if (classified.type === 'banned') {
         if (classified.field === 'title') setErrorMsg(t('episode.err.bannedTitle'));
         else if (classified.field === 'comment') setErrorMsg(t('episode.err.bannedComment'));
@@ -140,10 +155,15 @@ export function EpisodeShareDialog({
         setErrorMsg(classified.message || t('episode.err.generic'));
       }
     } finally {
-      setSubmitting(false);
+      if (isCurrent()) { busy.current = false; setSubmitting(false); }
     }
   };
 
+  let validInput = true;
+  try {
+    validateEpisodeText(title, 80, false);
+    validateEpisodeText(comment, 500, true);
+  } catch { validInput = false; }
   const titleCp = countCodePoints(title);
   const commentCp = countCodePoints(comment);
 
@@ -192,10 +212,11 @@ export function EpisodeShareDialog({
             <input
               ref={titleInputRef}
               id="shareTitleInput"
+              aria-describedby={errorMsg ? "episodeShareError" : undefined}
               type="text"
               className="inpField"
               value={title}
-              placeholder={session.songTitle ? t('episode.titleWithVideo', { title: session.songTitle }) : t('episode.defaultTitle')}
+              placeholder={computeEpisodeTitle({ youtubeTitle: existingShare?.card?.youtubeTitle })}
               onChange={(e) => setTitle(e.target.value)}
               disabled={submitting}
             />
@@ -208,6 +229,7 @@ export function EpisodeShareDialog({
             </div>
             <textarea
               id="shareCommentInput"
+              aria-describedby={errorMsg ? "episodeShareError" : undefined}
               className="inpField"
               rows={3}
               value={comment}
@@ -242,7 +264,7 @@ export function EpisodeShareDialog({
           </div>
 
           {errorMsg && (
-            <div className={styles.errorAlert} role="alert" aria-live="assertive">
+            <div id="episodeShareError" className={styles.errorAlert} role="alert" aria-live="assertive">
               {errorMsg}
             </div>
           )}
@@ -262,7 +284,7 @@ export function EpisodeShareDialog({
             <button
               type="submit"
               className={`cta ${styles.submitBtn}`}
-              disabled={submitting || !consent}
+              disabled={submitting || !consent || !validInput}
             >
               {submitting
                 ? t('episode.saving')

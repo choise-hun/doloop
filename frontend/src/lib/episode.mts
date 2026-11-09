@@ -15,7 +15,7 @@ export interface PracticeSessionCardModel {
   b?: number | null;
   rate?: number | null;
   coveragePct: number;
-  partStats: PublicPartStatDto[];
+  partStats: PublicPartStatDto[] | null;
   memo?: string | null;
   takes?: TakeDto[];
 }
@@ -128,17 +128,17 @@ export function buildEpisodePracticeUrl(
 }
 
 /** 파트 통계 배열 파싱 및 안전 정규화 */
-export function normalizePartStats(raw: unknown): PublicPartStatDto[] {
-  if (!raw) return [];
+export function normalizePartStats(raw: unknown): PublicPartStatDto[] | null {
+  if (raw == null) return [];
   let list: unknown = raw;
   if (typeof raw === 'string') {
     try {
       list = JSON.parse(raw);
     } catch {
-      return [];
+      return null;
     }
   }
-  if (!Array.isArray(list)) return [];
+  if (!Array.isArray(list)) return null;
 
   return list.map((it: any) => ({
     name: String(it?.name || ''),
@@ -185,7 +185,7 @@ export function classifyEpisodeError(err: any): ClassifiedEpisodeError {
     return { type: 'self_report', message };
   }
   if (status === 400 && code === 'BANNED_WORD') {
-    const field = err?.detail?.field ? String(err.detail.field) : undefined;
+    const field = (err?.data?.detail?.field ?? err?.detail?.field) ? String(err?.data?.detail?.field ?? err.detail.field) : undefined;
     return { type: 'banned', field, message };
   }
 

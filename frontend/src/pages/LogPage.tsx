@@ -172,6 +172,11 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved }: SongCardItem
 }
 
 export function LogPage(): React.ReactElement {
+  const state = useAuth();
+  return <OwnedLogPage key={state.user?.id ?? 'guest'} />;
+}
+
+function OwnedLogPage(): React.ReactElement {
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
   const isGuest = !activeUid || !apiClient.isLoggedIn();
@@ -706,7 +711,12 @@ export function LogPage(): React.ReactElement {
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`}>{t('log.titleSessionTimeline')}</h3>
             </div>
-            <SessionTimeline sessions={detailSessions} song={detailSong} takes={detailTakes} idPrefix="" />
+            <SessionTimeline onTakeRemoved={(_sessionId, takeId) => {
+                setAbSelected((prev) => prev.filter((id) => id !== takeId));
+                setDetailData((prev) => prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev);
+              }}
+              onTakeCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
+              onMemoSaved={(sessionId, memo) => setDetailData((prev) => prev ? { ...prev, sessions: prev.sessions.map((it) => it.id === sessionId ? { ...it, memo } : it) } : prev)} sessions={detailSessions} song={detailSong} takes={detailTakes} idPrefix="" />
           </div>
 
           {/* 녹음 목록 및 A/B 비교 듣기 (FR-LIB-3: id="abPanel" id="abAudioA" id="abAudioB" 위임) */}
@@ -765,6 +775,7 @@ export function LogPage(): React.ReactElement {
                           return (slotA || slotB) ? [slotA, slotB] : [];
                         });
                       }}
+                      onCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
                       onDeleted={(takeId) => {
                         setAbSelected((prev) => prev.filter((id) => id !== takeId));
                         setDetailData((prev) =>

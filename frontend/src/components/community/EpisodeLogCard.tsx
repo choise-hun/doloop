@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import styles from './EpisodeLogCard.module.css';
 import type { PublicEpisodeLogDto } from '../../lib/apiClient';
+import { thumb, videoIdFrom } from '../../lib/security';
 import { useAuth } from '../../lib/auth';
 import { computeEpisodeTitle, buildEpisodePracticeUrl } from '../../lib/episode.mts';
 import { segText, fmtSec } from '../../lib/community.mts';
@@ -27,7 +28,9 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
   const playHref = buildEpisodePracticeUrl(post.videoId, post.a, post.b, post.rate);
   const saveHref = playHref; // 기존 플레이어 저장 동선으로 연결
 
-  const thumbUrl = post.videoId ? `https://i.ytimg.com/vi/${encodeURIComponent(post.videoId)}/mqdefault.jpg` : '';
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const validVideo = videoIdFrom(post.videoId);
+  const thumbUrl = validVideo && !thumbFailed ? thumb(validVideo) : '';
   const segInfo = segText(post.a, post.b, post.rate);
   const coverage = typeof post.coveragePct === 'number' ? post.coveragePct : 0;
   const parts = Array.isArray(post.partStats) ? post.partStats : [];
@@ -53,9 +56,7 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
               alt=""
               className={styles.thumbImg}
               loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
+              onError={() => setThumbFailed(true)}
             />
           ) : (
             <div className={styles.thumbPlaceholder}>NO VIDEO</div>
@@ -145,10 +146,10 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
           <div className={styles.footerRow}>
             <span className={styles.publishDate}>{publishDateStr}</span>
             <div className={styles.actions} aria-label={t('episode.aria.actions')}>
-              <a href={playHref} className={`ghost mini ${styles.actionBtn}`}>
+              <a aria-disabled={!validVideo} href={validVideo ? playHref : undefined} className={`ghost mini ${styles.actionBtn}`}>
                 {t('episode.play')}
               </a>
-              <a href={saveHref} className={`ghost mini ${styles.actionBtn}`}>
+              <a aria-disabled={!validVideo} href={validVideo ? saveHref : undefined} className={`ghost mini ${styles.actionBtn}`}>
                 {t('episode.saveViaPlayer')}
               </a>
               {!isMine && (

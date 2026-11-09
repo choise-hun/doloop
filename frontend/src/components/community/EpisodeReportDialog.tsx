@@ -1,6 +1,7 @@
 // frontend/src/components/community/EpisodeReportDialog.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './EpisodeReportDialog.module.css';
+import { auth, useAuth } from '../../lib/auth';
 import { apiClient } from '../../lib/apiClient';
 import { validateEpisodeText, countCodePoints, classifyEpisodeError } from '../../lib/episode.mts';
 import { t } from '../../lib/i18n.mts';
@@ -32,6 +33,13 @@ export function EpisodeReportDialog({
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const authState = useAuth();
+  const ownerUid = authState.user?.id;
+  const alive = useRef(false);
+  const busy = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const isCurrent = () => alive.current && ownerUid === auth.getUser()?.id;
+
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstRadioRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +60,7 @@ export function EpisodeReportDialog({
 
       if (e.key === 'Tab' && dialogRef.current) {
         const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
         );
         if (focusable.length === 0) return;
         const first = focusable[0];
@@ -78,18 +86,17 @@ export function EpisodeReportDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (busy.current || !isCurrent() || statusMsg?.type === 'success') return;
 
     let cleanDetail = '';
     try {
-      if (detail.trim()) {
-        cleanDetail = validateEpisodeText(detail, 500, true);
-      }
+      cleanDetail = validateEpisodeText(detail, 500, true);
     } catch (err: any) {
-      setStatusMsg({ type: 'error', text: err?.message || t('episode.err.invalid') });
+      setStatusMsg({ type: 'error', text: t('episode.err.invalid') });
       return;
     }
 
+    busy.current = true;
     setSubmitting(true);
     setStatusMsg(null);
 
@@ -98,15 +105,15 @@ export function EpisodeReportDialog({
         reason,
         detail: cleanDetail,
       });
+      if (!isCurrent()) return;
+      if (!res?.reportId) throw new Error(t('episode.share.unknownResult'));
       setStatusMsg({ type: 'success', text: t('episode.report.success') });
       if (res?.reportId && onReported) {
         onReported(res.reportId);
       }
-      setTimeout(() => {
-        onClose();
-        triggerEl?.focus();
-      }, 1500);
+
     } catch (err: any) {
+      if (!isCurrent()) return;
       const classified = classifyEpisodeError(err);
       if (classified.type === 'already_reported') {
         setStatusMsg({ type: 'error', text: t('episode.report.already') });
@@ -119,7 +126,7 @@ export function EpisodeReportDialog({
         setStatusMsg({ type: 'error', text: classified.message || t('episode.err.generic') });
       }
     } finally {
-      setSubmitting(false);
+      if (isCurrent()) { busy.current = false; setSubmitting(false); }
     }
   };
 
@@ -189,6 +196,7 @@ export function EpisodeReportDialog({
             </div>
             <textarea
               id="reportDetailInput"
+              aria-describedby={statusMsg?.type === 'error' ? "episodeReportError" : undefined}
               className="inpField"
               rows={3}
               value={detail}
@@ -202,6 +210,7 @@ export function EpisodeReportDialog({
 
           {statusMsg && (
             <div
+              id={statusMsg.type === 'error' ? 'episodeReportError' : undefined}
               className={statusMsg.type === 'error' ? styles.errorAlert : styles.successAlert}
               role={statusMsg.type === 'error' ? 'alert' : 'status'}
               aria-live="assertive"
@@ -222,7 +231,7 @@ export function EpisodeReportDialog({
             >
               {t('episode.share.cancel')}
             </button>
-            <button type="submit" className={`cta ${styles.submitBtn}`} disabled={submitting}>
+            <button type="submit" className={`cta ${styles.submitBtn}`} disabled={submitting || statusMsg?.type === 'success'}>
               {submitting ? t('episode.submitting') : t('episode.report.submit')}
             </button>
           </div>

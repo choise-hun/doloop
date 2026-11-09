@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import styles from './CommunityPage.module.css';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth, auth } from '../lib/auth';
-import { apiClient, type PracticeLogDto } from '../lib/apiClient';
+import { apiClient, type PublicFolderDto, type PracticeLogDto } from '../lib/apiClient';
 import { communityErrorKey } from '../lib/community.mts';
 import { t } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
@@ -24,6 +24,11 @@ function parseTabFromHash(): CommunityTab {
 }
 
 export function CommunityPage(): React.ReactElement {
+  const state = useAuth();
+  return <OwnedCommunityPage key={state.user?.id ?? 'guest'} />;
+}
+
+function OwnedCommunityPage(): React.ReactElement {
   const authState = useAuth();
   const currentUid = authState.user?.id || null;
 
@@ -36,6 +41,53 @@ export function CommunityPage(): React.ReactElement {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryErr, setSummaryErr] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
   const summarySeq = useRef(0);
+  const [profileAttempt, setProfileAttempt] = useState(0);
+  const [profilePending, setProfilePending] = useState(!authState.me);
+  useEffect(() => {
+    if (!currentUid || authState.me) return;
+    let alive = true;
+    setProfilePending(true);
+    void auth.fetchMe().finally(() => { if (alive) setProfilePending(false); });
+    return () => { alive = false; };
+  }, [currentUid, authState.me?.id, profileAttempt]);
+
+  const [recentFolders, setRecentFolders] = useState<PublicFolderDto[]>([]);
+  const [recentNext, setRecentNext] = useState<string | null>(null);
+  const [recentError, setRecentError] = useState(false);
+  const [recentPending, setRecentPending] = useState(false);
+  const [recentAttempt, setRecentAttempt] = useState(0);
+  const recentSeq = useRef(0);
+  const recentBusy = useRef(false);
+  async function loadRecent(cursor: string | null = null) {
+    if (!currentUid || !authState.me || recentBusy.current) return;
+    const seq = ++recentSeq.current;
+    const uid = currentUid;
+    recentBusy.current = true;
+    setRecentPending(true);
+    setRecentError(false);
+    try {
+      const res = await apiClient.community.folders('recent', cursor);
+      if (seq !== recentSeq.current || uid !== auth.getUser()?.id) return;
+      setRecentFolders((prev) => cursor ? [...prev, ...res.folders.filter((f) => !prev.some((p) => p.id === f.id))] : res.folders);
+      setRecentNext(res.next);
+    } catch {
+      if (seq === recentSeq.current && uid === auth.getUser()?.id) setRecentError(true);
+    } finally {
+      if (seq === recentSeq.current && uid === auth.getUser()?.id) {
+        recentBusy.current = false;
+        setRecentPending(false);
+      }
+    }
+  }
+  useEffect(() => {
+    if (activeTab !== 'all' || !authState.me) return;
+    recentBusy.current = false;
+    setRecentFolders([]);
+    setRecentNext(null);
+    void loadRecent();
+    return () => { recentSeq.current++; recentBusy.current = false; };
+  }, [activeTab, currentUid, authState.me?.id, recentAttempt]);
+
 
   // hashchange 이벤트 감지
   useEffect(() => {
@@ -58,6 +110,8 @@ export function CommunityPage(): React.ReactElement {
   // 84일 연습 집계 조회 (summary 탭일 때만)
   useEffect(() => {
     if (activeTab !== 'summary' || !currentUid) return;
+    setSummaryLogs(null);
+    setSummaryNext(null);
 
     const mySeq = ++summarySeq.current;
     const uid = currentUid;
@@ -67,21 +121,22 @@ export function CommunityPage(): React.ReactElement {
     apiClient.community
       .logs(summaryScope, null)
       .then((res) => {
-        if (mySeq !== summarySeq.current || uid !== (auth.getMe()?.id ?? null)) return;
+        if (mySeq !== summarySeq.current || uid !== auth.getUser()?.id) return;
         setSummaryLogs(Array.isArray(res?.logs) ? res.logs : []);
         setSummaryNext(typeof res?.next === 'string' ? res.next : null);
       })
       .catch((e) => {
-        if (mySeq !== summarySeq.current) return;
+        if (mySeq !== summarySeq.current || uid !== auth.getUser()?.id) return;
         setSummaryLogs([]);
         setSummaryNext(null);
         setSummaryErr(communityErrorKey(e));
       })
       .finally(() => {
-        if (mySeq === summarySeq.current) {
+        if (mySeq === summarySeq.current && uid === auth.getUser()?.id) {
           setSummaryLoading(false);
         }
       });
+    return () => { summarySeq.current++; };
   }, [activeTab, summaryScope, currentUid]);
 
   const loadMoreSummary = () => {
@@ -93,17 +148,17 @@ export function CommunityPage(): React.ReactElement {
     apiClient.community
       .logs(summaryScope, summaryNext)
       .then((res) => {
-        if (mySeq !== summarySeq.current || uid !== (auth.getMe()?.id ?? null)) return;
+        if (mySeq !== summarySeq.current || uid !== auth.getUser()?.id) return;
         const incoming = Array.isArray(res?.logs) ? res.logs : [];
         setSummaryLogs((prev) => (prev ? [...prev, ...incoming] : incoming));
         setSummaryNext(typeof res?.next === 'string' ? res.next : null);
       })
       .catch((e) => {
-        if (mySeq !== summarySeq.current) return;
+        if (mySeq !== summarySeq.current || uid !== auth.getUser()?.id) return;
         setSummaryErr(communityErrorKey(e));
       })
       .finally(() => {
-        if (mySeq === summarySeq.current) {
+        if (mySeq === summarySeq.current && uid === auth.getUser()?.id) {
           setSummaryLoading(false);
         }
       });
@@ -128,6 +183,11 @@ export function CommunityPage(): React.ReactElement {
                 {t('nav.login')}
               </a>
             </div>
+          </div>
+        ) : !authState.me ? (
+          <div id={profilePending ? 'communityLoading' : 'communityError'} role={profilePending ? 'status' : 'alert'}>
+            <p>{t(profilePending ? 'episode.loading' : 'episode.err.generic')}</p>
+            {!profilePending && <button type="button" className="ghost mini" onClick={() => setProfileAttempt((n) => n + 1)}>{t('episode.retry')}</button>}
           </div>
         ) : (
           <>
@@ -199,10 +259,14 @@ export function CommunityPage(): React.ReactElement {
             {/* [모두 탭] 큐레이션 + 새 게시물 피드 */}
             {activeTab === 'all' && (
               <div className={styles.tabContent}>
-                <CurationRows variant="community" me={authState.me} />
+                <CurationRows variant="community" me={authState.me} recentFolders={recentFolders} recentNext={recentPending ? null : recentNext}
+                  onLoadMoreRecent={() => void loadRecent(recentNext)}
+                  onPatchRecent={(id, patch) => setRecentFolders((prev) => prev.map((f) => f.id === id ? { ...f, ...patch } : f))} />
+                {recentPending && <p role="status">{t('episode.loading')}</p>}
+                {recentError && <div id="recentErrMsg" role="alert"><p>{t('episode.err.generic')}</p><button type="button" className="ghost mini" onClick={() => recentNext ? void loadRecent(recentNext) : setRecentAttempt((n) => n + 1)}>{t('episode.retry')}</button></div>}
                 <section className={styles.feedSection} aria-label={t('community.newPostsHeading')}>
                   <h2 className={styles.sectionTitle}>{t('community.newPostsHeading')}</h2>
-                  <EpisodeLogFeed initialScope="all" showScopeChips={false} />
+                  <EpisodeLogFeed key={`${currentUid}:all`} initialScope="all" showScopeChips={false} />
                 </section>
               </div>
             )}
@@ -210,7 +274,7 @@ export function CommunityPage(): React.ReactElement {
             {/* [LOG 탭] 개별 세션 피드 전용 (all/following 범위 선택) */}
             {activeTab === 'log' && (
               <div className={styles.tabContent}>
-                <EpisodeLogFeed initialScope="all" showScopeChips={true} />
+                <EpisodeLogFeed key={`${currentUid}:log`} initialScope="all" showScopeChips={true} />
               </div>
             )}
 
@@ -245,7 +309,7 @@ export function CommunityPage(): React.ReactElement {
                   </p>
                 )}
 
-                {summaryLogs && summaryLogs.length === 0 && !summaryLoading && (
+                {summaryLogs && summaryLogs.length === 0 && !summaryLoading && !summaryErr && (
                   <div className={styles.emptyBox}>
                     <p>{t('community.logEmpty')}</p>
                   </div>

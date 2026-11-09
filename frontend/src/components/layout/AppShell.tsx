@@ -45,13 +45,18 @@ export function AppShell({
   useEffect(() => {
     const updateHeight = () => {
       if (tabBarRef.current && shellRef.current) {
-        const h = tabBarRef.current.offsetHeight;
+        const h = Math.ceil(tabBarRef.current.getBoundingClientRect().height);
         if (h > 0) shellRef.current.style.setProperty('--tabbar-real-height', `${h}px`);
       }
     };
     updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    if (tabBarRef.current) observer.observe(tabBarRef.current);
     window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
   }, []);
 
   const signedInUser = authState.user;

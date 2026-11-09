@@ -1642,10 +1642,10 @@ async function communityEpisodeLogs(
     encodeURIComponent(scope) +
     (cursor !== undefined && cursor !== null && cursor !== '' ? '&cursor=' + encodeURIComponent(String(cursor)) : '');
   const r = await getAuthRef().apiFetch('/api/v1/community/episode-logs' + q);
-  return {
-    posts: r && Array.isArray(r.posts) ? r.posts : [],
-    next: r && typeof r.next === 'string' ? r.next : null,
-  };
+  if (!r || !Array.isArray(r.posts) || !(r.next === null || (typeof r.next === 'string' && r.next.length > 0))) {
+    throw new Error(t('episode.err.generic'));
+  }
+  return { posts: r.posts, next: r.next };
 }
 
 async function communityMyEpisodeLogs(cursor?: string | null): Promise<MyEpisodeLogListResponse> {
@@ -1653,10 +1653,10 @@ async function communityMyEpisodeLogs(cursor?: string | null): Promise<MyEpisode
   const q =
     cursor !== undefined && cursor !== null && cursor !== '' ? '?cursor=' + encodeURIComponent(String(cursor)) : '';
   const r = await getAuthRef().apiFetch('/api/v1/community/me/episode-logs' + q);
-  return {
-    posts: r && Array.isArray(r.posts) ? r.posts : [],
-    next: r && typeof r.next === 'string' ? r.next : null,
-  };
+  if (!r || !Array.isArray(r.posts) || !(r.next === null || (typeof r.next === 'string' && r.next.length > 0))) {
+    throw new Error(t('episode.err.generic'));
+  }
+  return { posts: r.posts, next: r.next };
 }
 
 async function communityReportEpisode(

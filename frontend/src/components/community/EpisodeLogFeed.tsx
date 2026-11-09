@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './EpisodeLogFeed.module.css';
 import { apiClient, type PublicEpisodeLogDto } from '../../lib/apiClient';
-import { useAuth } from '../../lib/auth';
+import { auth, useAuth } from '../../lib/auth';
 import { EpisodeLogCard } from './EpisodeLogCard';
 import { t } from '../../lib/i18n.mts';
 
@@ -25,6 +25,8 @@ export function EpisodeLogFeed({
   const [moreLoading, setMoreLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const moreBusy = useRef(false);
   const reqSeqRef = useRef(0);
   const cursorRef = useRef<string | null>(null);
 
@@ -33,6 +35,9 @@ export function EpisodeLogFeed({
       const mySeq = ++reqSeqRef.current;
       const myUid = currentUid;
 
+      moreBusy.current = false;
+      setMoreLoading(false);
+      setMoreError(null);
       setLoading(true);
       setErrorMsg(null);
       setPosts([]);
@@ -41,16 +46,16 @@ export function EpisodeLogFeed({
 
       try {
         const res = await apiClient.community.episodeLogs(targetScope, null);
-        if (mySeq !== reqSeqRef.current || myUid !== (authState.user?.id || null)) return;
+        if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) return;
 
         setPosts(Array.isArray(res.posts) ? res.posts : []);
         setNextCursor(res.next);
         cursorRef.current = res.next;
       } catch (err: any) {
-        if (mySeq !== reqSeqRef.current || myUid !== (authState.user?.id || null)) return;
+        if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) return;
         setErrorMsg(err?.message || t('episode.err.generic'));
       } finally {
-        if (mySeq === reqSeqRef.current && myUid === (authState.user?.id || null)) {
+        if (mySeq === reqSeqRef.current && myUid === (auth.getUser()?.id || null)) {
           setLoading(false);
         }
       }
@@ -60,30 +65,38 @@ export function EpisodeLogFeed({
 
   const fetchMore = useCallback(async () => {
     const currentCursor = cursorRef.current;
-    if (!currentCursor || moreLoading || loading) return;
+    if (!currentCursor || moreBusy.current || loading) return;
 
     const mySeq = ++reqSeqRef.current;
     const myUid = currentUid;
 
+    moreBusy.current = true;
+    setMoreError(null);
     setMoreLoading(true);
 
     try {
       const res = await apiClient.community.episodeLogs(scope, currentCursor);
-      if (mySeq !== reqSeqRef.current || myUid !== (authState.user?.id || null)) return;
+      if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) return;
 
       const newPosts = Array.isArray(res.posts) ? res.posts : [];
       setPosts((prev) => {
         const existingIds = new Set(prev.map((p) => p.postId));
-        const filtered = newPosts.filter((p) => !existingIds.has(p.postId));
+        const filtered = newPosts.filter((p) => {
+          if (existingIds.has(p.postId)) return false;
+          existingIds.add(p.postId);
+          return true;
+        });
         return [...prev, ...filtered];
       });
       setNextCursor(res.next);
       cursorRef.current = res.next;
     } catch (err: any) {
-      if (mySeq !== reqSeqRef.current || myUid !== (authState.user?.id || null)) return;
+      if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) return;
+      setMoreError(err?.message || t('episode.err.generic'));
       // 더보기 실패 시 기존 목록 유지
     } finally {
-      if (mySeq === reqSeqRef.current && myUid === (authState.user?.id || null)) {
+      if (mySeq === reqSeqRef.current && myUid === (auth.getUser()?.id || null)) {
+        moreBusy.current = false;
         setMoreLoading(false);
       }
     }
@@ -92,10 +105,12 @@ export function EpisodeLogFeed({
   // scope 또는 사용자 변경 시 첫 페이지 조회
   useEffect(() => {
     fetchFirstPage(scope);
+    return () => { reqSeqRef.current++; };
   }, [scope, fetchFirstPage]);
 
   const handlePostGone = (gonePostId: string) => {
     setPosts((prev) => prev.filter((p) => p.postId !== gonePostId));
+    void fetchFirstPage(scope);
   };
 
   return (
@@ -147,6 +162,13 @@ export function EpisodeLogFeed({
       {!loading && !errorMsg && posts.length === 0 && (
         <div id="episodeEmpty" className={styles.emptyBox}>
           <p>{scope === 'following' ? t('episode.emptyFollowing') : t('episode.emptyAll')}</p>
+          {scope === 'following' ? (
+            <button type="button" className="ghost mini" onClick={() => setScope('all')}>
+              {t('episode.scopeAllFeed')}
+            </button>
+          ) : (
+            <a href="log.html">{t('nav.trails')}</a>
+          )}
         </div>
       )}
 
@@ -162,6 +184,7 @@ export function EpisodeLogFeed({
 
           {nextCursor && (
             <div className={styles.moreRow}>
+              {moreError && <p id="episodeMoreError" role="alert">{moreError}</p>}
               <button
                 type="button"
                 id="episodeMore"
