@@ -2,8 +2,16 @@
 // 명세: 개발산출물/명세/PF-1_구현명세.md
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { layoutSuite } = require('../support/layout-check');
-const { mockApp, STATES } = require('../support/mock-app');
+const { layoutSuite, checkLayout } = require('../support/layout-check');
+const { mockApp: mockBaseApp, STATES } = require('../support/mock-app');
+
+const PF3_ROUTES = [
+  [url => url.pathname === '/api/v1/categories', route => route.fulfill({ json: { categories: [] } })],
+  [url => url.pathname === '/api/v1/community/me/episode-logs', route => route.fulfill({ json: { posts: [], next: null } })],
+];
+function mockApp(page, options) {
+  return mockBaseApp(page, { ...options, routes: [...PF3_ROUTES, ...(options.routes || [])] });
+}
 
 const USER_WITH_NAMES = {
   ...STATES.user,
@@ -61,6 +69,7 @@ async function profileReady(page, state) {
 // ---------------------------------------------------------------------------
 layoutSuite({
   name: 'profile',
+  mock: { routes: PF3_ROUTES },
   path: '/profile.html',
   states: [
     'guest',
@@ -759,4 +768,173 @@ test('PF2-11 다국어 (ja) 이름 및 요약 렌더링', async ({ page }) => {
   await expect(page.locator('#profileNamesTitle')).toHaveText('自分の名前');
   await expect(page.locator('#profileSummaryTitle')).toHaveText('公開プロフィール概要');
   await expect(page.locator('#profileFollowers')).toHaveText('フォロワー 0人');
+});
+
+// PF-3 표적: 토큰 대기 취소와 철회 후 미확정 캐시를 실제 UI/API로 검증한다.
+test('PF3-05 폴더 토큰 대기 중 A→B: 이전 PUT 전송·B 상태 오염 0', async ({ page }) => {
+  let puts = 0;
+  let switched = false;
+  const bId = '00000000-0000-4000-8000-000000000002';
+  const share = { folderId: 'f1', categoryId: 'c1', title: 'folder', isPublic: true, autoSync: false,
+    hidden: false, itemCount: 1, likeCount: 0, cloneCount: 0, publishedAt: null, publicName: 'gildong' };
+  await mockApp(page, { ...USER_WITH_NAMES, routes: PF3_ROUTES });
+  await page.route('**/api/v1/me', route => route.fulfill({ json: {
+    ...USER_WITH_NAMES.me, id: switched ? bId : USER_WITH_NAMES.me.id,
+    limits: { ...USER_WITH_NAMES.me.limits, communityWrite: true },
+  } }));
+  await page.route('**/api/v1/categories', route => route.fulfill({ json: {
+    categories: [{ id: 'c1', name: switched ? 'B folder' : 'A folder', sortOrder: 0, onHome: true, songCount: 1 }],
+  } }));
+  await page.route('**/api/v1/categories/c1/share', route => {
+    if (route.request().method() === 'PUT') puts++;
+    return route.fulfill({ json: { share } });
+  });
+  await page.goto('/profile.html');
+  await expect(page.locator('[data-share-public=c1]')).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate(() => {
+    window.ULAuth.getClient().auth.getSession = () => new Promise(resolve => { window.__releaseFolderToken = resolve; });
+    const save = window.ULData.categories.setShare;
+    window.ULData.categories.setShare = (...args) => save(...args).finally(() => { window.__folderSettled = true; });
+  });
+  await page.locator('[data-share-public=c1]').click();
+  await expect.poll(() => page.evaluate(() => typeof window.__releaseFolderToken)).toBe('function');
+  switched = true;
+  await page.evaluate(bId => {
+    const session = { access_token: 'b-token', user: { id: bId, email: 'b@example.com' } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+    window.__releaseFolderToken({ data: { session } });
+  }, bId);
+  await expect.poll(() => page.evaluate(() => window.__folderSettled)).toBe(true);
+  await expect(page.locator('[data-share-row=c1]')).toContainText('B folder');
+  await expect(page.locator('[data-share-public=c1]')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('[data-share-public=c1]')).toBeEnabled();
+  await expect(page.locator('#mySharesErr')).toHaveCount(0);
+  expect(puts).toBe(0);
+  expect((await checkLayout(page)).fails).toEqual([]);
+});
+
+test('PF3-09 DELETE 성공 뒤 GET 실패: 원문 제거·임시 재게시 금지·철회 복원 0', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const post = { postId: 'p1', sessionId: 's1', title: 'OLD TITLE', comment: 'OLD COMMENT',
+    publishedAt: '2026-11-09T00:00:00Z', status: 'published', hiddenAt: null, hiddenReason: null,
+    tierPausedAt: null, withdrawnAt: null, createdAt: '', updatedAt: '', canRepublish: true,
+    reportCounts: { open: 0, resolved: 0, dismissed: 0 }, card: null };
+  let deleted = false;
+  const deletes = [];
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await mockApp(page, { ...USER_WITH_NAMES, routes: PF3_ROUTES });
+  await page.route('**/api/v1/community/me/episode-logs*', async route => {
+    if (deleted) { await pending; return route.fulfill({ status: 500, json: { code: 'INTERNAL' } }); }
+    return route.fulfill({ json: { posts: [post], next: null } });
+  });
+  await page.route('**/api/v1/sessions/**', route => {
+    deletes.push({ method: route.request().method(), path: new URL(route.request().url()).pathname });
+    deleted = true;
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto('/profile.html');
+  await expect(page.locator('[data-profile-post=p1]')).toContainText('OLD TITLE');
+  page.on('dialog', dialog => dialog.accept());
+  const refresh = page.waitForRequest('**/api/v1/community/me/episode-logs');
+  await page.locator('[data-profile-withdraw=s1]').evaluate(el => { el.click(); el.click(); });
+  await refresh;
+  await expect(page.locator('#profileEpisodesMsg')).toHaveText('공유가 중지되었습니다.');
+  await expect(page.locator('#profileEpisodes')).not.toContainText('OLD TITLE');
+  await expect(page.locator('#profileEpisodes')).not.toContainText('OLD COMMENT');
+  await expect(page.locator('[data-profile-withdraw=s1]')).toHaveCount(0);
+  await expect(page.locator('#profileEpisodes [data-share-republish]')).toHaveCount(0);
+  expect(deletes).toEqual([{ method: 'DELETE', path: '/api/v1/sessions/s1/share' }]);
+  release();
+  await expect(page.locator('#profileEpisodesStatus')).toHaveText('공유 상태를 불러오지 못했습니다.');
+  await expect(page.locator('#profileEpisodesRetry')).toBeEnabled();
+  await expect(page.locator('#profileEpisodes')).not.toContainText('OLD TITLE');
+  await expect(page.locator('[data-profile-withdraw=s1]')).toHaveCount(0);
+  await expect(page.locator('#profileEpisodesMsg')).toHaveText('공유가 중지되었습니다.');
+  await page.evaluate(() => document.fonts.ready);
+  expect((await checkLayout(page)).fails).toEqual([]);
+  if (process.env.LAYOUT_SHOTS) await page.screenshot({ path: 'test-results/layout-shots/profile-pf3-withdrawn-error-390.png', fullPage: true });
+  // 같은 캐시의 TRAILS 소비자: 재조회 전 canRepublish=false를 실제 버튼으로 관찰한다.
+  const session = { id: 's1', songId: 'song1', date: '2026-11-09', startedAt: '2026-11-09T00:00:00Z',
+    endedAt: '2026-11-09T00:10:00Z', seconds: 600, loops: 1, memo: '', songTitle: 'Song',
+    songArtist: '', videoId: 'abcdefghij1', takes: [], partStats: [] };
+  deleted = false;
+  let eligibility = false;
+  let releaseEligibility;
+  const eligibilityGate = new Promise(resolve => { releaseEligibility = resolve; });
+  await page.route('**/api/v1/me', route => route.fulfill({ json: { ...USER_WITH_NAMES.me,
+    tier: 'pro', limits: { ...USER_WITH_NAMES.me.limits, communityWrite: true } } }));
+  await page.route(url => url.pathname === '/api/v1/sessions', route => route.fulfill({ json: {
+    calendar: [{ date: session.date, totalSeconds: 600 }], sessions: [session] } }));
+  await page.route('**/api/v1/community/me/episode-logs*', async route => {
+    if (deleted) await eligibilityGate;
+    return route.fulfill({ json: { posts: [{ ...post, withdrawnAt: deleted ? '2026-11-10T00:00:00Z' : null,
+      title: deleted ? '' : post.title, comment: deleted ? '' : post.comment,
+      canRepublish: deleted ? eligibility : true }], next: null } });
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action=withdraw]').click();
+  const republish = page.getByRole('button', { name: '다시 게시', exact: true });
+  await expect(republish).toBeDisabled();
+  const eligibilityResponse = page.waitForResponse('**/api/v1/community/me/episode-logs');
+  releaseEligibility();
+  await (await eligibilityResponse).finished();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await expect(page.locator('[data-session-id=s1]')).toContainText('공유가 중지되었습니다.');
+  await expect(republish).toBeDisabled();
+  eligibility = true;
+  await page.reload();
+  await expect(republish).toBeEnabled();
+});
+
+test('PF3-01 guest/me 불일치: 관리 API 호출 0회 및 관리 패널 미노출', async ({ page }) => {
+  let apiCalls = 0;
+  await page.route('**/api/v1/categories**', route => { apiCalls++; return route.fulfill({ json: { categories: [] } }); });
+  await page.route('**/api/v1/community/me/episode-logs**', route => { apiCalls++; return route.fulfill({ json: { posts: [], next: null } }); });
+  await mockApp(page, STATES.guest);
+  await page.goto('/profile.html');
+  await expect(page.locator('#profileGuest')).toBeVisible();
+  await expect(page.locator('#profileFolders, #profileEpisodes')).toHaveCount(0);
+  expect(apiCalls).toBe(0);
+});
+
+test('PF3-03/08 free 공개 폴더 off 허용 & 개별 confirm 취소 시 DELETE 0회', async ({ page }) => {
+  let puts = 0;
+  let deletes = 0;
+  const share = { folderId: 'f1', categoryId: 'c1', title: 'folder', isPublic: true, autoSync: false,
+    hidden: false, itemCount: 1, likeCount: 0, cloneCount: 0, publishedAt: null, publicName: null };
+  const post = { postId: 'p1', sessionId: 's1', title: 'POST', comment: '', publishedAt: '2026-11-09T00:00:00Z',
+    status: 'published', hiddenAt: null, hiddenReason: null, tierPausedAt: null, withdrawnAt: null,
+    createdAt: '', updatedAt: '', canRepublish: true, reportCounts: { open: 0, resolved: 0, dismissed: 0 }, card: null };
+  await mockApp(page, { ...USER_WITH_NAMES, me: { ...USER_WITH_NAMES.me, tier: 'free', publicName: null }, routes: PF3_ROUTES });
+  await page.route('**/api/v1/categories', route => route.fulfill({ json: {
+    categories: [{ id: 'c1', name: 'Cat 1', sortOrder: 0, onHome: true, songCount: 1 }],
+  } }));
+  let currentShare = { ...share };
+  await page.route('**/api/v1/categories/c1/share', route => {
+    if (route.request().method() === 'PUT') {
+      puts++;
+      currentShare = { ...currentShare, isPublic: false };
+      return route.fulfill({ json: { share: currentShare } });
+    }
+    return route.fulfill({ json: { share: currentShare } });
+  });
+  await page.route('**/api/v1/community/me/episode-logs*', route => route.fulfill({ json: { posts: [post], next: null } }));
+  await page.route('**/api/v1/sessions/**', route => { deletes++; return route.fulfill({ json: { ok: true } }); });
+  await page.goto('/profile.html');
+  // 1) free+publicName=null 사용자의 공개 폴더 off는 허용되어 PUT 발생
+  await expect(page.locator('[data-share-public=c1]')).toHaveAttribute('aria-checked', 'true');
+  await page.locator('[data-share-public=c1]').click();
+  await expect(page.locator('[data-share-public=c1]')).toHaveAttribute('aria-checked', 'false');
+  expect(puts).toBe(1);
+  // 2) 비공개에서 on 시도 시 upgrade 에러 표시 및 PUT 추가 없음
+  await page.locator('[data-share-public=c1]').click();
+  await expect(page.locator('#mySharesPanel')).toContainText('Pro로 업그레이드하면 쓸 수 있어요');
+  expect(puts).toBe(1);
+  // 3) 개별 공유 중지 confirm 취소 시 DELETE 0회
+  page.on('dialog', dialog => dialog.dismiss());
+  await page.locator('[data-profile-withdraw=s1]').click();
+  expect(deletes).toBe(0);
+  await expect(page.locator('[data-profile-withdraw=s1]')).toBeVisible();
 });

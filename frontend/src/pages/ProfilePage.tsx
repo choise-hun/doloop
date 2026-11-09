@@ -5,6 +5,8 @@ import { useAuth, auth } from '../lib/auth';
 import { t, type I18nKey } from '../lib/i18n.mts';
 import { apiClient, type CommunityUserDto } from '../lib/apiClient';
 import { PublicNameForm } from '../components/community/PublicNameForm';
+import { MySharesPanel } from '../components/community/MySharesPanel';
+import { MyEpisodeSharesPanel } from '../components/community/MyEpisodeSharesPanel';
 import formStyles from '../components/community/Community.module.css';
 import styles from './ProfilePage.module.css';
 
@@ -294,6 +296,14 @@ export function ProfilePage(): React.ReactElement {
           {summaryKey && !summaryData ? <button id="profileSummaryRetry" className="ghostBtn" disabled={summaryLoading}
             onClick={() => setRetry(n => n + 1)}>{t('record.retry')}</button> : null}
         </section>
+        {me ? <React.Fragment key={identity}>
+          <section id="profileFolders" className={`${styles.accountCard} ${styles.profileFolders}`}
+            data-align-group="profileCol:left; profileEdges:right" aria-labelledby="profileFoldersTitle">
+            <h2 id="profileFoldersTitle">{t('community.mySharesLink')}</h2>
+            <MySharesPanel me={me} onRequireName={() => document.getElementById('profilePublicNameInput')?.focus()} />
+          </section>
+          <MyEpisodeSharesPanel />
+        </React.Fragment> : null}
       </> : null}
 
     </AppShell>
