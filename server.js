@@ -12,7 +12,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 // HTML 진입 경로와 /assets/*를 React 빌드(dist/)에서 서빙한다 (Ktor와 같은 규칙)
 const DIST_DIR = path.join(__dirname, 'dist');
-const SPA_PAGES = new Set(['/index.html', '/chords.html', '/practice.html', '/log.html', '/notes.html', '/note.html', '/settings.html', '/privacy.html', '/progressions.html']);
+const SPA_PAGES = new Set(['/index.html', '/chords.html', '/practice.html', '/log.html', '/community.html', '/notes.html', '/note.html', '/settings.html', '/privacy.html', '/progressions.html']);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

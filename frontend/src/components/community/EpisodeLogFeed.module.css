@@ -1,0 +1,79 @@
+/* frontend/src/components/community/EpisodeLogFeed.module.css */
+.feedContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.scopeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scopeBtn {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.scopeBtnOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.postsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loadingBox,
+.emptyBox,
+.errorBox {
+  padding: 32px 16px;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0);
+  color: var(--muted);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loadingBox p,
+.emptyBox p,
+.errorBox p {
+  margin: 0;
+}
+
+.errorBox {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.moreRow {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.moreBtn {
+  min-height: 40px;
+  padding: 8px 24px;
+  font-weight: 700;
+}

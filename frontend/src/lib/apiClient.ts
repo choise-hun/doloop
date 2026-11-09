@@ -534,6 +534,82 @@ export interface PlaylistImportResultDto {
   skippedUnavailable: number;
 }
 
+export interface PublicPartStatDto {
+  name: string;
+  a: number;
+  b: number;
+  rate: number;
+  completed: boolean;
+  seconds: number;
+  loops: number;
+}
+
+export interface PublicEpisodeLogDto {
+  postId: string;
+  sessionId: string;
+  owner: PublicOwnerDto;
+  videoId: string;
+  youtubeTitle: string | null;
+  youtubeArtist: string | null;
+  title: string;
+  comment: string;
+  publishedAt: string;
+  date: string;
+  seconds: number;
+  loops: number;
+  a: number | null;
+  b: number | null;
+  rate: number | null;
+  coveragePct: number;
+  partStats: PublicPartStatDto[];
+}
+
+export interface EpisodeLogListResponse {
+  posts: PublicEpisodeLogDto[];
+  next: string | null;
+}
+
+export interface EpisodeReportCountsDto {
+  open: number;
+  resolved: number;
+  dismissed: number;
+}
+
+export interface MyEpisodeLogDto {
+  postId: string;
+  sessionId: string;
+  title: string;
+  comment: string;
+  publishedAt: string;
+  status: 'published' | 'tier_paused' | 'moderation_hidden' | string;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+  tierPausedAt: string | null;
+  withdrawnAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  canRepublish: boolean;
+  reportCounts: EpisodeReportCountsDto;
+  card: PublicEpisodeLogDto | null;
+}
+
+export interface MyEpisodeLogListResponse {
+  posts: MyEpisodeLogDto[];
+  next: string | null;
+}
+
+export interface ShareEpisodeResponse {
+  post: MyEpisodeLogDto;
+}
+
+export interface WithdrawEpisodeResponse {
+  ok: boolean;
+}
+
+export interface ReportEpisodeResponse {
+  reportId: string;
+}
+
 const EXT: Record<string, string> = {
   'audio/mp4': 'm4a',
   'audio/webm': 'weba',
@@ -863,6 +939,29 @@ async function updateMemo(sessionId: string, memo: string): Promise<{ ok: boolea
   return await getAuthRef().apiFetch(path, {
     method: 'PATCH',
     body: JSON.stringify({ memo: String(memo ?? '') }),
+  });
+}
+
+async function shareEpisode(
+  sessionId: string,
+  input: { title?: string; comment?: string }
+): Promise<ShareEpisodeResponse> {
+  requireLogin();
+  const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share';
+  return await getAuthRef().apiFetch(path, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: String(input?.title ?? ''),
+      comment: String(input?.comment ?? ''),
+    }),
+  });
+}
+
+async function withdrawShareEpisode(sessionId: string): Promise<WithdrawEpisodeResponse> {
+  requireLogin();
+  const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share';
+  return await getAuthRef().apiFetch(path, {
+    method: 'DELETE',
   });
 }
 
@@ -1533,6 +1632,48 @@ async function communitySetPublicName(
   });
 }
 
+async function communityEpisodeLogs(
+  scope: 'all' | 'following' = 'all',
+  cursor?: string | null
+): Promise<EpisodeLogListResponse> {
+  requireLogin();
+  const q =
+    '?scope=' +
+    encodeURIComponent(scope) +
+    (cursor !== undefined && cursor !== null && cursor !== '' ? '&cursor=' + encodeURIComponent(String(cursor)) : '');
+  const r = await getAuthRef().apiFetch('/api/v1/community/episode-logs' + q);
+  if (!r || !Array.isArray(r.posts) || !(r.next === null || (typeof r.next === 'string' && r.next.length > 0))) {
+    throw new Error(t('episode.err.generic'));
+  }
+  return { posts: r.posts, next: r.next };
+}
+
+async function communityMyEpisodeLogs(cursor?: string | null): Promise<MyEpisodeLogListResponse> {
+  requireLogin();
+  const q =
+    cursor !== undefined && cursor !== null && cursor !== '' ? '?cursor=' + encodeURIComponent(String(cursor)) : '';
+  const r = await getAuthRef().apiFetch('/api/v1/community/me/episode-logs' + q);
+  if (!r || !Array.isArray(r.posts) || !(r.next === null || (typeof r.next === 'string' && r.next.length > 0))) {
+    throw new Error(t('episode.err.generic'));
+  }
+  return { posts: r.posts, next: r.next };
+}
+
+async function communityReportEpisode(
+  postId: string,
+  input: { reason: string; detail?: string }
+): Promise<ReportEpisodeResponse> {
+  requireLogin();
+  const body: { reason: string; detail?: string } = {
+    reason: input.reason,
+    detail: input.detail !== undefined ? String(input.detail) : '',
+  };
+  return await getAuthRef().apiFetch('/api/v1/community/episode-logs/' + encodeURIComponent(postId) + '/reports', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 async function getCategoryShare(id: string): Promise<{ share: ShareSummaryDto | null }> {
   requireLogin();
   const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share');
@@ -1622,10 +1763,15 @@ export const apiClient = {
     setFollow: communitySetFollow,
     logs: communityLogs,
     setPublicName: communitySetPublicName,
+    episodeLogs: communityEpisodeLogs,
+    myEpisodeLogs: communityMyEpisodeLogs,
+    reportEpisode: communityReportEpisode,
   },
   sessions: {
     list: listSessions,
     updateMemo,
+    share: shareEpisode,
+    withdrawShare: withdrawShareEpisode,
   },
   saveProgress,
   takes: {

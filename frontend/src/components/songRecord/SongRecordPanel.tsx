@@ -19,7 +19,12 @@ export interface SongRecordPanelProps {
   reloadKey: number;
 }
 
-export function SongRecordPanel({
+export function SongRecordPanel(props: SongRecordPanelProps): React.ReactElement {
+  const state = useAuth();
+  return <OwnedSongRecordPanel key={`${state.user?.id}:${props.songId}`} {...props} />;
+}
+
+function OwnedSongRecordPanel({
   songId,
   loggedIn,
   reloadKey,
@@ -194,6 +199,7 @@ export function SongRecordPanel({
                           return (slotA || slotB) ? [slotA, slotB] : [];
                         });
                       }}
+                      onCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
                       onDeleted={(takeId) => {
                         setAbSelected((prev) => prev.filter((id) => id !== takeId));
                         setDetailData((prev) =>
@@ -214,7 +220,19 @@ export function SongRecordPanel({
                 {t('record.tabSessions')}
               </h3>
             </div>
-            <SessionTimeline sessions={sessions} loading={notLoaded} idPrefix="sr" initialLimit={5} />
+            <SessionTimeline onTakeRemoved={(_sessionId, takeId) => {
+                setAbSelected((prev) => prev.filter((id) => id !== takeId));
+                setDetailData((prev) => prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev);
+              }}
+              onTakeCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
+              onMemoSaved={(sessionId, memo) => setDetailData((prev) => prev ? { ...prev, sessions: prev.sessions.map((it) => it.id === sessionId ? { ...it, memo } : it) } : prev)}
+              sessions={sessions}
+              song={detailSong}
+              takes={takes}
+              loading={notLoaded}
+              idPrefix="sr"
+              initialLimit={5}
+            />
           </div>
         </div>
       )}

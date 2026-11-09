@@ -481,8 +481,145 @@ function communityRoutes(opts = {}) {
         return fulfillJson(route, importResult);
       },
     ],
+    [
+      (url) => url.pathname === '/api/v1/community/episode-logs',
+      async (route) => {
+        const u = new URL(route.request().url());
+        const scope = u.searchParams.get('scope') || 'all';
+        const cursor = u.searchParams.get('cursor') || null;
+        if (opts.onEpisodeLogs) return opts.onEpisodeLogs(route, fulfillJson, scope, cursor);
+        const posts = scope === 'following' ? [EPISODE_POST_FOLLOWING] : EPISODE_POSTS_FIXTURE;
+        return fulfillJson(route, { posts, next: null });
+      },
+    ],
+    [
+      (url) => url.pathname === '/api/v1/community/me/episode-logs',
+      async (route) => {
+        const u = new URL(route.request().url());
+        const cursor = u.searchParams.get('cursor') || null;
+        if (opts.onMyEpisodeLogs) return opts.onMyEpisodeLogs(route, fulfillJson, cursor);
+        return fulfillJson(route, { posts: MY_EPISODE_LOGS_FIXTURE, next: null });
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/community\/episode-logs\/[^/]+\/reports$/.test(url.pathname),
+      async (route) => {
+        if (opts.onReportEpisode) return opts.onReportEpisode(route, fulfillJson);
+        return fulfillJson(route, { reportId: 'report-mock-123' }, 201);
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/sessions\/[^/]+\/share$/.test(url.pathname),
+      async (route) => {
+        const method = route.request().method();
+        const p = new URL(route.request().url()).pathname;
+        const sessId = decodeURIComponent(p.split('/')[4]);
+        if (method === 'DELETE') {
+          if (opts.onWithdrawShare) return opts.onWithdrawShare(route, fulfillJson, sessId);
+          return fulfillJson(route, { ok: true });
+        }
+        if (opts.onShareEpisode) return opts.onShareEpisode(route, fulfillJson, sessId);
+        const body = route.request().postDataJSON() || {};
+        return fulfillJson(route, {
+          post: {
+            ...MY_EPISODE_LOG_1,
+            sessionId: sessId,
+            title: body.title || '',
+            comment: body.comment || '',
+            publishedAt: new Date().toISOString(),
+          },
+        });
+      },
+    ],
   ];
 }
+
+const EPISODE_POST_1 = {
+  postId: '00000000-0000-4000-8000-000000000901',
+  sessionId: '00000000-0000-4000-8000-000000000801',
+  owner: { id: 'user-2', publicName: '기타달인', isCreator: true, creatorBadge: 'PRO' },
+  videoId: 'dQw4w9WgXcQ',
+  youtubeTitle: 'Rick Astley - Never Gonna Give You Up',
+  youtubeArtist: 'Rick Astley',
+  title: '인트로 루프 100회 완주!',
+  comment: '매일 연습하니 손가락에 힘이 붙네요. 피킹 속도 올리는 중입니다.',
+  publishedAt: '2026-11-08T10:00:00Z',
+  date: '2026-11-08',
+  seconds: 1800,
+  loops: 100,
+  a: 12.5,
+  b: 34.0,
+  rate: 1.0,
+  coveragePct: 85,
+  partStats: [
+    { name: 'Intro Riff', a: 12.5, b: 20.0, rate: 1.0, completed: true, seconds: 1200, loops: 70 },
+    { name: 'Verse 1', a: 20.0, b: 34.0, rate: 0.9, completed: false, seconds: 600, loops: 30 },
+  ],
+};
+
+const EPISODE_POST_FOLLOWING = {
+  postId: '00000000-0000-4000-8000-000000000903',
+  sessionId: '00000000-0000-4000-8000-000000000803',
+  owner: { id: 'user-3', publicName: '팔로잉연습생', isCreator: false, creatorBadge: null },
+  videoId: 'abcdefghij3',
+  youtubeTitle: 'J-Rock Lick Study',
+  youtubeArtist: 'Rockstar',
+  title: '팔로잉 게시물 테스트',
+  comment: '팔로잉 탭에 노출될 게시물입니다.',
+  publishedAt: '2026-11-08T14:00:00Z',
+  date: '2026-11-08',
+  seconds: 600,
+  loops: 20,
+  a: 5.0,
+  b: 25.0,
+  rate: 0.8,
+  coveragePct: 70,
+  partStats: [
+    { name: 'Main Lick', a: 5.0, b: 25.0, rate: 0.8, completed: true, seconds: 600, loops: 20 },
+  ],
+};
+
+const MY_EPISODE_LOG_1 = {
+  postId: '00000000-0000-4000-8000-000000000902',
+  sessionId: '00000000-0000-4000-8000-000000000802',
+  title: '내 첫 세션 공유',
+  comment: '자세 교정 피드백 부탁드립니다.',
+  publishedAt: '2026-11-08T12:00:00Z',
+  status: 'published',
+  hiddenAt: null,
+  hiddenReason: null,
+  tierPausedAt: null,
+  withdrawnAt: null,
+  createdAt: '2026-11-08T12:00:00Z',
+  updatedAt: '2026-11-08T12:00:00Z',
+  canRepublish: true,
+  reportCounts: { open: 0, resolved: 0, dismissed: 0 },
+  card: {
+    postId: '00000000-0000-4000-8000-000000000902',
+    sessionId: '00000000-0000-4000-8000-000000000802',
+    owner: { id: 'user-pro', publicName: '네오소울러', isCreator: false, creatorBadge: null },
+    videoId: 'abcdefghij1',
+    youtubeTitle: 'Funk Groove Masterclass',
+    youtubeArtist: 'Master',
+    title: '내 첫 세션 공유',
+    comment: '자세 교정 피드백 부탁드립니다.',
+    publishedAt: '2026-11-08T12:00:00Z',
+    date: '2026-11-08',
+    seconds: 900,
+    loops: 50,
+    a: 0,
+    b: 60,
+    rate: 1.0,
+    coveragePct: 100,
+    partStats: [
+      { name: 'Groove A', a: 0, b: 30, rate: 1.0, completed: true, seconds: 500, loops: 30 },
+      { name: 'Groove B', a: 30, b: 60, rate: 1.0, completed: true, seconds: 400, loops: 20 },
+    ],
+  },
+};
+
+const EPISODE_POSTS_FIXTURE = [EPISODE_POST_1, EPISODE_POST_FOLLOWING];
+const MY_EPISODE_LOGS_FIXTURE = [MY_EPISODE_LOG_1];
 
 module.exports = {
   COMMUNITY_FREE_ME,
@@ -500,5 +637,10 @@ module.exports = {
   SHARES_FIXTURE,
   PLAYLIST_PREVIEW_FIXTURE,
   PLAYLIST_IMPORT_RESULT_FIXTURE,
+  EPISODE_POST_1,
+  EPISODE_POST_FOLLOWING,
+  MY_EPISODE_LOG_1,
+  EPISODE_POSTS_FIXTURE,
+  MY_EPISODE_LOGS_FIXTURE,
   communityRoutes,
 };

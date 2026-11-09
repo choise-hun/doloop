@@ -124,7 +124,7 @@ fun runAnalyzeJobCli(jobId: UUID) = runBlocking {
 
 // React 빌드(spa.html)가 대신 서빙하는 HTML 진입 경로 (RZ-3)
 private val SPA_ENTRY_PAGES = setOf(
-    "index.html", "chords.html", "practice.html", "log.html",
+    "index.html", "chords.html", "practice.html", "log.html", "community.html",
     "notes.html", "note.html", "settings.html", "privacy.html", "progressions.html"
 )
 

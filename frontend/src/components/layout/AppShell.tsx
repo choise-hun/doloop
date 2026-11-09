@@ -6,13 +6,14 @@ import { t, type I18nKey } from '../../lib/i18n.mts';
 import { BetaBadge } from '../common/BetaBadge';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
-export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'chords' | 'notes' | 'settings' | 'privacy';
+export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy';
 
 // 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
 const MAIN_NAV: Array<{ key: ActiveNavKey; labelKey: I18nKey; href: string | null }> = [
   { key: 'learn', labelKey: 'nav.learn', href: 'chords.html' },
   { key: 'play', labelKey: 'nav.play', href: 'practice.html' },
   { key: 'trails', labelKey: 'nav.trails', href: 'log.html' },
+  { key: 'community', labelKey: 'nav.community', href: 'community.html' },
   { key: 'chords', labelKey: 'nav.chords', href: 'progressions.html' },
   { key: 'notes', labelKey: 'nav.notes', href: 'notes.html' },
 ];
@@ -32,10 +33,30 @@ export function AppShell({
 }: AppShellProps): React.ReactElement {
   const authState = useAuth();
   const [theme, setThemeState] = useState<'light' | 'dark' | ''>(() => getTheme());
+  const shellRef = React.useRef<HTMLDivElement | null>(null);
+  const tabBarRef = React.useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     const sync = () => setThemeState(getTheme());
     window.addEventListener(THEME_EVENT, sync);
     return () => window.removeEventListener(THEME_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      if (tabBarRef.current && shellRef.current) {
+        const h = Math.ceil(tabBarRef.current.getBoundingClientRect().height);
+        if (h > 0) shellRef.current.style.setProperty('--tabbar-real-height', `${h}px`);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    if (tabBarRef.current) observer.observe(tabBarRef.current);
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
   }, []);
 
   const signedInUser = authState.user;
@@ -72,7 +93,11 @@ export function AppShell({
         : styles.mainDefault;
 
   return (
-    <div className={shellClass} data-shell-variant={variant}>
+    <div
+      ref={shellRef}
+      className={shellClass}
+      data-shell-variant={variant}
+    >
       <nav className={`site-nav ${styles.siteNav}`} aria-label={t('nav.ariaSite')}>
         <span className={styles.navMain}>
           <a
@@ -135,7 +160,7 @@ export function AppShell({
         </span>
       </nav>
       <main className={mainClass}>{children}</main>
-      <nav className={styles.tabBar} aria-label={t('nav.ariaTabs')} data-tabbar="1">
+      <nav ref={tabBarRef} className={styles.tabBar} aria-label={t('nav.ariaTabs')} data-tabbar="1">
         {MAIN_NAV.map((item) =>
           item.href ? (
             <a

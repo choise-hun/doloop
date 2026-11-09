@@ -84,7 +84,7 @@ export function itemPracticeHref(it: {
   return href;
 }
 
-function fmtSec(n: number): string {
+export function fmtSec(n: number): string {
   const sec = Math.max(0, Math.floor(n));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);

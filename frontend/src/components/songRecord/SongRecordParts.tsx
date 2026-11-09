@@ -1,10 +1,14 @@
 // frontend/src/components/songRecord/SongRecordParts.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAudio } from '../common/SafeAudio';
+import { auth, useAuth } from '../../lib/auth';
 import { apiClient, SongSessionDto, TakeDto } from '../../lib/apiClient';
 import { drive } from '../../lib/drive';
 import { safeAudioUrl } from '../../lib/security';
 import { t } from '../../lib/i18n.mts';
+import { PracticeSessionCard } from './PracticeSessionCard';
+import { fromSongSession } from '../../lib/episode.mts';
+// i18n-keep: 'record.sessionSegment' 'record.sessionDurationLoops' 'record.btnDetailAccordion' 호환 키 보존
 import styles from './SongRecordParts.module.css';
 
 export function fmtDuration(sec?: number | null): string {
@@ -49,6 +53,7 @@ export interface TakeItemRowProps {
   onToggleAb?: (takeId: string, checked: boolean) => void;
   onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
   onDeleted: (takeId: string) => void;
+  onCompleted?: (take: TakeDto) => void;
 }
 
 export function TakeItemRow({
@@ -59,6 +64,7 @@ export function TakeItemRow({
   onToggleAb,
   onSelectAbSlot,
   onDeleted,
+  onCompleted,
 }: TakeItemRowProps): React.ReactElement {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [audioVisible, setAudioVisible] = useState(false);
@@ -69,6 +75,12 @@ export function TakeItemRow({
   const [completed, setCompleted] = useState<boolean>(Boolean(take.completed));
   const [rowMsg, setRowMsg] = useState('');
   const takeReqSeqRef = useRef(0);
+  const state = useAuth();
+  const ownerUid = state.user?.id;
+  const alive = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; takeReqSeqRef.current++; }; }, []);
+  const isCurrent = () => alive.current && ownerUid === auth.getUser()?.id;
+
 
   // 렌더 타임 동기 정규화 (docs/rules/frontend-state.md §2, PR #132 리뷰 3번)
   if (take.id !== prevTakeId || take.completed !== prevTakeCompleted) {
@@ -87,6 +99,7 @@ export function TakeItemRow({
       setRowMsg(t('record.loadingDriveAudio'));
       try {
         const blobUrl = await drive.fetchMediaObjectUrl(take.storageKey);
+        if (!isCurrent()) return;
         const valid = safeAudioUrl(blobUrl);
         if (valid) {
           setAudioUrl(valid);
@@ -96,9 +109,10 @@ export function TakeItemRow({
           setRowMsg(t('record.urlIssueFailed'));
         }
       } catch (err: any) {
+        if (!isCurrent()) return;
         setRowMsg((err && err.message) || t('record.playFailed'));
       } finally {
-        setLoadingPlay(false);
+        if (isCurrent()) setLoadingPlay(false);
       }
       return;
     }
@@ -106,6 +120,7 @@ export function TakeItemRow({
     setRowMsg(t('record.requestingUrl'));
     try {
       const r = await apiClient.takes.getUrl(take.id);
+      if (!isCurrent()) return;
       const valid = r && r.url ? safeAudioUrl(r.url) : '';
       if (valid) {
         setAudioUrl(valid);
@@ -117,9 +132,10 @@ export function TakeItemRow({
         setRowMsg(t('record.urlIssueFailed'));
       }
     } catch (err: any) {
+      if (!isCurrent()) return;
       setRowMsg((err && err.message) || t('record.playFailed'));
     } finally {
-      setLoadingPlay(false);
+      if (isCurrent()) setLoadingPlay(false);
     }
   };
 
@@ -130,10 +146,11 @@ export function TakeItemRow({
     setCompleted(nextVal);
     try {
       const res = await apiClient.takes.toggleComplete(take.id, nextVal);
-      if (token !== takeReqSeqRef.current) return;
+      if (!isCurrent() || token !== takeReqSeqRef.current) return;
       setCompleted(Boolean(res.take.completed));
+      onCompleted?.(res.take);
     } catch (err: any) {
-      if (token !== takeReqSeqRef.current) return;
+      if (!isCurrent() || token !== takeReqSeqRef.current) return;
       setCompleted(!nextVal);
       window.alert(err.message || 'Error');
     }
@@ -144,10 +161,12 @@ export function TakeItemRow({
     setDeleting(true);
     try {
       await apiClient.takes.remove(take.id);
+      if (!isCurrent()) return;
       setAudioUrl('');
       setAudioVisible(false);
       onDeleted(take.id);
     } catch (err: any) {
+      if (!isCurrent()) return;
       window.alert((err && err.message) || t('record.deleteTakeFailed'));
       setDeleting(false);
     }
@@ -397,6 +416,11 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
 
 export interface SessionTimelineProps {
   sessions: SongSessionDto[];
+  song?: { videoId?: string; title?: string; artist?: string } | null;
+  takes?: TakeDto[];
+  onTakeRemoved?: (sessionId: string, takeId: string) => void;
+  onTakeCompleted?: (take: TakeDto) => void;
+  onMemoSaved?: (sessionId: string, memo: string) => void;
   idPrefix?: string;
   initialLimit?: number;
   loading?: boolean;
@@ -404,26 +428,20 @@ export interface SessionTimelineProps {
 
 export function SessionTimeline({
   sessions,
+  song,
+  takes,
+  onTakeRemoved,
+  onTakeCompleted,
+  onMemoSaved,
   idPrefix = '',
   initialLimit,
   loading = false,
 }: SessionTimelineProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
-  const [openSet, setOpenSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setExpanded(false);
-    setOpenSet(new Set());
   }, [sessions]);
-
-  const toggleAccordion = (id: string) => {
-    setOpenSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const hasLimit = typeof initialLimit === 'number' && initialLimit > 0;
   const visibleSessions = hasLimit && !expanded ? sessions.slice(0, initialLimit) : sessions;
@@ -431,85 +449,26 @@ export function SessionTimeline({
 
   const tlId = idPrefix ? `${idPrefix}Timeline` : 'detailTimeline';
 
-  const parseParts = (partStats: unknown): any[] => {
-    if (!partStats) return [];
-    if (Array.isArray(partStats)) return partStats;
-    if (typeof partStats === 'string') {
-      try {
-        const parsed = JSON.parse(partStats);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  };
-
-  const formatSec = (sec: number): string => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${String(s).padStart(2, '0')}`;
-  };
-
   return (
-    <div id={tlId}>
+    <div id={tlId} className={styles.timelineWrap}>
       {loading ? (
         <p className={`empty ${styles.empty}`}>{t('record.loading')}</p>
       ) : sessions.length === 0 ? (
         <p className={`empty ${styles.empty}`}>{t('record.emptySessions')}</p>
       ) : (
         <>
-          {visibleSessions.map((s) => {
-            let leftText = s.date;
-            if (s.segment) leftText += t('record.sessionSegment', { seg: s.segment });
-            if (s.rate != null) leftText += ` · ${s.rate}×`;
-            const isOpen = openSet.has(s.id);
-            const coverage = s.coveragePct || 0;
-            const parts = parseParts(s.partStats);
-
-            return (
-              <div key={s.id} className={`tl-row ${styles.tlRow}`}>
-                <div className={`tl-meta ${styles.tlMeta}`}>
-                  <span>{leftText}</span>
-                  <span className={`meta ${styles.meta}`}>
-                    {t('record.sessionDurationLoops', { m: Math.round(s.minutes || (s.seconds ? s.seconds / 60 : 0)), loops: 0 })}
-                  </span>
-                </div>
-                <progress
-                  className={`tlCoverageBar ${styles.tlCoverageBar} ${coverage >= 100 ? styles.tlCoverageComplete : styles.tlCoverageInProgress}`}
-                  max={100}
-                  value={coverage}
-                />
-                <button
-                  type="button"
-                  className={`ghost mini btnAccordion ${styles.ghostMini} ${styles.btnAccordion}`}
-                  onClick={() => toggleAccordion(s.id)}
-                >
-                  {t('record.btnDetailAccordion')} {isOpen ? '▴' : '▾'}
-                </button>
-                <div className={`tlPartStats ${styles.tlPartStats}`} hidden={!isOpen}>
-                  {parts.length === 0 ? (
-                    <div className={styles.partEmpty}>{t('record.emptySessions')}</div>
-                  ) : (
-                    <ul className={styles.partList}>
-                      {parts.map((p: any, idx: number) => (
-                        <li key={idx} className={styles.partItem}>
-                          <span className={styles.partName}>{p.name || `Part ${idx + 1}`}</span>
-                          <span className={styles.partRange}>
-                            {p.a != null && p.b != null ? `${formatSec(p.a)}–${formatSec(p.b)}` : ''}
-                          </span>
-                          <span className={styles.partDuration}>
-                            {p.seconds ? formatSec(p.seconds) : ''}
-                          </span>
-                          {p.completed && <span className={styles.partBadge}>{t('record.btnCompleted')}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          <div className={styles.timelineList}>
+            {visibleSessions.map((s) => (
+              <PracticeSessionCard
+                key={s.id}
+                session={fromSongSession(s, song, takes)}
+                onTakeRemoved={onTakeRemoved}
+                onTakeCompleted={onTakeCompleted}
+                onMemoSaved={onMemoSaved}
+                surface={idPrefix === 'sr' ? 'player' : 'detail'}
+              />
+            ))}
+          </div>
           {hasMore && (
             <div className={styles.tlMoreRow}>
               <button

@@ -1,0 +1,253 @@
+/* frontend/src/components/songRecord/PracticeSessionCard.module.css */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sessionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sessionTitle {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.ghostMini {
+  font-size: 11px;
+  padding: 4px 8px;
+  text-decoration: none;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.coverageRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coverageBarWrap {
+  flex: 1;
+  max-width: 140px;
+  height: 6px;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.coverageBar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  appearance: none;
+}
+
+.coverageBar::-webkit-progress-bar {
+  background: var(--panel-bg);
+}
+
+.coverageBar::-webkit-progress-value {
+  background: var(--muted);
+}
+
+.coverageBar::-moz-progress-bar {
+  background: var(--muted);
+}
+
+.coverageComplete::-webkit-progress-value {
+  background: var(--ink);
+}
+
+.coverageComplete::-moz-progress-bar {
+  background: var(--ink);
+}
+
+.coveragePct {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.partsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.partsToggleBtn {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.partsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0);
+}
+
+.partItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.partName {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.partStats {
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.takesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sessionMemo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sessionMemoAct {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memoStatus {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shareSection {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shareStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shareBadgeNone {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shareBadgePublished {
+  font-size: 11px;
+  font-weight: 700;
+  color: #059669;
+}
+
+.shareBadgePaused {
+  font-size: 11px;
+  font-weight: 700;
+  color: #d97706;
+}
+
+.shareBadgeWithdrawn {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shareBadgeChecking {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.moderationBox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shareBadgeHidden {
+  font-size: 11px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.hiddenReason {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.shareErrorRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shareErrorText {
+  font-size: 11px;
+  color: #dc2626;
+}
+
+.shareActs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shareActBtn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.withdrawBtn {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 8px;
+}
+
+.actionMsg {
+  font-size: 11px;
+  color: var(--ink);
+  margin: 0;
+}
