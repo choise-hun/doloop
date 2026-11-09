@@ -54,3 +54,20 @@
   gap: 16px;
   min-width: 0;
 }
+
+.episodeRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}
+.episodeRow h3 { margin: 0; font-size: 16px; color: var(--ink); }
+.episodeRow time { font: 12px var(--font-mono); color: var(--muted); }
+.episodeActions { display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; }
+.episodeActions > * { min-height: 44px; max-width: 100%; }
+.profileFolders [data-share-row] { overflow-wrap: anywhere; }
+.profileFolders [data-share-row] > * { min-width: 0; }

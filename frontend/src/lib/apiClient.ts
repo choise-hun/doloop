@@ -702,9 +702,9 @@ function categoryList(r: any): CategoryDto[] {
   return r && Array.isArray(r.categories) ? r.categories : [];
 }
 
-async function listCategories(): Promise<CategoryDto[]> {
+async function listCategories(signal?: AbortSignal): Promise<CategoryDto[]> {
   requireLogin();
-  const r = await getAuthRef().apiFetch('/api/v1/categories');
+  const r = await getAuthRef().apiFetch('/api/v1/categories', { signal });
   return categoryList(r);
 }
 
@@ -957,11 +957,11 @@ async function shareEpisode(
   });
 }
 
-async function withdrawShareEpisode(sessionId: string): Promise<WithdrawEpisodeResponse> {
+async function withdrawShareEpisode(sessionId: string, signal?: AbortSignal): Promise<WithdrawEpisodeResponse> {
   requireLogin();
   const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share';
   return await getAuthRef().apiFetch(path, {
-    method: 'DELETE',
+    method: 'DELETE', signal,
   });
 }
 
@@ -1649,11 +1649,11 @@ async function communityEpisodeLogs(
   return { posts: r.posts, next: r.next };
 }
 
-async function communityMyEpisodeLogs(cursor?: string | null): Promise<MyEpisodeLogListResponse> {
+async function communityMyEpisodeLogs(cursor?: string | null, signal?: AbortSignal): Promise<MyEpisodeLogListResponse> {
   requireLogin();
   const q =
     cursor !== undefined && cursor !== null && cursor !== '' ? '?cursor=' + encodeURIComponent(String(cursor)) : '';
-  const r = await getAuthRef().apiFetch('/api/v1/community/me/episode-logs' + q);
+  const r = await getAuthRef().apiFetch('/api/v1/community/me/episode-logs' + q, { signal });
   if (!r || !Array.isArray(r.posts) || !(r.next === null || (typeof r.next === 'string' && r.next.length > 0))) {
     throw new Error(t('episode.err.generic'));
   }
@@ -1675,15 +1675,16 @@ async function communityReportEpisode(
   });
 }
 
-async function getCategoryShare(id: string): Promise<{ share: ShareSummaryDto | null }> {
+async function getCategoryShare(id: string, signal?: AbortSignal): Promise<{ share: ShareSummaryDto | null }> {
   requireLogin();
-  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share');
+  const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share', { signal });
   return { share: r && r.share ? r.share : null };
 }
 
 async function setCategoryShare(
   id: string,
-  input: { isPublic: boolean; autoSync?: boolean; title?: string }
+  input: { isPublic: boolean; autoSync?: boolean; title?: string },
+  signal?: AbortSignal
 ): Promise<{ share: ShareSummaryDto | null }> {
   requireLogin();
   const body: Record<string, unknown> = { isPublic: Boolean(input.isPublic) };
@@ -1691,18 +1692,18 @@ async function setCategoryShare(
   if (input.title !== undefined && input.title !== '') body.title = input.title;
   const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share', {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: JSON.stringify(body), signal,
   });
   return { share: r && r.share ? r.share : null };
 }
 
-async function republishCategoryShare(id: string, title?: string): Promise<{ share: ShareSummaryDto | null }> {
+async function republishCategoryShare(id: string, title?: string, signal?: AbortSignal): Promise<{ share: ShareSummaryDto | null }> {
   requireLogin();
   const body: Record<string, unknown> = {};
   if (title !== undefined && title !== '') body.title = title;
   const r = await getAuthRef().apiFetch('/api/v1/categories/' + encodeURIComponent(id) + '/share/republish', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify(body), signal,
   });
   return { share: r && r.share ? r.share : null };
 }
