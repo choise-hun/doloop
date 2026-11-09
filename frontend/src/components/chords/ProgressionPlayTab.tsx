@@ -6,7 +6,7 @@ import { t, type I18nKey } from '../../lib/i18n.mts';
 import { SafeLink } from '../common/SafeLink';
 import { audioEngine, CT, GE, loadChordForms, PATH } from '../../lib/musicEngine';
 import type { FormTable, PathOptions, Voicing, VoicingPath } from '../../lib/musicEngine';
-import { ChordBoxSvg, ChordNeckSvg, buildCtxNotes, geNotesToDiagram, pitchesOf } from './ChordDiagrams';
+import { ChordBoxSvg, ChordNeckSvg, KeyboardDiagramSvg, buildCtxNotes, geNotesToDiagram, pitchesOf } from './ChordDiagrams';
 import { parseChord } from '../../lib/chords/symbol.mts';
 import type { ChordOk } from '../../lib/chords/symbol.mts';
 import {
@@ -24,6 +24,7 @@ import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '..
 import styles from '../../pages/ChordsPage.module.css';
 
 export interface ProgressionPlayTabProps {
+  instrumentKind?: 'guitar' | 'keyboard';
   /** 이 탭이 보이는지 — 숨겨지면 재생을 멈춘다 */
   active: boolean;
   /** window.location.hash ("#prog?c=…") */
@@ -66,7 +67,8 @@ const SEEDS = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_ARCHIVE_PROGRESSION
 const SEMIS = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
 const Q4_IDS = new Set(CT.Q4.map((q) => q.id));
 
-export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onOpenTone }: ProgressionPlayTabProps): React.ReactElement {
+export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onOpenTone, instrumentKind = 'guitar' }: ProgressionPlayTabProps): React.ReactElement {
+  const isKeyboard = instrumentKind === 'keyboard';
   const prog = useMemo(() => parseProgHash(hash) || { chords: [], key: '', title: '', from: '', note: '' }, [hash]);
 
   const [table, setTable] = useState<FormTable | null>(null);
@@ -93,7 +95,7 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
 
   // 표는 이 탭을 처음 열 때만 받는다(첫 화면 번들에 안 넣음 — CH-2c-2 §1)
   useEffect(() => {
-    if (!active || table) return;
+    if (!active || table || isKeyboard) return;
     let alive = true;
     loadChordForms()
       .then((t) => alive && setTable(t))
@@ -101,12 +103,13 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
     return () => {
       alive = false;
     };
-  }, [active, table]);
+  }, [active, table, isKeyboard]);
 
   useEffect(() => {
     if (!active) stop();
   }, [active]);
   useEffect(() => stop, []);
+  useEffect(() => { stop(); }, [instrumentKind]);
 
   // 다른 진행이 들어오면 탐구 상태를 처음으로
   useEffect(() => {
@@ -131,10 +134,18 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
   );
   const playable = useMemo(() => items.filter((x) => x.chord), [items]);
   const skipped = items.length - playable.length;
+  const keyboardChords = useMemo(() => playable.map((item) => {
+    const chord = item.chord!;
+    const bass = { pitch: 36 + (chord.bass ?? chord.root), hand: 'lh' as const };
+    const tones = chord.degrees.filter((degree) => GE.DEG[degree]).map((degree) => ({
+      pitch: 48 + chord.root + GE.DEG[degree][0], text: degree, hand: 'rh' as const,
+    }));
+    return [bass, ...tones];
+  }), [playable]);
 
   const { paths, mode } = useMemo(
-    () => (table ? computePaths(playable.map((x) => x.chord!), table, lo, Math.max(lo, hi)) : { paths: [], mode: 'none' as PathMode }),
-    [table, playable, lo, hi]
+    () => (table && !isKeyboard ? computePaths(playable.map((x) => x.chord!), table, lo, Math.max(lo, hi)) : { paths: [], mode: 'none' as PathMode }),
+    [table, playable, lo, hi, isKeyboard]
   );
   const path = paths[Math.min(pathIdx, Math.max(0, paths.length - 1))] || null;
   const voicings: Voicing[] = path ? path.voicings.map((v, k) => overrides[k] || v) : [];
@@ -155,6 +166,10 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
   }, [showAlt, curItem, table, mode, lo, hi]);
 
   const playChordAt = (k: number, when: number, dur: number) => {
+    if (isKeyboard) {
+      keyboardChords[k]?.forEach((note) => audioEngine.keyboard(note.pitch, when, dur));
+      return;
+    }
     const it = playable[k];
     const v = voicings[k];
     if (!it || !v) return;
@@ -168,10 +183,11 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
       stop();
       return;
     }
-    if (!voicings.length) return;
+    const count = isKeyboard ? keyboardChords.length : voicings.length;
+    if (!count) return;
     audioEngine.resume();
     setPlaying(true);
-    const n = voicings.length;
+    const n = count;
     const spb = 60 / bpm;
     let beat = 0;
     const tick = () => {
@@ -249,6 +265,58 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
         </form>
       </div>
     );
+  }
+
+  if (isKeyboard) {
+    return <div className={styles.pane}>
+      <div className={styles.panel}>
+        <div className={styles.headRow}>
+          <h2 className={styles.h3} id="pp-title">{prog.title || t('chords.progDefaultTitle')}<span className={styles.meta}>{targetKey}</span></h2>
+          {back}
+        </div>
+        <div className={styles.controls}>
+          <div className={styles.field}>
+            <label htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
+            <select id="pp-semis" className={styles.selectField} value={semis} onChange={(event) => { stop(); setSemis(+event.target.value); }}>
+              {SEMIS.map((n) => <option key={n} value={n}>{n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`}</option>)}
+            </select>
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="pp-bpm">BPM</label>
+            <input id="pp-bpm" type="number" min={40} max={200} className={styles.numField} value={bpm} onChange={(event) => { stop(); setBpm(Math.max(40, Math.min(200, +event.target.value || 80))); }} />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
+            <select id="pp-beats" className={styles.selectField} value={beats} onChange={(event) => { stop(); setBeats(+event.target.value); }}>
+              {[1, 2, 4, 8].map((beat) => <option key={beat} value={beat}>{t('chords.beatsUnit', { b: beat })}</option>)}
+            </select>
+          </div>
+          <label className={styles.check}><input id="pp-loop" type="checkbox" checked={loop} onChange={(event) => { stop(); setLoop(event.target.checked); }} />{t('chords.repeatLabel')}</label>
+        </div>
+        <div id="pp-chips" className={styles.chips}>
+          {items.map((item) => {
+            const index = playable.indexOf(item);
+            return <button key={item.i} type="button" className={styles.chip} data-chord={item.i}
+              disabled={index < 0} aria-pressed={index >= 0 && curK === index} onClick={() => pickChord(index)}>{item.shown}<small>{item.roman}</small></button>;
+          })}
+        </div>
+        {skipped > 0 && <p id="pp-skipped" className={styles.note}>{t('chords.skippedNotice', { skipped })}</p>}
+        {!playable.length && <p id="pp-status" role="status" className={styles.note}>{t('chords.errNoReadableChord')}</p>}
+        <button id="pp-play" type="button" className={styles.playbtn} disabled={!playable.length} aria-pressed={playing} onClick={togglePlay}>{playing ? t('chords.btnStop') : t('chords.btnPlay')}</button>
+      </div>
+      {curItem && <div className={styles.panel}>
+        <h3 id="pp-cur" className={styles.h3}>{curItem.shown}</h3>
+        <KeyboardDiagramSvg notes={keyboardChords[curK]} split label={curItem.shown} />
+        {CT.ARP_Q.includes(curItem.chord!.quality) && <button id="pp-open-tone" type="button" className={styles.ghost} onClick={() => onOpenTone(curItem.chord!.root, curItem.chord!.quality)}>{t('chords.openInTone')}</button>}
+        <div id="pp-boxes" className={styles.keyboardCards}>
+          {keyboardChords.map((notes, index) => <div key={index} className={styles.cell}>
+            <button type="button" className={styles.chip} aria-pressed={curK === index} onClick={() => pickChord(index)}>{playable[index].shown}</button>
+            <KeyboardDiagramSvg notes={notes} split label={playable[index].shown} />
+          </div>)}
+        </div>
+        {prog.note && <SafeLink id="pp-note-link" href={`note.html?id=${encodeURIComponent(prog.note)}`}>{t('chords.viewVoicingInNote')}</SafeLink>}
+      </div>}
+    </div>;
   }
 
   const status = !table

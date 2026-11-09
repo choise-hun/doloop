@@ -2,6 +2,61 @@
 import React from 'react';
 import { t } from '../../lib/i18n.mts';
 import { BoardNote, CT, DoubleStopIntervalId, GE } from '../../lib/musicEngine';
+import styles from '../../pages/ChordsPage.module.css';
+
+/** MIDI notes, or octave-qualified names, with the server keyboard's hand semantics. */
+export function KeyboardDiagramSvg({ notes, label, split = false }: {
+  notes: ReadonlyArray<{ pitch: number | string; text?: string; hand?: 'lh' | 'rh'; now?: boolean }>;
+  label: string;
+  split?: boolean;
+}): React.ReactElement {
+  function midi(value: number | string): number | null {
+    if (typeof value === 'number') return Number.isInteger(value) && value >= 0 && value <= 127 ? value : null;
+    const match = /^([A-Ga-g])(##|bb|x|#|b|♯|♭)?(-?\d)$/.exec(value.trim());
+    if (!match) return null;
+    const step: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    const accidental: Record<string, number> = { '': 0, '#': 1, '♯': 1, '##': 2, x: 2, b: -1, '♭': -1, bb: -2 };
+    const n = (Number(match[3]) + 1) * 12 + step[match[1].toUpperCase()] + accidental[match[2] || ''];
+    return n >= 0 && n <= 127 ? n : null;
+  }
+  const valid = notes.flatMap((note) => {
+    const pitch = midi(note.pitch);
+    return pitch === null ? [] : [{ ...note, pitch }];
+  });
+  const lo = valid.length ? Math.floor(Math.min(...valid.map((n) => n.pitch)) / 12) * 12 : 48;
+  const hi = Math.min(127, valid.length ? Math.max(Math.floor(Math.max(...valid.map((n) => n.pitch)) / 12) * 12 + 11, lo + 23) : 71);
+  const pressed = new Map(valid.map((n) => [n.pitch, n]));
+  const keys: Array<{ pitch: number; x: number; black: boolean }> = [];
+  let whites = 0;
+  for (let pitch = lo; pitch <= hi; pitch++) {
+    const black = [1, 3, 6, 8, 10].includes(pitch % 12);
+    keys.push({ pitch, x: black ? whites * 20 - 6 : whites++ * 20, black });
+  }
+  const top = split ? 22 : 0;
+  return (
+    <svg className={styles.keyboard} data-keyboard="true" viewBox={`0 0 ${whites * 20 + 2} ${top + 94}`} role="img" aria-label={label}>
+      <title>{label}</title>
+      {split && <g className={styles.keyLegend}>
+        <text x={2} y={13} className={styles.keyLeft}>LH</text>
+        <text x={40} y={13} className={styles.keyRight}>RH</text>
+      </g>}
+      {[false, true].flatMap((black) => keys.filter((k) => k.black === black).map((key) => {
+        const note = pressed.get(key.pitch);
+        const width = black ? 12 : 20;
+        const height = black ? 44 : 72;
+        const name = `${CT.NAMES[key.pitch % 12]}${Math.floor(key.pitch / 12) - 1}`;
+        return <g key={key.pitch} data-midi={key.pitch} data-pressed={!!note} data-hand={note?.hand} data-now={!!note?.now}>
+          <title>{`${name}${note?.text ? ` · ${note.text}` : ''}`}</title>
+          <rect x={key.x + 1} y={top + 1} width={width} height={height}
+            className={`${black ? styles.blackKey : styles.whiteKey} ${note ? styles.keyPressed : ''} ${note && split ? note.hand === 'lh' ? styles.keyLeft : styles.keyRight : ''} ${note?.now ? styles.keyNow : ''}`} />
+          {note && <text x={key.x + 1 + width / 2} y={black ? top + 86 : top + 65}
+            className={black ? styles.blackKeyLabel : styles.whiteKeyLabel}>{note.text ?? name}</text>}
+          {!black && key.pitch % 12 === 0 && <text x={key.x + 11} y={top + 12} className={styles.keyOctave}>{name}</text>}
+        </g>;
+      }))}
+    </svg>
+  );
+}
 
 export interface DiagramNote {
   s: number;
@@ -434,7 +489,7 @@ export function NeckSvg({
   }
 
   return (
-    <svg className="fb sb" viewBox={`0 0 ${VW} ${H}`} role="img" aria-label={label}>
+    <svg className="fb sb" data-strings={n} viewBox={`0 0 ${VW} ${H}`} role="img" aria-label={label}>
       {renderRect(xL, VW - R, T - 8, GAP * (n - 1) + 16, 'wood')}
       {INLAY_FRETS.filter((f) => f >= first && f <= hi).map((f) => (
         <circle key={`inlay-${f}`} className="inlay" cx={xOf(f)} cy={mid} r={5} />

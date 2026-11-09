@@ -24,6 +24,7 @@ import {
   getDoubleStopPairs,
   getSafeDoubleStopPair,
   NeckSvg,
+  KeyboardDiagramSvg,
   pitchesOf,
   q4Tones,
   ScaleWheelSvg,
@@ -53,6 +54,9 @@ const TUNING_NAME_KEY: Record<TuningId, I18nKey> = {
   b5: 'chords.tuningBassFive',
   b6: 'chords.tuningBassSix',
 };
+const INSTRUMENT_NAME_KEY = {
+  guitar: 'chords.instrumentGuitar', bass: 'chords.instrumentBass', keyboard: 'chords.instrumentKeyboard',
+} as const;
 
 const INV_NAME_KEYS: readonly I18nKey[] = [
   'chords.invRoot',
@@ -154,11 +158,12 @@ function shuffle<T>(arr: T[]): T[] {
 
 export function ChordsPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '기타 코드 연습실'; // i18n-keep: RZ3-4 소스 문자열 단언
+    document.title = '악기 연습실'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   // 초기 탭 결정
-  const [activeTab, setActiveTab] = useState<ChordTabId>(() => {
+  const [instrumentKind, setInstrumentKind] = useState<'guitar' | 'bass' | 'keyboard'>('guitar');
+  const [storedTab, setActiveTab] = useState<ChordTabId>(() => {
     if (typeof window !== 'undefined') {
       const fromHash = tabFromHash(window.location.hash);
       if (fromHash) return fromHash;
@@ -171,6 +176,52 @@ export function ChordsPage(): React.ReactElement {
     }
     return 'scale';
   });
+  const supportedTabs: readonly ChordTabId[] = instrumentKind === 'bass' ? ['scale', 'tone']
+    : instrumentKind === 'keyboard' ? ['scale', 'tone', 'reint', 'tf', 'prog'] : CHORD_TABS.map((tab) => tab.id);
+  const activeTab = supportedTabs.includes(storedTab) ? storedTab : 'scale';
+  const isKeyboard = instrumentKind === 'keyboard';
+  const [guitarTuning, setGuitarTuning] = useState<TuningId>('g6');
+  const [bassTuning, setBassTuning] = useState<TuningId>('b4');
+  const selectedTuning = instrumentKind === 'bass' ? bassTuning : guitarTuning;
+  const availableTunings = CT.TUNINGS.filter((tuning) => tuning.kind === instrumentKind);
+
+  function changeInstrument(next: typeof instrumentKind) {
+    stopAllTransports();
+    const tabs: readonly ChordTabId[] = next === 'bass' ? ['scale', 'tone']
+      : next === 'keyboard' ? ['scale', 'tone', 'reint', 'tf', 'prog'] : CHORD_TABS.map((tab) => tab.id);
+    const tab = tabs.includes(activeTab) ? activeTab : 'scale';
+    setInstrumentKind(next);
+    setDsInst(guitarTuning);
+    setDsPair(getSafeDoubleStopPair(CT.TUNING_BY[guitarTuning].open.length, dsInterval, dsPair));
+    setActiveTab(tab);
+    setScPos(0);
+    setScCi(0);
+    setScMode('simple');
+    setScZoom(CT.TUNING_BY[next === 'bass' ? bassTuning : guitarTuning].frets - 12);
+    window.location.hash = tab === 'prog' && progHash ? progHash : `#${tab}`;
+  }
+
+  function changeTuning(id: TuningId) {
+    const tuning = CT.TUNING_BY[id];
+    if (!tuning) return;
+    if (tuning.kind !== instrumentKind) { changeInstrument(tuning.kind); }
+    stopAllTransports();
+    if (tuning.kind === 'bass') setBassTuning(id); else setGuitarTuning(id);
+    setDsInst(id);
+    setDsPair(getSafeDoubleStopPair(tuning.open.length, dsInterval, dsPair));
+    setScZoom(tuning.frets - 12);
+    setScPos(0);
+  }
+
+  function playInstrumentChord(midis: number[], when?: number, dur = 1.4) {
+    if (isKeyboard) midis.forEach((midi) => audioEngine.keyboard(midi, when, dur));
+    else audioEngine.chord(midis, when, dur);
+  }
+
+  function playInstrumentBass(midi: number, when?: number, dur = 1.2) {
+    if (isKeyboard) audioEngine.keyboard(36 + CT.pc(midi), when, dur);
+    else audioEngine.bass(midi, when, dur);
+  }
 
   // 진행 연주 탭이 받은 해시("#prog?c=…") — 다른 탭에 갔다 돌아와도 같은 진행을 연다
   const [progHash, setProgHash] = useState<string>(() =>
@@ -189,6 +240,7 @@ export function ChordsPage(): React.ReactElement {
     setScPlaying(false);
     setScNow(null);
     setTonePlaying(false);
+    setToneIdx(-1);
     setMxPlaying(false);
     setCcPlaying(false);
     setRiPlaying(false);
@@ -197,6 +249,7 @@ export function ChordsPage(): React.ReactElement {
   }
 
   function handleTabChange(tabId: ChordTabId) {
+    if (!supportedTabs.includes(tabId)) tabId = 'scale';
     stopAllTransports();
     setActiveTab(tabId);
     try {
@@ -211,7 +264,9 @@ export function ChordsPage(): React.ReactElement {
 
   useEffect(() => {
     function handleHashChange() {
-      const h = tabFromHash(window.location.hash);
+      const requested = tabFromHash(window.location.hash);
+      const h = requested && supportedTabs.includes(requested) ? requested : requested ? 'scale' : null;
+      if (requested && requested !== h) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${h}`);
       if (h === 'prog') setProgHash(window.location.hash === '#prog' ? '' : window.location.hash);
       if (h && h !== activeTab) {
         stopAllTransports();
@@ -228,13 +283,12 @@ export function ChordsPage(): React.ReactElement {
       window.removeEventListener('hashchange', handleHashChange);
       stopAllTransports();
     };
-  }, [activeTab]);
+  }, [activeTab, instrumentKind]);
 
   // ================= 1. 스케일 연습 상태 =================
   const [scMode, setScMode] = useState<'simple' | 'circle'>('simple');
   const [scRoot, setScRoot] = useState<number>(0);
   const [scType, setScType] = useState<string>('pentMaj');
-  const [scInst, setScInst] = useState<TuningId>('g6');
   const [scBlock, setScBlock] = useState<number>(1);
   const [scLabel, setScLabel] = useState<'deg' | 'name' | 'none'>('deg');
   const [scHand, setScHand] = useState<'right' | 'left'>('right');
@@ -249,9 +303,9 @@ export function ChordsPage(): React.ReactElement {
   const [scNow, setScNow] = useState<{ s: number; f: number } | null>(null);
   const [scPlaying, setScPlaying] = useState<boolean>(false);
 
-  const scTuning = CT.TUNING_BY[scInst] || CT.TUNING_BY.g6;
+  const scTuning = CT.TUNING_BY[selectedTuning];
   const scIsCagedUnsupported = isCagedUnsupportedScale(scType);
-  const scEffBlock = scIsCagedUnsupported ? 0 : scBlock;
+  const scEffBlock = isKeyboard || scIsCagedUnsupported ? 0 : scBlock;
   const scCircleList = useMemo(() => CT.scaleCircle(scRoot, scType, scDir), [scRoot, scType, scDir]);
   const scCurrentKey = scMode === 'circle' ? scCircleList[scCi] : CT.scaleInfo(scRoot, scType);
 
@@ -279,6 +333,15 @@ export function ChordsPage(): React.ReactElement {
   const scWinHi = scWinLo + scWindowCount - 1;
 
   const scSeqNotes = useMemo<BoardNote[]>(() => {
+    if (isKeyboard) {
+      const notes = scCurrentKey.notes;
+      const up: BoardNote[] = [];
+      for (let pitch = 48 + scCurrentKey.root; pitch <= 48 + scCurrentKey.root + (scRange === 'oct' ? 12 : 24); pitch++) {
+        const meta = notes.find((n: any) => n.pc === CT.pc(pitch));
+        if (meta) up.push({ s: 0, f: pitch, pitch, deg: meta.deg, name: meta.name, isRoot: meta.iv === 0 });
+      }
+      return up.concat(up.slice(1, -1).reverse());
+    }
     if (scActiveBlockObj) {
       return CT.scaleBlockSeq(scActiveBlockObj.notes);
     }
@@ -306,7 +369,9 @@ export function ChordsPage(): React.ReactElement {
       return pick;
     });
     return up.concat(up.slice(1, -1).reverse());
-  }, [scActiveBlockObj, scCurrentKey.root, scType, scTuning.open, scWinLo, scWinHi, scRange]);
+  }, [isKeyboard, scActiveBlockObj, scCurrentKey.root, scType, scTuning.open, scWinLo, scWinHi, scRange]);
+  const scSequenceRef = useRef(scSeqNotes);
+  scSequenceRef.current = scSeqNotes;
 
   const scBoardNotes = useMemo<DiagramNote[]>(() => {
     const raw = CT.scaleOnBoard(scCurrentKey.root, scType, scTuning.open, scWinLo, scWinHi);
@@ -355,7 +420,8 @@ export function ChordsPage(): React.ReactElement {
   ]);
 
   function scPlayNote(midi: number, t?: number, dur = 0.55) {
-    if (scTuning.kind === 'bass') {
+    if (isKeyboard) audioEngine.keyboard(midi, t, dur);
+    else if (scTuning.kind === 'bass') {
       audioEngine.bassPluck(midi, t, dur);
     } else {
       audioEngine.pluck(midi, t, dur);
@@ -376,6 +442,7 @@ export function ChordsPage(): React.ReactElement {
     const intervalMs = (60 / scBpm) * 500; // 8분음표 단위
 
     const timerId = window.setInterval(() => {
+      seq = scSequenceRef.current;
       if (seq.length === 0) return;
       const note = seq[stepIdx % seq.length];
       const nowTime = audioEngine.now();
@@ -390,12 +457,12 @@ export function ChordsPage(): React.ReactElement {
         stepIdx = 0;
         localCi = (localCi + 1) % 12;
         setScCi(localCi);
-        audioEngine.bass(36 + scCircleList[localCi].root, audioEngine.now(), 1.0);
+        playInstrumentBass(36 + scCircleList[localCi].root, audioEngine.now(), 1.0);
       } else if (stepIdx >= seq.length && scMode === 'circle' && scBars === 0) {
         stepIdx = 0;
         localCi = (localCi + 1) % 12;
         setScCi(localCi);
-        audioEngine.bass(36 + scCircleList[localCi].root, audioEngine.now(), 1.0);
+        playInstrumentBass(36 + scCircleList[localCi].root, audioEngine.now(), 1.0);
       }
     }, intervalMs);
 
@@ -414,9 +481,36 @@ export function ChordsPage(): React.ReactElement {
   const [tonePlaying, setTonePlaying] = useState<boolean>(false);
 
   const toneNotes = useMemo(() => {
+    if (isKeyboard) {
+      const quality = CT.QBY[toneQ];
+      return [...Array(8)].map((_, index) => {
+        const slot = (toneStart + index) % 4;
+        const pitch = 48 + toneRoot + quality.iv[slot] + Math.floor((toneStart + index) / 4) * 12;
+        return { s: 0, f: pitch, pitch, slot, deg: quality.deg[slot], cls: slot === 0 ? 'root' : 'guide' };
+      });
+    }
+    if (selectedTuning !== 'g6') {
+      const tuning = CT.TUNING_BY[selectedTuning];
+      const quality = CT.QBY[toneQ];
+      const candidates: any[][] = [];
+      for (let fret = 0; fret <= tuning.frets; fret++) {
+        if (CT.pc(tuning.open[0] + fret) !== CT.pc(toneRoot + quality.iv[toneStart])) continue;
+        let previous = tuning.open[0] + fret - 1;
+        const notes = tuning.open.flatMap((open, s) => [0, 1].map((offset) => {
+          const slot = (toneStart + s * 2 + offset) % 4;
+          let pitch = previous + 1;
+          while (CT.pc(pitch) !== CT.pc(toneRoot + quality.iv[slot])) pitch++;
+          previous = pitch;
+          return { s, f: pitch - open, pitch, slot, deg: quality.deg[slot], cls: slot === 0 ? 'root' : 'guide' };
+        }));
+        if (notes.every((n) => n.f >= 0 && n.f <= tuning.frets)) candidates.push(notes);
+      }
+      candidates.sort((a, b) => Math.abs(a[0].f - toneNear) - Math.abs(b[0].f - toneNear));
+      return candidates[0] || [];
+    }
     const base = CT.arpeggio2nps(toneRoot, toneStart, toneNear);
     return CT.arpeggioAs(base, toneQ);
-  }, [toneRoot, toneStart, toneNear, toneQ]);
+  }, [isKeyboard, selectedTuning, toneRoot, toneStart, toneNear, toneQ]);
 
   const toneOrderList = useMemo(() => {
     const up = [...Array(toneNotes.length).keys()];
@@ -432,6 +526,8 @@ export function ChordsPage(): React.ReactElement {
       now: i === cur,
     }));
   }, [toneNotes, toneIdx, toneOrderList]);
+  const tonePlaybackRef = useRef({ notes: toneNotes, order: toneOrderList, quality: toneQ });
+  tonePlaybackRef.current = { notes: toneNotes, order: toneOrderList, quality: toneQ };
 
   // tone 탭 지판 가로 스크롤 상자 ref
   const toneScrollRef = useRef<HTMLDivElement | null>(null);
@@ -468,19 +564,20 @@ export function ChordsPage(): React.ReactElement {
     const intervalMs = (60 / toneBpm) * 500;
 
     const timerId = window.setInterval(() => {
-      if (!toneOrderList.length) return;
-      const k = step % toneOrderList.length;
-      const noteIdx = toneOrderList[k];
-      const n = toneNotes[noteIdx];
+      const latest = tonePlaybackRef.current;
+      if (!latest.order.length) return;
+      const k = step % latest.order.length;
+      const noteIdx = latest.order[k];
+      const n = latest.notes[noteIdx];
       const nowTime = audioEngine.now();
-      audioEngine.pluck(n.pitch, nowTime, 0.5);
+      scPlayNote(n.pitch, nowTime, 0.5);
       if (step % 2 === 0) {
         audioEngine.click(nowTime, k === 0);
       }
       setToneIdx(k);
       step++;
-      if (k === toneOrderList.length - 1 && toneAuto) {
-        const qi = CT.ARP_Q.indexOf(toneQ);
+      if (k === latest.order.length - 1 && toneAuto) {
+        const qi = CT.ARP_Q.indexOf(latest.quality);
         setToneQ(CT.ARP_Q[(qi + 1) % CT.ARP_Q.length]);
       }
     }, intervalMs);
@@ -554,7 +651,7 @@ export function ChordsPage(): React.ReactElement {
         const qId = CT.Q4[qIdx].id;
         const a = CT.atR0(mxDropStructure, activeMxSetObj.set, mxR0, qId);
         if (a.valid) {
-          audioEngine.chord(pitchesOf(a.notes), nowTime, (60 / mxBpm) * mxBeats * 0.9);
+          playInstrumentChord(pitchesOf(a.notes), nowTime, (60 / mxBpm) * mxBeats * 0.9);
         }
         setMxCur(qIdx);
         setMxQ(qId);
@@ -621,7 +718,7 @@ export function ChordsPage(): React.ReactElement {
   function ccStepSound(stepIdx: number) {
     const st = ccStepsList[stepIdx % 12];
     const nowTime = audioEngine.now() + 0.02;
-    audioEngine.bass(36 + CT.pc(st.root) + (CT.pc(st.root) < 4 ? 12 : 0), nowTime, 1.2);
+    playInstrumentBass(36 + CT.pc(st.root) + (CT.pc(st.root) < 4 ? 12 : 0), nowTime, 1.2);
     if (ccTopSnd) {
       audioEngine.pluck(CT.OPEN[ccStr] + ccTopFret, nowTime + 0.01, 1.2);
     }
@@ -662,7 +759,7 @@ export function ChordsPage(): React.ReactElement {
         }
         const st = ccStepsList[localIdx];
         const dur = (60 / ccBpm) * ccBeats * 0.95;
-        audioEngine.bass(36 + CT.pc(st.root) + (CT.pc(st.root) < 4 ? 12 : 0), nowTime, dur);
+        playInstrumentBass(36 + CT.pc(st.root) + (CT.pc(st.root) < 4 ? 12 : 0), nowTime, dur);
         if (ccTopSnd) {
           audioEngine.pluck(CT.OPEN[ccStr] + ccTopFret, nowTime + 0.01, dur);
         }
@@ -675,6 +772,8 @@ export function ChordsPage(): React.ReactElement {
 
   // ================= 5. 코드 재해석 상태 =================
   const [riFrets, setRiFrets] = useState<number[]>(() => [...REINT_PRESETS[0].frets]);
+  const [riKeyboardPitches, setRiKeyboardPitches] = useState<number[]>([48, 52, 55, 59]);
+  const [riInputPitch, setRiInputPitch] = useState(60);
   const [riPreset, setRiPreset] = useState<string>(DEFAULT_REINT_PRESET_ID);
   const [riPick, setRiPick] = useState<number | null>(0);
   const [riKey, setRiKey] = useState<number>(0);
@@ -693,11 +792,11 @@ export function ChordsPage(): React.ReactElement {
   const [quizFeedback, setQuizFeedback] = useState<{ text: string; good: boolean } | null>(null);
 
   const riNotes = useMemo(
-    () =>
+    () => isKeyboard ? riKeyboardPitches.map((pitch, index) => ({ s: index, f: pitch, pitch })) :
       riFrets
         .map((f, s) => (f < 0 ? null : { s, f, pitch: CT.OPEN[s] + f }))
         .filter(Boolean) as Array<{ s: number; f: number; pitch: number }>,
-    [riFrets]
+    [riFrets, isKeyboard, riKeyboardPitches]
   );
 
   const riInterpretList = useMemo(() => CT.interpret(riNotes), [riNotes]);
@@ -727,13 +826,15 @@ export function ChordsPage(): React.ReactElement {
     return roles.map((ro) => {
       const it = riInterpretList.find((x: any) => ro.fams.includes(x.fam));
       if (!it) return { ro, none: true };
-      const tn = CT.transposeShape(riNotes, it.root, ro.root);
+      const shift = CT.pc(ro.root - it.root);
+      const delta = shift > 6 ? shift - 12 : shift;
+      const tn = isKeyboard ? riNotes.map((note) => ({ ...note, f: note.f + delta, pitch: note.pitch + delta })) : CT.transposeShape(riNotes, it.root, ro.root);
       if (!tn) return { ro, none: true };
       const d = tn[0].f - riNotes[0].f;
       const name = CT.NAMES[ro.root] + it.name.slice(CT.NAMES[it.root].length);
       return { ro, it, notes: tn, name, d };
     });
-  }, [riNotes, riKey, riInterpretList]);
+  }, [riNotes, riKey, riInterpretList, isKeyboard]);
 
   function startNewQuiz() {
     const p = REINT_PRESETS[Math.floor(Math.random() * REINT_PRESETS.length)];
@@ -759,7 +860,7 @@ export function ChordsPage(): React.ReactElement {
           ok: r === it.root,
         })),
         explain: `${it.name} · ${notes
-          .map((n, k) => t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[k] }))
+          .map((n, k) => isKeyboard ? `${CT.NAMES[CT.pc(n.pitch)]}${Math.floor(n.pitch / 12) - 1}: ${it.degs[k]}` : t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[k] }))
           .reverse()
           .join(', ')}`,
       };
@@ -770,12 +871,12 @@ export function ChordsPage(): React.ReactElement {
         text: t('chords.quizQuestionTwo', { name: it.name, deg: it.degs[k] }),
         opts: shuffle(
           notes.map((n, j) => ({
-            label: t('chords.quizStringOnly', { str: 6 - n.s }),
+            label: isKeyboard ? `${CT.NAMES[CT.pc(n.pitch)]}${Math.floor(n.pitch / 12) - 1}` : t('chords.quizStringOnly', { str: 6 - n.s }),
             ok: j === k || it.degs[j] === it.degs[k],
           }))
         ),
         explain: notes
-          .map((n, j) => t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[j] }))
+          .map((n, j) => isKeyboard ? `${CT.NAMES[CT.pc(n.pitch)]}${Math.floor(n.pitch / 12) - 1}: ${it.degs[j]}` : t('chords.quizStringDegree', { str: 6 - n.s, deg: it.degs[j] }))
           .reverse()
           .join(', '),
       };
@@ -787,7 +888,7 @@ export function ChordsPage(): React.ReactElement {
 
   useEffect(() => {
     startNewQuiz();
-  }, []);
+  }, [isKeyboard]);
 
   function toggleRiPlay() {
     if (riPlaying) {
@@ -808,10 +909,10 @@ export function ChordsPage(): React.ReactElement {
       const spb = 60 / riBpm;
       if (p) {
         if (k === 0) {
-          audioEngine.bass(36 + p.ro.root + (p.ro.root < 4 ? 12 : 0), nowTime, spb * 3.8);
+          playInstrumentBass(36 + p.ro.root + (p.ro.root < 4 ? 12 : 0), nowTime, spb * 3.8);
         }
         if ((k === 0 || k === 2) && !p.none) {
-          audioEngine.chord(pitchesOf(p.notes), nowTime + 0.01, spb * 1.8);
+          playInstrumentChord(pitchesOf(p.notes), nowTime + 0.01, spb * 1.8);
         }
       }
       beat++;
@@ -831,18 +932,42 @@ export function ChordsPage(): React.ReactElement {
   const [tfUsePent, setTfUsePent] = useState<boolean>(true);
   const [tfVariants, setTfVariants] = useState<boolean>(false);
   const [tfStatus, setTfStatus] = useState<string>('');
-  const [tfOkList, setTfOkList] = useState<any[]>([]);
+  const [tfResults, setTfResults] = useState<{ keyboard: boolean; results: any[] }>({ keyboard: false, results: [] });
+  const tfOkList = tfResults.keyboard === isKeyboard ? tfResults.results : [];
   const [tfKey, setTfKey] = useState<number | null>(null);
   const [tfP, setTfP] = useState<number>(0);
   const [tfC, setTfC] = useState<number>(0);
   const [tfPlaying, setTfPlaying] = useState<boolean>(false);
 
   function runTfSearch() {
+    stopAllTransports();
     setTfStatus(t('chords.tfSearching'));
     const timerId = window.setTimeout(() => {
       const lo = tfLo;
       const hi = Math.max(lo, tfHi);
-      const res = GE.search251({
+      let res: any[];
+      if (isKeyboard) {
+        const pent = GE.pentPcs(tfProot, tfPtype);
+        const qualities = tfKind === 'major' ? [['m7', 'm9', 'm11'], ['7', '9', '13'], ['maj7', 'maj9', '6']]
+          : [['m7b5'], ['7', '9', '13'], ['m7', 'm6', 'm9']];
+        res = Array.from({ length: 12 }, (_, key) => {
+          const paths = Array.from({ length: tfVariants ? 3 : 1 }, (_, variant) => {
+            const chords = [2, 7, 0].map((interval, index) => {
+              const root = CT.pc(key + interval);
+              const q = qualities[index][variant % qualities[index].length];
+              const notes = GE.CH[q].map((degree, slot) => {
+                const pitch = 48 + root + GE.DEG[degree][0];
+                return { s: slot, f: 0, pitch, deg: degree, cls: degree === 'R' ? 'root' : ['3', 'b3', '7', 'b7', 'bb7'].includes(degree) ? 'guide' : '' };
+              });
+              return { root, q, name: GE.chordName(root, q), notes,
+                outside: notes.filter((note) => !pent.includes(CT.pc(note.pitch))).length,
+                guide: notes.filter((note) => note.cls === 'guide').length };
+            });
+            return { chords };
+          }).filter((path) => path.chords.every((chord) => chord.guide >= tfNeedGuide && (!tfUsePent || chord.outside <= tfOutsideMax)));
+          return { key, paths };
+        });
+      } else res = GE.search251({
         kind: tfKind,
         lo,
         hi,
@@ -853,8 +978,8 @@ export function ChordsPage(): React.ReactElement {
         pent: tfUsePent ? { root: tfProot, type: tfPtype } : null,
       });
       const ok = res.filter((k: any) => k.paths.length);
-      setTfStatus(t('chords.tfResultStatus', { lo, hi, count: ok.length }));
-      setTfOkList(ok);
+      setTfStatus(isKeyboard ? t('chords.keyboardTfResults', { count: ok.length }) : t('chords.tfResultStatus', { lo, hi, count: ok.length }));
+      setTfResults({ keyboard: isKeyboard, results: ok });
       if (!ok.some((k: any) => k.key === tfKey)) {
         setTfKey(ok.length ? ok[0].key : null);
         setTfP(0);
@@ -865,8 +990,8 @@ export function ChordsPage(): React.ReactElement {
   }
 
   useEffect(() => {
-    runTfSearch();
-  }, []);
+    if (activeTab === 'tf') runTfSearch();
+  }, [activeTab, isKeyboard]);
 
   const tfCurrentPath = useMemo(() => {
     if (tfKey == null) return null;
@@ -875,20 +1000,22 @@ export function ChordsPage(): React.ReactElement {
   }, [tfKey, tfOkList, tfP]);
 
   function playTfSequence() {
+    if (tfPlaying) { stopAllTransports(); return; }
     if (!tfCurrentPath) return;
+    stopAllTransports();
     audioEngine.resume();
     setTfPlaying(true);
     const path = tfCurrentPath;
-    const t0 = audioEngine.now() + 0.05;
     path.chords.forEach((c: any, i: number) => {
-      audioEngine.bass(36 + CT.pc(c.root) + (CT.pc(c.root) < 4 ? 12 : 0), t0 + i * 1.6, 1.5);
-      audioEngine.chord(pitchesOf(c.notes), t0 + i * 1.6 + 0.02, 1.5);
       const tid = window.setTimeout(() => {
+        const now = audioEngine.now();
+        playInstrumentBass(36 + CT.pc(c.root) + (CT.pc(c.root) < 4 ? 12 : 0), now, 1.5);
+        playInstrumentChord(pitchesOf(c.notes), now, 1.5);
         setTfC(i);
-        if (i === path.chords.length - 1) setTfPlaying(false);
-      }, 50 + i * 1600);
+      }, i * 1600);
       timersRef.current.push(tid);
     });
+    timersRef.current.push(window.setTimeout(() => setTfPlaying(false), path.chords.length * 1600));
   }
 
   // ================= 7. 더블 스탑 연습 상태 =================
@@ -1018,11 +1145,29 @@ export function ChordsPage(): React.ReactElement {
         <p className={styles.subText}>
           {t('chords.pageSub')}
         </p>
+        <div className={styles.instrumentControls} data-align-group="instrumentFlow:left">
+          <div className={styles.field}>
+            <span id="instrument-label" className={styles.lab}>{t('chords.instrumentSelectLab')}</span>
+            <div id="instrument-kind" className={styles.chips} role="group" aria-labelledby="instrument-label">
+              {(['guitar', 'bass', 'keyboard'] as const).map((kind) => <button
+                key={kind} id={`instrument-${kind}`} type="button" className={styles.chip}
+                data-align-group="instrumentButtons:height" aria-pressed={instrumentKind === kind}
+                onClick={() => changeInstrument(kind)}>{t(INSTRUMENT_NAME_KEY[kind])}</button>)}
+            </div>
+          </div>
+          {!isKeyboard && <div className={styles.field}>
+            <label htmlFor="instrument-tuning">{t('chords.instrumentTuning')}</label>
+            <select id="instrument-tuning" className={styles.selectField} value={selectedTuning}
+              onChange={(event) => changeTuning(event.target.value as TuningId)}>
+              {availableTunings.map((tuning) => <option key={tuning.id} value={tuning.id}>{t(TUNING_NAME_KEY[tuning.id])}</option>)}
+            </select>
+          </div>}
+        </div>
       </header>
 
       {/* 상단 탭 내비게이션 */}
-      <nav className={styles.tabs} role="tablist" aria-label={t('chords.tabListAria')}>
-        {CHORD_TABS.map((tab) => (
+      <nav className={styles.tabs} role="tablist" aria-label={t('chords.tabListAria')} data-align-group="instrumentFlow:left">
+        {CHORD_TABS.filter((tab) => supportedTabs.includes(tab.id)).map((tab) => (
           <button
             key={tab.id}
             id={`tab-${tab.id}`}
@@ -1031,6 +1176,15 @@ export function ChordsPage(): React.ReactElement {
             className={styles.tab}
             data-align-group="tabs: top,height"
             aria-selected={activeTab === tab.id}
+            aria-controls={`pane-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            onKeyDown={(event) => {
+              const index = supportedTabs.indexOf(tab.id);
+              const next = event.key === 'ArrowRight' ? supportedTabs[(index + 1) % supportedTabs.length]
+                : event.key === 'ArrowLeft' ? supportedTabs[(index + supportedTabs.length - 1) % supportedTabs.length]
+                : event.key === 'Home' ? supportedTabs[0] : event.key === 'End' ? supportedTabs[supportedTabs.length - 1] : null;
+              if (next) { event.preventDefault(); handleTabChange(next); document.getElementById(`tab-${next}`)?.focus(); }
+            }}
             onClick={() => handleTabChange(tab.id)}
           >
             {t(tab.labelKey)}
@@ -1069,7 +1223,7 @@ export function ChordsPage(): React.ReactElement {
                 dir={scDir}
                 onSelectKey={(i) => {
                   setScCi(i);
-                  audioEngine.bass(36 + scCircleList[i].root, audioEngine.now() + 0.02, 1.2);
+                  playInstrumentBass(36 + scCircleList[i].root, audioEngine.now() + 0.02, 1.2);
                 }}
               />
             </div>
@@ -1113,7 +1267,9 @@ export function ChordsPage(): React.ReactElement {
           {/* 지판 */}
           <div className={styles.scroll} data-align-group="scBoardFlow:left,right">
             <div id="sc-board">
-              <NeckSvg
+              {isKeyboard ? <KeyboardDiagramSvg label={scCurrentKey.name} notes={scSeqNotes.slice(0, Math.ceil(scSeqNotes.length / 2) + 1).filter((note) => !scRootOnly || note.isRoot || scNow?.f === note.f).map((n) => ({
+                pitch: n.pitch, text: scLabel === 'name' ? n.name : scLabel === 'deg' ? n.deg : '', now: scNow?.f === n.f,
+              }))} /> : <NeckSvg
                 open={scTuning.open}
                 isBass={scTuning.kind === 'bass'}
                 lo={scWinLo}
@@ -1123,12 +1279,12 @@ export function ChordsPage(): React.ReactElement {
                 label={t('chords.fretboardKeyLabel', { name: scCurrentKey.name })}
                 notes={scBoardNotes}
                 onNoteClick={(pitch) => scPlayNote(pitch, audioEngine.now() + 0.02)}
-              />
+              />}
             </div>
           </div>
 
           {/* CAGED 5블럭 선택기 */}
-          <div className={styles.field} data-align-group="scBoardFlow:left,right">
+          <div className={styles.field} data-align-group="scBoardFlow:left,right" hidden={isKeyboard}>
             <span id="sc-block-label" className={styles.lab}>{t('chords.cagedBlockSelectLab')}</span>
             <div id="sc-block" className={styles.chips} role="group" aria-labelledby="sc-block-label">
               {CAGED_BLOCK_CHIPS.map((b) => (
@@ -1151,7 +1307,11 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           {/* 범례 */}
-          <div className={styles.legend} data-align-group="scBoardFlow:left,right">
+          {isKeyboard && <div className={styles.legend} data-align-group="scBoardFlow:left,right">
+            <span><i className="g" />{t('chords.legendScaleNotes')}</span>
+            <span><i className="n" />{t('chords.legendCurrentPlaying')}</span>
+          </div>}
+          <div className={styles.legend} data-align-group="scBoardFlow:left,right" hidden={isKeyboard}>
             <span><i className="r" />{t('chords.legendRoot')}</span>
             <span><i className="g" />{t('chords.legendScaleNotes')}</span>
             <span><i className="ctxk" />{t('chords.legendOutNotes')}</span>
@@ -1162,7 +1322,7 @@ export function ChordsPage(): React.ReactElement {
           </div>
 
           {/* 슬라이더 컨트롤 */}
-          <div className={styles.scSliders}>
+          <div className={styles.scSliders} hidden={isKeyboard}>
             <label className={styles.scSl}>
               {t('chords.sliderZoom')}
               <input
@@ -1191,42 +1351,6 @@ export function ChordsPage(): React.ReactElement {
 
         {/* 프렛보드 및 스케일 설정 패널 */}
         <div className={styles.panel}>
-          {/* 악기 선택 필 칩 */}
-          <div className={styles.field}>
-            <span className={styles.lab}>{t('chords.instrumentSelectLab')}</span>
-            <div id="sc-inst-chips" className={styles.chips}>
-              {CT.TUNINGS.map((tun) => (
-                <button
-                  key={tun.id}
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scInst === tun.id}
-                  onClick={() => {
-                    setScInst(tun.id);
-                    setScZoom(Math.max(0, (CT.TUNING_BY[tun.id]?.frets || 22) + 1 - 13));
-                    setScPos(0);
-                  }}
-                >
-                  {TUNING_NAME_KEY[tun.id] ? t(TUNING_NAME_KEY[tun.id]) : tun.name}
-                  <small>{t('chords.tuningSummary', { strings: tun.open.length, frets: tun.frets })}</small>
-                </button>
-              ))}
-            </div>
-            {/* 하위 호환용 hidden select */}
-            <select
-              id="sc-inst"
-              value={scInst}
-              onChange={(e) => setScInst(e.target.value as TuningId)}
-              hidden
-            >
-              {CT.TUNINGS.map((tun) => (
-                <option key={tun.id} value={tun.id}>
-                  {TUNING_NAME_KEY[tun.id] ? t(TUNING_NAME_KEY[tun.id]) : tun.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className={styles.controls}>
             <div className={styles.field}>
               <span className={styles.lab}>{t('chords.practiceModeLab')}</span>
@@ -1310,7 +1434,7 @@ export function ChordsPage(): React.ReactElement {
               </div>
             </div>
 
-            <div className={styles.field}>
+            <div className={styles.field} hidden={isKeyboard}>
               <span className={styles.lab}>{t('chords.handednessLab')}</span>
               <div id="sc-hand" className={styles.chips}>
                 <button
@@ -1432,7 +1556,8 @@ export function ChordsPage(): React.ReactElement {
               {scPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
             <span id="sc-status" className={styles.status}>
-              {t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
+              {isKeyboard ? t('chords.keyboardScaleCount', { from: `${CT.NAMES[scCurrentKey.root]}3`, to: `${CT.NAMES[scCurrentKey.root]}${scRange === 'oct' ? 4 : 5}`, count: new Set(scSeqNotes.map((note) => note.pitch)).size })
+                : t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
             </span>
           </div>
         </div>
@@ -1442,7 +1567,7 @@ export function ChordsPage(): React.ReactElement {
       <section id="pane-tone" role="tabpanel" className={styles.pane} hidden={activeTab !== 'tone'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>{t('chords.toneIntroBold')}</b> {t('chords.toneIntroText')}
+            {isKeyboard ? t('chords.keyboardToneIntro') : <><b>{t('chords.toneIntroBold')}</b> {t('chords.toneIntroText')}</>}
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
@@ -1460,7 +1585,7 @@ export function ChordsPage(): React.ReactElement {
                 ))}
               </select>
             </div>
-            <div className={styles.field}>
+            <div className={styles.field} hidden={isKeyboard}>
               <label htmlFor="tone-near">{t('chords.startFretNearLabel')}</label>
               <input
                 id="tone-near"
@@ -1563,18 +1688,19 @@ export function ChordsPage(): React.ReactElement {
           </h3>
           <div ref={toneScrollRef} className={styles.scroll}>
             <div id="tone-board">
-              <FretboardSvg
+              {isKeyboard ? <KeyboardDiagramSvg notes={toneBoardNotes.map((n) => ({ pitch: n.pitch!, text: n.deg, now: n.now }))} label={`${CT.NAMES[toneRoot]}${CT.QBY[toneQ]?.name}`} />
+              : selectedTuning !== 'g6' ? <NeckSvg open={scTuning.open} isBass={scTuning.kind === 'bass'} lo={0} hi={Math.max(15, ...toneNotes.map((n: any) => n.f))} notes={toneBoardNotes} label={`${CT.NAMES[toneRoot]} 2NPS`} /> : <FretboardSvg
                 from={0}
                 to={Math.max(15, Math.min(22, Math.max(...toneNotes.map((n: any) => n.f)) + 1))}
                 label={`${CT.NAMES[toneRoot]}${CT.QBY[toneQ]?.name} 2-note-per-string`}
                 notes={toneBoardNotes}
-              />
+              />}
             </div>
           </div>
           <div id="tone-seq" className={styles.seq}>
             {(toneDir === 'down' ? [...toneNotes].reverse() : toneNotes).map((n: any, i: number) => (
               <span key={i} className={`seqn ${n.cls || ''} ${n.moved ? 'moved' : ''}`}>
-                {6 - n.s}·{n.f}
+                {isKeyboard ? `${CT.NAMES[CT.pc(n.pitch)]}${Math.floor(n.pitch / 12) - 1}` : `${scTuning.open.length - n.s}·${n.f}`}
                 <b>{n.deg}</b>
               </span>
             ))}
@@ -1583,7 +1709,7 @@ export function ChordsPage(): React.ReactElement {
       </section>
 
       {/* 3. 보이싱 매트릭스 패널 */}
-      <section id="pane-matrix" role="tabpanel" className={styles.pane} hidden={activeTab !== 'matrix'}>
+      {supportedTabs.includes('matrix') && (<section id="pane-matrix" role="tabpanel" className={styles.pane} hidden={activeTab !== 'matrix'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
             <b>{t('chords.matrixIntroBold')}</b> {t('chords.matrixIntroText')}
@@ -1762,7 +1888,7 @@ export function ChordsPage(): React.ReactElement {
                   onClick={() => {
                     setMxQ(q.id);
                     if (a.valid) {
-                      audioEngine.chord(pitchesOf(a.notes), audioEngine.now() + 0.02);
+                      playInstrumentChord(pitchesOf(a.notes), audioEngine.now() + 0.02);
                     }
                   }}
                 >
@@ -1784,10 +1910,10 @@ export function ChordsPage(): React.ReactElement {
           </div>
           <div id="mx-alt" />
         </div>
-      </section>
+      </section>)}
 
       {/* 4. 탑노트 5도권 패널 */}
-      <section id="pane-circle" role="tabpanel" className={styles.pane} hidden={activeTab !== 'circle'}>
+      {supportedTabs.includes('circle') && (<section id="pane-circle" role="tabpanel" className={styles.pane} hidden={activeTab !== 'circle'}>
         <div className={styles.panel}>
           <div className={styles.ccTop}>
             <div id="cc-wheel">
@@ -1953,7 +2079,7 @@ export function ChordsPage(): React.ReactElement {
                 className={`${styles.cell} ${i === ccHsel ? styles.dsStepCardSel : ''}`}
                 onClick={() => {
                   setCcHsel(i);
-                  audioEngine.chord(
+                  playInstrumentChord(
                     h.v.notes.map((n: any) => n.pitch),
                     audioEngine.now() + 0.02
                   );
@@ -2004,13 +2130,13 @@ export function ChordsPage(): React.ReactElement {
             <div id="cc-alllist" />
           </details>
         </div>
-      </section>
+      </section>)}
 
       {/* 5. 코드 재해석 패널 */}
-      <section id="pane-reint" role="tabpanel" className={styles.pane} hidden={activeTab !== 'reint'}>
+      {supportedTabs.includes('reint') && (<section id="pane-reint" role="tabpanel" className={styles.pane} hidden={activeTab !== 'reint'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>{t('chords.reintIntroBold')}</b> {t('chords.reintIntroText')}
+            {isKeyboard ? t('chords.keyboardReintIntro') : <><b>{t('chords.reintIntroBold')}</b> {t('chords.reintIntroText')}</>}
           </p>
           <div className={styles.field}>
             <span className={styles.lab}>{t('chords.presetFormLab')}</span>
@@ -2020,11 +2146,13 @@ export function ChordsPage(): React.ReactElement {
                   key={p.id}
                   type="button"
                   className={styles.chip}
-                  title={t(p.hintKey)}
+                  title={isKeyboard ? undefined : t(p.hintKey)}
                   aria-pressed={riPreset === p.id}
                   onClick={() => {
+                    stopAllTransports();
                     setRiPreset(p.id);
                     setRiFrets([...p.frets]);
+                    setRiKeyboardPitches(p.frets.flatMap((f, index) => f < 0 ? [] : [CT.OPEN[index] + f]));
                     setRiPick(0);
                   }}
                 >
@@ -2044,7 +2172,7 @@ export function ChordsPage(): React.ReactElement {
 
           <div className={styles.scroll}>
             <div id="ri-board">
-              <FretboardSvg
+              {isKeyboard ? <KeyboardDiagramSvg notes={riNotes.map((note, index) => ({ pitch: note.pitch, text: riSelectedInterp?.degs[index], hand: index === 0 ? 'lh' : 'rh' }))} split label={t('chords.reintInputLabel')} /> : <FretboardSvg
                 from={0}
                 to={15}
                 clickable
@@ -2060,9 +2188,23 @@ export function ChordsPage(): React.ReactElement {
                     audioEngine.pluck(CT.OPEN[s] + f, audioEngine.now() + 0.02, 0.8);
                   }
                 }}
-              />
+              />}
             </div>
           </div>
+          {isKeyboard && <div className={styles.controls}>
+            <div className={styles.field}>
+              <label htmlFor="ri-keyboard-note">{t('chords.keyboardNote')}</label>
+              <select id="ri-keyboard-note" className={styles.selectField} value={riInputPitch} onChange={(event) => setRiInputPitch(+event.target.value)}>
+                {Array.from({ length: 48 }, (_, index) => 36 + index).map((pitch) => <option value={pitch} key={pitch}>{CT.NAMES[CT.pc(pitch)]}{Math.floor(pitch / 12) - 1}</option>)}
+              </select>
+            </div>
+            <button id="ri-keyboard-toggle" type="button" className={styles.btn} aria-pressed={riKeyboardPitches.includes(riInputPitch)} onClick={() => {
+              stopAllTransports();
+              setRiKeyboardPitches((pitches) => pitches.includes(riInputPitch) ? pitches.filter((pitch) => pitch !== riInputPitch) : [...pitches, riInputPitch].sort((a, b) => a - b));
+              setRiPreset('custom'); setRiPick(0);
+              audioEngine.keyboard(riInputPitch, audioEngine.now(), 0.8);
+            }}>{t('chords.keyboardToggleNote')}</button>
+          </div>}
 
           <div className={styles.row}>
             <button
@@ -2070,7 +2212,7 @@ export function ChordsPage(): React.ReactElement {
               type="button"
               className={styles.btn}
               onClick={() => {
-                if (riNotes.length) audioEngine.chord(pitchesOf(riNotes), audioEngine.now() + 0.02);
+                if (riNotes.length) playInstrumentChord(pitchesOf(riNotes), audioEngine.now() + 0.02);
               }}
             >
               {t('chords.btnListenSound')}
@@ -2080,12 +2222,14 @@ export function ChordsPage(): React.ReactElement {
               type="button"
               className={styles.ghost}
               onClick={() => {
+                stopAllTransports();
                 setRiFrets([-1, -1, -1, -1, -1, -1]);
+                setRiKeyboardPitches([]);
                 setRiPreset('custom');
                 setRiPick(0);
               }}
             >
-              {t('chords.btnClearFretboard')}
+              {isKeyboard ? t('chords.keyboardClear') : t('chords.btnClearFretboard')}
             </button>
           </div>
         </div>
@@ -2095,9 +2239,9 @@ export function ChordsPage(): React.ReactElement {
             <div id="ri-shape">
               {riNotes.length ? (
                 <figure className={styles.cell}>
-                  <ChordBoxSvg notes={riDegNotes} label={t('chords.currentShapeLabel')} />
+                  <>{isKeyboard ? <KeyboardDiagramSvg notes={riNotes} label={t('chords.currentShapeLabel')} /> : <ChordBoxSvg notes={riDegNotes} label={t('chords.currentShapeLabel')} />}</>
                   <figcaption>
-                    <b>{fretText(riNotes)}</b>
+                    <b>{isKeyboard ? riNotes.map((note) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(riNotes)}</b>
                   </figcaption>
                 </figure>
               ) : (
@@ -2114,8 +2258,8 @@ export function ChordsPage(): React.ReactElement {
                   onClick={() => {
                     setRiPick(riPick === i ? null : i);
                     const nowTime = audioEngine.now() + 0.02;
-                    audioEngine.bass(36 + interp.root + (interp.root < 4 ? 12 : 0), nowTime, 2);
-                    audioEngine.chord(pitchesOf(riNotes), nowTime + 0.05, 2);
+                    playInstrumentBass(36 + interp.root + (interp.root < 4 ? 12 : 0), nowTime, 2);
+                    playInstrumentChord(pitchesOf(riNotes), nowTime + 0.05, 2);
                   }}
                 >
                   <b>{interp.name}</b>
@@ -2168,13 +2312,13 @@ export function ChordsPage(): React.ReactElement {
             {riSwapPlan.map((p, i) => (
               <figure key={i} className={styles.cell}>
                 {!p.none ? (
-                  <ChordBoxSvg notes={p.notes} label={p.name} />
+                  <>{isKeyboard ? <KeyboardDiagramSvg notes={p.notes} label={p.name!} /> : <ChordBoxSvg notes={p.notes} label={p.name} />}</>
                 ) : (
                   <div className={styles.empty}>{t('chords.shapeImpossible')}</div>
                 )}
                 <figcaption>
                   <b>{p.ro.r} {p.name}</b>
-                  <span>{p.notes ? fretText(p.notes) : ''}</span>
+                  <span>{p.notes ? isKeyboard ? p.notes.map((note: any) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(p.notes) : ''}</span>
                 </figcaption>
               </figure>
             ))}
@@ -2185,7 +2329,7 @@ export function ChordsPage(): React.ReactElement {
           <div className={styles.quiz}>
             <div id="qz-box">
               {quizQuestion && (
-                <ChordBoxSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} />
+                <>{isKeyboard ? <KeyboardDiagramSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} /> : <ChordBoxSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} />}</>
               )}
             </div>
             <div className={styles.field}>
@@ -2230,7 +2374,7 @@ export function ChordsPage(): React.ReactElement {
                   type="button"
                   className={styles.ghost}
                   onClick={() => {
-                    if (quizQuestion) audioEngine.chord(pitchesOf(quizQuestion.notes), audioEngine.now() + 0.02);
+                    if (quizQuestion) playInstrumentChord(pitchesOf(quizQuestion.notes), audioEngine.now() + 0.02);
                   }}
                 >
                   {t('chords.btnListenSound')}
@@ -2242,13 +2386,13 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
         </div>
-      </section>
+      </section>)}
 
       {/* 6. 2-5-1 탐색 패널 */}
-      <section id="pane-tf" role="tabpanel" className={styles.pane} hidden={activeTab !== 'tf'}>
+      {supportedTabs.includes('tf') && (<section id="pane-tf" role="tabpanel" className={styles.pane} hidden={activeTab !== 'tf'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
-            <b>{t('chords.tfIntroBold')}</b> {t('chords.tfIntroText')}
+            {isKeyboard ? t('chords.keyboardTfIntro') : <><b>{t('chords.tfIntroBold')}</b> {t('chords.tfIntroText')}</>}
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
@@ -2263,7 +2407,7 @@ export function ChordsPage(): React.ReactElement {
                 <option value="minor">{t('chords.tfMinorTwoFiveOne')}</option>
               </select>
             </div>
-            <div className={styles.field}>
+            <div className={styles.field} hidden={isKeyboard}>
               <label htmlFor="a-lo">{t('chords.fretStartLabel')}</label>
               <input
                 id="a-lo"
@@ -2275,7 +2419,7 @@ export function ChordsPage(): React.ReactElement {
                 onChange={(e) => setTfLo(+e.target.value)}
               />
             </div>
-            <div className={styles.field}>
+            <div className={styles.field} hidden={isKeyboard}>
               <label htmlFor="a-hi">{t('chords.fretEndLabel')}</label>
               <input
                 id="a-hi"
@@ -2396,7 +2540,7 @@ export function ChordsPage(): React.ReactElement {
                 aria-pressed={tfC === i}
                 onClick={() => {
                   setTfC(i);
-                  audioEngine.chord(pitchesOf(c.notes), audioEngine.now() + 0.02, 1.5);
+                  playInstrumentChord(pitchesOf(c.notes), audioEngine.now() + 0.02, 1.5);
                 }}
               >
                 {ROMAN[tfKind][i]} · {c.name}
@@ -2406,7 +2550,7 @@ export function ChordsPage(): React.ReactElement {
 
           <div className={styles.scroll}>
             <div id="a-board">
-              {tfCurrentPath && (
+              {tfCurrentPath && (isKeyboard ? <KeyboardDiagramSvg notes={tfCurrentPath.chords[tfC].notes} label={t('chords.tfFretboardLabel')} /> :
                 <ChordNeckSvg
                   press={geNotesToDiagram(tfCurrentPath.chords[tfC])}
                   ctx={buildCtxNotes(
@@ -2420,7 +2564,7 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
           <div id="a-vctxl" className={styles.note}>
-            {t('chords.tfSameChordToneFull')}
+            {isKeyboard ? t('chords.keyboardToneContext') : t('chords.tfSameChordToneFull')}
           </div>
 
           <div id="a-out-list" className={styles.results}>
@@ -2429,7 +2573,7 @@ export function ChordsPage(): React.ReactElement {
                 <h4 className={styles.h3}>
                   {CT.NAMES[k.key]} {tfKind === 'minor' ? t('chords.minor') : t('chords.major')} {t('chords.tfProgTitle')}
                 </h4>
-                <div className={styles.boxrowTight}>
+                <div className={isKeyboard ? styles.keyboardSequence : styles.boxrowTight}>
                   {k.paths[0].chords.map((c: any, ci: number) => (
                     <figure
                       key={ci}
@@ -2439,13 +2583,13 @@ export function ChordsPage(): React.ReactElement {
                         setTfKey(k.key);
                         setTfP(0);
                         setTfC(ci);
-                        audioEngine.chord(pitchesOf(c.notes), audioEngine.now() + 0.02, 1.5);
+                        playInstrumentChord(pitchesOf(c.notes), audioEngine.now() + 0.02, 1.5);
                       }}
                     >
-                      <ChordBoxSvg notes={geNotesToDiagram(c)} label={c.name} />
+                      <>{isKeyboard ? <KeyboardDiagramSvg notes={c.notes} label={c.name} /> : <ChordBoxSvg notes={geNotesToDiagram(c)} label={c.name} />}</>
                       <figcaption>
                         <b>{c.name}</b>
-                        <span>{GE.fretStr(c)}</span>
+                        <span>{isKeyboard ? c.notes.map((note: any) => CT.NAMES[CT.pc(note.pitch)]).join(' · ') : GE.fretStr(c)}</span>
                       </figcaption>
                     </figure>
                   ))}
@@ -2454,10 +2598,10 @@ export function ChordsPage(): React.ReactElement {
             ))}
           </div>
         </div>
-      </section>
+      </section>)}
 
       {/* 7. 더블 스탑 연습 패널 */}
-      <section id="pane-ds" role="tabpanel" className={styles.pane} hidden={activeTab !== 'ds'}>
+      {supportedTabs.includes('ds') && (<section id="pane-ds" role="tabpanel" className={styles.pane} hidden={activeTab !== 'ds'}>
         <div className={styles.panel}>
           <p className={styles.lead}>
             <b>{t('chords.dsIntroBold')}</b> {t('chords.dsIntroText')}
@@ -2466,7 +2610,7 @@ export function ChordsPage(): React.ReactElement {
           <div className={styles.field}>
             <span className={styles.lab}>{t('chords.dsInstrumentLab')}</span>
             <div id="ds-inst" className={styles.chips}>
-              {CT.TUNINGS.map((tun) => (
+              {CT.TUNINGS.filter((tuning) => tuning.kind === 'guitar').map((tun) => (
                 <button
                   key={tun.id}
                   type="button"
@@ -2475,7 +2619,7 @@ export function ChordsPage(): React.ReactElement {
                   onClick={() => {
                     const nextTun = CT.TUNING_BY[tun.id] || CT.TUNING_BY.g6;
                     const nextPair = getSafeDoubleStopPair(nextTun.open.length, dsInterval, dsPair);
-                    setDsInst(tun.id);
+                    changeTuning(tun.id);
                     setDsPair(nextPair);
                     setDsSel(0);
                   }}
@@ -2667,11 +2811,12 @@ export function ChordsPage(): React.ReactElement {
             })}
           </div>
         </div>
-      </section>
+      </section>)}
 
       {/* 8. 진행 연주 패널 (CH-5b) */}
-      <section id="pane-prog" role="tabpanel" className={styles.pane} hidden={activeTab !== 'prog'}>
+      {supportedTabs.includes('prog') && (<section id="pane-prog" role="tabpanel" className={styles.pane} hidden={activeTab !== 'prog'}>
         <ProgressionPlayTab
+          instrumentKind={isKeyboard ? 'keyboard' : 'guitar'}
           active={activeTab === 'prog'}
           hash={progHash}
           onNavigate={(h) => {
@@ -2688,7 +2833,7 @@ export function ChordsPage(): React.ReactElement {
             handleTabChange('tone');
           }}
         />
-      </section>
+      </section>)}
     </div>
     </AppShell>
   );

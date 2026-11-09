@@ -52,7 +52,7 @@ describe('RZ3-3: CI·배포 계약 (LG-1)', () => {
 describe('RZ3-4: React 화면 제목·설정 버튼', () => {
   test('5개 React 화면이 초기 document.title을 설정한다', () => {
     const want = {
-      ChordsPage: '기타 코드 연습실',
+      ChordsPage: '악기 연습실',
       NotesPage: '학습 노트 · ULeveLP',
       NoteDetailPage: '학습 노트 상세 · ULeveLP',
       SettingsPage: '설정 · ULeveLP',
