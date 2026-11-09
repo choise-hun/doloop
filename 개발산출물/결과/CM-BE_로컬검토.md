@@ -106,5 +106,8 @@ allprojects {
 
 - Green: **BUILD SUCCESSFUL in 1m 39s**. XML 7개 합계 **31 tests / failures 0 / errors 0 / skipped 0**(CM-BE18·TierQuotaAdminApiTest13). 신규 경합의 세 삭제 조건 모두 조회 시점 snapshot을 반환하고, 다음 조회 빈 목록/DB0 단언 통과. 기존 커서 20+1/상태 필터·owner 권한·신고 종결/audit·마이그레이션 회귀도 통과. 원시 `build/pr145-green.log`, `build/pr145-review/test-results/test/TEST-*.xml`(ignored).
 - 자체 검토: JOIN의 PK/FK 1:1 관계로 정렬/limit/커서 의미를 보존하며, DTO 변환의 N+1 SELECT를 제거했다. 초기 index는 비어 있었고 기존 사용자 변경 SHA-256도 모두 보존했다. 제품·테스트·진행/결과 4파일만 선별한다. 로컬 전체 서버·실외부 YouTube·UI 연결·운영 배포/확인은 이번 실행 범위가 아니다. 최신 CI/리뷰는 게시 후 후속 기록한다.
+- 게시/CI: `c024de2`를 기존 `step/cm-be`/PR #145에 push했다. [코드 CI run 42561686187](https://github.com/choise-hun/doloop/actions/runs/42561686187)에서 Kotlin(JDK21)·Node22/24·Docker smoke·E2E XSS/CSP·CI ok **모두 통과**. 문서만 변경된 이전 head의 skip을 제품 통과 근거로 사용하지 않았다.
+- 리뷰: CI 대기 중/종료 후 리뷰 본문·라인·일반 코멘트 재확인, 기존 P2 외 추가 지적 없음. 해당 스레드는 outdated/unresolved이며 **구현 반영 완료**와 UI resolve 여부를 구별한다. 답글/resolve/추가 호출은 실행하지 않았다. 최신 코드에 대한 새 자동 리뷰가 완료됐다는 의미는 아니다.
+- 최종 CI 결과 기록은 문서 2파일만 후속 커밋/push하고 최신 head 검사 종료까지 확인한다. 문서 head에서 제품 검사가 skip되면 위 직전 코드 커밋 전체 통과를 별도 근거로 사용한다. 사용자 변경은 보존하며 머지/운영 배포는 제외한다. 다음 단계는 [진행 §9](../진행_CM-BE.md).
 
 
