@@ -1,0 +1,19 @@
+{
+  "id": "handoff-smoke",
+  "goal": "연결 검증용 신규 문서 개발산출물/결과/LLM_연결확인.txt에 handoff-ok 한 줄을 작성한다. 제품 코드와 기존 문서는 수정하지 않는다.",
+  "references": [
+    "docs/rules/testing-security.md"
+  ],
+  "write_files": [
+    "개발산출물/결과/LLM_연결확인.txt"
+  ],
+  "verify": [
+    [
+      "python",
+      "-c",
+      "from pathlib import Path; p=Path('개발산출물/결과/LLM_연결확인.txt'); assert p.read_text(encoding='utf-8').strip() == 'handoff-ok'"
+    ]
+  ],
+  "models": {},
+  "timeout_seconds": 1800
+}
