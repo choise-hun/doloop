@@ -1,6 +1,6 @@
 # PF 진행 — 프로필 진입 분리 및 내 게시물 관리
 
-> 최신 상태(2026-11-10): PF-3 주니어 4단계 최종 로컬 검증 및 결과 기록 완료. step/PF-3, HEAD=efcc651, 미커밋(로컬 검증·기록만, Git 게시 금지 준수). 전체 회귀(160 e2e + 49 profile + 416 node + 30 auth-races + Gradle 백엔드 전체) 및 4폭 Q표 전수 통과. 결과 문서 개발산출물/결과/PF-3.md 작성 완료. 사용자 인수인계/계획 2개 내용 보존.
+> 최신 상태(2026-11-10): PF-3 PR #152 §3-P 핀포인트 수정. 두 리뷰 결함 모두 Red 확인 후 최소 수정, 빌드 및 PF3 표적 6개 통과. step/PF-3에서 커밋·push 후 최신 CI·리뷰 확인 진행. 상세는 §14. 기존 인수인계·계획 사용자 변경 보존.
 
 ## 1. 목표·입력·승인 경계
 
@@ -518,3 +518,41 @@ Codex 자동 리뷰에서 2건의 인라인 코멘트(P2)가 확인됨.
 ### 13.4 미실행 사항
 
 - PR 머지 및 운영 배포: 사용자 권한으로 미실행.
+
+
+## 14. PF-3 PR #152 시니어 핀포인트 수정 — 2026-11-10
+
+### 14.1 범위·승인·시작 상태
+
+- 사용자 요청: §3-P로 리뷰 결함 2건만 확인·수정하고 기존 `step/PF-3`에 커밋·push, 최신 head CI 확인까지 수행. 전체 PR 재검증·머지·배포 제외.
+- 시작 로컬/원격 PR head 일치: `9a6d313518d6c5c3510e383983e4954eab2f2975`, base `main`, PR OPEN.
+- 기존 사용자 변경 `개발산출물/인수인계_메모.md`, `계획/상용_서비스_계획.md` 보존 및 커밋 제외. 동시 에이전트 작업 없음.
+- 소스 읽기·수정은 `MySharesPanel.tsx` 해당 조회 effect와 `profile.spec.js` 관련 테스트에 한정. 절차·실행 확인용 문서/테스트 설정만 추가 확인. 읽지 않은 범위 = 미검증. API·DB·export·시그니처·DOM·CSS 계약 변경 없음.
+- 입력의 “7 successful”은 코드 head `d76067e`의 [기존 CI](https://github.com/choise-hun/doloop/actions/runs/42678679341). 시작 head `9a6d313`의 [실제 CI](https://github.com/choise-hun/doloop/actions/runs/42680954459)는 문서 변경 감지에 따라 2 success / 4 skipped. 이전 코드 검증과 최신 head 검증을 구분한다.
+
+### 14.2 결함별 판정·프로덕션 가드와 단언
+
+| 리뷰 | 판정·근거 | 최소 수정·검증 |
+| --- | --- | --- |
+| [전체 자동 연동 변경](https://github.com/choise-hun/doloop/pull/152#discussion_r4516738639) | 반영. `frontend/src/components/community/MySharesPanel.tsx:85` 조회 의존성에 전역 설정 누락 | `me?.shareAutosync` 추가. `profile.spec.js:774` PF3-R1에서 true→false→true 후 폴더 off 유지, 다음 PUT `{isPublic:true,autoSync:true}`, 정상 행 사용자 초안 보존 단언 |
+| [실패 행 복구 제목](https://github.com/choise-hun/doloop/pull/152#discussion_r4516738648) | 반영. `frontend/src/components/community/MySharesPanel.tsx:77` 실패 임시 제목까지 이전 입력 우선 병합 | `old && !old.failed`일 때만 이전 입력 보존. `profile.spec.js:816` PF3-R2에서 실패 시 비활성 임시 제목→재시도 후 서버 공개 제목, 재게시 body도 서버 제목 단언 |
+
+기존 identity/seq/AbortController 가드는 유지. 설정 변경 시 기존 조회 cleanup 취소와 새 조회의 시퀀스 검증을 그대로 사용한다. 목록 밖 결함 수정 없음.
+
+### 14.3 실제 실행·한계
+
+| 명령 | 실제 결과 |
+| --- | --- |
+| 수정 전 `npm run build` | 성공, 171 modules |
+| 수정 전 `npx playwright test test/e2e/layout/profile.spec.js --grep 'PF3-R[12]'` | **2 failed (의도한 Red)**. R1 off→on 뒤 실제 aria-checked=true(기대 false), R2 복구 뒤 실제 “실패 분류 이름”(기대 “서버 공개 제목”) |
+| 수정 후 `npm run build` | 성공, TypeScript/Vite 정상. 기존 CJS/config.js/chunk 크기 경고 유지 |
+| 수정 후 `npx playwright test test/e2e/layout/profile.spec.js --grep 'PF3-'` | **6 passed (5.3s)**. 새 회귀 2개 및 기존 PF3 4개 |
+| `git diff --check` | 통과 |
+
+- 로컬 전체 profile/전체 E2E/Node/Gradle 회귀, 실외부 OAuth·DB 통합, 레이아웃 스크린샷 재검증 미실행. DOM·배치 변경 없음. 전체 PR 독립 재검증도 미실행.
+- 게시 전 리뷰 본문·라인·일반 코멘트 재조회: 기존 2건 외 신규 없음. 실제 두 결함 수정과 봇 unresolved 상태는 별개이며 댓글·resolve·리뷰 재호출은 하지 않는다.
+
+### 14.4 Git·최신 CI·리뷰 및 다음 행동
+
+- 승인 범위의 소스·테스트·본 진행 기록만 커밋·push한다. 최신 코드 head CI 종료 및 새 리뷰 확인 후 이 절에 결과를 추가한다.
+- 다음 행동: CI·리뷰 확인 완료 후 사용자 PR #152 머지 대기. 이번 두 결함의 구현·표적 검증 반복 불필요. 머지·배포는 수행하지 않는다.

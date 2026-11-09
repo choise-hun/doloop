@@ -771,6 +771,77 @@ test('PF2-11 다국어 (ja) 이름 및 요약 렌더링', async ({ page }) => {
 });
 
 // PF-3 표적: 토큰 대기 취소와 철회 후 미확정 캐시를 실제 UI/API로 검증한다.
+test('PF3-R1 전체 자동 연동 off→on 뒤 폴더는 off 유지·다음 PUT은 on', async ({ page }) => {
+  let profile = { ...USER_WITH_NAMES.me, shareAutosync: true,
+    limits: { ...USER_WITH_NAMES.me.limits, communityWrite: true } };
+  let share = { folderId: 'f1', categoryId: 'c1', title: '공개 제목', isPublic: true, autoSync: true,
+    hidden: false, itemCount: 1, likeCount: 0, cloneCount: 0, publishedAt: null, publicName: 'gildong' };
+  const puts = [];
+  await mockApp(page, { ...USER_WITH_NAMES, me: profile });
+  await page.route('**/api/v1/me', route => {
+    if (route.request().method() === 'PATCH') {
+      profile = { ...profile, ...route.request().postDataJSON() };
+      if (!profile.shareAutosync) share = { ...share, autoSync: false };
+    }
+    return route.fulfill({ json: profile });
+  });
+  await page.route('**/api/v1/categories', route => route.fulfill({ json: {
+    categories: [{ id: 'c1', name: '분류 이름', sortOrder: 0, onHome: true, songCount: 1 }],
+  } }));
+  await page.route('**/api/v1/categories/c1/share', route => {
+    if (route.request().method() === 'PUT') {
+      puts.push(route.request().postDataJSON());
+      share = { ...share, ...puts[puts.length - 1] };
+    }
+    return route.fulfill({ json: { share } });
+  });
+  await page.goto('/profile.html');
+  const toggle = page.locator('[data-share-autosync=c1]');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  // 정상 행에서 사용자가 편집한 초안은 설정 재조회 후에도 보존한다.
+  const title = page.locator('[data-share-row=c1] input');
+  await title.fill('사용자 초안');
+  await page.evaluate(() => window.ULAuth.updateProfile({ shareAutosync: false }));
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('#mySharesStatus')).toHaveCount(0);
+  await page.evaluate(() => window.ULAuth.updateProfile({ shareAutosync: true }));
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('#mySharesStatus')).toHaveCount(0);
+  await expect(title).toHaveValue('사용자 초안');
+  await toggle.click();
+  await expect.poll(() => puts).toEqual([{ isPublic: true, autoSync: true }]);
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+});
+
+test('PF3-R2 getShare 실패 복구 시 공개 제목 표시·재게시 요청 보존', async ({ page }) => {
+  let fail = true;
+  const republished = [];
+  const share = { folderId: 'f1', categoryId: 'c1', title: '서버 공개 제목', isPublic: true, autoSync: false,
+    hidden: false, itemCount: 1, likeCount: 0, cloneCount: 0, publishedAt: null, publicName: 'gildong' };
+  await mockApp(page, { ...USER_WITH_NAMES, me: { ...USER_WITH_NAMES.me,
+    limits: { ...USER_WITH_NAMES.me.limits, communityWrite: true } } });
+  await page.route('**/api/v1/categories', route => route.fulfill({ json: {
+    categories: [{ id: 'c1', name: '실패 분류 이름', sortOrder: 0, onHome: true, songCount: 1 }],
+  } }));
+  await page.route('**/api/v1/categories/c1/share', route => fail
+    ? route.fulfill({ status: 500, json: { error: { code: 'INTERNAL' } } })
+    : route.fulfill({ json: { share } }));
+  await page.route('**/api/v1/categories/c1/share/republish', route => {
+    republished.push(route.request().postDataJSON());
+    return route.fulfill({ json: { share } });
+  });
+  await page.goto('/profile.html');
+  const title = page.locator('[data-share-row=c1] input');
+  await expect(title).toBeDisabled();
+  await expect(title).toHaveValue('실패 분류 이름');
+  fail = false;
+  await page.locator('#mySharesRetry').click();
+  await expect(title).toBeEnabled();
+  await expect(title).toHaveValue('서버 공개 제목');
+  await page.locator('[data-share-republish=c1]').click();
+  await expect.poll(() => republished).toEqual([{ title: '서버 공개 제목' }]);
+});
+
 test('PF3-05 폴더 토큰 대기 중 A→B: 이전 PUT 전송·B 상태 오염 0', async ({ page }) => {
   let puts = 0;
   let switched = false;

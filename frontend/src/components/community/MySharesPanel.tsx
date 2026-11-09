@@ -74,14 +74,15 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
             return { cat, share: null, titleInput: cat.name, failed: true };
           }
         }));
-        if (current()) setRows(previous => loaded.map(row => ({ ...row,
-          titleInput: previous.find(old => old.cat.id === row.cat.id)?.titleInput ?? row.titleInput,
-        })));
+        if (current()) setRows(previous => loaded.map(row => {
+          const old = previous.find(old => old.cat.id === row.cat.id);
+          return { ...row, titleInput: old && !old.failed ? old.titleInput : row.titleInput };
+        }));
       } catch { if (current()) setErr({ key: 'home.catLoadFailed' }); }
       finally { if (current()) setLoading(false); }
     })();
     return () => controller.abort();
-  }, [identity, me?.id, me?.limits?.communityWrite, me?.publicName, retry]);
+  }, [identity, me?.id, me?.limits?.communityWrite, me?.publicName, me?.shareAutosync, retry]);
 
   function patchRow(catId: string, patch: Partial<ShareRowState>) {
     setRows(prev => prev.map(row => row.cat.id === catId ? { ...row, ...patch } : row));
