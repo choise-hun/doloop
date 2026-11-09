@@ -20,7 +20,9 @@ import {
 } from '../lib/apiClient';
 import { safeUrl } from '../lib/security';
 import { t, type I18nKey } from '../lib/i18n.mts';
-import { CommunityPane } from '../components/community/CommunityPane';
+import { PracticeSessionCard } from '../components/songRecord/PracticeSessionCard';
+import { fromSessionWithSong } from '../lib/episode.mts';
+// i18n-keep: 'community.tab' 'log.sessionMeta' 'log.sessionSegment' 호환 키 보존
 import styles from './LogPage.module.css';
 
 export { fmtDuration, fmtTakeMeta };
@@ -49,86 +51,6 @@ export function build84Days(baseDateStr: string): string[] {
 
 export function sortAbTakes(t1: TakeDto, t2: TakeDto): [TakeDto, TakeDto] {
   return t1.recordedAt > t2.recordedAt ? [t2, t1] : [t1, t2];
-}
-
-// 개별 세션 카드 컴포넌트 (미저장 메모 격리)
-interface SessionCardItemProps {
-  session: SessionWithSongDto;
-  onTakeRemoved: (sessionId: string, takeId: string) => void;
-  onMemoSaved: (sessionId: string, memo: string) => void;
-}
-
-function SessionCardItem({ session, onTakeRemoved, onMemoSaved }: SessionCardItemProps): React.ReactElement {
-  const [memoVal, setMemoVal] = useState(session.memo || '');
-  const [savingMemo, setSavingMemo] = useState(false);
-  const [memoStatus, setMemoStatus] = useState('');
-
-  const titleText = `${session.songTitle || t('log.noTitleSong')}${session.songArtist ? ' · ' + session.songArtist : ''}`;
-  let metaText = t('log.sessionMeta', { min: session.minutes, sec: session.seconds, loops: session.loops });
-  if (session.segment) metaText += t('log.sessionSegment', { seg: session.segment });
-  if (session.rate != null) metaText += ` · ${session.rate}×`;
-
-  return (
-    <div className={`card session-card ${styles.card}`}>
-      <div className={`session-head ${styles.sessionHead}`}>
-        <div className={`session-title ${styles.sessionTitle}`}>{titleText}</div>
-        <SafeLink
-          className={`ghost mini ${styles.ghostMini}`}
-          href={`practice.html?v=${encodeURIComponent(session.videoId || '')}`}
-        >
-          {t('log.btnPractice')}
-        </SafeLink>
-      </div>
-      <div className={`meta ${styles.meta}`}>{metaText}</div>
-      <div className={`session-memo ${styles.sessionMemo}`}>
-        <textarea
-          className="inpField"
-          rows={2}
-          maxLength={2000}
-          placeholder={t('log.phSessionMemo')}
-          value={memoVal}
-          onChange={(e) => setMemoVal(e.target.value)}
-        />
-        <div className={`session-memo-act ${styles.sessionMemoAct}`}>
-          <button
-            type="button"
-            className={`ghost mini ${styles.ghostMini}`}
-            disabled={savingMemo}
-            onClick={async () => {
-              setSavingMemo(true);
-              setMemoStatus(t('log.statusSaving'));
-              try {
-                await apiClient.sessions.updateMemo(session.id, memoVal);
-                onMemoSaved(session.id, memoVal.trim());
-                setMemoStatus(t('log.statusSaved'));
-                setTimeout(() => {
-                  setMemoStatus((cur) => (cur === t('log.statusSaved') ? '' : cur));
-                }, 2000);
-              } catch (err: any) {
-                setMemoStatus((err && err.message) || t('log.statusSaveFailed'));
-              } finally {
-                setSavingMemo(false);
-              }
-            }}
-          >
-            {t('log.btnSaveMemo')}
-          </button>
-          <span className={`meta ${styles.meta}`}>{memoStatus}</span>
-        </div>
-      </div>
-      {Array.isArray(session.takes) && session.takes.length > 0 && (
-        <div className={`session-takes ${styles.sessionTakes}`}>
-          {session.takes.map((t) => (
-            <TakeItemRow
-              key={t.id}
-              take={t}
-              onDeleted={(takeId) => onTakeRemoved(session.id, takeId)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // 개별 곡 카드 컴포넌트 (미저장 메모 격리)
@@ -255,10 +177,13 @@ export function LogPage(): React.ReactElement {
   const isGuest = !activeUid || !apiClient.isLoggedIn();
 
   // 라우트 상태 (탭 vs 곡 상세)
-  const [activeTab, setActiveTab] = useState<'log' | 'songs' | 'community'>(() => {
+  const [activeTab, setActiveTab] = useState<'log' | 'songs'>(() => {
     if (typeof window === 'undefined') return 'log';
+    if (window.location.hash === '#community') {
+      window.location.replace('community.html');
+      return 'log';
+    }
     if (window.location.hash === '#songs') return 'songs';
-    if (window.location.hash === '#community') return 'community';
     return 'log';
   });
   const [detailSongId, setDetailSongId] = useState<string | null>(() => {
@@ -366,16 +291,14 @@ export function LogPage(): React.ReactElement {
   useEffect(() => {
     document.title = t('log.documentTitle');
     const onPopState = () => {
+      if (window.location.hash === '#community') {
+        window.location.replace('community.html');
+        return;
+      }
       const q = new URLSearchParams(window.location.search);
       const nextSongId = q.get('song');
       setDetailSongId(nextSongId);
-      setActiveTab(
-        window.location.hash === '#songs'
-          ? 'songs'
-          : window.location.hash === '#community'
-          ? 'community'
-          : 'log'
-      );
+      setActiveTab(window.location.hash === '#songs' ? 'songs' : 'log');
     };
     window.addEventListener('popstate', onPopState);
     window.addEventListener('hashchange', onPopState);
@@ -395,8 +318,6 @@ export function LogPage(): React.ReactElement {
       void loadSongDetailView(activeUid, detailSongId);
     } else if (activeTab === 'songs') {
       void loadSongsView(activeUid, songFilter);
-    } else if (activeTab === 'community') {
-      setMsg({ text: '', kind: '' });
     } else {
       void loadLogView(activeUid);
     }
@@ -473,20 +394,6 @@ export function LogPage(): React.ReactElement {
               }}
             >
               {t('log.tabSongs')}
-            </button>
-            <button
-              type="button"
-              className={`tab ${styles.tab}`}
-              role="tab"
-              id="tab-community"
-              aria-selected={activeTab === 'community'}
-              onClick={() => {
-                setDetailSongId(null);
-                setActiveTab('community');
-                window.history.pushState(null, '', 'log.html#community');
-              }}
-            >
-              {t('community.tab')}
             </button>
           </nav>
         </header>
@@ -582,9 +489,10 @@ export function LogPage(): React.ReactElement {
                 <p className={`empty ${styles.empty}`}>{t('log.emptyDateSessions')}</p>
               ) : (
                 daySessionsList.map((s) => (
-                  <SessionCardItem
+                  <PracticeSessionCard
                     key={s.id}
-                    session={s}
+                    session={fromSessionWithSong(s)}
+                    surface="day"
                     onMemoSaved={(sessId, nextMemo) => {
                       setSessionsData((prev) =>
                         prev
@@ -669,19 +577,6 @@ export function LogPage(): React.ReactElement {
               ))
             )}
           </div>
-        </section>
-
-        {/* 2-b. 커뮤니티 탭 패널 (M2-23 D3) */}
-        <section
-          id="pane-community"
-          role="tabpanel"
-          aria-labelledby="tab-community"
-          className={styles.logContainer}
-          hidden={isGuest || Boolean(detailSongId) || activeTab !== 'community'}
-        >
-          {activeTab === 'community' && !isGuest && !detailSongId ? (
-            <CommunityPane me={authState.me} />
-          ) : null}
         </section>
 
         {/* 3. 곡 상세 패널 (FR-LIB-2, FR-LIB-3) */}
@@ -811,7 +706,7 @@ export function LogPage(): React.ReactElement {
             <div className={`head-row ${styles.headRow}`}>
               <h3 className={`h3 ${styles.h3}`}>{t('log.titleSessionTimeline')}</h3>
             </div>
-            <SessionTimeline sessions={detailSessions} idPrefix="" />
+            <SessionTimeline sessions={detailSessions} song={detailSong} takes={detailTakes} idPrefix="" />
           </div>
 
           {/* 녹음 목록 및 A/B 비교 듣기 (FR-LIB-3: id="abPanel" id="abAudioA" id="abAudioB" 위임) */}

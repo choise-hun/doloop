@@ -162,13 +162,13 @@
 
   .shell,
   .playerShell {
-    /* 고정 탭 바 높이(56px) + 하단 여백(16px) + safe-area (PR #99 리뷰 반영) */
-    padding-bottom: calc(56px + 16px + env(safe-area-inset-bottom, 0px));
+    /* 고정 탭 바 높이 + 하단 여백(16px) + safe-area (CM-UI) */
+    padding-bottom: calc(var(--tabbar-real-height, 56px) + 16px + env(safe-area-inset-bottom, 0px));
   }
 
   .tabBar {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     position: fixed;
     left: 0;
     right: 0;
@@ -180,7 +180,7 @@
     border-top: 1px solid var(--line);
     font-family: var(--font-display);
     font-weight: 800;
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.02em;
   }
 
@@ -191,7 +191,12 @@
     min-height: 56px;
     color: var(--muted);
     text-decoration: none;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    word-break: break-word;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 4px 2px;
   }
 
   .tabItem[aria-current="page"] {

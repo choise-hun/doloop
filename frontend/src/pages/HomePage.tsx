@@ -951,6 +951,22 @@ export function HomePage(): React.ReactElement {
         </section>
       </div>
 
+      <section
+        className={`card ${styles.communityBanner}`}
+        id="homeCommunityBanner"
+        aria-labelledby="homeCommunityTitle"
+      >
+        <div className={styles.communityBannerContent}>
+          <h2 className={styles.communityBannerTitle} id="homeCommunityTitle">
+            {t('home.communityTitle')}
+          </h2>
+          <p className={styles.communityBannerDesc}>{t('home.communityDescription')}</p>
+        </div>
+        <SafeLink href="community.html" className={styles.communityBannerLink} id="homeCommunityLink">
+          {t('home.communityLink')}
+        </SafeLink>
+      </section>
+
       <CurationRows variant="home" me={authState.me} />
 
       <PlaylistImportModal

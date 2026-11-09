@@ -1,0 +1,190 @@
+/* frontend/src/pages/CommunityPage.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin: 0;
+  color: var(--ink);
+}
+
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chipBtn {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.chipBtnOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.auxLinks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.auxLink {
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px 6px;
+}
+
+.auxLinkOn {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.guestCard {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.guestTitle {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.guestDesc {
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 480px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.guestActions {
+  margin-top: 8px;
+}
+
+.guestLoginBtn {
+  text-decoration: none;
+  min-height: 42px;
+  padding: 10px 24px;
+}
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.feedSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.summaryScopeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.summaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emptyBox {
+  padding: 32px 16px;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.moreRow {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.nameBanner {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.bannerTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  .auxLinks {
+    margin-left: 0;
+    width: 100%;
+  }
+}

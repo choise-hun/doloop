@@ -214,7 +214,14 @@ export function SongRecordPanel({
                 {t('record.tabSessions')}
               </h3>
             </div>
-            <SessionTimeline sessions={sessions} loading={notLoaded} idPrefix="sr" initialLimit={5} />
+            <SessionTimeline
+              sessions={sessions}
+              song={detailSong}
+              takes={takes}
+              loading={notLoaded}
+              idPrefix="sr"
+              initialLimit={5}
+            />
           </div>
         </div>
       )}
