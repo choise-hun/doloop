@@ -56,7 +56,7 @@ for (const tuning of ['g6', 'b4']) {
     });
     await page.clock.install();
     await openScale(page);
-    if (tuning === 'b4') await page.locator('#sc-inst-chips button').nth(2).click();
+    if (tuning === 'b4') await page.locator('#instrument-bass').click();
     await page.locator('#sc-play').click();
     await page.clock.runFor(400);
     await expect(page.locator('#sc-play')).toHaveAttribute('aria-pressed', 'true');

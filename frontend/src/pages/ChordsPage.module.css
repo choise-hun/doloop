@@ -37,20 +37,44 @@
 }
 
 .tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap: 8px;
 }
 
 .tab {
+  min-height: 44px;
   font: inherit;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
   padding: 8px 16px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-card);
   cursor: pointer;
 }
+
+.instrumentControls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.instrumentControls > .field { flex: 1 1 180px; }
+.instrumentControls button { min-height: 44px; }
+.instrumentControls select { min-height: 44px; }
+.keyboard { width: 100%; height: auto; display: block; max-height: 220px; }
+.whiteKey { fill: var(--surface); stroke: var(--ink); stroke-width: 0.8; }
+.blackKey { fill: var(--ink); stroke: var(--line); stroke-width: 0.8; }
+.keyPressed { fill: var(--guide); }
+.keyLeft { fill: var(--root); }
+.keyRight { fill: var(--guide); }
+.keyNow { fill: var(--orange-vivid); stroke: var(--ink); stroke-width: 2; }
+.whiteKeyLabel { fill: var(--guide-ink); font-size: 8px; text-anchor: middle; font-weight: 700; }
+.keyboard g[data-hand="lh"] .whiteKeyLabel { fill: var(--root-ink); }
+.keyboard g[data-now="true"] .whiteKeyLabel { fill: var(--root-ink); }
+.keyLegend .keyRight { fill: var(--guide-ink); }
+.blackKeyLabel { fill: var(--ink); font-size: 8px; text-anchor: middle; font-weight: 700; }
+.keyOctave { fill: var(--muted); font-size: 6px; text-anchor: middle; }
+.keyLegend { font-size: 12px; font-weight: 700; }
+.keyboardCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.controls > .btn { align-self: end; justify-self: start; min-height: 44px; }
+.keyboardSequence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 768px) { .keyboardSequence { grid-template-columns: 1fr; } }
 
 .tab[aria-selected="true"] {
   background: var(--accent);

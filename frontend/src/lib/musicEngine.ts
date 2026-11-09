@@ -95,6 +95,7 @@ export interface AudioEngine {
   pluck(midi: number, when?: number, dur?: number): void;
   bassPluck(midi: number, when?: number, dur?: number): void;
   bass(midi: number, when?: number, dur?: number): void;
+  keyboard(midi: number, when?: number, dur?: number): void;
   chord(midis: number[], when?: number, dur?: number): void;
   doubleStop(midis: [number, number], when?: number, dur?: number, isBass?: boolean): void;
   click(when?: number, accent?: boolean): void;
@@ -436,6 +437,30 @@ export function createAudioEngine(ctxProvider?: () => any): AudioEngine {
     o.stop(t0 + dur + 0.05);
   }
 
+  function keyboard(midi: number, when?: number, dur = 1.2): void {
+    if (!Number.isInteger(midi) || midi < 0 || midi > 127) return;
+    if (!Number.isFinite(dur) || dur <= 0 || (when !== undefined && !Number.isFinite(when))) return;
+    const c = ensureContext();
+    if (!c) return;
+    const t0 = Math.max(c.currentTime, when ?? c.currentTime);
+    const length = Math.min(8, Math.max(0.04, dur));
+    const fundamental = midiToFreq(midi);
+    // A short attack and a decaying harmonic give the keyboard its own timbre.
+    for (const [harmonic, level] of [[1, 0.22], [2, 0.055], [3, 0.018]]) {
+      const oscillator = c.createOscillator();
+      const gain = c.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(fundamental * harmonic, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(level, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
+      oscillator.connect(gain);
+      gain.connect(c.destination);
+      oscillator.start(t0);
+      oscillator.stop(t0 + length + 0.02);
+    }
+  }
+
   function chord(midis: number[], when?: number, dur = 1.4): void {
     const c = ensureContext();
     if (!c) return;
@@ -478,6 +503,7 @@ export function createAudioEngine(ctxProvider?: () => any): AudioEngine {
     pluck,
     bassPluck,
     bass,
+    keyboard,
     chord,
     doubleStop,
     click,
