@@ -173,6 +173,97 @@ class AdminService(private val db: Database?) {
     private fun requireDb(): Database =
         db ?: throw ApiException(HttpStatusCode.ServiceUnavailable, "DB_UNAVAILABLE", "데이터베이스가 연결되어 있지 않습니다.")
 
+    private fun Transaction.requireEpisodeOwner(actorId: UUID) {
+        val role = ProfilesTable.select(ProfilesTable.role).where { ProfilesTable.id eq actorId }.singleOrNull()?.get(ProfilesTable.role)
+        if (role != "owner") throw ApiException(HttpStatusCode.Forbidden, "FORBIDDEN", "관리자만 쓸 수 있습니다.")
+    }
+
+    /** 신규 관리 쓰기: profiles(UUID 순) → 곡 → 세션 → 카드 → 신고. */
+    private fun Transaction.lockEpisode(actorId: UUID, postId: UUID): ResultRow {
+        val c = SharedPracticeCardsTable
+        val initial = c.selectAll().where { c.id eq postId }.singleOrNull() ?: throw NotFoundException()
+        ProfilesTable.selectAll().where { ProfilesTable.id inList listOf(actorId, initial[c.userId]).distinct() }
+            .orderBy(ProfilesTable.id to SortOrder.ASC).forUpdate(ForUpdateOption.ForUpdate).toList()
+        requireEpisodeOwner(actorId)
+        val sessionId = initial[c.sessionId]
+        val songId = SessionsTable.select(SessionsTable.songId).where { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq initial[c.userId]) }
+            .singleOrNull()?.get(SessionsTable.songId) ?: throw NotFoundException()
+        SongsTable.selectAll().where { (SongsTable.id eq songId) and (SongsTable.userId eq initial[c.userId]) }
+            .forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: throw NotFoundException()
+        SessionsTable.selectAll().where { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq initial[c.userId]) }
+            .forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: throw NotFoundException()
+        return c.selectAll().where { c.id eq postId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: throw NotFoundException()
+    }
+
+    suspend fun moderateEpisode(actorId: UUID, postId: UUID, status: String, reason: String): AdminEpisodeModerationDto = DatabaseFactory.dbQuery(requireDb()) {
+        val c = SharedPracticeCardsTable
+        val old = lockEpisode(actorId, postId)
+        val now = OffsetDateTime.now(ZoneOffset.UTC)
+        val hidden = old[c.status] == "moderation_hidden"
+        if (status == "published" && !hidden && old[c.status] == "tier_paused") episodeConflict("POST_REPUBLISH_REQUIRED")
+        if (status == "moderation_hidden" || hidden) {
+            val paid = TierLimits.isPaid(tierContext(old[c.userId]).tier)
+            c.update({ c.id eq postId }) {
+                if (status == "moderation_hidden") {
+                    it[c.status] = "moderation_hidden"; it[hiddenAt] = now; it[hiddenReason] = reason
+                } else {
+                    it[c.status] = if (old[c.tierPausedAt] != null || !paid) "tier_paused" else "published"
+                    it[hiddenAt] = null; it[hiddenReason] = null
+                    if (!paid && old[c.tierPausedAt] == null) it[tierPausedAt] = now
+                }
+            }
+            val after = c.selectAll().where { c.id eq postId }.single()
+            fun state(row: ResultRow) = buildJsonObject {
+                put("status", row[c.status]); put("hiddenAt", episodeTs(row[c.hiddenAt])); put("tierPausedAt", episodeTs(row[c.tierPausedAt])); put("withdrawnAt", episodeTs(row[c.withdrawnAt]))
+            }
+            audit(actorId, "episode_moderate", old[c.userId], state(old), state(after), reason, postId.toString())
+        }
+        val row = c.selectAll().where { c.id eq postId }.single()
+        AdminEpisodeModerationDto(postId.toString(), row[c.status], episodeTs(row[c.hiddenAt]), row[c.hiddenReason], episodeTs(row[c.tierPausedAt]), episodeTs(row[c.withdrawnAt]), episodeTs(row[c.updatedAt])!!)
+    }
+
+    private fun episodeReportsQuery(): Query {
+        val r = SharedPracticeCardReportsTable
+        val c = SharedPracticeCardsTable
+        val p = ProfilesTable
+        // One READ COMMITTED snapshot for the report and its cascade-deletable parents.
+        return r.join(c, JoinType.INNER, r.cardId, c.id)
+            .join(p, JoinType.INNER, c.userId, p.id)
+            .select(r.columns + listOf(c.userId, c.status, c.withdrawnAt, c.hiddenAt, p.publicName))
+    }
+
+    private fun episodeReportDto(row: ResultRow): AdminEpisodeReportDto {
+        val r = SharedPracticeCardReportsTable
+        val c = SharedPracticeCardsTable
+        return AdminEpisodeReportDto(row[r.id].toString(), row[r.cardId].toString(), row[c.userId].toString(), row[ProfilesTable.publicName], row[r.reporterId].toString(), row[r.reason], row[r.detail], row[r.status],
+            episodeTs(row[r.createdAt])!!, episodeTs(row[r.resolvedAt]), row[c.status], episodeTs(row[c.withdrawnAt]), episodeTs(row[c.hiddenAt]))
+    }
+
+    suspend fun listEpisodeReports(actorId: UUID, status: String, limit: Int, rawCursor: String?): AdminEpisodeReportListResponse {
+        val cursor = EpisodeCursor.parse(rawCursor, "reports", status)
+        return DatabaseFactory.dbQuery(requireDb()) {
+            requireEpisodeOwner(actorId)
+            val r = SharedPracticeCardReportsTable
+            val rows = episodeReportsQuery().where { (r.status eq status) and episodeBefore(r.createdAt, r.id, cursor) }
+                .orderBy(r.createdAt to SortOrder.DESC, r.id to SortOrder.DESC).limit(limit + 1).toList()
+            AdminEpisodeReportListResponse(rows.take(limit).map { episodeReportDto(it) }, if (rows.size > limit) episodeNext(rows[limit - 1], "reports", status, r.createdAt, r.id) else null)
+        }
+    }
+
+    suspend fun resolveEpisodeReport(actorId: UUID, reportId: UUID, status: String, reason: String): AdminEpisodeReportDto = DatabaseFactory.dbQuery(requireDb()) {
+        val r = SharedPracticeCardReportsTable
+        val postId = r.select(r.cardId).where { r.id eq reportId }.singleOrNull()?.get(r.cardId) ?: throw NotFoundException()
+        val card = lockEpisode(actorId, postId)
+        val old = r.selectAll().where { r.id eq reportId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull() ?: throw NotFoundException()
+        if (old[r.status] != "open") episodeConflict("REPORT_ALREADY_RESOLVED")
+        r.update({ r.id eq reportId }) { it[r.status] = status; it[resolvedAt] = OffsetDateTime.now(ZoneOffset.UTC) }
+        val after = r.selectAll().where { r.id eq reportId }.single()
+        audit(actorId, "episode_report_resolve", card[SharedPracticeCardsTable.userId],
+            buildJsonObject { put("status", "open"); put("postId", postId.toString()) },
+            buildJsonObject { put("status", status); put("resolvedAt", episodeTs(after[r.resolvedAt])); put("postId", postId.toString()) }, reason, reportId.toString())
+        episodeReportDto(episodeReportsQuery().where { r.id eq reportId }.single())
+    }
+
     /** owner가 아니면 403 FORBIDDEN */
     suspend fun requireOwner(userId: UUID) {
         val role = DatabaseFactory.dbQuery(requireDb()) {
@@ -185,7 +276,9 @@ class AdminService(private val db: Database?) {
 
     private fun Transaction.loadUserRow(userId: UUID, lock: Boolean = false): ResultRow {
         val query = (UsersTable innerJoin ProfilesTable).selectAll().where { UsersTable.id eq userId }
-        if (lock) query.forUpdate(ForUpdateOption.ForUpdate)
+        // Tier/share writes lock profiles first. Locking users here as well could invert
+        // the FK key-share lock acquired by a concurrent first card INSERT.
+        if (lock) query.forUpdate(ForUpdateOption.PostgreSQL.ForUpdate(null, ProfilesTable))
         return query.singleOrNull() ?: throw NotFoundException("사용자를 찾을 수 없습니다.")
     }
 
@@ -274,6 +367,7 @@ class AdminService(private val db: Database?) {
         return DatabaseFactory.dbQuery(requireDb()) {
             val beforeRow = loadUserRow(userId, lock = true)
             val beforeTier = effectiveTier(beforeRow, now)
+            pauseExpiredEpisodeCards(userId, beforeRow, now)
             // 충전 시각이 지났는데 cron(매시)이 아직이면 바꾸기 전 티어로 먼저 처리한다(M1-3d)
             processDueCycle(userId, beforeTier, now.toInstant())
             ProfilesTable.update({ ProfilesTable.id eq userId }) {

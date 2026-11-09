@@ -404,6 +404,7 @@ object AdminAuditTable : Table("admin_audit") {
 }
 
 val ALL_TABLES: List<Table> = listOf(
+    SharedPracticeCardsTable, SharedPracticeCardReportsTable,
     UsersTable,
     ProfilesTable,
     SongsTable,
@@ -505,5 +506,35 @@ object FolderReportsTable : Table("folder_reports") {
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val resolvedAt = timestampWithTimeZone("resolved_at").nullable()
 
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SharedPracticeCardsTable : Table("shared_practice_cards") {
+    val id = uuid("id").autoGenerate()
+    val sessionId = uuid("session_id").references(SessionsTable.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val title = text("title").default("")
+    val comment = text("comment").default("")
+    val status = text("status").default("published")
+    val publishedAt = timestampWithTimeZone("published_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val hiddenAt = timestampWithTimeZone("hidden_at").nullable()
+    val hiddenReason = text("hidden_reason").nullable()
+    val tierPausedAt = timestampWithTimeZone("tier_paused_at").nullable()
+    val withdrawnAt = timestampWithTimeZone("withdrawn_at").nullable()
+    val publicSession = jsonb<JsonElement>("public_session", Json)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SharedPracticeCardReportsTable : Table("shared_practice_card_reports") {
+    val id = uuid("id").autoGenerate()
+    val cardId = uuid("card_id").references(SharedPracticeCardsTable.id, onDelete = ReferenceOption.CASCADE)
+    val reporterId = uuid("reporter_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val reason = text("reason")
+    val detail = text("detail").default("")
+    val status = text("status").default("open")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val resolvedAt = timestampWithTimeZone("resolved_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }

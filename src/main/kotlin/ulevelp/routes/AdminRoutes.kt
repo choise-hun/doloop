@@ -96,6 +96,8 @@ fun Route.registerAdminRoutes(
             this.adminService = adminService
         }
 
+        registerAdminEpisodeRoutes(adminService)
+
         get("/users") {
             val email = call.request.queryParameters["email"]?.trim()
             if (email.isNullOrEmpty() || email.length > 320) {

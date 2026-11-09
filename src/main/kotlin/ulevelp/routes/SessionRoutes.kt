@@ -12,6 +12,7 @@ import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.auth.requireAuthUser
 import ulevelp.service.ProfileService
 import ulevelp.service.SessionService
+import ulevelp.service.EpisodeLogService
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
@@ -39,13 +40,16 @@ private fun parseQueryDate(name: String, raw: String?): LocalDate? {
 fun Route.registerSessionRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
-    sessionService: SessionService
+    sessionService: SessionService,
+    episodeLogService: EpisodeLogService
 ) {
     route("/sessions") {
         install(SupabaseAuthPlugin) {
             this.jwtVerifier = jwtVerifier
             this.profileService = profileService
         }
+
+        registerSessionEpisodeRoutes(episodeLogService)
 
         get {
             val user = call.requireAuthUser()
