@@ -176,7 +176,7 @@ async function mockApp(page, opts = {}) {
     });
   }
   if (opts.sessions !== undefined) {
-    await page.route((url) => url.pathname.startsWith('/api/v1/sessions'), (route) => json(route, opts.sessions));
+    await page.route((url) => url.pathname === '/api/v1/sessions' || url.pathname === '/api/v1/sessions/', (route) => json(route, opts.sessions));
   }
   if (opts.takeUrl !== undefined) {
     await page.route((url) => url.pathname.startsWith('/api/v1/takes'), (route) => {

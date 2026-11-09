@@ -268,7 +268,7 @@ test('CM-8 PLAY 가져오기: 연습 화면 #urlForm에 list URL 제출 → 이 
   expect(importPostCount).toBe(0);
 });
 
-test('CM-9 TRAILS LOG: /log.html#community → LOG 칩 → 팔로잉 선택 시 logs?scope=following 호출 및 카드 표시', async ({ page }) => {
+test('CM-9 TRAILS LOG: /community.html#summary → 84일 집계 탭 → 팔로잉 선택 시 logs?scope=following 호출 및 카드 표시', async ({ page }) => {
   const scopesCalled = [];
   await mockApp(page, {
     ...STATES.userData,
@@ -298,16 +298,15 @@ test('CM-9 TRAILS LOG: /log.html#community → LOG 칩 → 팔로잉 선택 시 
       },
     }),
   });
-  await page.goto('/log.html#community', { waitUntil: 'load' });
+  await page.goto('/community.html#summary', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
-  await expect(page.locator('#pane-community')).toBeVisible();
-  await page.locator('#chipLog').click();
+  await expect(page.locator('#summaryPane')).toBeVisible();
   await expect(page.locator('#logScopeAll')).toBeVisible();
 
   await page.locator('#logScopeFollowing').click();
-  await expect(page.locator('#pane-community')).toContainText('박블루스');
-  await expect(page.locator('#pane-community')).toContainText('연속 5일');
+  await expect(page.locator('#summaryPane')).toContainText('박블루스');
+  await expect(page.locator('#summaryPane')).toContainText('연속 5일');
   expect(scopesCalled).toContain('following');
 });
 
@@ -327,7 +326,7 @@ test('CM-10 이름: 이름 없는 상태에서 배너 폼에 공백 이름 입�
       },
     }),
   });
-  await page.goto('/log.html#community', { waitUntil: 'load' });
+  await page.goto('/community.html', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
   const banner = page.locator('#communityNameBanner');
@@ -378,7 +377,7 @@ test('CM-11 내 공유: Pro·이름 있음, 분류 2개 중 하나 공개 PUT �
       },
     }),
   });
-  await page.goto('/log.html#community', { waitUntil: 'load' });
+  await page.goto('/community.html#my-shares', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
   const pubSwitch = page.locator('[data-share-public="cat-2"]');

@@ -3,8 +3,8 @@
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('../support/mock-app');
 
-const TAB_LABELS = ['LEARN', 'PRACTICE', 'TRAILS', 'CHORDS', 'NOTES'];
-const TAB_HREFS = ['chords.html', 'practice.html', 'log.html', 'progressions.html', 'notes.html'];
+const TAB_LABELS = ['LEARN', 'PRACTICE', 'TRAILS', 'COMMUNITY', 'CHORDS', 'NOTES'];
+const TAB_HREFS = ['chords.html', 'practice.html', 'log.html', 'community.html', 'progressions.html', 'notes.html'];
 
 async function open(page, path, width) {
   await page.setViewportSize({ width, height: 800 });
@@ -16,7 +16,7 @@ async function open(page, path, width) {
 }
 
 for (const width of [390, 768]) {
-  test(`W1-1 ${width}px 탭 바: 5칸·순서·화면 바닥 고정`, async ({ page }) => {
+  test(`W1-1 ${width}px 탭 바: 6칸·순서·화면 바닥 고정`, async ({ page }) => {
     await open(page, '/privacy.html', width);
     const bar = page.locator('nav[data-tabbar="1"]');
     await expect(bar).toBeVisible();

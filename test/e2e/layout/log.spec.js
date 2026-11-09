@@ -4,7 +4,6 @@
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES } = require('../support/mock-app');
-const { COMMUNITY_PRO_ME, communityRoutes } = require('../support/community-fixtures');
 
 layoutSuite({
   name: 'log',
@@ -18,23 +17,15 @@ layoutSuite({
   known: [{ match: /^G6 #logGuest 제목 아래 /, why: '비로그인 안내 패널: gap 14px에 <p> 기본 여백 14px가 더해져 28px' }],
 });
 
-const LOG_COMMUNITY_PRO = {
-  ...STATES.userData,
-  me: COMMUNITY_PRO_ME,
-  routes: communityRoutes(),
-};
-
 layoutSuite({
-  name: 'log',
-  path: '/log.html#community',
-  states: [{ name: 'communityPro', mock: LOG_COMMUNITY_PRO }],
+  name: 'log-songs',
+  path: '/log.html#songs',
+  states: ['userData'],
   ready: async (page) => {
-    await page.locator('#pane-community').waitFor();
-    await expect(page.locator('#pane-community')).not.toContainText('i18n-keep');
-    await expect(page.locator('#pane-community [data-row]')).toHaveCount(5);
-    await expect(page.locator('#mySharesPanel [data-share-row]')).toHaveCount(2);
+    await page.locator('#pane-songs').waitFor();
+    await page.locator('#songFilters').waitFor();
   },
-  dark: 'communityPro',
+  dark: 'userData',
 });
 
 test('UI-1 T4 TRAILS 타이틀 검증: LogPage의 h1 텍스트가 TRAILS인지 검증', async ({ page }) => {
@@ -56,14 +47,4 @@ test('UI-1 T5 1120px 레이아웃 검증: LogPage 메인 컨테이너 최대 너
   expect(Math.abs(box.width - 1120)).toBeLessThanOrEqual(1);
 });
 
-// LOG creator 배지에도 JSX 주석이 사용자 텍스트로 노출되지 않아야 한다.
-layoutSuite({
-  name: 'log-creators', path: '/log.html#community',
-  states: [{ name: 'logs', mock: LOG_COMMUNITY_PRO }],
-  ready: async (page) => {
-    await page.locator('#chipLog').click();
-    await expect(page.locator('[data-user-id]').first()).toBeVisible();
-    await expect(page.locator('#pane-community')).not.toContainText('i18n-keep');
-  },
-  dark: 'logs',
-});
+
