@@ -13,6 +13,7 @@ import ulevelp.auth.SupabaseAuthPlugin
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.auth.requireAuthUser
 import ulevelp.service.CommunityService
+import ulevelp.service.EpisodeLogService
 import ulevelp.service.PracticeLogService
 import ulevelp.service.ProfileService
 
@@ -88,13 +89,16 @@ fun Route.registerCommunityRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
     communityService: CommunityService,
-    practiceLogService: PracticeLogService
+    practiceLogService: PracticeLogService,
+    episodeLogService: EpisodeLogService
 ) {
     route("/community") {
         install(SupabaseAuthPlugin) {
             this.jwtVerifier = jwtVerifier
             this.profileService = profileService
         }
+
+        registerCommunityEpisodeRoutes(episodeLogService)
 
         put("/me/public-name") {
             val user = call.requireAuthUser()

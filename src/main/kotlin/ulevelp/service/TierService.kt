@@ -262,6 +262,7 @@ fun requireDrive(ctx: TierContext) {
  * - 공개 폴더 비공개 + 자동 연동 정지(Q8, M1-4a). 행·좋아요는 남고, 재구독 뒤 "다시 게시"로 되살린다
  */
 fun Transaction.downgradeCleanup(userId: UUID) {
+    pauseEpisodeCards(userId)
     ProfilesTable.update({ ProfilesTable.id eq userId }) {
         it[sharePracticeLog] = false
         it[storageProvider] = "supabase"
@@ -270,6 +271,30 @@ fun Transaction.downgradeCleanup(userId: UUID) {
         it[isPublic] = false
         it[autoSync] = false
     }
+}
+
+/** profile 잠금을 가진 호출부에서만 실행. 숨김과 철회 이력을 유지한다. */
+fun Transaction.pauseEpisodeCards(userId: UUID, now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC)) {
+    val c = SharedPracticeCardsTable
+    val rows = c.selectAll().where { c.userId eq userId }.orderBy(c.id to SortOrder.ASC)
+        .forUpdate(ForUpdateOption.ForUpdate).toList()
+    for (row in rows) {
+        if (row[c.tierPausedAt] != null) continue
+        c.update({ c.id eq row[c.id] }) {
+            it[tierPausedAt] = now
+            if (row[c.status] != "moderation_hidden") it[status] = "tier_paused"
+        }
+    }
+}
+
+/** cron 지연 중 무료 구간을 지난 override를 새 유료 값으로 덮기 전에 호출한다. */
+fun Transaction.pauseExpiredEpisodeCards(userId: UUID, row: ResultRow, now: OffsetDateTime) {
+    if (TierLimits.isPaid(effectiveTier(row, now))) return
+    val expiredOverride = row[ProfilesTable.tierOverride]?.let(TierLimits::isPaid) == true &&
+        row[ProfilesTable.tierOverrideUntil]?.let { !it.isAfter(now) } == true
+    val expiredCycle = row[ProfilesTable.creditCycleTier]?.let(TierLimits::isPaid) == true &&
+        row[ProfilesTable.creditCycleNextAt]?.let { !it.isAfter(now) } == true
+    if (expiredOverride || expiredCycle) pauseEpisodeCards(userId, now)
 }
 
 /** 커뮤니티 쓰기(폴더 공개·다시 게시·통째 복제·자동 연동 켜기)는 유료(Q10). 무료 403 `TIER_UPGRADE_REQUIRED` */
@@ -297,6 +322,7 @@ class TierService(private val db: Database?) {
         return DatabaseFactory.dbQuery(database) {
             val rows = ProfilesTable.selectAll()
                 .where { ProfilesTable.tierOverride.isNotNull() and (ProfilesTable.tierOverrideUntil lessEq now) }
+                .orderBy(ProfilesTable.id to SortOrder.ASC)
                 .forUpdate(ForUpdateOption.ForUpdate)
                 .toList()
             var downgraded = 0
