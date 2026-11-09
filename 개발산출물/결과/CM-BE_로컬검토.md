@@ -86,7 +86,25 @@ allprojects {
 - 최신 CI 모니터링: GitHub Actions run `42559989948` (Kotlin, Node 22/24, Docker smoke, E2E 등) **전체 통과 (Pass)**.
 - 리뷰 코멘트 조회 및 판단:
   - `chatgpt-codex-connector[bot]`의 P2 리뷰 ([PR 코멘트](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772)): `AdminService.kt`의 신고 목록 조회 시 동시 cascade 삭제 경합 방어를 위한 JOIN 쿼리 단일화 권장.
-  - 판단: 타당한 개선점이며, PR 게시 및 CI 검증 완료 후 후속 리뷰 반영 또는 다음 단계에서 단일 JOIN으로 개선 처리하기로 기록함.
+  - 판단: 타당한 결함. 당시 후속 보완으로 남겼으나 사용자 추가 요청에 따라 같은 PR에서 수정한다. 최신 근거는 §7.
 - 세부 게시 내역은 [진행 파일 §8](../진행_CM-BE.md)에 기록했다. 머지는 사용자 담당이다.
+
+## 7. PR #145 신고 목록 삭제 경합 P2 반영 (2026-11-09)
+
+- 대상: [discussion_r4509375772](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772), `chatgpt-codex-connector[bot]`, 수정 전 `AdminService.kt:228-229`. 사용자 코드 수정·해당 PR 커밋/push 승인에 따라 처리한다.
+- 판단: **타당/반영**. READ COMMITTED(`DatabaseFactory.kt:94`)에서 신고 SELECT 이후 카드/프로필 재조회는 별도 snapshot이다. V10 cascade 삭제가 그 사이 커밋되면 기존 `.single()`이 실패한다. 실패를 catch/fallback으로 숨기지 않고 같은 SELECT로 묶었다.
+- 변경: `AdminService.kt`의 private JOIN query는 신고 열과 카드 userId/status/withdrawnAt/hiddenAt, 프로필 publicName만 조회한다. DTO mapper는 DB I/O 없이 ResultRow를 변환한다. 목록의 권한·상태·정렬·20+1/keyset 및 응답 계약을 유지한다. 종결 응답도 같은 mapper를 사용하며 기존 lock/audit는 유지한다.
+- 정식 회귀: `EpisodeReportReadConcurrencyTest.reportSnapshotSurvivesCommittedCascadeDeletes`. 테스트 JDBC proxy에서 실제 SELECT 실행 결과가 반환되는 경계에 별도 DB 트랜잭션으로 세션/곡/계정을 각각 삭제·커밋한다. 조회 응답의 ID/작성자/공개명/신고자 snapshot, next=null, 삭제 후 카드/신고0 및 다음 조회 빈 결과를 단언한다. 제품에 테스트 hook/의존성은 추가하지 않는다.
+- Red: 제품 수정 전 **1 test / failures 1 / errors 0 / skipped 0**, 첫 세션 삭제 조건에서 `AdminService.kt:228`의 `NoSuchElementException: Collection is empty`로 실패. 같은 테스트가 수정 전 실패하는 근거이며 세 삭제 조건 모두 Red 실행됐다는 뜻은 아니다. `build/pr145-red.log`, `build/pr145-red.xml` 보존(ignored).
+
+```powershell
+# ignored init: allprojects { layout.buildDirectory.set(file("build/pr145-review")) }
+./gradlew.bat --project-cache-dir build/pr145-review-cache -I build/pr145-review.init.gradle.kts '-Pkotlin.incremental=false' '-Pkotlin.compiler.execution.strategy=in-process' '-Dorg.gradle.jvmargs=-Xmx2g' test --tests 'ulevelp.community.EpisodeReportReadConcurrencyTest'
+# 수정 후 관련 회귀
+./gradlew.bat --project-cache-dir build/pr145-review-cache -I build/pr145-review.init.gradle.kts '-Pkotlin.incremental=false' '-Pkotlin.compiler.execution.strategy=in-process' '-Dorg.gradle.jvmargs=-Xmx2g' test --tests 'ulevelp.community.Episode*' --tests 'ulevelp.tier.TierQuotaAdminApiTest'
+```
+
+- Green: **BUILD SUCCESSFUL in 1m 39s**. XML 7개 합계 **31 tests / failures 0 / errors 0 / skipped 0**(CM-BE18·TierQuotaAdminApiTest13). 신규 경합의 세 삭제 조건 모두 조회 시점 snapshot을 반환하고, 다음 조회 빈 목록/DB0 단언 통과. 기존 커서 20+1/상태 필터·owner 권한·신고 종결/audit·마이그레이션 회귀도 통과. 원시 `build/pr145-green.log`, `build/pr145-review/test-results/test/TEST-*.xml`(ignored).
+- 자체 검토: JOIN의 PK/FK 1:1 관계로 정렬/limit/커서 의미를 보존하며, DTO 변환의 N+1 SELECT를 제거했다. 초기 index는 비어 있었고 기존 사용자 변경 SHA-256도 모두 보존했다. 제품·테스트·진행/결과 4파일만 선별한다. 로컬 전체 서버·실외부 YouTube·UI 연결·운영 배포/확인은 이번 실행 범위가 아니다. 최신 CI/리뷰는 게시 후 후속 기록한다.
 
 

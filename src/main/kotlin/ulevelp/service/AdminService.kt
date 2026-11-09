@@ -222,13 +222,21 @@ class AdminService(private val db: Database?) {
         AdminEpisodeModerationDto(postId.toString(), row[c.status], episodeTs(row[c.hiddenAt]), row[c.hiddenReason], episodeTs(row[c.tierPausedAt]), episodeTs(row[c.withdrawnAt]), episodeTs(row[c.updatedAt])!!)
     }
 
-    private fun Transaction.episodeReportDto(row: ResultRow): AdminEpisodeReportDto {
+    private fun episodeReportsQuery(): Query {
         val r = SharedPracticeCardReportsTable
         val c = SharedPracticeCardsTable
-        val card = c.selectAll().where { c.id eq row[r.cardId] }.single()
-        val name = ProfilesTable.select(ProfilesTable.publicName).where { ProfilesTable.id eq card[c.userId] }.single()[ProfilesTable.publicName]
-        return AdminEpisodeReportDto(row[r.id].toString(), row[r.cardId].toString(), card[c.userId].toString(), name, row[r.reporterId].toString(), row[r.reason], row[r.detail], row[r.status],
-            episodeTs(row[r.createdAt])!!, episodeTs(row[r.resolvedAt]), card[c.status], episodeTs(card[c.withdrawnAt]), episodeTs(card[c.hiddenAt]))
+        val p = ProfilesTable
+        // One READ COMMITTED snapshot for the report and its cascade-deletable parents.
+        return r.join(c, JoinType.INNER, r.cardId, c.id)
+            .join(p, JoinType.INNER, c.userId, p.id)
+            .select(r.columns + listOf(c.userId, c.status, c.withdrawnAt, c.hiddenAt, p.publicName))
+    }
+
+    private fun episodeReportDto(row: ResultRow): AdminEpisodeReportDto {
+        val r = SharedPracticeCardReportsTable
+        val c = SharedPracticeCardsTable
+        return AdminEpisodeReportDto(row[r.id].toString(), row[r.cardId].toString(), row[c.userId].toString(), row[ProfilesTable.publicName], row[r.reporterId].toString(), row[r.reason], row[r.detail], row[r.status],
+            episodeTs(row[r.createdAt])!!, episodeTs(row[r.resolvedAt]), row[c.status], episodeTs(row[c.withdrawnAt]), episodeTs(row[c.hiddenAt]))
     }
 
     suspend fun listEpisodeReports(actorId: UUID, status: String, limit: Int, rawCursor: String?): AdminEpisodeReportListResponse {
@@ -236,7 +244,7 @@ class AdminService(private val db: Database?) {
         return DatabaseFactory.dbQuery(requireDb()) {
             requireEpisodeOwner(actorId)
             val r = SharedPracticeCardReportsTable
-            val rows = r.selectAll().where { (r.status eq status) and episodeBefore(r.createdAt, r.id, cursor) }
+            val rows = episodeReportsQuery().where { (r.status eq status) and episodeBefore(r.createdAt, r.id, cursor) }
                 .orderBy(r.createdAt to SortOrder.DESC, r.id to SortOrder.DESC).limit(limit + 1).toList()
             AdminEpisodeReportListResponse(rows.take(limit).map { episodeReportDto(it) }, if (rows.size > limit) episodeNext(rows[limit - 1], "reports", status, r.createdAt, r.id) else null)
         }
@@ -253,7 +261,7 @@ class AdminService(private val db: Database?) {
         audit(actorId, "episode_report_resolve", card[SharedPracticeCardsTable.userId],
             buildJsonObject { put("status", "open"); put("postId", postId.toString()) },
             buildJsonObject { put("status", status); put("resolvedAt", episodeTs(after[r.resolvedAt])); put("postId", postId.toString()) }, reason, reportId.toString())
-        episodeReportDto(after)
+        episodeReportDto(episodeReportsQuery().where { r.id eq reportId }.single())
     }
 
     /** owner가 아니면 403 FORBIDDEN */

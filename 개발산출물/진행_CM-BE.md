@@ -6,7 +6,7 @@
 - 승인: 로컬 구현/테스트 승인(§5) 및 P2 수정 승인(§7)에 이어, 사용자 “CM-BE 로컬 구현과 P2 수정을 Git으로 게시한다. 커밋·push·PR을 승인한다. 머지는 사용자 담당이며 배포는 제외한다” 확인(§8).
 - 담당/변경 파일: [상세 명세](명세/CM-BE_구현명세.md) §2/§10의 제품 11, 테스트 7, CM-BE 문서 3 (총 21파일). 사용자 문서 이동·다른 작업 변경(LLM 작업, 계획/인수인계 메모)은 안전하게 보존.
 - 완료 기준: 변경 선별, 관련 검증 확인, main 대상 PR 생성, 최신 CI 종료와 리뷰 판단 기록.
-- 현재: PR #145 생성 및 CI 전체 통과(Pass). 자동 리뷰 1건(AdminService 신고 목록 JOIN 권장) 확인 및 판단 기록 완료. 사용자 머지 대기. [검토 결과](결과/CM-BE_로컬검토.md) 및 아래 §8을 따른다.
+- 현재: PR #145의 신고 목록 삭제 경합 P2 수정과 로컬 관련 31개 검증 통과. 아래 §9의 게시/최신 CI 확인을 진행하며 §4/§8의 게시 대기·후속 보완 판단은 당시 기록이다.
 
 ## 1. Git·선행 확인 결과
 
@@ -32,6 +32,8 @@
 - 제품 빌드·단위/API/E2E·마이그레이션·변이 검사·CI는 명세 전용 요청이므로 미실행. 구현 명세 §8은 검증 계획이며 실제 통과 결과가 아니다.
 
 ## 4. 다음 행동·재개 지시
+
+> 2026-11-09 갱신: 아래 1~4 및 코드 블록은 Git 게시 전 기록이다. 게시와 커서 수정은 반복하지 않는다. 현재 리뷰 반영은 §9를 따른다. PR 검증 후에는 실제 PR #145 머지 확인과 사용자 변경을 보존한 main 안전 동기화를 선행하고, 계획의 CM-UI 상세 명세 검토부터 시작한다. CM-UI 구현·Git 게시는 별도 사용자 범위 지시를 따른다.
 
 1. git status/브랜치와 이 파일 §5~§6, 상세 명세를 확인한다. 로컬 미커밋 변경은 다른 PC에 전달되지 않았다. 기존 staged 문서 이동·LLM 작업·계획/인수인계 변경은 CM-BE 제품 변경과 구분해 보존한다.
 2. [검토 결과 §5](결과/CM-BE_로컬검토.md)의 P2 로컬 수정·정식 회귀를 완료했다. §7의 17개 통과와 과거 전체 314개 통과를 구별한다. P2 수정은 반복하지 않는다. 현재 승인 범위의 다음 로컬 작업은 없다. CM-BE 전체 Git 게시는 별도 지시 대기이며, 승인될 경우 아래 3~4 순서로 이어간다.
@@ -122,6 +124,18 @@ Git 처리: 커밋·push·PR은 별도 명시 지시 전 실행하지 않는다.
 - 리뷰 코멘트 및 판단 기록:
   - 자동 리뷰: `chatgpt-codex-connector[bot]` P2 1건 등록 ([PR #145 코멘트](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772))
   - 지적 내용: `AdminService.kt:228-229`의 `episodeReportDto`가 `listEpisodeReports`에서 신고 목록을 읽은 뒤 카드 정보를 단건 `.single()`로 조회하므로, `READ COMMITTED` 격리 수준에서 조회 도중 신고된 곡/사용자가 cascade 삭제될 경우 500 예외가 발생할 수 있어 신고·카드·프로필을 JOIN 쿼리로 한 번에 조회하거나 안전 처리 권장.
-  - 판단: **타당함**. 운영자 신고 목록 조회와 곡/사용자 삭제 경합 시의 잠재 결함이자 N+1 쿼리 개선 포인트임. 현재 PR #145는 승인된 CM-BE 로컬 구현과 P2 커서 수정을 게시하여 CI를 성공적으로 마친 상태이며, 머지는 사용자 담당임. 해당 리뷰 제안(JOIN 단일 쿼리화)은 후속 리뷰 반영 또는 다음 단계에서 적용하기로 판단·기록한다.
+  - 판단: **타당함**. 운영자 신고 목록 조회와 곡/사용자 삭제 경합 시의 잠재 결함이자 N+1 쿼리 개선 포인트임. 당시 후속 보완으로 남겼으나 사용자 추가 요청에 따라 같은 PR에서 수정한다(§9).
+
+## 9. 2026-11-09 PR #145 신고 목록 삭제 경합 리뷰 반영
+
+- 승인: 사용자 “pr 145의 리뷰 코멘트를 검토하여 필요하다면 수정 후 해당 pr에 커밋 푸시”. 해당 결함의 코드·회귀·기록·기존 PR 커밋/push/최신 CI 확인 범위다. 머지·배포·리뷰 답글/resolve는 실행하지 않는다.
+- 시작: `step/cm-be`, HEAD/원격 PR head `08191bce54974721854a75af60fbe26bdd82807c`, main 대상 열린 PR 확인. 기존 규칙/문서 수정, 계획 삭제·이동, LLM 스크립트는 보존하고 선별 커밋에서 제외한다.
+- 지적: [discussion_r4509375772](https://github.com/choise-hun/doloop/pull/145#discussion_r4509375772), `chatgpt-codex-connector[bot]`, P2. 수정 전 `AdminService.kt:225-241`의 신고→카드→프로필 별도 조회와 `DatabaseFactory.kt:94`의 READ COMMITTED, V10의 CASCADE를 대조해 **타당/반영**으로 판단했다.
+- 수정 명세: 신고·카드·작성자 프로필을 한 SELECT snapshot으로 읽고 필요한 열만 DTO에 매핑한다. 상태 필터·created_at/id 내림차순·limit+1·next 커서·owner 권한·nullable 공개명·기존 응답 필드/상태 코드를 유지한다. 신고 종결 응답도 같은 JOIN mapper를 사용하며 기존 잠금·audit 트랜잭션은 유지한다. 공개 함수 시그니처·DB 스키마·API 계약 변경 없음.
+- 회귀: `EpisodeReportReadConcurrencyTest`는 실제 PostgreSQL JDBC SELECT 결과 반환 직후 별도 연결로 세션/곡/사용자 삭제를 각각 커밋한다. 현재 응답은 조회 시점 snapshot, 다음 조회는 빈 목록이며 DB 카드/신고0을 단언한다. JDBC 관찰 장치는 테스트에만 둔다.
+- Red: 수정 전 정식 회귀 **1 test / failures 1 / errors 0 / skipped 0**, 첫 세션 삭제 조건에서 `AdminService.kt:228`의 `NoSuchElementException: Collection is empty` 재현. 원시 `build/pr145-red.log`, `build/pr145-red.xml`(ignored). 세 조건 모두 수정 전 실행됐다는 의미는 아니다.
+- 검증/최신 CI 결과는 아래 후속 기록 및 [결과 §7](결과/CM-BE_로컬검토.md)을 따른다. 구체적인 다음 행동: 관련 검증 → 자체 diff 검토 → 4파일 선별 커밋·push → 최신 head CI와 리뷰를 대기 중/종료 후/최종 직전에 각각 확인한다.
+- Green: 결과 §7의 명령 → **BUILD SUCCESSFUL in 1m 39s**, XML 7개 **31 tests / failures 0 / errors 0 / skipped 0**. CM-BE18개(신규 경합1 포함)·TierQuotaAdminApiTest13개. `build/pr145-green.log`, `build/pr145-review/test-results/test/TEST-*.xml`(ignored). 실제 로컬 격리 PostgreSQL에서 세 삭제 조건 snapshot/다음 조회 빈 결과와 기존 커서·권한·종결/audit 검증 통과.
+- 자체 검토: JOIN은 PK/작성자 FK의 1:1 매칭이라 신고 중복/페이지 수를 늘리지 않는다. mapper의 추가 SELECT를 제거했고 resolve 경로의 잠금은 유지했다. 기존 사용자 변경 SHA-256 동일, 초기 index 빈 상태 확인. 로컬 전체 서버 재실행·UI/실외부/운영은 미실행.
 
 
