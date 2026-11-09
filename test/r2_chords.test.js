@@ -46,12 +46,13 @@ test('R2-C2: 5종 악기(g6, g7, b4, b5, b6) 칩 전환 및 베이스 AU.bassPlu
   assert.ok(chordsTsx.includes('audioEngine.bassPluck'), 'ChordsPage.tsx must invoke audioEngine.bassPluck for bass');
 });
 
-test('R2-C3: CAGED 5블럭(#1~#5) 지판 .press/.ctx/.lowestRoot 구분 및 31스텝 시퀀스(#sc-seq)', () => {
+test('R2-C3: CAGED 5블럭(#1~#5) 지판 .press/.ctx/.lowestRoot 구분 및 시퀀스 격자 제거(CH-A)', () => {
   const chordsTsx = readText('frontend/src/pages/ChordsPage.tsx');
   const diagramsTsx = readText('frontend/src/components/chords/ChordDiagrams.tsx');
 
   assert.ok(chordsTsx.includes('id="sc-board"'), 'ChordsPage.tsx must have #sc-board');
-  assert.ok(chordsTsx.includes('id="sc-seq"'), 'ChordsPage.tsx must have #sc-seq');
+  assert.ok(!chordsTsx.includes('id="sc-seq"'), 'CH-A removes the visual sequence grid');
+  assert.ok(chordsTsx.includes('let seq = scSeqNotes'), 'Playback must preserve the calculated sequence');
   assert.ok(diagramsTsx.includes("'blk'"), 'Hand window box .blk must be present in ChordDiagrams.tsx');
   assert.ok(diagramsTsx.includes("parts.push('press')"), 'Block notes should have press class');
   assert.ok(diagramsTsx.includes("parts.push('lowestRoot')"), 'Lowest root should have lowestRoot class');

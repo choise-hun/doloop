@@ -11,14 +11,12 @@ import {
   TuningId,
 } from '../lib/musicEngine';
 import {
-  BlockSeqMilestoneSummary,
   buildCtxNotes,
   ChordBoxSvg,
   ChordNeckSvg,
   CircleWheelSvg,
   DiagramNote,
   dotClassOf,
-  formatBlockSeqSummary,
   FretboardSvg,
   fretText,
   geNotesToDiagram,
@@ -189,6 +187,7 @@ export function ChordsPage(): React.ReactElement {
     timersRef.current.forEach((id) => window.clearTimeout(id));
     timersRef.current = [];
     setScPlaying(false);
+    setScNow(null);
     setTonePlaying(false);
     setMxPlaying(false);
     setCcPlaying(false);
@@ -308,20 +307,6 @@ export function ChordsPage(): React.ReactElement {
     });
     return up.concat(up.slice(1, -1).reverse());
   }, [scActiveBlockObj, scCurrentKey.root, scType, scTuning.open, scWinLo, scWinHi, scRange]);
-
-  const scMilestoneSummary = useMemo<BlockSeqMilestoneSummary>(() => {
-    if (!scActiveBlockObj) {
-      return {
-        totalSteps: 0,
-        startLabel: '-',
-        highPeakLabel: '-',
-        lowPeakLabel: '-',
-        endLabel: '-',
-        summaryText: '',
-      };
-    }
-    return formatBlockSeqSummary(scActiveBlockObj.notes, scSeqNotes, scTuning.open.length);
-  }, [scActiveBlockObj, scSeqNotes, scTuning.open.length]);
 
   const scBoardNotes = useMemo<DiagramNote[]>(() => {
     const raw = CT.scaleOnBoard(scCurrentKey.root, scType, scTuning.open, scWinLo, scWinHi);
@@ -1125,8 +1110,8 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
 
-          {/* 지판 및 시퀀스 바 */}
-          <div className={styles.scroll}>
+          {/* 지판 */}
+          <div className={styles.scroll} data-align-group="scBoardFlow:left,right">
             <div id="sc-board">
               <NeckSvg
                 open={scTuning.open}
@@ -1142,29 +1127,31 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
 
-          {/* CAGED 4대 이정표 요약 및 31스텝 시퀀스 바 */}
-          {scActiveBlockObj && (
-            <div className={styles.seqSummary}>
-              {scMilestoneSummary.summaryText}
-            </div>
-          )}
-          <div id="sc-seq" className={styles.seq} aria-label={t('chords.cagedSeqAria')}>
-            {scSeqNotes.map((n, i) => {
-              const isNow = !!scNow && scNow.s === n.s && scNow.f === n.f;
-              return (
-                <span
-                  key={`${n.s}-${n.f}-${i}`}
-                  className={`seqn ${n.isRoot ? 'root' : ''} ${isNow ? 'now' : ''}`}
+          {/* CAGED 5블럭 선택기 */}
+          <div className={styles.field} data-align-group="scBoardFlow:left,right">
+            <span id="sc-block-label" className={styles.lab}>{t('chords.cagedBlockSelectLab')}</span>
+            <div id="sc-block" className={styles.chips} role="group" aria-labelledby="sc-block-label">
+              {CAGED_BLOCK_CHIPS.map((b) => (
+                <button
+                  key={b.v}
+                  type="button"
+                  className={styles.blockButton}
+                  data-align-group="scBlocks:height"
+                  disabled={scIsCagedUnsupported && b.v > 0}
+                  aria-pressed={scEffBlock === b.v}
+                  onClick={() => setScBlock(b.v)}
                 >
-                  {scTuning.open.length - n.s}·{n.f}
-                  <b>{n.name}</b>
-                </span>
-              );
-            })}
+                  {t(b.labelKey)}
+                </button>
+              ))}
+            </div>
+            <span id="sc-block-msg" className={styles.note} hidden={!scIsCagedUnsupported}>
+              {t('chords.cagedMinorNotice')}
+            </span>
           </div>
 
           {/* 범례 */}
-          <div className={styles.legend}>
+          <div className={styles.legend} data-align-group="scBoardFlow:left,right">
             <span><i className="r" />{t('chords.legendRoot')}</span>
             <span><i className="g" />{t('chords.legendScaleNotes')}</span>
             <span><i className="ctxk" />{t('chords.legendOutNotes')}</span>
@@ -1238,28 +1225,6 @@ export function ChordsPage(): React.ReactElement {
                 </option>
               ))}
             </select>
-          </div>
-
-          {/* CAGED 5블럭 선택기 */}
-          <div className={styles.field}>
-            <span className={styles.lab}>{t('chords.cagedBlockSelectLab')}</span>
-            <div id="sc-block" className={styles.chips}>
-              {CAGED_BLOCK_CHIPS.map((b) => (
-                <button
-                  key={b.v}
-                  type="button"
-                  className={styles.chip}
-                  disabled={scIsCagedUnsupported && b.v > 0}
-                  aria-pressed={scEffBlock === b.v}
-                  onClick={() => setScBlock(b.v)}
-                >
-                  {t(b.labelKey)}
-                </button>
-              ))}
-            </div>
-            <span id="sc-block-msg" className={styles.note} hidden={!scIsCagedUnsupported}>
-              {t('chords.cagedMinorNotice')}
-            </span>
           </div>
 
           <div className={styles.controls}>

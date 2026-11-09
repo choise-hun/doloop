@@ -563,7 +563,6 @@ export const JA: Record<I18nKey, string> = {
   'chords.btnPrevKey': "◀ 前のキー",
   'chords.btnNextKey': "次のキー ▶",
   'chords.fretboardKeyLabel': "{name} 指板",
-  'chords.cagedSeqAria': "CAGEDブロック演奏シーケンス",
   'chords.legendRoot': "ルート",
   'chords.legendScaleNotes': "スケール構成音",
   'chords.legendOutNotes': "ブロック外スケール音",

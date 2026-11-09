@@ -563,7 +563,6 @@ export const EN: Record<I18nKey, string> = {
   'chords.btnPrevKey': "◀ Prev Key",
   'chords.btnNextKey': "Next Key ▶",
   'chords.fretboardKeyLabel': "{name} fretboard",
-  'chords.cagedSeqAria': "CAGED block sequence",
   'chords.legendRoot': "Root",
   'chords.legendScaleNotes': "Scale tone",
   'chords.legendOutNotes': "Scale tone outside block",

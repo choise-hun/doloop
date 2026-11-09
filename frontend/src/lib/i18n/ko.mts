@@ -575,7 +575,6 @@ export const KO = {
   'chords.btnPrevKey': "◀ 이전 키",
   'chords.btnNextKey': "다음 키 ▶",
   'chords.fretboardKeyLabel': "{name} 지판",
-  'chords.cagedSeqAria': "CAGED 블럭 연주 시퀀스",
   'chords.legendRoot': "근음",
   'chords.legendScaleNotes': "스케일 구성음",
   'chords.legendOutNotes': "블럭 밖 스케일 음",
