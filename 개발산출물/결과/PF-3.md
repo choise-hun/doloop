@@ -85,4 +85,28 @@
 ## 5. 미실행 및 차단 사항
 
 1. **실제 외부 네트워크/live OAuth 서버 A/B 통합 미실행 (차단):** 실제 Supabase live OAuth 서버 및 원격 DB가 로컬 환경에 부재하므로, 실제 live 브라우저 A/B 인증 여정은 미실행(차단)으로 유지한다. 본 검증은 Testcontainers PostgreSQL 격리 DB API 테스트(`CommunityApiTest`, `EpisodeLogApiTest`) 및 Playwright mock E2E로 대체 검증되었으며, live 서버 통합 검증으로 승격하지 않는다.
-2. **Git 게시 미실행:** 사용자 지침("로컬 검증·기록만. 커밋·push·PR·머지·배포 금지")에 따라 커밋·push·PR 생성·CI 감시·머지·배포는 수행하지 않고 로컬 검증 및 결과/진행 기록까지만 완료했다. 별도 Git 게시 승인 시 후속 진행이 가능하다.
+2. **Git 게시 완료:** 사용자 승인에 따라 커밋·push 및 main 대상 PR #152 생성, CI 7개 전수 통과 확인 완료.
+3. **PR 머지 및 운영 배포 미실행:** PR 머지 및 배포는 사용자 권한으로 미실행 유지.
+
+---
+
+## 6. Git 게시 내역 및 CI·리뷰 결과
+
+### 6.1 Git 게시 및 PR 생성
+- 커밋: `d76067e` `feat(profile): 프로필 내 공유 폴더·개별 게시물 관리와 철회 및 전수 검증`
+- PR: [PR #152 (choise-hun/doloop)](https://github.com/choise-hun/doloop/pull/152) (`main <- step/PF-3`)
+
+### 6.2 CI 체크 감시 결과 (7개 전수 통과)
+- `CI/CI ok (pull_request)`: 4s (성공)
+- `CI/Detect code changes (pull_request)`: 5s (성공)
+- `CI/Docker build & smoke test (pull_request)`: 2m 12s (성공)
+- `CI/E2E XSS & CSP (Playwright, spa) (pull_request)`: 11m 11s (성공)
+- `CI/Kotlin test (JDK 21) (pull_request)`: 2m 27s (성공)
+- `CI/Test (Node 22) (pull_request)`: 48s (성공)
+- `CI/Test (Node 24) (pull_request)`: 44s (성공)
+
+### 6.3 PR 리뷰 코멘트 조회 및 타당성 분석
+- 조회 결과: Codex 자동 리뷰 인라인 코멘트 2건 확인 (P2).
+  1. `frontend/src/components/community/MySharesPanel.tsx:84`: 전체 자동 연동을 끌 때 저장된 폴더 상태 초기화/재조회 누락 (`me?.shareAutosync` 의존성 누락) -> **타당 (반영 권장)**
+  2. `frontend/src/components/community/MySharesPanel.tsx:78`: 최초 `getShare` 실패 후 복구 시 서버의 공개 제목 대신 분류 이름이 남는 현상 (`old.failed` 임시 제목 병합 분기 누락) -> **타당 (반영 권장)**
+- 권장 조치: 시니어 0단계 핵심 로직에 대한 엣지 케이스 결함으로, `개발산출물/프롬프트_템플릿_4단계.md` §3-P 핀포인트 결함 검증·수정 세션으로 인계하여 처리 권장.

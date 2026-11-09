@@ -479,4 +479,42 @@ Git 처리: 로컬 검증·기록만. 커밋·push·PR·머지·배포 금지.
 ### 12.5 미실행 및 차단 사항
 
 1. **실제 외부 네트워크/live OAuth 서버 A/B 통합 미실행 (차단):** 실제 live Supabase OAuth 서버 및 원격 DB 환경이 로컬에 부재하므로, 실제 live 브라우저 A/B 인증 여정은 미실행(차단)으로 유지. Testcontainers PostgreSQL 격리 DB 테스트로 검증 완료.
-2. **Git 게시 미실행:** 사용자 지침("로컬 검증·기록만. 커밋·push·PR·머지·배포 금지")에 따라 커밋·push·PR·머지·배포는 미실행. 로컬 검증 및 결과/진행 기록까지만 완료. 별도 Git 게시 승인 대기.
+2. **Git 게시 미실행:** 로컬 검증 당시의 상태이며, 이후 승인에 따른 실제 Git 게시 및 PR 검증 결과는 아래 §13을 따른다.
+
+## 13. PF-3 Git 게시 및 PR 검증 — 2026-11-10
+
+### 13.1 승인·Git 게시 내역
+
+- 사용자 명시 승인: “PF-3 Git 게시 및 PR 검증. 목표: 로컬 검증이 완료된 PF-3 산출물을 커밋, push하고 main 대상 PR 생성 후 CI 및 리뷰를 확인한다.”
+- Git 커밋 및 Push:
+  - 승인 7개 소스/테스트 파일 및 PF-3 문서(명세, 결과, 진행) 스테이징. 사용자 문서 2개(`인수인계_메모.md`, `계획/상용_서비스_계획.md`) 커밋 제외 및 100% 보존.
+  - 커밋: `d76067e` `feat(profile): 프로필 내 공유 폴더·개별 게시물 관리와 철회 및 전수 검증`.
+  - 원격 push: `origin/step/PF-3` 신규 브랜치 push 성공.
+  - PR 생성: [PR #152](https://github.com/choise-hun/doloop/pull/152) (`main <- step/PF-3`).
+
+### 13.2 CI 체크 감시 결과
+
+`gh pr checks 152 --watch` 실행 결과, 7개 체크 전수 통과 (0 failed, 7 successful, 0 cancelled):
+- `CI/CI ok (pull_request)`: 4s (성공)
+- `CI/Detect code changes (pull_request)`: 5s (성공)
+- `CI/Docker build & smoke test (pull_request)`: 2m 12s (성공)
+- `CI/E2E XSS & CSP (Playwright, spa) (pull_request)`: 11m 11s (성공)
+- `CI/Kotlin test (JDK 21) (pull_request)`: 2m 27s (성공)
+- `CI/Test (Node 22) (pull_request)`: 48s (성공)
+- `CI/Test (Node 24) (pull_request)`: 44s (성공)
+
+### 13.3 PR 리뷰 코멘트 조회 및 타당성 분석
+
+조회 API: `gh api repos/choise-hun/doloop/pulls/152/reviews`, `comments`, `issues/152/comments`
+Codex 자동 리뷰에서 2건의 인라인 코멘트(P2)가 확인됨.
+
+| 번호 | 위치 | 지적 요지 | 타당성 판단 | 근거 및 권장 조치 |
+| --- | --- | --- | --- | --- |
+| 1 | `frontend/src/components/community/MySharesPanel.tsx:84` | 전체 자동 연동을 끌 때 저장된 폴더 상태 초기화/재조회 누락 | **타당 (반영 권장)** | `useEffect`의 의존성 배열에 `me?.shareAutosync`가 누락되어 있어, 사용자가 프로필/설정에서 전체 `shareAutosync`를 변경해도 패널의 행 상태가 갱신되지 않음. `[identity, me?.id, me?.limits?.communityWrite, me?.publicName, me?.shareAutosync, retry]`로 의존성에 추가하여 전체 설정 변경 시 서버 상태를 재조회하도록 보강 필요. |
+| 2 | `frontend/src/components/community/MySharesPanel.tsx:78` | 최초 `getShare` 실패 후 복구 시 서버의 공개 제목 대신 분류 이름이 남는 현상 | **타당 (반영 권장)** | 최초 실패 시 `titleInput: cat.name`으로 임시 설정된 후, 재시도로 성공했을 때 `previous.find(...)?.titleInput`을 무조건 우선 병합하여 서버의 실제 `res.share?.title`을 덮어씀. `old && !old.failed ? old.titleInput : row.titleInput`으로 분기하여 이전 실패 행 복구 시에는 서버 제목을 채택하도록 보강 필요. |
+
+- 조치 방향: 두 지적 모두 시니어 0단계 핵심 로직(`MySharesPanel.tsx`)의 내부 엣지 케이스에 해당하며 매우 타당함. `개발산출물/프롬프트_템플릿_4단계.md` §3-P에 따라 **시니어 핀포인트 결함 검증·수정(3-P단계)** 또는 사용자의 직접 판단에 따라 후속 처리하도록 인계함.
+
+### 13.4 미실행 사항
+
+- PR 머지 및 운영 배포: 사용자 권한으로 미실행.
