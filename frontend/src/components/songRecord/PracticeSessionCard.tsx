@@ -98,7 +98,7 @@ export function PracticeSessionCard({
 
   return (
     <div
-      className={`card ${styles.card}`}
+      className={`card tl-row ${styles.card} ${styles.tlRow || ''}`}
       data-session-id={session.sessionId}
       data-surface={surface}
       aria-label={`${session.date} ${t('episode.defaultTitle')}`}
@@ -108,7 +108,7 @@ export function PracticeSessionCard({
         className={styles.sessionHead}
         data-align-group={`sessionHead-${surface}-${session.sessionId}:top@768`}
       >
-        <div className={styles.sessionTitle}>{titleText}</div>
+        <div className={`session-title ${styles.sessionTitle}`}>{titleText}</div>
         <SafeLink className={`ghost mini ${styles.ghostMini}`} href={playHref}>
           {t('log.btnPractice')}
         </SafeLink>
@@ -133,7 +133,7 @@ export function PracticeSessionCard({
       <div className={styles.coverageRow}>
         <div className={styles.coverageBarWrap}>
           <progress
-            className={`${styles.coverageBar} ${coverage >= 100 ? styles.coverageComplete : ''}`}
+            className={`tlCoverageBar ${styles.coverageBar} ${coverage >= 100 ? styles.coverageComplete : ''}`}
             value={coverage}
             max={100}
             aria-label={t('episode.aria.coverage', { pct: coverage })}
@@ -147,29 +147,28 @@ export function PracticeSessionCard({
         <div className={styles.partsSection} aria-label={t('episode.aria.details')}>
           <button
             type="button"
-            className={`ghost mini ${styles.partsToggleBtn}`}
+            className={`ghost mini btnAccordion ${styles.partsToggleBtn}`}
             aria-expanded={partsOpen}
             aria-controls={`sessionParts-${surface}-${session.sessionId}`}
             onClick={() => setPartsOpen((prev) => !prev)}
           >
             {partsOpen ? t('episode.partsFold') : t('episode.partsUnfold', { count: parts.length })}
           </button>
-          {partsOpen && (
-            <div
-              id={`sessionParts-${surface}-${session.sessionId}`}
-              className={styles.partsList}
-            >
-              {parts.map((p, idx) => (
-                <div key={idx} className={styles.partItem}>
-                  <span className={styles.partName}>{p.name || t('episode.partEmpty')}</span>
-                  <span className={styles.partStats}>
-                    {segText(p.a, p.b, p.rate)} · {fmtSec(p.seconds)} · {t('episode.loopsUnit', { loops: p.loops })}
-                    {p.completed ? ' ✓' : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div
+            id={`sessionParts-${surface}-${session.sessionId}`}
+            className={`tlPartStats ${styles.partsList}`}
+            hidden={!partsOpen}
+          >
+            {parts.map((p, idx) => (
+              <div key={idx} className={styles.partItem}>
+                <span className={styles.partName}>{p.name || t('episode.partEmpty')}</span>
+                <span className={styles.partStats}>
+                  {segText(p.a, p.b, p.rate)} · {fmtSec(p.seconds)} · {t('episode.loopsUnit', { loops: p.loops })}
+                  {p.completed ? ' ✓' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {!parts && (

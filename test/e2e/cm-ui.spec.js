@@ -149,7 +149,7 @@ test('CUI-03 UID/seq/scope 비동기 레이스 가드: scope 전환 시 이전 �
 
   // 이전 all 응답을 뒤늦게 resolve
   resolveSlowAll();
-  await page.waitForTimeout(100);
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
 
   // 뒤늦게 도착한 all 응답이 현재 following 화면을 덮어쓰지 않아야 함
   await expect(page.locator(`[data-post-id="${EPISODE_POST_FOLLOWING.postId}"]`)).toBeVisible();
