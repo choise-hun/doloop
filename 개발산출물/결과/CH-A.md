@@ -1,7 +1,7 @@
 # CH-A 검증 결과
 
 - 날짜/환경: 2026-11-09, Windows PowerShell, Node v26.8.1, Chromium/Playwright 1.51.1, 로컬 Node 정적 SPA 서버.
-- 기준: main `30bcfc7`, 작업 `feat/ch-a-caged-layout`. [화면 명세](../명세/CH-A_구현명세.md), [실행 기록](../진행_CH-A.md).
+- 기준: main `30bcfc7`, 작업 `feat/ch-a-caged-layout`. [화면 명세](../명세/CH-A_구현명세.md), [실행 기록](../완료/진행_CH-A.md).
 - 선행: [PR #141](https://github.com/choise-hun/doloop/pull/141)은 choise-hun가 2026-11-09 07:38 KST 머지. 제품 CI [42530210412](https://github.com/choise-hun/doloop/actions/runs/42530210412) Node 22/24·E2E·Kotlin·Docker·CI ok success. 최신 문서 head `2e38a05` CI [42531003771](https://github.com/choise-hun/doloop/actions/runs/42531003771) success, 제품 jobs skipped를 구분 확인.
 
 ## 1. 구현·실패 재현
@@ -52,4 +52,7 @@
 - 구현/화면 연결: 완료. 게스트 진입, 전체/5블럭·미지원 복귀·키보드·기타/베이스 oscillator 시작·현재음·정지·탭 이탈·코드톤 시퀀스 유지 확인.
 - 통합: 서버/DB/API 계약 미변경이므로 CH-A 통합 데이터 검수 N/A. E2E는 mockApp 인증/주변 API 장치이며 실제 서버+격리 DB의 AV 검수를 재실행하지 않았다.
 - 운영: 배포·운영 쓰기·추가 유료 분석 미실행. headless oscillator 시작은 가청 음질·실기기 청취 검증을 뜻하지 않는다.
-- 커밋·PR·CI·리뷰: 게시 후 이 절에 확인 결과를 추가한다. 머지는 사용자 담당.
+- 구현 커밋 `8889549`·push, [main PR #142](https://github.com/choise-hun/doloop/pull/142) 게시 완료.
+- 제품 CI [42540586393](https://github.com/choise-hun/doloop/actions/runs/42540586393) 전체 success: Node 22/24 각각 403/403, 전체 E2E 443/443, Kotlin·Docker build/smoke·CI ok success. 로컬 CRLF 한계와 CI Linux 통과를 구분한다. 기존 파이프라인 실행이며 AV 실제 계정 검수는 수동 재실행하지 않았다.
+- 리뷰: PR 직후 일반/라인/리뷰 없음, CI 중 [자동 요약](https://github.com/choise-hun/doloop/pull/142#issuecomment-6729386211)에서 대상 `8889549` 코드 리뷰 completed/findings 없음 확인. 2026-11-09 09:40 KST CI 종료 후 동일 요약 1건, review submissions·inline threads 0 재확인. 처리할 지적 없음. 추가 리뷰 호출·댓글·resolve 없음.
+- 이 문서/완료 기록의 마감 커밋을 게시한 뒤 최신 head CI·리뷰를 별도로 확인한다. CI의 문서 전용 skipped와 위 제품 CI를 구분하고 최종 확인은 PR Checks와 세션 완료 보고를 기준으로 한다. 머지는 사용자 담당.
