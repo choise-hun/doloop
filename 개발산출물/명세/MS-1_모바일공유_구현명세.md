@@ -139,7 +139,50 @@ npx cap init ULeveLP com.ulevelp.app --web-dir dist
 </activity>
 ```
 
-#### 3) iOS 시스템 공유 연동 (Share Extension)
+#### 3) Android SEND 인텐트 수신 및 네이티브 브리지 (`MainActivity.java`)
+* **배경:** Android YouTube 앱 공유는 `ACTION_SEND`와 `Intent.EXTRA_TEXT`로 전달되나, Capacitor 6 `AppPlugin`의 `handleOnNewIntent()`는 `ACTION_VIEW`와 `intent.getData()`만 `appUrlOpen` 이벤트로 전달함.
+* **해결 (네이티브 브리지):** `MainActivity.java`에서 `onCreate()` 및 `onNewIntent()` 시 `ACTION_SEND`를 감지하여 공유 텍스트를 추출하고 커스텀 스킴 URL로 변환하여 처리.
+```java
+// android/app/src/main/java/com/ulevelp/app/MainActivity.java
+package com.ulevelp.app;
+
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        handleSendIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleSendIntent(intent);
+    }
+
+    private void handleSendIntent(Intent intent) {
+        if (intent != null && Intent.ACTION_SEND.equals(intent.getAction()) && "text/plain".equals(intent.getType())) {
+            String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (sharedText != null && !sharedText.isEmpty()) {
+                // 커스텀 스킴 URL로 변환하여 브리지로 라우팅 (iOS Share Extension과 규격 일원화)
+                String schemeUrl = "ulevelp://share?url=" + Uri.encode(sharedText);
+                bridge.getWebView().post(() -> {
+                    bridge.getWebView().evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('appUrlOpen', { detail: { url: '" + schemeUrl + "' } }));",
+                        null
+                    );
+                });
+            }
+        }
+    }
+}
+```
+
+#### 4) iOS 시스템 공유 연동 (Share Extension)
 * **구성:** Xcode 프로젝트 내 `ShareExtension` 타깃 추가.
 * **동작:**
   1. iOS 유튜브 앱에서 [공유] 시 ULevelP Share Extension이 실행됨.
@@ -147,20 +190,35 @@ npx cap init ULeveLP com.ulevelp.app --web-dir dist
   3. URL 스킴 `ulevelp://share?url=${encodeURIComponent(sharedUrl)}`를 호출하여 메인 앱을 열고 익스텐션 즉시 종료.
   4. 메인 앱이 포그라운드로 올라오며 해당 URL을 감지.
 
-#### 4) Capacitor 앱 딥링크/인텐트 수신 리스너 (`frontend/src/App.tsx` 또는 `main.tsx`)
+#### 5) Capacitor 앱 딥링크/인텐트 통합 수신 리스너 (`frontend/src/App.tsx` 또는 `main.tsx`)
 ```typescript
 import { App as CapApp } from '@capacitor/app';
 
+// 1. Capacitor 공식 딥링크 리스너 (iOS 커스텀 스킴 및 Android ACTION_VIEW)
 CapApp.addListener('appUrlOpen', (event) => {
-  // 예: ulevelp://share?url=https%3A%2F%2Fyoutu.be%2Fxyz
-  const url = new URL(event.url);
-  if (url.protocol === 'ulevelp:' && url.host === 'share') {
-    const targetUrl = url.searchParams.get('url');
-    if (targetUrl) {
-      window.location.href = `/share-target?url=${encodeURIComponent(targetUrl)}`;
-    }
+  handleShareUrl(event.url);
+});
+
+// 2. Android ACTION_SEND 네이티브 브리지 이벤트 리스너
+window.addEventListener('appUrlOpen', (event: any) => {
+  if (event.detail && event.detail.url) {
+    handleShareUrl(event.detail.url);
   }
 });
+
+function handleShareUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol === 'ulevelp:' && url.host === 'share') {
+      const targetUrl = url.searchParams.get('url');
+      if (targetUrl) {
+        window.location.href = `/share-target?url=${encodeURIComponent(targetUrl)}`;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse share url', e);
+  }
+}
 ```
 
 ---

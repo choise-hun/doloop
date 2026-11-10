@@ -126,23 +126,43 @@ extension/
   - `song != null`: 이미 저장된 곡이므로 저장된 `a`, `b`, `rate`를 가져와 오버레이 패널에 자동 적용.
   - `song == null`: 신규 곡 모드로 표시.
 
-#### 2) ULevelP 곡 추가/업데이트 호출
-- **호출:** `POST /api/v1/songs`
-- **Request Body 전수:**
-  ```json
-  {
-    "videoId": "11자리 YouTube Video ID (정규식 검증: ^[a-zA-Z0-9_-]{11}$)",
-    "title": "유튜브 영상 제목 (document.title 또는 yt-formatted-string에서 추출, 최대 300자)",
-    "artist": "채널명 (ytd-channel-name에서 추출, 최대 200자)",
-    "rate": 1.00,
-    "a": 12.5,
-    "b": 35.8
-  }
-  ```
-- **Response 처리:**
-  - `201 Created` / `200 OK`: 패널에 3초간 "저장 완료!" 토스트 표시 후 [저장됨] 배지로 전환.
-  - `401 Unauthorized`: "ULevelP 로그인이 필요합니다. 옵션 페이지를 확인하세요." 안내 팝업.
-  - `400 Bad Request`: 서버 반환 `message` 표시.
+#### 2) ULevelP 곡 추가 및 기존 곡 구간 업데이트 호출
+
+1. **신규 곡 추가 (`song == null`인 경우):**
+   - **엔드포인트:** `POST /api/v1/songs`
+   - **Request Body 전수:**
+     ```json
+     {
+       "videoId": "11자리 YouTube Video ID (정규식 검증: ^[a-zA-Z0-9_-]{11}$)",
+       "title": "유튜브 영상 제목 (document.title 또는 yt-formatted-string에서 추출, 최대 300자)",
+       "artist": "채널명 (ytd-channel-name에서 추출, 최대 200자)",
+       "rate": 1.00,
+       "a": 12.5,
+       "b": 35.8
+     }
+     ```
+   - **Response 처리:** `201 Created` / `200 OK`: 패널에 3초간 "저장 완료!" 토스트 표시 후 [저장됨] 배지로 전환.
+
+2. **기존 등록 곡 구간/배속 업데이트 (`song != null`인 경우):**
+   - **배경:** `SongService.kt:273`의 `create()`는 기존 곡 존재 시 추가 저장/수정 없이 기존 곡을 그대로 반환하므로, 기존 곡의 A/B 구간 및 배속 변경은 연습 저장 API로 전송해야 함.
+   - **엔드포인트:** `POST /api/v1/practice/save`
+   - **Request Body 전수:**
+     ```json
+     {
+       "songId": "기존 곡의 ID (song.id)",
+       "pos": 12.5,
+       "a": 12.5,
+       "b": 35.8,
+       "rate": 1.00,
+       "date": "YYYY-MM-DD",
+       "addSeconds": 0,
+       "addLoops": 0
+     }
+     ```
+   - **Response 처리:**
+     - `200 OK`: 패널에 "구간 업데이트 완료!" 토스트 표시 후 저장된 구간 상태 유지.
+     - `401 Unauthorized`: "ULevelP 로그인이 필요합니다. 옵션 페이지를 확인하세요." 안내 팝업.
+     - `400 Bad Request` / `404 Not Found`: 서버 반환 `message` 표시.
 
 ---
 
