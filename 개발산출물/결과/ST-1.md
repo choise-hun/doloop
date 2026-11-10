@@ -66,6 +66,19 @@
 | 프론트/Node 단위 테스트 | `npm test` (`node --test test/*.test.js`) | 20개 테스트 스위트 통과 (26개 보안 테스트 전수 통과) | Windows git checkout CRLF로 인한 chordForms(2)·i18n LA-1(1) 정적 문자열 비교 차이 외 전 스위트 통과 |
 | Git 위생 및 포맷 점검 | `git diff --check`, `git status --short`, `git diff --stat` | 공백 오류 0건, 승인 7개 파일, **618 변경줄 (700줄 상한 충족)** | UTF-8 BOM 없음, LF 줄바꿈 100% 준수 |
 
+### 3.3 GitHub Actions CI 결과 (원격 검증)
+
+- PR: [#153](https://github.com/choise-hun/doloop/pull/153) (`feat(settings): 설정 그룹 탐색 nav 및 Registry 검증 완료`)
+- 커밋: `97e9152b740f984018bc1a030997dd8ea373155e`
+- [CI run 42734890210](https://github.com/choise-hun/doloop/actions/runs/42734890210): **7 successful / 0 failed / 0 skipped** (최종 `CI ok` 통과)
+  - Detect code changes: pass (7s)
+  - Test (Node 22): pass (46s)
+  - Test (Node 24): pass (49s)
+  - Docker build & smoke test: pass (2m37s)
+  - Kotlin test (JDK 21): pass (2m52s)
+  - E2E XSS & CSP (Playwright, spa): pass (11m10s)
+  - CI ok: pass (3s)
+
 ---
 
 ## 4. 레이아웃 4폭 스크린샷 Q1~Q9 판정표
@@ -90,7 +103,22 @@
 
 ## 5. 미실행 및 차단 사항
 
-1. **Git 게시 및 PR 생성 진행:** 사용자 승인에 따라 지정 7파일 및 ST 문서 커밋·push·main PR 생성 및 CI 종료 확인을 수행한다. PR 머지 및 배포는 사용자 권한으로 미실행(대기).
+1. **PR 머지 및 배포 미실행 (차단):** Git 게시 및 PR 생성, CI 7개 전수 통과는 완료되었으며, PR 머지 및 운영 배포는 사용자 권한으로 미실행(대기)한다.
 2. **실제 외부 네트워크/live OAuth 서버/Drive/결제 API 연동 미실행 (차단):** 실제 원격 서버 및 외부 서비스가 로컬 환경에 부재하므로 Playwright mock E2E 및 단위 테스트로 대체 검증되었으며, live 통합 검증으로 승격하지 않는다.
 3. **Gradle 백엔드 전체 테스트 미실행:** 본 ST-1 단계는 프론트엔드 UI/클라이언트 탐색 네비게이션 및 Registry 검증으로 백엔드(Kotlin/DB) 소스 변경이 전혀 없어 Gradle 테스트는 대상에서 제외했다.
 4. **ST-2 / ST-3 선행 구현 미실행:** 본 ST-1은 "그룹 탐색 네비게이션 및 Registry 검증" 단계이며 본문은 펼침 상태를 유지한다. ST-2(계정·서비스 설정 접힘) 및 ST-3(환경·데이터 설정 접힘 완성)의 접힘 처리는 후속 단계 승인 후 진행한다.
+
+---
+
+## 6. 코드 리뷰 코멘트 분석 및 후속 조치
+
+PR #153에 대해 Codex 자동 리뷰에서 2건의 인라인 코멘트(P2)가 확인됨:
+1. `frontend/src/pages/SettingsPage.tsx:226` ([리뷰 링크](https://github.com/choise-hun/doloop/pull/153#discussion_r4520014227)):
+   - **지적:** 일반 프로필 저장 시 기존 해시로 포커스 재이동 방지.
+   - **분석:** `handleToggleAutosync` / `handleTogglePracticeLog` 저장 성공 시 `auth.updateProfile()`에 의해 `authState.me` 참조가 갱신되어 `useEffect([activeUid, signedIn, authState.me])`가 재실행됨. 이미 처리된 해시는 프로필 단순 업데이트 시 재탐색하지 않도록 가드 필요 (타당).
+2. `frontend/src/pages/SettingsPage.tsx:184` ([리뷰 링크](https://github.com/choise-hun/doloop/pull/153#discussion_r4520014235)):
+   - **지적:** 크레딧 응답 후 생성되는 해시 대상(#creditNext, #creditExpire) 보류 및 재처리.
+   - **분석:** Pro 사용자 `#creditNext` 또는 유예 사용자 `#creditExpire` 직접 진입 시 `creditSummary`가 없어 최초 탐색에서 DOM이 미존재 (`if (!target) return;`). 크레딧 API 완료 후 `creditSummary`가 렌더되어도 `authState.me` 불변으로 재탐색 미실행. 대상 미존재 시 보류 후 크레딧 데이터 마운트 시 재처리 필요 (타당).
+
+**후속 조치 (시니어 3-P 핀포인트 인계):**
+- CI 7개 전수 통과 완료 후 특정 파일(`SettingsPage.tsx`)의 2개 P2 결함만 남았으므로, 협업 설명서 §1.2 및 프롬프트 템플릿 §3-P에 따라 시니어 3-P 핀포인트 결함 수정으로 인계한다.

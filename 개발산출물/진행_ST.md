@@ -1,6 +1,6 @@
 # ST 진행 — 설정 그룹·접힘·딥링크·Registry 검증
 
-> 2026-11-10 / ST-1 Git 게시·PR 생성 및 CI 확인 진행. 최신 실행은 §8·§9, 재개는 §5.
+> 2026-11-10 / ST-1 Git 게시(PR #153, 97e9152) 및 CI 7개 전수 통과 완료. Codex 리뷰 2건 확인에 따라 시니어 3-P 핀포인트 인계 대기. 최신 실행은 §9, 재개는 §5.
 
 ## 1. 목표·입력·승인 경계
 
@@ -68,23 +68,25 @@ ST는 하나의 Feature로 유지한다. 설정을 찾고 열어 값을 유지/�
 
 ## 5. 검토 관문·다음 행동
 
-1. **ST-1 구현·로컬 검증 완료:** 지정 7개 파일(핵심 2, CSS 1, i18n 3, 테스트 1) 및 진행/결과 문서 완료. ST1-01~09 전수 검증 통과(6 passed in 13.2s), Playwright 전체 회귀(205 passed in 3.7m), 4폭 스크린샷 33장 생성 및 Q1~Q9 전수 ○ 판정, `결과/ST-1.md` 작성 완료.
-2. **Git 게시 승인 및 실행:** 사용자 승인에 따라 커밋(`feat(settings): 설정 그룹 탐색 nav 및 Registry 검증 완료`), origin push, main 대상 PR 생성 및 `gh pr checks --watch` CI 종료 대기 진행. 머지·배포는 미승인(사용자 권한).
+1. **ST-1 Git 게시 및 CI 통과 완료:** 커밋 `97e9152b74`, PR [#153](https://github.com/choise-hun/doloop/pull/153) 생성, GitHub Actions 7개 CI 전수 통과 확인.
+2. **리뷰 코멘트 확인:** Codex 리뷰 코멘트 2건(P2, SettingsPage.tsx 런타임 포커스 가드) 확인 완료.
 3. **다음 행동:**
-   - **CI 완료 및 리뷰 점검:** 최신 head CI 종료 확인 및 리뷰 코멘트 점검.
-   - **사용자 PR 머지 후:** main 안전 동기화 후 시니어 1단계로 ST-2(계정·서비스 설정 접힘) 세부 명세 착수.
+   - **시니어 3-P 핀포인트 수정:** GPT-6.1 Sol 시니어가 2개 결함 확인 후 최소 수정 및 표적 검증, 커밋/push 및 최신 CI 확인 진행.
+   - **머지 대기:** 3-P 수정 및 CI 완료 후 사용자 PR #153 머지 진행.
 
-다음 세션 시작 멘트(사용자 PR 머지 후 ST-2 세부 명세 착수용):
+다음 세션 시작 멘트(시니어 3-P 핀포인트 결함 수정용):
 
 ```text
-# GPT-6.1 Sol (시니어) — ST-2 세부 명세
-개발산출물/프롬프트_템플릿_4단계.md §1과 협업_시니어주니어.md를 따른다.
-목표: ST-2(계정·서비스 설정 접힘) 세부 명세 작성 및 기존 계약 대조.
-기준: 개발산출물/진행_ST.md §3·§5 및 상용 서비스 계획 #10.
-선행 조건: PR 머지 완료 확인, main 브랜치 동기화.
-범위: 계정·저장소/구독·크레딧/공개·연동 그룹 기본 접힘 및 해시 자동 열기 명세.
-Git 처리: 로컬 문서 작성만.
-[필수 가드레일] 권장 Effort: 높음
+# GPT-6.1 Sol (시니어) — ST-1 PR #153 핀포인트 결함 수정
+개발산출물/프롬프트_템플릿_4단계.md §3-P와 협업_시니어주니어.md를 따른다.
+목표: 아래 2개 리뷰 결함만 확인하고 최소 수정한다. 전체 PR 재검증은 하지 않는다.
+입력: PR #153, head 97e9152b740f984018bc1a030997dd8ea373155e, 최신 CI 결과 https://github.com/choise-hun/doloop/actions/runs/42734890210
+결함 목록:
+1. frontend/src/pages/SettingsPage.tsx:226 — 일반 프로필 저장 시 기존 해시로 포커스 재이동 방지 (https://github.com/choise-hun/doloop/pull/153#discussion_r4520014227)
+2. frontend/src/pages/SettingsPage.tsx:184 — 크레딧 응답 후 렌더되는 해시 대상(#creditNext, #creditExpire) 보류 및 재처리 (https://github.com/choise-hun/doloop/pull/153#discussion_r4520014235)
+읽기 범위: SettingsPage.tsx의 해당 effect/핸들러 및 settings.spec.js 관련 테스트만.
+Git 처리: step/ST-1 브랜치 커밋·push·CI 확인 승인. 머지·배포는 하지 않는다.
+[필수 가드레일] 권장 Effort: 중간
 ```
 
 ## 6. 명세 작성 당시 최종 정적 확인 — 2026-11-10 (과거 기록)
@@ -175,8 +177,33 @@ ok 2 [chromium] settings.spec.js:362:1 ST1-01 role DOM, group navigation, keyboa
 
 ## 9. ST-1 Git 게시·PR 생성 및 CI 확인 — 2026-11-10
 
-### 9.1 Git 게시 준비
+### 9.1 Git 게시 및 PR 생성 내역
 - 사용자 승인: “Gemini (주니어) — ST-1 Git 게시 및 PR 생성·CI 확인”.
 - 브랜치: `step/ST-1` (base `main=9d33f13e761fb30ae8d6f748d19f1a9fce5383ff`).
-- 변경 범위: 승인된 지정 7개 파일(핵심 2, CSS 1, i18n 3, 테스트 1) 및 ST 문서 3개(`명세/ST-1_구현명세.md`, `진행_ST.md`, `결과/ST-1.md`).
-- 커밋·push 및 PR 생성 승인: 로컬 완료 7개 파일 및 ST 문서 커밋, origin push, main 대상 PR 생성 및 `gh pr checks --watch` CI 종료 대기 진행. 머지·배포는 미승인(사용자 권한).
+- 코드/문서 커밋: `97e9152b740f984018bc1a030997dd8ea373155e` (`feat(settings): 설정 그룹 탐색 nav 및 Registry 검증 완료`).
+- 원격 브랜치 push: `origin/step/ST-1` push 완료.
+- PR 생성: [PR #153](https://github.com/choise-hun/doloop/pull/153) (`feat(settings): 설정 그룹 탐색 nav 및 Registry 검증 완료`, main <- step/ST-1).
+
+### 9.2 GitHub Actions CI 종료 결과
+- [CI run 42734890210](https://github.com/choise-hun/doloop/actions/runs/42734890210): **7 successful / 0 failed / 0 skipped**, 최종 `CI ok` 통과.
+  - Detect code changes: pass (7s)
+  - Test (Node 22): pass (46s)
+  - Test (Node 24): pass (49s)
+  - Docker build & smoke test: pass (2m37s)
+  - Kotlin test (JDK 21): pass (2m52s)
+  - E2E XSS & CSP (Playwright, spa): pass (11m10s)
+  - CI ok: pass (3s)
+
+### 9.3 코드 리뷰 코멘트 조회 및 분석
+Codex 자동 리뷰에서 2건의 인라인 코멘트(P2) 확인:
+1. `frontend/src/pages/SettingsPage.tsx:226` ([리뷰 링크](https://github.com/choise-hun/doloop/pull/153#discussion_r4520014227)):
+   - **지적 요지:** 일반 프로필 저장에서는 기존 해시로 포커스를 재이동하지 않도록 제한.
+   - **분석:** `handleToggleAutosync` / `handleTogglePracticeLog` 등 프로필 업데이트 시 `auth.updateProfile()` 성공으로 `authState.me` 참조가 변경되어 `useEffect([activeUid, signedIn, authState.me])`가 재실행됨. 이미 처리된 해시는 프로필 단순 업데이트 시 재탐색하지 않고, 최초/인증 전환/해시 변경 시에만 탐색하도록 가드 필요 (타당).
+2. `frontend/src/pages/SettingsPage.tsx:184` ([리뷰 링크](https://github.com/choise-hun/doloop/pull/153#discussion_r4520014235)):
+   - **지적 요지:** 크레딧 응답 후 생성되는 해시 대상(#creditNext, #creditExpire)도 다시 처리.
+   - **분석:** Pro 사용자가 `#creditNext`나 유예 중 사용자가 `#creditExpire`로 직접 진입 시, 최초 렌더 또는 `/me` 직후에는 `creditSummary`가 아직 없어 DOM이 존재하지 않음 (`if (!target) return;`). 크레딧 API 완료 후 `creditSummary`가 렌더되더라도 `authState.me`는 바뀌지 않아 재탐색되지 않음. 대상이 아직 없는 경우 보류하고 크레딧 데이터 마운트 시 재처리 필요 (타당).
+
+### 9.4 다음 행동 판정 (시니어 3-P 핀포인트 인계)
+- 최신 코드 커밋 `97e9152b74`의 7개 CI 전체 통과 완료.
+- 특정 파일(`SettingsPage.tsx`)의 구체적 줄에 대한 P2 리뷰 결함 2건이 남았으므로, 협업 설명서 §1.2 및 프롬프트 템플릿 §3-P에 따라 시니어 3-P 핀포인트 결함 수정 단계로 인계한다.
+- 머지 및 배포는 사용자 권한으로 미실행 유지.
