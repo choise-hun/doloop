@@ -10,7 +10,7 @@
 
 - **목표:** 환경(화면·언어) 및 데이터(고급·백업·데이터 관리) 설정의 단일 접힘 구조 완성, 기존 운영자 접힘 체계 통합, 전수 회귀 테스트 및 4폭 스크린샷 Q1~Q9 검토를 통한 최종 수용 기준(AC-9, AC-10) 판정 근거 기록.
 - **수행 범위:** 시니어 핵심 구현(Page/CSS/OpsPanel/테스트) 인계를 바탕으로, 범위 내 보완 2건(ops.spec 엔드포인트 정합, ST1-P2 signout 후 그룹 열기 정합), 9개 관련 spec(218개 테스트) 전수 회귀 실행, LAYOUT_SHOTS 4폭 PNG 38장 캡처 및 Q1~Q9 판정, 실제 실행과 미실행 경계 명시.
-- **Git 처리:** 로컬 검증·범위 내 보완·결과 기록 완료. 사용자 지침에 따라 커밋·push·PR·CI·머지·배포는 이번 세션에서 제외.
+- **Git 처리:** 로컬 검증·범위 내 보완·결과 기록 완료 후 [PR #155](https://github.com/choise-hun/doloop/pull/155) 생성, GitHub Actions CI 전수 통과(Run 42759316956), Codex 리뷰 코멘트 1건(CH-7b 정적 단언 정합) 반영 완료. 머지·배포는 사용자 권한으로 대기.
 
 ---
 
@@ -100,9 +100,9 @@
 ## 6. 미실행 범위 및 다음 작업 안내
 
 ### 6.1 미실행 범위
-- 실제 외부 서비스 연동: Google OAuth, Google Drive API, 실제 ZIP 파일 백업/복원 서버 처리, 원격 DB 동시성.
-- Git 게시: 커밋, remote push, GitHub PR 생성, GitHub Actions CI 감시, 프로덕션 배포는 사용자 승인 및 지침에 따라 실행하지 않음.
+- 실제 외부 서비스 연동: Google OAuth, Google Drive API, 실제 ZIP 파일 백업/복원 서버 처리, 원격 DB 동시성 A↔B 검증 (모의 E2E 환경과 구별되는 실운영 범위).
+- PR 머지 및 프로덕션 배포: PR #155 머지 및 배포는 사용자 권한으로 에이전트 미실행 유지.
 
 ### 6.2 다음 작업 안내
-- ST-3의 모든 로컬 전수 검증 및 화면 검토(AC-9, AC-10)가 성공적으로 완료되었습니다.
-- 사용자의 Git 게시 승인 시, 다음 세션에서 `step/ST-3` 브랜치의 변경 사항 커밋, push, PR 생성 및 GitHub Actions CI 확인을 진행할 수 있습니다.
+- ST-3의 구현, 9개 spec 218개 E2E 회귀, 4폭 스크린샷 38장 Q1~Q9 검토, [PR #155](https://github.com/choise-hun/doloop/pull/155) 생성, GitHub Actions CI 전 Job 통과(All Pass, Run 42759316956), Codex 리뷰 반영(CH-7b 정적 단언 정합)이 완료되었습니다.
+- 사용자 PR #155 머지 후, 후속 상용 계획(M0-0 실기기 확인 또는 M0-1 Capacitor 앱 패키징) 단계로 진행할 수 있습니다.
