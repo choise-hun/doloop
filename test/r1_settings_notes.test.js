@@ -170,7 +170,12 @@ test('CH-7b: 노션 연동은 설정 맨 아래 고급 접힘 안으로 은닉(�
     assert.ok(i > a && i < end, `${id}는 고급 설정 안에 있어야 함`);
   }
   assert.ok(src.indexOf('id="btnExportZip"') < a, '백업 ZIP 내보내기는 밖에 남음');
-  assert.ok(!/<details[^>]*id="advNotion"[^>]*\sopen\s*>/.test(src) && src.includes("useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash))"), '기본 접힘, 노션 해시로 오면 펼침');
+  assert.ok(
+    !/<details[^>]*id="advNotion"[^>]*\sopen\s*>/.test(src) &&
+    !/<details[^>]*data-setting-disclosure="advancedData"[^>]*\sopen\s*>/.test(src) &&
+    src.includes('data-setting-disclosure="advancedData"'),
+    '기본 접힘, 고급·데이터 설정 안에 은닉'
+  );
   const home = readText('frontend/src/pages/HomePage.tsx');
   assert.ok(!home.includes('노션 연결 →'));
   assert.match(home, /id="notionBig"[\s\S]{0,120}hidden=\{!mainNotionUrl\}/, 'NOTION 큰 링크는 주소가 있을 때만');
