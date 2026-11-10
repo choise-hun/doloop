@@ -139,7 +139,79 @@ npx cap init ULeveLP com.ulevelp.app --web-dir dist
 </activity>
 ```
 
-#### 3) iOS 시스템 공유 연동 (Share Extension)
+#### 3) Android SEND 인텐트 수신 및 네이티브 브리지 (`MainActivity.java`)
+* **배경:** Android YouTube 앱 공유는 `ACTION_SEND`와 `Intent.EXTRA_TEXT`로 전달되나, Capacitor 6 `AppPlugin`의 `handleOnNewIntent()`는 `ACTION_VIEW`와 `intent.getData()`만 `appUrlOpen` 이벤트로 전달함. 또한 앱 완전 종료 후 공유로 시작되는 콜드 스타트 시에는 WebView/React 리스너 마운트 전 이벤트가 발생하여 유실될 위험이 있으며, 공유 텍스트 내 작은따옴표(`'`)는 `Uri.encode()`로 이스케이프되지 않아 JS 문자열 파싱 시 `SyntaxError`를 유발할 수 있음.
+* **해결 (네이티브 브리지 및 콜드 스타트 버퍼):**
+  1. `pendingShareUrl`로 콜드 스타트 공유 데이터를 보관하고 `AndroidShareBridge.getAndClearPendingShareUrl()`로 프론트엔드 준비 완료 시 안전하게 소비.
+  2. 실행 중(웜 스타트) 전달 시에는 `org.json.JSONObject.quote()`로 이스케이프하여 JavaScript 구문 오류 원천 차단.
+```java
+// android/app/src/main/java/com/ulevelp/app/MainActivity.java
+package com.ulevelp.app;
+
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.webkit.JavascriptInterface;
+import com.getcapacitor.BridgeActivity;
+import org.json.JSONObject;
+
+public class MainActivity extends BridgeActivity {
+    // 앱 종료(콜드 스타트) 상태에서 수신된 공유 URL 보관
+    private String pendingShareUrl = null;
+
+    public class NativeShareBridge {
+        @JavascriptInterface
+        public String getAndClearPendingShareUrl() {
+            String url = pendingShareUrl;
+            pendingShareUrl = null;
+            return url;
+        }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // WebView에 네이티브 공유 브리지 등록
+        bridge.getWebView().addJavascriptInterface(new NativeShareBridge(), "AndroidShareBridge");
+        handleSendIntent(getIntent(), true);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleSendIntent(intent, false);
+    }
+
+    private void handleSendIntent(Intent intent, boolean isColdStart) {
+        if (intent != null && Intent.ACTION_SEND.equals(intent.getAction()) && "text/plain".equals(intent.getType())) {
+            String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (sharedText != null && !sharedText.isEmpty()) {
+                // 커스텀 스킴 URL로 변환하여 브리지로 라우팅 (iOS Share Extension과 규격 일원화)
+                String schemeUrl = "ulevelp://share?url=" + Uri.encode(sharedText);
+                if (isColdStart) {
+                    // 콜드 스타트 시: React 리스너 마운트 전 이벤트 유실 방지를 위해 pending 보관
+                    pendingShareUrl = schemeUrl;
+                } else {
+                    // 웜 스타트(앱 실행 중) 시: JSONObject.quote()로 JS 문자열(작은따옴표·특수문자 포함) 안전 직렬화 후 이벤트 발행
+                    dispatchShareEvent(schemeUrl);
+                }
+            }
+        }
+    }
+
+    private void dispatchShareEvent(String schemeUrl) {
+        String quotedUrl = JSONObject.quote(schemeUrl);
+        bridge.getWebView().post(() -> {
+            bridge.getWebView().evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('appUrlOpen', { detail: { url: " + quotedUrl + " } }));",
+                null
+            );
+        });
+    }
+}
+```
+
+#### 4) iOS 시스템 공유 연동 (Share Extension)
 * **구성:** Xcode 프로젝트 내 `ShareExtension` 타깃 추가.
 * **동작:**
   1. iOS 유튜브 앱에서 [공유] 시 ULevelP Share Extension이 실행됨.
@@ -147,20 +219,43 @@ npx cap init ULeveLP com.ulevelp.app --web-dir dist
   3. URL 스킴 `ulevelp://share?url=${encodeURIComponent(sharedUrl)}`를 호출하여 메인 앱을 열고 익스텐션 즉시 종료.
   4. 메인 앱이 포그라운드로 올라오며 해당 URL을 감지.
 
-#### 4) Capacitor 앱 딥링크/인텐트 수신 리스너 (`frontend/src/App.tsx` 또는 `main.tsx`)
+#### 5) Capacitor 앱 딥링크/인텐트 통합 수신 리스너 (`frontend/src/App.tsx` 또는 `main.tsx`)
 ```typescript
 import { App as CapApp } from '@capacitor/app';
 
+// 1. Capacitor 공식 딥링크 리스너 (iOS 커스텀 스킴 및 Android ACTION_VIEW)
 CapApp.addListener('appUrlOpen', (event) => {
-  // 예: ulevelp://share?url=https%3A%2F%2Fyoutu.be%2Fxyz
-  const url = new URL(event.url);
-  if (url.protocol === 'ulevelp:' && url.host === 'share') {
-    const targetUrl = url.searchParams.get('url');
-    if (targetUrl) {
-      window.location.href = `/share-target?url=${encodeURIComponent(targetUrl)}`;
-    }
+  handleShareUrl(event.url);
+});
+
+// 2. Android ACTION_SEND 네이티브 브리지 이벤트 리스너 (웜 스타트 / 실행 중 공유)
+window.addEventListener('appUrlOpen', (event: any) => {
+  if (event.detail && event.detail.url) {
+    handleShareUrl(event.detail.url);
   }
 });
+
+// 3. Android 콜드 스타트 시 pending 공유 데이터 소비 (초기 마운트 시 1회 실행)
+if (typeof (window as any).AndroidShareBridge?.getAndClearPendingShareUrl === 'function') {
+  const pending = (window as any).AndroidShareBridge.getAndClearPendingShareUrl();
+  if (pending) {
+    handleShareUrl(pending);
+  }
+}
+
+function handleShareUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol === 'ulevelp:' && url.host === 'share') {
+      const targetUrl = url.searchParams.get('url');
+      if (targetUrl) {
+        window.location.href = `/share-target?url=${encodeURIComponent(targetUrl)}`;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse share url', e);
+  }
+}
 ```
 
 ---
@@ -208,3 +303,5 @@ export function extractYouTubeVideoId(input: string): string | null {
 | TC-MS-04 | iOS Share Extension URL 스킴 호출 | Safari 브라우저로 튕김 현상 | Share Extension에서 `ulevelp://share` 호출 시 네이티브 메인 앱이 즉시 열림. |
 | TC-MS-05 | `POST /api/v1/songs` 자동 등록 | 비로그인 상태에서 등록 시 401 unhandled 에러 | 미로그인 시 로컬스토리지에 임시 저장 후 로그인 페이지로 안내되며 로그인 직후 등록 완료됨. |
 | TC-MS-06 | 이미 등록된 곡 재공유 | 중복 생성 에러(409 또는 중복 등록) 발생 | `by-video` 조회로 기등록 곡임을 인지하고 200 OK 처리 후 바로 연습 화면 연결 안내. |
+| TC-MS-07 | 안드로이드 콜드 스타트(Cold Start) 공유 수신 | 앱 미실행 상태에서 공유 시 이벤트 유실 | 앱 완전 종료 상태에서 YouTube 공유로 앱이 처음 켜질 때, `AndroidShareBridge.getAndClearPendingShareUrl()`을 통해 pending URL이 정상 전달되어 `/share-target`으로 이동함. |
+| TC-MS-08 | 공유 텍스트 내 작은따옴표(') 등 특수문자 직렬화 | `evaluateJavascript` 구문 오류(SyntaxError) 발생 | 제목에 작은따옴표가 포함된 영상(`John's guitar lesson https://...`) 공유 시 `JSONObject.quote()`로 안전 직렬화되어 JS SyntaxError 없이 정상 디스패치 및 파싱됨. |
