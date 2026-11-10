@@ -187,6 +187,11 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await settingsLink.click();
 
     await expect(page).toHaveURL(/.*settings\.html/);
+    for (const id of ['account', 'community']) {
+      await expect(page.locator(`#${id} > details > div`)).toBeHidden();
+      await page.locator(`#${id} > details > summary`).click();
+      await expect(page.locator(`#${id} > details`)).toHaveAttribute('open', '');
+    }
     // Locked Contracts 셀렉터 유지 확인
     for (const id of [
       '#account',
@@ -509,6 +514,7 @@ test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저�
   });
   await page.goto('/settings.html');
   await expect(page.locator('#settingsPublicNameInput, #settingsPublicNameSave')).toHaveCount(0);
+  await page.locator('#community > details > summary').click();
   await page.locator('#settingsProfileLink').click();
   await expect(page).toHaveURL(/profile\.html#profileNames$/);
   await expect(page.locator('#profileNames')).toHaveAttribute('data-align-group', 'profileCol:left; profileEdges:right');

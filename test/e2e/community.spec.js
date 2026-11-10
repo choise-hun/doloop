@@ -410,6 +410,7 @@ test('CM-12 설정: 무료는 두 스위치 disabled, Pro에서 shareAutosync �
   await page.goto('/settings.html', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
+  await page.locator('#community > details > summary').click();
   await expect(page.locator('#commAutosync')).toBeDisabled();
   await expect(page.locator('#commPracticeLog')).toBeDisabled();
   await expect(page.locator('#commProNotice')).toHaveText('Pro 기능이에요');
@@ -445,6 +446,7 @@ test('CM-12 설정: 무료는 두 스위치 disabled, Pro에서 shareAutosync �
     ],
   });
   await page.goto('/settings.html', { waitUntil: 'load' });
+  await page.locator('#community > details > summary').click();
   await expect(page.locator('#commAutosync')).toBeEnabled();
   await expect(page.locator('#commAutosync')).toHaveAttribute('aria-checked', 'false');
 
