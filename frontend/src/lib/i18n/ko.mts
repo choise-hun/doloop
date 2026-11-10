@@ -1,5 +1,12 @@
 // L0: 한국어 사전. 키 규칙 <영역>.<camelCase> — 명세 개발산출물/명세/L0_구현명세.md §1 D4
 export const KO = {
+  'settings.groups.navigation': "설정 그룹",
+  'settings.groups.accountStorage': "계정·저장소",
+  'settings.groups.subscriptionCredits': "구독·크레딧",
+  'settings.groups.publicIntegration': "공개·연동",
+  'settings.groups.appearanceLanguage': "화면·언어",
+  'settings.groups.advancedData': "고급·백업·데이터 관리",
+  'settings.groups.operations': "운영자",
   'profile.namesTitle': "내 이름",
   'profile.displayNameLabel': "표시 이름",
   'profile.displayNameHint': "나에게만 보이는 이름이에요. 100자까지 입력할 수 있어요.",

@@ -5,6 +5,7 @@ import { OpsPanel } from '../components/ops/OpsPanel';
 import { SafeLink } from '../components/common/SafeLink';
 import { auth, canUseAi, useAuth } from '../lib/auth';
 import { apiClient, CreditsSummaryDto, IntegrationDto, NotionSyncStatusDto } from '../lib/apiClient';
+import { SETTINGS_GROUPS, resolveSettingsHash } from '../lib/settingsRegistry.mts';
 import { tierLabel } from '../lib/jobError.mts';
 import { communityErrorKey } from '../lib/community.mts';
 import { getLangChoice, onLangChange, setLang, t, type I18nKey, type LangChoice, type LocaleCode } from '../lib/i18n.mts';
@@ -162,6 +163,67 @@ export function SettingsPage(): React.ReactElement {
     window.addEventListener(THEME_EVENT, sync);
     return () => window.removeEventListener(THEME_EVENT, sync);
   }, []);
+
+  // Resolve only registered IDs. A new hash or auth generation cancels queued focus.
+  const navigateHashRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    let sequence = 0;
+    let frame = 0;
+    let disposed = false;
+    const navigate = () => {
+      const current = ++sequence;
+      cancelAnimationFrame(frame);
+      const hash = window.location.hash;
+      const destination = resolveSettingsHash(hash, SETTINGS_GROUPS);
+      if (!destination) return;
+      const item = SETTINGS_GROUPS.flatMap(group => group.items).find(item => item.renderKey === destination.renderKey);
+      if (!item) return;
+      if (item.availability === 'signedIn' && !signedIn) return;
+      if (item.availability === 'owner' && (!signedIn || authState.me?.id !== activeUid || authState.me?.role !== 'owner')) return;
+      const target = document.getElementById(destination.targetId);
+      if (!target) return; // Re-evaluate the current URL when auth/me finishes loading.
+      const generation = auth.getSessionGeneration();
+      if (destination.renderKey === 'advanced') setAdvOpen(true);
+      // Clicking the native summary also updates the existing React onToggle owner.
+      const details: HTMLDetailsElement[] = [];
+      for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) details.unshift(parent);
+      }
+      if (target instanceof HTMLDetailsElement) details.push(target);
+      if (destination.targetId === 'ops') {
+        const ownDetails = target.querySelector('details');
+        if (ownDetails) details.push(ownDetails);
+      }
+      for (const detail of details) {
+        if (!detail.open) detail.querySelector<HTMLElement>(':scope > summary')?.click();
+      }
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => {
+          if (disposed || sequence !== current || window.location.hash !== hash || generation !== auth.getSessionGeneration() || !target.isConnected) return;
+          if (auth.getUser()?.id !== (activeUid ?? undefined)) return;
+          if (item.availability === 'owner' && (auth.getMe()?.id !== activeUid || auth.getMe()?.role !== 'owner')) return;
+          if (details.some(detail => !detail.open)) return;
+          const section = target.closest<HTMLElement>('section');
+          const disabled = target.matches(':disabled, [aria-disabled="true"]');
+          const focusTarget = disabled ? section?.querySelector<HTMLElement>('h2, summary') : target;
+          if (!focusTarget || !focusTarget.checkVisibility({ visibilityProperty: true })) return;
+          if (!focusTarget.matches('a[href], button, input, select, textarea, summary, [tabindex]')) focusTarget.tabIndex = -1;
+          focusTarget.scrollIntoView({ block: 'start', behavior: 'instant' });
+          focusTarget.focus({ preventScroll: true });
+        });
+      });
+    };
+    navigateHashRef.current = navigate;
+    window.addEventListener('hashchange', navigate);
+    navigate();
+    return () => {
+      disposed = true;
+      sequence++;
+      cancelAnimationFrame(frame);
+      navigateHashRef.current = () => {};
+      window.removeEventListener('hashchange', navigate);
+    };
+  }, [activeUid, signedIn, authState.me]);
 
   const [langChoice, setLangChoiceState] = useState<LangChoice>(() => getLangChoice());
   const pendingLocaleRef = useRef<{ locale: LocaleCode | null; generation: number } | undefined>(undefined);
@@ -339,8 +401,25 @@ export function SettingsPage(): React.ReactElement {
         </p>
       </div>
 
+      <nav id="settingsGroups" className={styles.settingGroups} aria-label={t('settings.groups.navigation')} data-align-group="col: left; secs: right">
+        {SETTINGS_GROUPS.map(group => {
+          const items = group.items.filter(item => item.availability === 'always' ||
+            (item.availability === 'signedIn' && signedIn) ||
+            (item.availability === 'owner' && signedIn && authState.me?.id === activeUid && authState.me?.role === 'owner'));
+          if (!items.length) return null;
+          return (
+            <a key={group.id} href={`#${items[0].targetId}`} data-setting-group={group.id}
+              className={styles.settingGroup} data-align-group="settingGroups: left,right"
+              onClick={() => { if (window.location.hash === `#${items[0].targetId}`) navigateHashRef.current(); }}>
+              <strong>{t(group.titleKey as I18nKey)}</strong>
+              <span>{items.map(item => t(item.titleKey as I18nKey)).join(' · ')}</span>
+            </a>
+          );
+        })}
+      </nav>
+
       {/* 1. 계정 및 Google Drive 저장소 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="account" aria-labelledby="hAccount">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="account" data-setting-render-key="account" aria-labelledby="hAccount">
         <h2 id="hAccount">{t('settings.secAccount')}</h2>
         <p id="accDesc">{t('settings.accDesc')}</p>
 
@@ -571,7 +650,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 2. 데이터 백업 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="nx" aria-labelledby="hNx">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="nx" data-setting-render-key="backup" aria-labelledby="hNx">
         <h2 id="hNx">{t('settings.secNx')}</h2>
         <p>{t('settings.nxDesc')}</p>
         <div className={styles.panel}>
@@ -633,7 +712,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="credits" aria-labelledby="hCredits">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="credits" data-setting-render-key="credits" aria-labelledby="hCredits">
         <h2 id="hCredits">{t('settings.secCredits')}</h2>
         <p>{t('settings.creditsDesc')}</p>
         <div className={styles.panel}>
@@ -684,7 +763,7 @@ export function SettingsPage(): React.ReactElement {
         <section
           className={`set-sec ${styles.setSec}`}
           data-align-group="col: left; secs: right"
-          id="community"
+          id="community" data-setting-render-key="community"
           aria-labelledby="hCommunity"
         >
           <h2 id="hCommunity">{t('community.settingsTitle')}</h2>
@@ -749,7 +828,7 @@ export function SettingsPage(): React.ReactElement {
       ) : null}
 
       {/* 4. 화면 모드 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" aria-labelledby="hScreen">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" data-setting-render-key="screen" aria-labelledby="hScreen">
         <h2 id="hScreen">{t('settings.secScreen')}</h2>
         <div className={`seg-pill ${styles.segPill}`} role="group" aria-label={t('settings.screenAria')}>
           {(
@@ -777,7 +856,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 5. 언어 설정 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="langSec" aria-labelledby="hLang">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="langSec" data-setting-render-key="language" aria-labelledby="hLang">
         <h2 id="hLang">{t('settings.secLang')}</h2>
         <p id="langDesc">{t('settings.langDesc')}</p>
         <div className={`seg-pill ${styles.segPill}`} id="langSelect" role="group" aria-label={t('settings.langAria')}>
@@ -797,7 +876,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 6. 고급 설정 — 노션 연동(2026-11-05 중단·동결: 새 기능 없음, 계획/앱_명세.md §5). 기본 접힘 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="advanced" aria-labelledby="hAdvanced">
+      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="advanced" data-setting-render-key="advanced" aria-labelledby="hAdvanced">
         <details
           className={styles.advanced}
           id="advNotion"
@@ -1361,7 +1440,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 7. 운영 — owner만(M2-4, 권한 판정은 서버 /admin). 기본 접힘 */}
-      {authState.me && authState.me.role === 'owner' ? <OpsPanel /> : null}
+      {signedIn && authState.me?.id === activeUid && authState.me.role === 'owner' ? <div data-setting-render-key="opsHost"><OpsPanel /></div> : null}
     </AppShell>
   );
 }

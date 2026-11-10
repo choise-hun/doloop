@@ -2,6 +2,13 @@
 import type { I18nKey } from '../i18n.mts';
 
 export const EN: Record<I18nKey, string> = {
+  'settings.groups.navigation': "Settings groups",
+  'settings.groups.accountStorage': "Account & storage",
+  'settings.groups.subscriptionCredits': "Subscription & credits",
+  'settings.groups.publicIntegration': "Sharing & connections",
+  'settings.groups.appearanceLanguage': "Appearance & language",
+  'settings.groups.advancedData': "Advanced, backup & data",
+  'settings.groups.operations': "Administration",
   'profile.namesTitle': "My names",
   'profile.displayNameLabel': "Display name",
   'profile.displayNameHint': "Only you can see this name. Up to 100 characters.",
