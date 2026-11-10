@@ -34,6 +34,13 @@ const GRACE_CREDITS_ROUTE = [
     }),
 ];
 const USER_GRACE = { ...STATES.user, me: PRO_ME, routes: [GRACE_CREDITS_ROUTE] };
+const USER_EXPIRED = {
+  ...STATES.user, me: { tier: 'free', billingTier: 'free', credits: { monthly: 0, purchased: 0 } },
+  routes: [[url => url.pathname === '/api/v1/credits', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ monthly: 0, purchased: 0, total: 0, monthlyGrant: 0, nextGrantAt: null, monthlyExpiresAt: '2026-10-31T15:00:00Z' }),
+  })]],
+};
 // M2-4a: owner 계정 — 운영 섹션(접힘)을 펼치고 크리에이터 검색까지 한 화면(폴더 0개)
 const OWNER_ADMIN_USERS_ROUTE = [
   (url) => url.pathname === '/api/v1/admin/users',
@@ -138,6 +145,124 @@ async function openServiceGroups(page) {
   }
 }
 
+test('ST3-01 groups and native disclosure', async ({ browser }) => {
+  for (const [role, state] of [['guest', STATES.guest], ['user', STATES.user], ['paid', USER_PRO], ['expired', USER_EXPIRED], ['owner', USER_OWNER]]) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await mockApp(page, state);
+      const mutations = [], admin = [];
+      page.on('request', request => {
+        if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method())) mutations.push(request.url());
+        if (request.url().includes('/api/v1/admin/')) admin.push(request.url());
+      });
+      await page.goto('/settings.html');
+      await settingsReady(page, role === 'guest' ? 'guest' : 'user');
+      const groups = ['account', 'credits', ...(role === 'guest' ? [] : ['community']), 'appearanceLanguage', 'advancedData', ...(role === 'owner' ? ['operations'] : [])];
+      expect(await page.locator('[data-setting-disclosure]').evaluateAll(nodes => nodes.map(node => node.dataset.settingDisclosure))).toEqual(groups);
+      await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(0);
+      const keys = ['account', 'credits', ...(role === 'guest' ? [] : ['community']), 'screen', 'language', 'backup', 'advanced', ...(role === 'owner' ? ['opsHost'] : [])];
+      expect(await page.locator('[data-setting-render-key]').evaluateAll(nodes => nodes.map(node => node.dataset.settingRenderKey))).toEqual(keys);
+      for (const key of keys) {
+        const contract = ST1_RENDERED.find(item => item.renderKey === key);
+        await expect(page.locator(`#${contract.targetId}`)).toBeAttached();
+        // Full conditional ID coverage remains in ST1; baseline controls must stay mounted.
+        if (['screen', 'language', 'backup', 'advanced'].includes(key)) {
+          for (const id of contract.descendantIds) await expect(page.locator(`#${contract.targetId} #${id}`)).toBeAttached();
+        }
+      }
+      const url = page.url();
+      for (const group of ['appearanceLanguage', 'advancedData']) {
+        const detail = page.locator(`[data-setting-disclosure="${group}"]`);
+        const summary = detail.locator(':scope > summary'), body = detail.locator(':scope > div');
+        await expect(summary).toHaveCount(1);
+        await expect(body).toBeAttached();
+        await expect(body).toBeHidden();
+        await summary.focus();
+        await page.keyboard.press('Tab');
+        expect(await body.evaluate(node => node.contains(document.activeElement))).toBe(false);
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(body).toBeVisible();
+        expect(await detail.evaluate(node => {
+          const summary = node.firstElementChild.getBoundingClientRect(), body = node.lastElementChild.getBoundingClientRect();
+          return { left: body.left - summary.left, right: body.right - summary.right, gap: body.top - summary.bottom, touch: summary.height >= 44 };
+        })).toEqual({ left: 0, right: 0, gap: 16, touch: true });
+        await page.keyboard.press('Space');
+        await expect(body).toBeHidden();
+        await summary.click();
+        await expect(body).toBeVisible();
+        await summary.focus();
+        await page.keyboard.press('Tab');
+        expect(await body.evaluate(node => node.contains(document.activeElement))).toBe(true);
+      }
+      await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(2);
+      expect(await page.locator('#advNotion').evaluate(node => node.tagName)).toBe('DIV');
+      expect(await page.locator('#hAdvanced').evaluate(node => node.tagName)).toBe('H2');
+      await expect(page.locator('[data-setting-disclosure="advancedData"] details')).toHaveCount(0);
+      await expect(page.locator('#ops')).toHaveCount(role === 'owner' ? 1 : 0);
+      expect(page.url()).toBe(url);
+      expect(mutations).toEqual([]);
+      expect(admin).toEqual([]);
+    } finally { await context.close(); }
+  }
+});
+
+test('ST3-02 hashes and identities: outer groups and stale hash', async ({ page }) => {
+  await mockApp(page, STATES.user);
+  await page.goto('/settings.html#advNotion');
+  await expect(page.locator('#advNotion')).toBeFocused();
+  const appearance = page.locator('[data-setting-disclosure="appearanceLanguage"]');
+  const advanced = page.locator('[data-setting-disclosure="advancedData"]');
+  await expect(advanced).toHaveAttribute('open', '');
+  await expect(appearance).not.toHaveAttribute('open', '');
+  for (const hash of ['screen', 'hScreen', 'langSec', 'langSelect', 'nx', 'hNx', 'advanced', 'hAdvanced']) {
+    await page.evaluate(hash => { location.hash = hash; }, hash);
+    await expect(page.locator(`#${hash}`)).toBeFocused();
+    await expect(page.locator(`#${hash}`)).toBeVisible();
+  }
+  await page.goBack();
+  await expect(page.locator('#advanced')).toBeFocused();
+  await page.goForward();
+  await expect(page.locator('#hAdvanced')).toBeFocused();
+  await advanced.locator(':scope > summary').click();
+  await page.locator('#settingsGroups a[href="#nx"]').click();
+  await expect(page.locator('#nx')).toBeFocused();
+  await advanced.locator(':scope > summary').click();
+  await page.locator('#settingsGroups a[href="#nx"]').click();
+  await expect(page.locator('#nx')).toBeFocused();
+  await advanced.locator(':scope > summary').click();
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/me');
+  await page.evaluate(() => window.ULAuth.fetchMe());
+  await refreshed;
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(advanced).not.toHaveAttribute('open', '');
+  await page.evaluate(() => {
+    window.__st3OldFocus = 0;
+    window.__st3Focus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (...args) {
+      if (this.id === 'advanced') window.__st3OldFocus++;
+      return window.__st3Focus.apply(this, args);
+    };
+    location.hash = 'advanced';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    location.hash = 'screen';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  await expect(page.locator('#screen')).toBeFocused();
+  expect(await page.evaluate(() => window.__st3OldFocus)).toBe(0);
+  await page.evaluate(() => { HTMLElement.prototype.focus = window.__st3Focus; });
+  // Opening is synchronous; a subsequent destination preserves already opened groups.
+  await expect(advanced).toHaveAttribute('open', '');
+  await page.locator('#account > details > summary').click();
+  await page.locator('#btnLogout').click();
+  await expect(page.locator('#accGuest')).toBeAttached();
+  await expect(advanced).not.toHaveAttribute('open', '');
+  await expect(appearance).toHaveAttribute('open', '');
+  await expect(page.locator('#screen')).toBeFocused();
+  await expect(page.locator('#community, #ops')).toHaveCount(0);
+});
+
 test('ST2-01-03 native disclosure, canonical hashes and mounted input', async ({ browser }) => {
   for (const [role, state] of [['guest', STATES.guest], ['user', STATES.user], ['owner', USER_OWNER]]) {
     const context = await browser.newContext({ viewport: { width: 390, height: 900 } });
@@ -152,7 +277,7 @@ test('ST2-01-03 native disclosure, canonical hashes and mounted input', async ({
       await page.goto('/settings.html');
       await settingsReady(page, role === 'guest' ? 'guest' : 'user');
       const ids = role === 'guest' ? ['account', 'credits'] : ['account', 'credits', 'community'];
-      await expect(page.locator('[data-setting-disclosure]')).toHaveCount(ids.length);
+      await expect(page.locator('#account > details, #credits > details, #community > details')).toHaveCount(ids.length);
       const url = page.url();
       for (const id of ids) {
         const detail = page.locator(`#${id} > details[data-setting-disclosure="${id}"]`);
@@ -177,7 +302,7 @@ test('ST2-01-03 native disclosure, canonical hashes and mounted input', async ({
         })).toEqual({ left: 0, right: 0, gap: 16, touch: true });
       }
       expect(page.url()).toBe(url);
-      await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(ids.length);
+      await expect(page.locator('#account > details[open], #credits > details[open], #community > details[open]')).toHaveCount(ids.length);
       if (role === 'guest') await expect(page.locator('#community')).toHaveCount(0);
       else {
         const inner = page.locator('#accUser details');
@@ -289,7 +414,8 @@ test('ST2-04-06 pending save, rollback, identity and delayed credit navigation',
     window.__supabaseAuthListener('SIGNED_IN', session);
   }, saved.id);
   await expect(page.locator('#accEmail')).toHaveText('b@example.com');
-  await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(0);
+  await expect(page.locator('#credits > details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).toHaveAttribute('open', '');
   await expect(page.locator('#screen')).toBeFocused();
 });
 
@@ -536,7 +662,8 @@ test('ST2-06-07 creditExpire pending, same uid refresh, roles, tiers and conditi
 
   await page.locator('#btnLogout').click();
   await expect(page.locator('#accGuest')).toBeAttached();
-  await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(0);
+  await expect(page.locator('#credits > details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).toHaveAttribute('open', '');
 
   await expect(page.locator('#community')).toHaveCount(0);
   await expect(page.locator('#ops')).toHaveCount(0);
@@ -569,8 +696,8 @@ test('ST2-08 open disclosures across 4 widths, 3 languages and dark mode', async
     await openServiceGroups(page);
     await page.evaluate(() => document.fonts.ready);
 
-    for (const id of ['account', 'credits', 'community']) {
-      const detail = page.locator(`#${id} > details`);
+    for (const id of ['account', 'credits', 'community', 'appearanceLanguage', 'advancedData']) {
+      const detail = page.locator(`[data-setting-disclosure="${id}"]`);
       const layout = await detail.evaluate(node => {
         const summary = node.firstElementChild.getBoundingClientRect();
         const body = node.lastElementChild.getBoundingClientRect();
@@ -599,11 +726,11 @@ test('ST2-08 open disclosures across 4 widths, 3 languages and dark mode', async
     await mockApp(page, COMMUNITY_PRO);
     await page.goto('/settings.html');
     await settingsReady(page, 'communityPro');
-    await page.locator(`#langSelect button[data-lang="${lang}"]`).click();
     await openServiceGroups(page);
+    await page.locator(`#langSelect button[data-lang="${lang}"]`).click();
     await page.evaluate(() => document.fonts.ready);
-    for (const id of ['account', 'credits', 'community']) {
-      const summary = page.locator(`#${id} > details > summary`);
+    for (const id of ['account', 'credits', 'community', 'appearanceLanguage', 'advancedData']) {
+      const summary = page.locator(`[data-setting-disclosure="${id}"] > summary`);
       expect((await summary.textContent()).trim().length).toBeGreaterThan(0);
       expect(await summary.evaluate(el => el.getBoundingClientRect().height >= 44)).toBe(true);
     }
@@ -613,8 +740,8 @@ test('ST2-08 open disclosures across 4 widths, 3 languages and dark mode', async
   await mockApp(page, COMMUNITY_PRO);
   await page.goto('/settings.html');
   await settingsReady(page, 'communityPro');
-  await page.locator('#screen [data-theme="dark"]').click();
   await openServiceGroups(page);
+  await page.locator('#screen [data-theme="dark"]').click();
   await page.evaluate(() => document.fonts.ready);
   if (process.env.LAYOUT_SHOTS) {
     const dir = path.join(process.cwd(), 'test-results', 'layout-shots');
@@ -779,9 +906,10 @@ for (const width of WIDTHS) {
     const problems = await page.evaluate(collectGapProblems, SCALE);
     expect(problems).toEqual([]);
     // 노션 연동은 고급 설정 접힘 안(계획/앱_명세.md §5) — 기본 접힘, 펼쳐도 간격 규칙 같음
-    await expect(page.locator('#advNotion')).not.toHaveAttribute('open', '');
+    await page.locator('[data-setting-disclosure="advancedData"] > summary').click();
+    await expect(page.locator('[data-setting-disclosure="advancedData"]')).not.toHaveAttribute('open', '');
     await expect(page.locator('#ntnToken')).toBeHidden();
-    await page.locator('#advNotion > summary').click();
+    await page.locator('[data-setting-disclosure="advancedData"] > summary').click();
     await expect(page.locator('#ntnToken')).toBeVisible();
     expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
   });
@@ -866,9 +994,9 @@ test('ST1-01 role DOM, group navigation, keyboard and hash focus', async ({ brow
   test.setTimeout(60000);
   const { groups, dictionaries } = await st1Modules();
   const cases = [
-    { role: 'guest', lang: 'ko', width: 390, state: STATES.guest, keys: ['account', 'backup', 'credits', 'screen', 'language', 'advanced'], targets: ['account', 'credits', 'screen', 'nx'] },
-    { role: 'user', lang: 'en', width: 768, state: STATES.user, keys: ['account', 'backup', 'credits', 'community', 'screen', 'language', 'advanced'], targets: ['account', 'credits', 'community', 'screen', 'nx'] },
-    { role: 'owner', lang: 'ja', width: 1280, state: USER_OWNER, keys: ['account', 'backup', 'credits', 'community', 'screen', 'language', 'advanced', 'opsHost'], targets: ['account', 'credits', 'community', 'screen', 'nx', 'ops'] },
+    { role: 'guest', lang: 'ko', width: 390, state: STATES.guest, keys: ['account', 'credits', 'screen', 'language', 'backup', 'advanced'], targets: ['account', 'credits', 'screen', 'nx'] },
+    { role: 'user', lang: 'en', width: 768, state: STATES.user, keys: ['account', 'credits', 'community', 'screen', 'language', 'backup', 'advanced'], targets: ['account', 'credits', 'community', 'screen', 'nx'] },
+    { role: 'owner', lang: 'ja', width: 1280, state: USER_OWNER, keys: ['account', 'credits', 'community', 'screen', 'language', 'backup', 'advanced', 'opsHost'], targets: ['account', 'credits', 'community', 'screen', 'nx', 'ops'] },
   ];
   for (const entry of cases) {
     const context = await browser.newContext({ viewport: { width: entry.width, height: 900 }, reducedMotion: 'reduce' });
@@ -960,8 +1088,8 @@ test('ST1-05 internal targets, accordion auto-expansion, and hash history', asyn
   await page.goto('/settings.html');
   await settingsReady(page, 'userOwner');
 
-  // 1. Details auto-expansion: #advNotion and #advanced should expand when targeting an internal element.
-  await expect(page.locator('#advNotion')).not.toHaveAttribute('open', '');
+  // 1. The outer data group opens for internal targets; the legacy host stays mounted.
+  await expect(page.locator('[data-setting-disclosure="advancedData"]')).not.toHaveAttribute('open', '');
   await page.evaluate(() => { location.hash = 'links'; });
   await expect(page.locator('#links')).toBeFocused();
   await expect(page.locator('#links')).toBeVisible();
@@ -1107,6 +1235,7 @@ for (const action of ['hashchange', 'signout']) {
       await expect(page.locator('#accGuest')).not.toHaveAttribute('hidden', '');
       await page.locator('#account > details > summary').click();
       await expect(page.locator('#accGuest')).toBeVisible();
+      await page.locator('[data-setting-disclosure="appearanceLanguage"] > summary').click();
     }
     const control = page.locator('#langSelect button').first();
     await control.focus();

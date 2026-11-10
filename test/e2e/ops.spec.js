@@ -3,7 +3,7 @@
 // 근거: 개발산출물/진행_운영화면.md §2·§3, 결과/M1-2a_티어쿼터관리API.md(PUT /admin/users/{id}/creator)
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { mockApp, STATES } = require('./support/mock-app');
+const { mockApp, STATES, DEFAULT_ME } = require('./support/mock-app');
 
 const TARGET = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -25,6 +25,46 @@ function json(route, body, status = 200) {
 }
 
 const isAdmin = (url) => url.pathname.startsWith('/api/v1/admin/');
+
+test('ST3-05 operations: lazy read, mounted draft and owner identity reset', async ({ page }) => {
+  const folders = [];
+  let me = { role: 'owner' };
+  await open(page, {
+    ...STATES.user, me,
+    routes: [
+      [url => url.pathname === '/api/v1/admin/shared-folders', route => {
+        folders.push(route.request().method());
+        return json(route, { folders: [] });
+      }],
+      [url => url.pathname === '/api/v1/me', route => json(route, { ...DEFAULT_ME, ...me })],
+    ],
+  });
+  const detail = page.locator('[data-setting-disclosure="operations"]');
+  await expect(detail).toHaveAttribute('id', 'opsDetails');
+  await expect(detail).not.toHaveAttribute('open', '');
+  expect(folders).toEqual([]);
+  await page.locator('#hOps').click();
+  await expect.poll(() => folders.length).toBe(1);
+  await expect(page.locator('#opsFoldersEmpty')).toBeVisible();
+  await page.locator('#opsEmail').fill('draft@example.com');
+  const input = await page.locator('#opsEmail').elementHandle();
+  await page.locator('#hOps').click();
+  await expect(page.locator('#opsEmail')).toBeHidden();
+  await page.locator('#hOps').click();
+  await expect(page.locator('#opsEmail')).toHaveValue('draft@example.com');
+  expect(await input.evaluate(node => node === document.getElementById('opsEmail'))).toBe(true);
+  expect(folders).toEqual(['GET']);
+  me = { ...me, id: '00000000-0000-4000-8000-000000000099', email: 'b@example.com' };
+  await page.evaluate(id => {
+    const session = { access_token: 'b-token', user: { id, email: 'b@example.com' } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, me.id);
+  await expect(page.locator('#accEmail')).toHaveText('b@example.com');
+  await expect(detail).not.toHaveAttribute('open', '');
+  await expect(page.locator('#opsEmail')).toHaveValue('');
+  expect(folders).toEqual(['GET']);
+});
 
 async function open(page, opts) {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -69,6 +109,10 @@ test('M2-4a owner인데 /admin 403: 안내 한 줄만 보이고 폼을 숨긴다
   await expect(page.locator('#opsForbidden')).toHaveText('owner 권한이 없어요. 계정 역할이 바뀌었으면 다시 로그인해 주세요.');
   await expect(page.locator('#opsCreator')).toHaveCount(0);
   await expect(page.locator('#opsEmail')).toHaveCount(0);
+  await page.locator('#hOps').click();
+  await page.locator('#hOps').click();
+  await expect(page.locator('#opsForbidden')).toBeVisible();
+  await expect(page.locator('#opsCreator')).toHaveCount(0);
 });
 
 test('M2-4a 크리에이터: 이메일 검색 → 지정 저장 요청 본문, 사유가 비면 저장 불가, 없는 이메일 안내', async ({ page }) => {

@@ -144,6 +144,8 @@ test('E2E-L1-1 /settings.html #langSelect 클릭·유지 및 연속 클릭 시 P
 
   await page.goto('/settings.html', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).not.toHaveAttribute('open', '');
+  await page.locator('[data-setting-disclosure="appearanceLanguage"] > summary').click();
   await expect(page.locator('#accEmail')).toHaveText('a@example.com');
 
   // 1) English 클릭 → html[lang="en"], localStorage('ulp:lang') === 'en', 화면 즉시 리렌더
@@ -157,6 +159,8 @@ test('E2E-L1-1 /settings.html #langSelect 클릭·유지 및 연속 클릭 시 P
   await page.goto('/index.html', { waitUntil: 'load' });
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.goto('/settings.html', { waitUntil: 'load' });
+  await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).not.toHaveAttribute('open', '');
+  await page.locator('[data-setting-disclosure="appearanceLanguage"] > summary').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.locator('#langSelect [data-lang="en"]')).toHaveAttribute('aria-pressed', 'true');
 
@@ -220,6 +224,8 @@ const PAGES = [
     mock: { ...STATES.user },
     ready: async (page) => {
       await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+      await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).not.toHaveAttribute('open', '');
+      await page.locator('[data-setting-disclosure="appearanceLanguage"] > summary').click();
       await page.locator('#langSec').waitFor();
     },
   },
@@ -310,6 +316,7 @@ for (const lang of ['ko', 'en', 'ja']) {
 
         if (pageCfg.name === 'settings') {
           // #langSelect 내부 4개 버튼이 390px 포함 모든 폭에서 한 줄(top·height 일치)
+          await expect(page.locator('#langSelect')).toBeVisible();
           const boxes = await page.locator('#langSelect button').evaluateAll((els) =>
             els.map((el) => {
               const r = el.getBoundingClientRect();
