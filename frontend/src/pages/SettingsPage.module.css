@@ -36,6 +36,13 @@
   padding: 12px 16px;
 }
 
+.groupItem {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
 .serviceDisclosure {
   min-width: 0;
   width: 100%;

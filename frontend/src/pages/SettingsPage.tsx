@@ -152,7 +152,6 @@ export function SettingsPage(): React.ReactElement {
   };
 
   // 고급 설정(노션) 접힘: 노션 관련 해시로 들어오면 펼친다
-  const [advOpen, setAdvOpen] = useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash));
   // 노션 바로가기 및 화면 테마
   const [nlPractice, setNlPractice] = useState(() => raw.get('ulp:notion-practice'));
   const [nlNotes, setNlNotes] = useState(() => raw.get('ulp:notion-notes'));
@@ -170,8 +169,8 @@ export function SettingsPage(): React.ReactElement {
   // Reset only the outer disclosures, before this identity's hash navigation.
   // The mounted body and nested account-deletion disclosure retain their state.
   useEffect(() => {
-    for (const id of ['account', 'credits', 'community']) {
-      const detail = document.getElementById(id)?.querySelector<HTMLDetailsElement>(`:scope > details[data-setting-disclosure="${id}"]`);
+    for (const id of ['account', 'credits', 'community', 'appearanceLanguage', 'advancedData']) {
+      const detail = document.querySelector<HTMLDetailsElement>(`details[data-setting-disclosure="${id}"]`);
       if (detail) detail.open = false;
     }
   }, [activeUid]);
@@ -194,7 +193,6 @@ export function SettingsPage(): React.ReactElement {
       const target = document.getElementById(destination.targetId);
       if (!target) return; // Retry after auth or conditional credit targets render.
       const generation = auth.getSessionGeneration();
-      if (destination.renderKey === 'advanced') setAdvOpen(true);
       // Clicking the native summary also updates the existing React onToggle owner.
       const details: HTMLDetailsElement[] = [];
       for (let parent = target.parentElement; parent; parent = parent.parentElement) {
@@ -676,68 +674,6 @@ export function SettingsPage(): React.ReactElement {
         </details>
       </section>
 
-      {/* 2. 데이터 백업 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="nx" data-setting-render-key="backup" aria-labelledby="hNx">
-        <h2 id="hNx">{t('settings.secNx')}</h2>
-        <p>{t('settings.nxDesc')}</p>
-        <div className={styles.panel}>
-          <h3>{t('settings.nxExportTitle')}</h3>
-          <p className="hint">
-            {t('settings.nxExportDesc')}
-          </p>
-          <label className={styles.checkRow}>
-            <input
-              type="checkbox"
-              id="chkExportAudio"
-              checked={exportAudio}
-              onChange={(e) => setExportAudio(e.target.checked)}
-            />
-            <span>{t('settings.nxExportAudio')}</span>
-          </label>
-          <div className={styles.row}>
-            <button
-              className="ghostBtn"
-              type="button"
-              id="btnExportZip"
-              disabled={busyNx}
-              onClick={async () => {
-                if (!activeUid) {
-                  setNxMsg({ text: t('settings.nxLoginReq'), kind: 'err' });
-                  return;
-                }
-                const reqUid = activeUid;
-                setBusyNx(true);
-                setNxMsg({ text: t('settings.nxExportProgress'), kind: '' });
-                try {
-                  const res = await apiClient.nx.exportZip(exportAudio);
-                  if (auth.getUser()?.id !== reqUid) return;
-                  const url = URL.createObjectURL(res.blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = res.filename || 'ULeveLP-export.zip';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                  setNxMsg({ text: t('settings.nxExportDone'), kind: 'ok' });
-                } catch (e: any) {
-                  if (auth.getUser()?.id !== reqUid) return;
-                  setNxMsg({ text: (e && e.message) || t('settings.nxExportFail'), kind: 'err' });
-                } finally {
-                  setBusyNx(false);
-                }
-              }}
-            >
-              {t('settings.nxExportBtn')}
-            </button>
-          </div>
-        </div>
-
-        <p className={`msg${nxMsg.kind ? ' ' + nxMsg.kind : ''}`} id="nxMsg" role="status">
-          {nxMsg.text}
-        </p>
-      </section>
-
       {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
       <section className={`set-sec ${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right" id="credits" data-setting-render-key="credits" aria-labelledby="hCredits">
         <details className={styles.serviceDisclosure} data-setting-disclosure="credits">
@@ -864,8 +800,12 @@ export function SettingsPage(): React.ReactElement {
         </section>
       ) : null}
 
-      {/* 4. 화면 모드 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="screen" data-setting-render-key="screen" aria-labelledby="hScreen">
+      {/* 화면·언어 — 본문을 마운트한 채 그룹 단위로 접는다. */}
+      <div className={`${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right">
+        <details className={styles.serviceDisclosure} data-setting-disclosure="appearanceLanguage">
+          <summary className={styles.serviceSummary} data-align-group="appearanceDisclosure: left,right">{t('settings.groups.appearanceLanguage')}</summary>
+          <div className={styles.serviceBody} data-align-group="appearanceDisclosure: left,right">
+      <section className={`set-sec ${styles.groupItem}`} id="screen" data-setting-render-key="screen" aria-labelledby="hScreen">
         <h2 id="hScreen">{t('settings.secScreen')}</h2>
         <div className={`seg-pill ${styles.segPill}`} role="group" aria-label={t('settings.screenAria')}>
           {(
@@ -893,7 +833,7 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 5. 언어 설정 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="langSec" data-setting-render-key="language" aria-labelledby="hLang">
+      <section className={`set-sec ${styles.groupItem}`} id="langSec" data-setting-render-key="language" aria-labelledby="hLang">
         <h2 id="hLang">{t('settings.secLang')}</h2>
         <p id="langDesc">{t('settings.langDesc')}</p>
         <div className={`seg-pill ${styles.segPill}`} id="langSelect" role="group" aria-label={t('settings.langAria')}>
@@ -911,16 +851,79 @@ export function SettingsPage(): React.ReactElement {
           ))}
         </div>
       </section>
+          </div>
+        </details>
+      </div>
 
-      {/* 6. 고급 설정 — 노션 연동(2026-11-05 중단·동결: 새 기능 없음, 계획/앱_명세.md §5). 기본 접힘 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="advanced" data-setting-render-key="advanced" aria-labelledby="hAdvanced">
-        <details
-          className={styles.advanced}
-          id="advNotion"
-          open={advOpen}
-          onToggle={(e) => setAdvOpen((e.currentTarget as HTMLDetailsElement).open)}
-        >
-          <summary id="hAdvanced">{t('settings.advSummary')}</summary>
+      {/* 고급·백업·데이터 관리 — 기존 상세 기능과 요청 수명은 유지한다. */}
+      <div className={`${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right">
+        <details className={styles.serviceDisclosure} data-setting-disclosure="advancedData">
+          <summary className={styles.serviceSummary} data-align-group="advancedDisclosure: left,right">{t('settings.groups.advancedData')}</summary>
+          <div className={styles.serviceBody} data-align-group="advancedDisclosure: left,right">
+      <section className={`set-sec ${styles.groupItem}`} id="nx" data-setting-render-key="backup" aria-labelledby="hNx">
+        <h2 id="hNx">{t('settings.secNx')}</h2>
+        <p>{t('settings.nxDesc')}</p>
+        <div className={styles.panel}>
+          <h3>{t('settings.nxExportTitle')}</h3>
+          <p className="hint">
+            {t('settings.nxExportDesc')}
+          </p>
+          <label className={styles.checkRow}>
+            <input
+              type="checkbox"
+              id="chkExportAudio"
+              checked={exportAudio}
+              onChange={(e) => setExportAudio(e.target.checked)}
+            />
+            <span>{t('settings.nxExportAudio')}</span>
+          </label>
+          <div className={styles.row}>
+            <button
+              className="ghostBtn"
+              type="button"
+              id="btnExportZip"
+              disabled={busyNx}
+              onClick={async () => {
+                if (!activeUid) {
+                  setNxMsg({ text: t('settings.nxLoginReq'), kind: 'err' });
+                  return;
+                }
+                const reqUid = activeUid;
+                setBusyNx(true);
+                setNxMsg({ text: t('settings.nxExportProgress'), kind: '' });
+                try {
+                  const res = await apiClient.nx.exportZip(exportAudio);
+                  if (auth.getUser()?.id !== reqUid) return;
+                  const url = URL.createObjectURL(res.blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = res.filename || 'ULeveLP-export.zip';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  setNxMsg({ text: t('settings.nxExportDone'), kind: 'ok' });
+                } catch (e: any) {
+                  if (auth.getUser()?.id !== reqUid) return;
+                  setNxMsg({ text: (e && e.message) || t('settings.nxExportFail'), kind: 'err' });
+                } finally {
+                  setBusyNx(false);
+                }
+              }}
+            >
+              {t('settings.nxExportBtn')}
+            </button>
+          </div>
+        </div>
+
+        <p className={`msg${nxMsg.kind ? ' ' + nxMsg.kind : ''}`} id="nxMsg" role="status">
+          {nxMsg.text}
+        </p>
+      </section>
+
+      <section className={`set-sec ${styles.groupItem}`} id="advanced" data-setting-render-key="advanced" aria-labelledby="hAdvanced">
+        <div id="advNotion">
+          <h2 id="hAdvanced">{t('settings.advSummary')}</h2>
           <div className={styles.advBody}>
             <p className="hint">
               {t('settings.advDesc')}
@@ -1473,11 +1476,14 @@ export function SettingsPage(): React.ReactElement {
           </div>
 
           </div>
-        </details>
+        </div>
       </section>
+          </div>
+        </details>
+      </div>
 
       {/* 7. 운영 — owner만(M2-4, 권한 판정은 서버 /admin). 기본 접힘 */}
-      {signedIn && authState.me?.id === activeUid && authState.me.role === 'owner' ? <div data-setting-render-key="opsHost"><OpsPanel /></div> : null}
+      {signedIn && authState.me?.id === activeUid && authState.me.role === 'owner' ? <div data-setting-render-key="opsHost"><OpsPanel key={activeUid} /></div> : null}
     </AppShell>
   );
 }

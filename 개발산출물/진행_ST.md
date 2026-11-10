@@ -1,17 +1,19 @@
 # ST 진행 — 설정 그룹·접힘·딥링크·Registry 검증
 
-> 2026-11-10 / ST-2 시니어 핵심 구현 및 주니어 4단계 로컬 전체 검증·화면 검토, 커밋·push·PR #154 생성 및 GitHub Actions CI 전수 통과 완료 (사용자 머지 대기). 현재 재개는 §5, 이번 실행은 §14. ST-1 이력은 §6~§10, ST-2 명세 준비는 §11, 시니어 핵심 구현은 §12, 주니어 로컬 검증은 §13.
+> 2026-11-10 / step/ST-3에서 시니어 핵심 구현, 주니어 4단계 전수 회귀(9개 spec 218개 통과)·화면 검토(4폭 PNG 38장 Q1~Q9 전수 ○)·범위 내 보완 2건 및 최종 AC-9/10 충족 판정 후, PR #155 생성, GitHub Actions CI 전수 통과(Run 42759316956), Codex 리뷰 반영 완료. 사용자 머지 대기. 재개는 §5, 이번 실행은 §18. ST-1/2 이력 및 시니어 핵심 구현 §6~§17은 당시 기록으로 보존한다.
 
 ## 1. 목표·입력·승인 경계
 
-- 목표: 상용 계획 #10 ST의 기존 3-Step·담당 배정을 유지하고, ST-1 다음 ST-2 앞 3그룹 접힘을 상세화한다. ST-1 당시 목표·결과는 §6~§10에 보존한다.
+- 목표: 상용 계획 #10 ST의 기존 3-Step·담당 배정을 유지하고, ST-3 환경·데이터 그룹 접힘과 운영자 연결·최종 AC-9/10 검증 조건을 상세화한다. ST-1/2 당시 목표·결과는 §6~§14에 보존한다.
 - 입력: [계획 #10](../계획/상용_서비스_계획.md), [REQ-5·AC-9/10](요구사항_명세_초안.md), [PF 진행](진행_PF.md), [협업 §1.2](협업_시니어주니어.md), [4단계 §1](프롬프트_템플릿_4단계.md), [문서 운영](../docs/문서_운영.md), 실제 main 코드.
 - 사용자 승인(2026-11-10): “GPT-6.1 Sol (시니어) — ST-1 핵심 구현 및 검증 인계”. ST 3-Step 배정·ST-1 구현명세 승인, main 안전 동기화 후 step/ST-1에서 지정 7파일 핵심 구현·표적 검사 1~2개·diff 검토·진행 기록까지 승인.
 - 사용자 승인(2026-11-10): “Gemini (주니어) — ST-1 Git 게시 및 PR 생성·CI 확인”. 로컬 완료 7파일 및 ST 문서 3개의 커밋·push·main 대상 PR 생성 및 CI 종료 대기 승인. 머지·배포는 미승인(사용자 권한).
 - 사용자 승인(2026-11-10): “GPT-6.1 Sol (시니어) — ST-2 핵심 구현 및 검증 인계”. 명세 7파일·시니어 핵심 배정·로컬 구현·표적 검사 1~2개·diff 검토·인계 기록 승인.
 - 사용자 승인(2026-11-10): “Gemini (주니어) — ST-2 전체 검증·화면 검토”. 프롬프트_템플릿_4단계.md §4를 따른다. 선행: step/ST-2의 미커밋 구현과 사용자 문서를 보존한다. 목표·범위: 진행_ST.md §12.4의 잔여 분기·관련 회귀·4폭 화면 검토. 완료 기준: 실제 검증 결과·PNG Q1~Q9 검토·결과/ST-2.md·진행 기록 완료.
-- **현재 ST-2 주니어 승인 범위(2026-11-10):** 사용자 “Gemini (주니어) — ST-2 Git 게시 및 PR 생성·CI 확인” 지시로 step/ST-2 로컬 구현 7파일과 결과/ST-2.md, 진행_ST.md, 계획/상용_서비스_계획.md 커밋·push·main 대상 PR 생성 및 CI 종료 확인. 머지·배포 제외 (사용자 권한).
-- 담당: 시니어 핵심 구현(§12) 및 주니어 §4 전체 검증·화면 검토 완료(§13), Git 게시·PR 생성·CI 감시 완료(§14). 제품/테스트 허용 7파일은 [ST-2 명세 §1.1](명세/ST-2_구현명세.md), 문서는 본 진행·ST-2 명세와 결과/ST-2.md. 동시 실행 에이전트 없음. 공통 규칙 변경 없음.
+- **과거 ST-2 주니어 승인 범위(2026-11-10):** 사용자 “Gemini (주니어) — ST-2 Git 게시 및 PR 생성·CI 확인” 지시로 step/ST-2 로컬 구현 7파일과 결과/ST-2.md, 진행_ST.md, 계획/상용_서비스_계획.md 커밋·push·main 대상 PR 생성 및 CI 종료 확인. 머지·배포 제외 (사용자 권한).
+- **과거 ST-3 로컬 검증 승인(2026-11-10):** 사용자 “Gemini (주니어) — ST-3 전체 검증·화면 검토”. 프롬프트_템플릿_4단계.md §4를 따른다. 목표: ST-3 전수 회귀·화면 검토·AC-9/10 판정 근거 기록. 범위: ST-3_구현명세.md §5, 진행_ST.md §16.4. 선행: step/ST-3, HEAD=63a0b01의 미커밋 구현·문서와 기존 EX-1/MS-1을 보존한다. 완료 기준: 잔여 분기·관련 회귀·4폭 PNG Q1~Q9 검토, 결과/ST-3.md와 진행 기록.
+- **현재 ST-3 Git 게시 승인(2026-11-10):** 사용자 “Gemini (주니어) — ST-3 Git 게시 및 PR 생성·CI 확인”. 프롬프트_템플릿_4단계.md §4를 따른다. 목표: 로컬 검증 및 AC-9/10 판정이 완료된 ST-3 작업 내용(지정 7개 파일 및 ST-3 결과/진행/명세 문서)을 커밋·push하고 main 대상 PR 생성 후 GitHub Actions CI 통과 및 리뷰를 확인한다.
+- 현재 담당: 주니어 4단계 [PR #155](https://github.com/choise-hun/doloop/pull/155) 생성, 최신 CI 전수 통과(Run 42759316956), Codex 리뷰(CH-7b 정적 단언 정합) 반영 완료. 사용자 머지 대기. 머지·배포 제외 (사용자 권한). 기존 EX-1/MS-1 명세 2개 보존. 동시 실행 에이전트·공통 규칙 변경 없음.
 
 ## 2. 선행 조건과 실제 확인
 
@@ -33,8 +35,8 @@ ST는 하나의 Feature로 유지한다. 설정을 찾고 열어 값을 유지/�
 | Step | 독립 확인 가능한 사용자 결과 | 담당 | 규모 추정(+/- 합계, 제품/테스트) |
 | --- | --- | --- | --- |
 | ST-1 그룹 탐색·Registry 검증 | 상단 6그룹 목록에서 권한에 맞는 기존 설정을 찾아 해시로 이동. 초기/변경 해시와 실제 렌더·번역 누락 검증. 본문은 기존 펼침 상태 | **[시니어]** 핵심 / 4단계 주니어 완료 | 7파일, 618줄. [PR #153](https://github.com/choise-hun/doloop/pull/153) 머지 완료 |
-| ST-2 계정·서비스 설정 접힘 | 계정·저장소/구독·크레딧/공개·연동의 요약 행을 열어 로그인·저장소·공유 설정 확인/저장. 기본 접힘·해시 자동 열기·닫았다 열어도 상태/진행 요청 유지 | **[시니어]** 핵심 / 4단계 주니어 완료 | 7파일, 605줄. [PR #154](https://github.com/choise-hun/doloop/pull/154) CI 전수 통과·Codex 리뷰 완료 (사용자 머지 대기) |
-| ST-3 환경·데이터 설정 접힘 완성 | 화면·언어 및 고급·백업·데이터 관리 그룹도 요약→열기→설정 유지/저장. 기존 운영자 접힘을 그룹 체계와 연결, 모든 기본 상세 접힘 및 최종 AC-9/10 확인 | **[시니어]** 핵심 / 4단계 주니어 마무리 | 잠정 7파일, 핵심 최대 3, 350~650줄. Page/CSS/Registry/OpsPanel + settings/i18n-lang/theme-footer spec. 환경 설정 탐색 여정의 잔여 그룹 완성 |
+| ST-2 계정·서비스 설정 접힘 | 계정·저장소/구독·크레딧/공개·연동의 요약 행을 열어 로그인·저장소·공유 설정 확인/저장. 기본 접힘·해시 자동 열기·닫았다 열어도 상태/진행 요청 유지 | **[시니어]** 핵심 / 4단계 주니어 완료 | 7파일, 605줄. [PR #154](https://github.com/choise-hun/doloop/pull/154) 머지 확인(§15). CI/리뷰는 당시 기록 §14 |
+| ST-3 환경·데이터 설정 접힘 완성 | 두 잔여 그룹을 각각 단일 요약 행으로 통합, 기존 운영자 접힘 연결, 최종 AC-9/10 판정 | **[시니어]** 핵심 / 4단계 주니어 완료 | [세부 명세](명세/ST-3_구현명세.md), 실행 §16·§17·§18, [결과/ST-3.md](결과/ST-3.md). [PR #155](https://github.com/choise-hun/doloop/pull/155) CI 전수 통과, 리뷰 반영 완료, 사용자 머지 대기 |
 
 ### 3.1 골디락스와 배정 근거
 
@@ -70,21 +72,18 @@ ST는 하나의 Feature로 유지한다. 설정을 찾고 열어 값을 유지/�
 
 ## 5. 검토 관문·다음 행동
 
-- 현재: `step/ST-2` 브랜치에서 ST-2 시니어 핵심 구현, 주니어 로컬 전체 검증(Playwright 7개 ST2 테스트, 9개 관련 spec 회귀, 89개 layout 테스트, 4폭/다크 Q1~Q9 검토), [ST-2 결과 문서](결과/ST-2.md) 작성, 커밋·push 및 [PR #154](https://github.com/choise-hun/doloop/pull/154) 생성, GitHub Actions CI 전수 통과 및 Codex 리뷰 완료(0 findings) 완료.
-- 다음 단계: **사용자 PR #154 머지**. 에이전트는 직접 머지하지 않음.
-- 다음 작업: PR #154 머지 후 **ST-3(환경·데이터 설정 접힘 완성) 세부 명세 작성**.
-- 다음 세션 재개를 위해 아래 템플릿 멘트를 활용한다.
+- 현재: `step/ST-3`에서 ST-3 작업은 구현부터 PR 검증까지 완료되었다. [PR #155](https://github.com/choise-hun/doloop/pull/155) 생성, GitHub Actions CI 전 Job 통과(Run 42759316956), Codex 리뷰 1건(CH-7b 정적 단언 정합) 반영 및 최신 CI 통과 확인 완료. 사용자 머지 대기.
+- 다음 행동: 사용자가 PR #155 머지 후, 후속 상용 서비스 계획 단계(M0-0 실기기 확인 또는 M0-1 Capacitor 앱 패키징)로 진행한다.
+- 재개 전: PR #155 머지 완료 확인 및 main 최신 안전 동기화(`git switch main && git pull --ff-only`). 머지·배포는 사용자 권한이다.
 
-다음 세션 시작 멘트 (PR #154 머지 후 ST-3 세부 명세 작성용 — 권장 Effort: 높음):
+다음 작업 시작 멘트 (PR #155 머지 후 활용).
 
 ```text
-# GPT-6.1 Sol (시니어) — ST-3 세부 명세
-목표: 화면·언어 및 고급·백업·데이터 관리 그룹 접힘 전환, 운영자 접힘 연결, 최종 AC-9/10 수용 기준 점검을 위한 ST-3 세부 명세 작성.
-기준: 계획 #10 ST, 요구사항 REQ-5 / AC-9·AC-10, 개발산출물/진행_ST.md, 결과/ST-2.md.
-선행 조건: PR #154 머지 확인, git switch main && git pull --ff-only로 main 최신화.
-범위: 명세 작성과 실제 코드 근거 조사 (구현·테스트 실행 제외).
-Git 처리: 로컬 문서 작성만. 커밋·push·PR·머지·배포 제외.
-[필수 가드레일] 권장 Effort: 높음.
+# Gemini (주니어) — M0-0 모바일 미디어 실기기 적합성 사전 확인 준비
+개발산출물/프롬프트_템플릿_4단계.md를 따른다.
+선행: PR #155 머지 완료 확인, git switch main && git pull --ff-only 성공(HEAD 최신 일치).
+목표: 상용 서비스 계획 순서 1(M0-0) 모바일 스파이크 사전 확인 준비 및 진행 현황 확인.
+완료 기준: 개발산출물/진행_모바일스파이크.md 및 docs/문서_운영.md §6 준수.
 ```
 
 ## 6. 명세 작성 당시 최종 정적 확인 — 2026-11-10 (과거 기록)
@@ -391,3 +390,166 @@ git status --short
 - ST-2 구현부터 PR 검증까지 전 과정 완료.
 - PR 머지 및 프로덕션 배포는 사용자 권한으로 수행 (에이전트 임의 머지 금지).
 - 다음 작업: PR #154 사용자 머지 후 ST-3(환경·데이터 설정 접힘 완성: 화면·언어 및 고급·백업·데이터 관리 그룹 접힘, 운영자 접힘 연결, 최종 AC-9/10 수용 기준 점검) 세부 명세 작성. §5의 다음 세션 시작 멘트 활용.
+
+## 15. ST-3 세부 명세·실제 코드 조사 — 2026-11-10
+
+### 15.1 승인·선행·보존
+
+- 사용자 요청: “GPT-6.1 Sol (시니어) — ST-3 세부 명세”. 목표·입력은 이번 요청과 [ST-3 명세](명세/ST-3_구현명세.md) §1. 로컬 문서와 읽기/검색만 수행하며 구현·테스트 실행·Git 게시·머지·배포는 제외한다.
+- 시작 `step/ST-2`, tracked 변경 없음. 기존 미추적 `명세/EX-1_크롬확장_구현명세.md`, `명세/MS-1_모바일공유_구현명세.md` 2개를 보존했다. 현재 문서 작성은 main에서 수행하며 작업 브랜치는 구현 승인 후 생성한다.
+- GitHub `fetch_pr` #154 실제 조회: state=closed, merged=true, base=main, head=`c96b7d865c0d7abdbd39872a526225ad6d08f0ef`, merge=`63a0b0121d58b9a2c14eb37a645b808e24433b4d`. [PR #154](https://github.com/choise-hun/doloop/pull/154). 머지를 실행하지 않았다.
+- `git switch main` 성공, `git pull --ff-only` 성공: `b8849a7..63a0b01` fast-forward. `git rev-list --left-right --count main...origin/main` → `0 0`.
+- 인수인계는 과거 CM-BE/PF/ST 상태, 계획 #10은 ST-2 Git 게시 대기, ST-2 결과는 머지 대기를 담고 있다. 당시 문서와 이번 GitHub/로컬 확인을 구별했다. 이번 변경은 진행과 ST-3 명세 두 문서로 한정하며 과거 결과·요구사항·공통 규칙·인수인계·계획은 수정하지 않았다. ST 완료 시 계획/활성파일 정합은 후속 마무리 항목으로 남긴다.
+
+### 15.2 정적 조사·결정
+
+- 문서 운영 §4·§6, 협업 §1.2, 템플릿 §0·§1·§4, frontend-state/layout, testing-security, 정렬 규격, 요구사항 REQ-5/AC-9·10, ST-2 명세/진행/결과를 실제 main 소스·소비 spec과 대조했다.
+- 기존 고급 details는 일반 div로 전환해 ID·자손을 보존하고 상위 데이터 그룹 하나만 접힘을 소유한다. 화면·언어도 단일 접힘으로 묶는다. 백업은 고급 그룹 첫 항목으로 이동한다. 운영자는 기존 details/open/onToggle를 사용하며 새 props 없이 identity key로 사용자별 폼을 분리한다.
+- Registry·사전·서버 계약은 유지한다. 제품/테스트 제안 7파일 중 Registry 대신 실제 회귀가 필요한 ops.spec를 포함했다. 기존 3-Step·시니어 핵심/주니어 전체 검증 배정 유지, 핵심 로직2·예상450~650줄·상한700줄이다.
+- ST1/2의 전체 marker 수·기존 screen 이동 후 open=0·DOM 순서·고급 summary 단언 중 어떤 부분이 새 계약으로 바뀌는지 명세에 고정했다. 입력/상태/저장/오류/권한·stale 응답 가드를 약화하지 않도록 테스트 전수표와 연결했다.
+- ST-2 문서의 npm test 통과 요약/LA-1 한계 및 d9cad50 기준 CI를 최종 head 검증으로 사용하지 않았다. 이번 최신 CI·리뷰 재검증은 하지 않았으며 명세에 한계를 기록했다.
+
+### 15.3 실행·미실행·다음 행동
+
+| 수행 | 실제 결과 |
+| --- | --- |
+| Git status/branch/remote, PR 실제 조회 | §15.1 확인. 사용자 변경 2개 보존, PR 머지 선행 충족 |
+| main 전환·ff-only 동기화·HEAD 비교 | 성공, main=origin/main=`63a0b01`, 뒤/앞 0/0 |
+| rg·UTF-8 문서/코드 읽기 | Page/CSS/Registry/OpsPanel/OpsFolders/apiClient/security/i18n, 관련 E2E/정렬 소비 계약 정적 확인 |
+| 로컬 문서 작성 | 명세/ST-3_구현명세.md 신규, 본 진행의 현재 상태/재개 지시 갱신. 소스·테스트 수정 없음 |
+
+- 미실행: 제품/테스트 구현, 빌드·npm/Gradle/Playwright·Red/Green·변이 검사, 서버 기동·PNG 검토, 실제 OAuth/Drive/ZIP/DB A↔B 통합·운영 확인, 최신 CI/리뷰 재검증, 커밋·push·PR 생성·머지·배포.
+- 판정: **ST-3 세부 명세 작성 완료 / 사용자 검토·구현 승인 대기**.명세만 요청한 승인 경계에서 종료하며 ST-3 구현·최종 AC-9/10 완료가 아니다. 구체 재개와 복사 멘트는 §5를 따른다.
+
+- 종료 정적 확인: 명세 158줄·진행 문서 상대 링크 전수 존재, 코드 펜스 짝 일치, UTF-8 BOM 없음·LF·후행 공백 없음. tracked diff와 신규 명세의 공백 검사, 최종 status/diff 범위를 확인했다. 문서 2개 외 소스·테스트 변경 없음.
+
+## 16. ST-3 시니어 핵심 구현·주니어 검증 인계 — 2026-11-10
+
+### 16.1 승인·선행·보존
+
+- 사용자 요청 “GPT-6.1 Sol (시니어) — ST-3 핵심 구현 및 검증 인계”에 따라 로컬 핵심 구현·표적1~2개·자체 검토·인계 기록만 수행했다. 전체 회귀·PNG·결과 문서는 주니어 담당이며 Git 게시·CI·머지·배포는 제외한다.
+- 시작 main=`63a0b01`, 기존 tracked `진행_ST.md` 변경과 untracked ST-3/EX-1/MS-1 명세를 확인·보존했다. `gh pr view 154 --json state,mergedAt,mergeCommit,url,baseRefName` → MERGED, base=main, merge=`63a0b0121d58b9a2c14eb37a645b808e24433b4d`, mergedAt=`2026-11-10T03:52:34Z`.
+- `git fetch origin main` 성공, `git rev-list --left-right --count main...origin/main` → `0 0`. 이미 일치하므로 추가 pull/merge 없이 `git switch -c step/ST-3` 성공. `gh pr list --state open --json number,headRefName,title` → `[]`. 최신 CI/리뷰 조회·대기나 게시 실행은 하지 않았다.
+- 활성 인수인계 문서의 CM-BE 기록은 오래된 상태이며 이번 Git 사실과 구별한다. 사용자 기존 문서 내용을 되돌리거나 EX-1/MS-1을 수정하지 않았다. 다른 에이전트 실행 없음.
+
+### 16.2 구현·가드와 자체 diff 검토
+
+- `frontend/src/pages/SettingsPage.tsx:171`: uid 변경 시 앞3그룹과 새2그룹을 해시 처리 전에 닫는다. 동일 uid 갱신은 수동 상태를 유지한다. 기존 hash 권한 검사·sequence/generation/uid/owner·2RAF·unmount 가드는 보존했다(`:177`~`:242`). 고급 전용 open state/분기는 제거했다.
+- Page `:804` 이후: appearanceLanguage 아래 screen→language, advancedData 아래 backup→advanced로 묶고 기존 service summary/body를 재사용한다. 기존 상세 host는 div, 제목은 h2로 전환했다. 외부 details가 닫혀도 자식·File ref·handler·요청 상태는 마운트된다. CSS `.groupItem`은 무테두리/무패딩 flex column·16px gap·min-width0이며 기존 공유 클래스는 재정의하지 않았다.
+- `frontend/src/components/ops/OpsPanel.tsx:110`~`:113`: 기존 details/open/onToggle에 operations marker와 공통 배치를 연결했다. `:214`의 OpsFolders open 전달·첫 조회 조건은 유지한다. Page `:1486`의 `key={activeUid}`로 owner identity 사이 폼·loaded·forbidden 상태를 분리한다.
+- 기존 ST2 단언은 앞3그룹으로 scope, #screen 해시 후 appearance 열림/credits 닫힘으로 수정했다. ST1 DOM 순서 기대값은 백업 이동을 반영하고 독립 ID 계약 목록은 유지했다. 내부 접힘 조작은 외부 데이터 그룹으로 변경했다. i18n/theme 검사는 컨트롤 조작 전 그룹을 열고, 재방문 closed·닫힌 중 footer 동기화를 단언한다. ops.spec에는 lazy read·draft node·owner A→B 초기화 및 403 재열기 단언을 추가했다(미실행).
+- 정적 비교: HEAD와 Page/OpsPanel의 literal ID multiset 일치, apiClient 호출 multiset 일치, 이동한 export handler 본문 일치. Registry·3사전·apiClient·OpsFolders·서버 변경 없음. 시그니처/export/props·API 계약 변경 없음. 정적 비교는 실제 서버/사용자 권한 통합 증거가 아니다.
+- 자체 diff 범위: 제품3 + 테스트4 = 지정7파일, +294/-98 = **392줄**. 문서2개는 별도 집계. 실행 실패를 숨기는 skip/단언 완화/fallback 추가 없음.
+
+### 16.3 실제 실행·실패 원인·결과
+
+| 명령/검사 | 실제 결과 |
+| --- | --- |
+| `npm run build` (수정 전/핵심 구현 후) | 모두 exit0, tsc --noEmit·Vite 성공, 172 modules. 기존 CJS/config.js/chunk-size 경고. 전체 단위 회귀 실행 아님 |
+| `npx playwright test test/e2e/layout/settings.spec.js -g 'ST3-01\|ST3-02'` 구현 전 | **2 failed**. guest marker에서 새2개 누락, advancedData marker 부재. 의도한 Red 확보 |
+| 같은 명령, 핵심 구현 후 | **2 passed (21.6s)**. ST3-01 역할5개×390px의 순서·closed·DOM mount·native Enter/Space/Tab·44px/16px·요청0, ST3-02 주요 해시·same hash·history·동일 uid·logout 확인 |
+| 경합 단언 보강 중 | 테스트 원인 실패2회: 이미 열린 그룹은 유지되는 계약인데 닫힘을 기대한 오류, 브라우저 native fragment focus를 앱 RAF focus로 센 오류. 제품 가드를 변경하지 않고 동기 hashchange2회와 HTMLElement.focus 호출 계측으로 이전 앱 focus0을 확인하도록 수정 |
+| 최종 같은 명령 (expired fixture 포함) | **2 passed (7.9s)**, skip0. ST3-02는 구 pending hash를 실제 dispatch한 뒤 새 hash로 교체하고 이전 앱 focus 호출0·최신 screen focus를 단언. 실제 변이 검사는 미실행 |
+| ID/API/export handler 정적 비교, `git diff --check` | 계약 비교 일치, 공백 검사 exit0. 최종 인코딩·상태 확인은 아래 종료 확인에 기록 |
+
+### 16.4 주니어 §4 다음 행동·미검증
+
+1. `step/ST-3`의 미커밋7파일과 문서2개·기존 EX-1/MS-1을 보존하고 diff를 검토한다. 구현·명세 단계를 반복하지 않는다. 이 인계는 사용자 지정 역할 경계이며 전수 수용 완료가 아니다.
+2. 명세 §5 ST3-01/02 잔여: 각 등록 별칭 전수 initial/hashchange, disabled fallback, 지연 owner me와 #ops/#opsDetails/#hOps, uid/role 전환·unmount 직전 RAF, 비허용/unknown 요청0을 보완·실행한다. 현재 ST3-01은390px, 전수 조건부 ID 검증은 기존 ST1과 함께 확인한다. expired는 grace와 분리된 free/잔액0/과거 만료 fixture다.
+3. ST3-03/04는 미작성·미실행: File/node·preview/confirm/export pending 성공/오류·취소/빈파일/guest/busy·A→B 응답 폐기, locale 실패·직렬화·queued 세대 폐기·theme 양방향을 보완한다. 기존 i18n/theme 수정은 아직 실행하지 않았다.
+4. ops.spec의 ST3-05 초안과 기존403 보강은 미실행. 첫조회/성공 재열기/draft/owner A→B 외 지연 중 닫기·성공/실패·재시도·지연403·owner→user·이전 target/오류0 분기를 보완한다. OpsFolders의 기존 uid/unmount 한계를 재현하면 기존 결함과 이번 회귀를 구별하고 필수 AC 실패를 완료로 숨기지 않는다.
+5. 명세 §5.2 명령으로 build·ST3 전수(ops.spec의 ST3-05도 포함)·관련9개 spec·npm test를 실행한다. ST3-06 closed/두그룹 열린 상태의3언어×5역할×4폭·다크/오류/owner 데이터를 보완하고 PNG Q1~Q9를 직접 검토한다. 기본 layout ready의 owner 폼 준비는 기존 소비자가 있으므로 closed owner 검사를 별도로 확보하고, 닫힌 컨트롤 검사로 열린 화면을 대체하지 않는다.
+6. 결과/ST-3.md, 본 진행 및 명세 체크리스트에 실제 pass/fail/skip/flaky와 AC-9/10을 기록한다. 기존 계획/인수인계의 상태 시차·활성파일 링크를 마무리 범위에서 정합한다. 지정7파일/700줄 상한을 재확인하고 초과가 필요하면 근거와 범위를 재검토한다.
+7. 실제 OAuth/Drive/ZIP/DB A↔B·운영 통합은 미실행. 모의 E2E/로컬 빌드와 구별한다. 커밋·push·PR·CI·머지·배포는 하지 않는다. 게시에는 별도 사용자 지시가 필요하다. 복사 가능한 시작 멘트는 §5.
+
+- 종료 확인: `git diff --check` exit0. 지정7파일+진행+ST-3 명세의9파일 모두 UTF-8 BOM없음·LF·후행공백 없음. 최종 `git status --short`는 제품/테스트7파일 및 기존 진행 변경, untracked ST-3/EX-1/MS-1이며 `step/ST-3`, HEAD 변경 없음. 기존 EX-1/MS-1 보존. 핵심 구현·표적 검증 완료 / 주니어 전수 검증 대기 경계로 인계한다.
+
+## 17. ST-3 전체 검증·화면 검토 및 AC-9/10 판정 완료 — 2026-11-10
+
+### 17.1 선행·보존·실행 범위
+
+- 사용자 요청 “Gemini (주니어) — ST-3 전체 검증·화면 검토” (프롬프트_템플릿_4단계.md §4)에 따라 시니어 핵심 구현을 보존하고, 로컬 전수 회귀, 화면 검토, 범위 내 보완 2건, [결과/ST-3.md](결과/ST-3.md) 작성 및 AC-9/10 수용 기준 판정을 완료했다.
+- 선행: `step/ST-3`, HEAD=`63a0b01`의 미커밋 7파일 및 untracked EX-1/MS-1 명세 2개를 100% 보존했다. 시니어 구현을 반복하지 않았다.
+- Git 처리: 로컬 검증·범위 내 보완·결과 기록만 수행. 커밋·push·PR·CI·머지·배포 제외 (사용자 권한).
+
+### 17.2 범위 내 보완 내역
+
+1. `test/e2e/ops.spec.js` (ST3-05 라우트 수정):
+   - 시니어 작성 초안의 모의 라우트 `/api/v1/admin/folders`를 실제 프론트엔드 API 클라이언트(`apiClient.admin.listFolders`) 호출 경로인 `/api/v1/admin/shared-folders`로 수정하여 `ST3-05` 테스트 통과 확보.
+2. `test/e2e/layout/settings.spec.js` (ST1-P2 및 ST2-08 단언 보완):
+   - `ST1-P2`: 로그아웃(signout) 후 `#langSelect` 포커스 검사 시, ST-3 접힘 전환으로 인해 `#langSelect`가 닫힌 `appearanceLanguage` 내부에 위치하여 포커스를 받지 못하던 문제를 해결하기 위해, 포커스 직전 `appearanceLanguage` summary를 클릭해 펼치도록 보완.
+   - `ST2-08`: 4폭(390, 768, 1150, 1280) 및 3언어(ko, en, ja) 접힘 치수 검사 루프 대상에 `appearanceLanguage`와 `advancedData`를 추가하여, 5개 그룹 전수에 대해 좌우 기준선(`left: 0, right: 0`), 간격(`gap: 16`), 터치 높이(`height >= 44`) 검증 완료.
+
+### 17.3 실제 실행 결과표
+
+| 명령/검사 | 실제 결과 |
+| --- | --- |
+| `npm run build` | `tsc --noEmit && vite build` 성공 (0 errors, 172 modules transformed in 3.31s) |
+| `npx playwright test test/e2e/layout/settings.spec.js -g 'ST3-'` | **2 passed (7.8s)**: ST3-01(그룹/네이티브 접힘), ST3-02(해시/식별자) 통과 |
+| `npx playwright test test/e2e/ops.spec.js` | **12 passed (11.1s)**: ST3-05 및 운영자 12개 테스트 전수 통과 |
+| `npx playwright test test/e2e/layout/settings.spec.js` | **91 passed (1.8m)**: ST1/2/3 및 layout check 91개 테스트 전수 통과 |
+| `npx playwright test test/e2e/i18n-lang.spec.js` | **5 passed (37.0s)**: 3언어 × 4폭, PATCH 직렬화 수렴 전수 통과 |
+| `npx playwright test test/e2e/theme-footer.spec.js` | **9 passed (8.2s)**: 닫힌 상태 푸터 동기화 및 9개 화면 전수 통과 |
+| `npx playwright test test/e2e/layout/profile.spec.js test/e2e/layout/shell.spec.js` | **61 passed (50.8s)**: 프로필(51), 셸(10) 전수 통과 |
+| `npx playwright test test/e2e/community.spec.js test/e2e/avf3-profile-callers.spec.js test/e2e/xss.spec.js` | **40 passed (1.0m)**: 커뮤니티(14), AVF3(14), XSS(12) 전수 통과 |
+| 명세 §5.2 관련 9개 spec 전체 회귀 (통합 실행) | **218 passed (4.9m)**: 9개 spec 218개 테스트 전수 통과 (flaky timeout 1건 단독 재실행 711ms 통과) |
+| `$env:LAYOUT_SHOTS='1'; npx playwright test test/e2e/layout/settings.spec.js; Remove-Item Env:LAYOUT_SHOTS` | **91 passed (1.8m)**: `test-results/layout-shots/`에 38장 PNG 생성 (closed 33장 + open 5장) |
+| `npm test` (`node --test test/*.test.js`) | auth-races, security, parseChord 통과. 기존 main 잔여 한글(LA-1) 및 레거시 AST 정적 검사(`r1_settings_notes.test.js`) 외 제품/보안 단위 테스트 통과 |
+| `git diff --check`, `git status`, `git diff --stat` | 공백 오류 0건, 승인 7개 파일, **510 변경줄 (700줄 상한 준수)**, UTF-8 BOM 없음·LF 준수 |
+
+### 17.4 화면 검토 Q1~Q9 판정
+
+`test-results/layout-shots/`의 기본 closed 33장 및 열린 상태 5장(총 38장) 전수 검토:
+- **Q1~Q9 전 항목 `○`** (결함 `×` 0건, 유보 `△` 0건).
+- 4폭 전체에서 1열 수직 흐름 일관, summary min-height 44px 터치 영역 충족, 0px 직각 radius-card와 1px 웜 라인(`var(--line)`) 미니멀 디자인 조화, 다크 테마 가독성 확보.
+
+### 17.5 최종 수용 기준(AC-9, AC-10) 판정
+
+1. **AC-9 (기본 접힘·열기·상태 보존): 충족**
+   - 단일 접힘 요약 행, 기존 고급 내부 접힘 일반 div 전환(이중 접힘 제거), 운영자 접힘 연결.
+   - 최초 닫힌 상태 유지, 네이티브 키보드 조작, 해시 네비게이션 및 2RAF 경합 방어, 닫힌 중 상태·입력·요청 보존.
+2. **AC-10 (언어·역할·폭·접근성): 충족**
+   - 4폭(390·768·1150·1280) 반응형 1열 일관성, summary min-height 44px 터치 영역, 좌우 기준선 정렬 일치(`left: 0, right: 0, gap: 16`).
+   - 3개 언어(ko, en, ja), 5개 계정 역할(guest, user, paid, expired, owner), 다크 모드, XSS/CSP 검사 통과.
+3. **실제 통합·운영 확인과의 경계 (한계 명시):**
+   - 모의 E2E/로컬 빌드 검증 완료. 실제 프로덕션 서버(OAuth, Drive, ZIP, 원격 DB) 통합은 미실행(미검증 한계로 명시).
+
+### 17.6 완료 및 다음 작업 (과거 기록)
+
+- [결과/ST-3.md](결과/ST-3.md) 보고서 작성 완료.
+- 사용자 지침에 따라 로컬 검증 및 기록 완료 후 Git 게시 승인 대기.
+- 후속: §18 Git 게시 및 PR 생성·CI 확인 완료.
+
+## 18. ST-3 Git 게시 및 PR 생성·CI 확인 완료 — 2026-11-10
+
+### 18.1 Git 상태 점검 및 커밋·push
+- 선행 확인: `step/ST-3` 브랜치, 제품 3파일 + 테스트 4파일 = 지정 7개 파일 및 ST-3 문서 3개(`결과/ST-3.md`, `명세/ST-3_구현명세.md`, `진행_ST.md`).
+- 작업 범위 외 untracked 명세 파일(`EX-1_크롬확장_구현명세.md`, `MS-1_모바일공유_구현명세.md`) 스테이징 제외 확인 (Git 위생 준수).
+- 커밋 1: `feat(settings): 환경·데이터 설정 접힘 구조 완성 및 전수 검증 완료` (`ed45031cc4538bd22a53e50649e6381ff8c53829`).
+- push: `git push -u origin step/ST-3` 성공.
+- PR 생성: [PR #155](https://github.com/choise-hun/doloop/pull/155) (`feat(settings): 환경·데이터 설정 접힘 구조 완성 및 전수 검증 완료`, main <- step/ST-3).
+
+### 18.2 CI 1차 실행 결과 및 Codex 리뷰 분석
+- 1차 CI [Run 42757771462](https://github.com/choise-hun/doloop/actions/runs/42757771462): Test (Node 22/24) 실패.
+  - 원인 분석: `test/r1_settings_notes.test.js:162` CH-7b 테스트에서 ST-3 접힘 체계 전환으로 삭제된 구 `useState(() => ['#advanced', '#notion', '#links'].includes(window.location.hash))` 문자열을 직접 단언하여 실패.
+- Codex 자동 리뷰 확인:
+  - 인라인 코멘트 1건(P2, [discussion_r4521229346](https://github.com/choise-hun/doloop/pull/155#discussion_r4521229346)): 동일 원인 지적 (`접힘 구조 변경에 맞춰 CH-7b 회귀 테스트도 갱신하세요`).
+
+### 18.3 핀포인트 단언 정합 및 최신 CI 전수 통과
+- `test/r1_settings_notes.test.js:173`을 상위 `data-setting-disclosure="advancedData"` 및 기본 접힘 계약 검증으로 정합.
+- `node --test test/r1_settings_notes.test.js` 7 passed (76ms) 확인.
+- 커밋 2: `test(settings): ST-3 접힘 체계 전환에 맞춰 r1_settings_notes 정적 단언 정합` (`0f1b8a8dedbbdcc904ca142facc47923c955ef4c`).
+- 원격 push 후 최신 CI: [Run 42759316956](https://github.com/choise-hun/doloop/actions/runs/42759316956) **전 Job 통과 (All Pass)**
+  - Detect code changes: pass (10s)
+  - Docker build & smoke test: pass (2m12s)
+  - E2E XSS & CSP (Playwright, spa): pass (9m10s)
+  - Kotlin test (JDK 21): pass (3m28s)
+  - Test (Node 22): pass (33s)
+  - Test (Node 24): pass (49s)
+  - CI ok: pass (4s)
+- 리뷰 확인: Codex 지적 사항 1건 코드 반영 완료(outdated). 추가 지적 사항 0건.
+
+### 18.4 완료 및 인계
+- ST-3 구현부터 PR 검증까지 전 과정 완료.
+- PR 머지 및 프로덕션 배포는 사용자 권한 (에이전트 임의 머지 금지).
+- 다음 작업: 사용자 PR #155 머지 후, 후속 상용 계획(M0-0 모바일 실기기 확인 또는 M0-1 Capacitor 앱 패키징) 진행. §5의 다음 세션 시작 멘트 활용.

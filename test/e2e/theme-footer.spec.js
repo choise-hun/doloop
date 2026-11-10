@@ -30,7 +30,11 @@ for (const path of PAGES) {
 
 test('T settings.html 푸터·화면 섹션 눌림 표시 일치', async ({ page }) => {
   test.skip(!(await open(page, 'settings.html')), 'legacy 모드: React 화면 아님');
+  await expect(page.locator('[data-setting-disclosure="appearanceLanguage"]')).not.toHaveAttribute('open', '');
   await page.locator('footer #theme-dark').click();
+  await expect(page.locator('#screen [data-theme="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#screen')).toBeHidden();
+  await page.locator('[data-setting-disclosure="appearanceLanguage"] > summary').click();
   await expect(page.locator('#screen [data-theme="dark"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#screen [data-theme="light"]').click();
   await expect(page.locator('footer #theme-light')).toHaveAttribute('aria-pressed', 'true');
