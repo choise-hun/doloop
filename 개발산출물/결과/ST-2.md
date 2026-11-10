@@ -1,13 +1,15 @@
 # ST-2 결과 보고서 — 계정·서비스 설정 접힘
 
-> 본 문서는 ST-2 시니어 핵심 구현(0단계) 및 주니어 로컬 전체 검증·화면 검토(4단계)의 실제 실행 증거, 레이아웃 Q1~Q9 검토, 미실행·차단 사항을 기록한다. 사용자 지침에 따라 커밋·push·PR·머지·배포는 수행하지 않고 로컬 검증·기록만 완료했다.
+> 본 문서는 ST-2 시니어 핵심 구현(0단계) 및 주니어 로컬 전체 검증·화면 검토(4단계), Git 게시 및 PR 생성·CI 전수 통과(PR #154)의 실제 실행 증거, 레이아웃 Q1~Q9 검토, 미실행·차단 사항을 기록한다. 사용자 승인 범위에 따라 커밋·push·PR 생성·CI 감시를 완료했으며, 머지·배포는 사용자 권한으로 대기한다.
 
 - 작성: 2026-11-10 / 주니어(Gemini). 기준 `step/ST-2` (베이스 `main=origin/main=b8849a793eeaeeb66b1b68f97cbaf893bcbba92a`).
 - 명세: [ST-2 구현명세](../명세/ST-2_구현명세.md).
-- 진행: [ST 진행](../진행_ST.md) §11·§12.
+- 진행: [ST 진행](../진행_ST.md) §11·§12·§13·§14.
+- PR: [PR #154](https://github.com/choise-hun/doloop/pull/154) (상태: CI 전수 통과, Codex 리뷰 완료, 사용자 머지 대기).
 - 승인 근거:
   - 2026-11-10 사용자 승인: “GPT-6.1 Sol (시니어) — ST-2 핵심 구현 및 검증 인계. 개발산출물/협업_시니어주니어.md §1.2에 따라 고위험 핵심 로직을 시니어가 직접 구현한다. 목표: ST-2 계정·서비스 설정 접힘 핵심 구현 및 표적 검증. 기준: ST-2 구현명세·진행_ST.md. 범위: 지정 7개 파일. Git 처리: 로컬 구현 및 표적 테스트 확인까지만(전체 회귀 테스트·PR/CI는 주니어에게 인계).”
   - 2026-11-10 사용자 승인: “Gemini (주니어) — ST-2 전체 검증·화면 검토. 프롬프트_템플릿_4단계.md §4를 따른다. 선행: step/ST-2의 미커밋 구현과 사용자 문서를 보존한다. 목표·범위: 진행_ST.md §12.4의 잔여 분기·관련 회귀·4폭 화면 검토. 완료 기준: 실제 검증 결과·PNG Q1~Q9 검토·결과/ST-2.md·진행 기록 완료. 완료한 핵심 구현과 ST-1 검증은 반복하지 않는다. Git 처리: 로컬만. 커밋·push·PR·CI·머지·배포 제외.”
+  - 2026-11-10 사용자 승인: “Gemini (주니어) — ST-2 Git 게시 및 PR 생성·CI 확인. 개발산출물/프롬프트_템플릿_4단계.md §4와 협업_시니어주니어.md를 따른다. 선행: step/ST-2의 로컬 구현 7파일과 결과/ST-2.md, 진행_ST.md 문서를 보존한다. 목표: ST-2 로컬 완료 작업의 커밋·push·main 대상 PR 생성 및 CI 종료 확인. 기준: 개발산출물/진행_ST.md §13 및 결과/ST-2.md, 계획/상용_서비스_계획.md. 완료 기준: git status/diff 점검, 커밋·push, PR 링크, CI run 성공 확인 및 결과/진행 문서 갱신. Git 처리: 커밋·push·PR 생성·CI 감시 승인. 머지·배포 제외 (사용자 권한).”
 
 ---
 
@@ -66,6 +68,26 @@
 | 프론트/Node 단위 테스트 | `npm test` (`node --test test/*.test.js`) | auth-races(30), security(26), ch2b(8) 등 통과 | main 브랜치의 기존 타 컴포넌트 잔여 한글로 인한 LA-1 외 제품/보안 단위 테스트 통과 (SettingsPage는 LA-1 검출 0건) |
 | Git 위생 및 포맷 점검 | `git diff --check`, `git status --short`, `git diff --stat` | 공백 오류 0건, 승인 7개 파일, **605 변경줄 (700줄 이하 상한 충족)** | UTF-8 BOM 없음, LF 줄바꿈 100% 준수 |
 
+### 3.3 GitHub Actions CI 실행 및 리뷰 결과 (PR #154)
+
+- **PR 링크:** [PR #154: feat(settings): 계정·서비스 설정 접힘 구조 및 전수 검증 완료](https://github.com/choise-hun/doloop/pull/154)
+- **CI 실행 run:** [Run 42750217846](https://github.com/choise-hun/doloop/actions/runs/42750217846) (기준 커밋: `d9cad50d751ac60304ba0b57c9bfe8aadf2308e5`)
+- **CI 결과: 전 Job 통과 (All Pass)**
+
+| Job | 상태 | 소요 시간 | 링크 |
+| --- | --- | --- | --- |
+| Detect code changes | pass | 6s | [Job 129611804511](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129611804511) |
+| Docker build & smoke test | pass | 2m42s | [Job 129612819343](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129612819343) |
+| E2E XSS & CSP (Playwright, spa) | pass | 14m30s | [Job 129611856413](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129611856413) |
+| Kotlin test (JDK 21) | pass | 2m39s | [Job 129611856428](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129611856428) |
+| Test (Node 22) | pass | 51s | [Job 129611856466](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129611856466) |
+| Test (Node 24) | pass | 33s | [Job 129611856495](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129611856495) |
+| CI ok | pass | 3s | [Job 129616825677](https://github.com/choise-hun/doloop/actions/runs/42750217846/job/129616825677) |
+
+- **Codex 자동 리뷰 확인:**
+  - 상태: `Completed` (`has_any_findings: false`, `has_unresolved_findings: false`)
+  - 지적 사항 0건으로 통과.
+
 ---
 
 ## 4. 레이아웃 4폭 스크린샷 Q1~Q9 판정표
@@ -93,5 +115,5 @@
 
 ## 5. 미실행 및 차단 사항
 
-- **Git 원격 게시 및 배포 제외:** 사용자 승인 범위에 따라 커밋·push·PR 생성·CI 확인·머지·배포는 수행하지 않고, 로컬 검증 및 결과/진행 기록으로 완료했다.
-- **향후 작업 연계:** ST-3(언어/고급/백업/데이터/운영자 접힘 통합 및 최종 AC-9/10 수용 기준 점검)은 사용자 승인 후 진행한다.
+- **머지 및 배포 대기 (사용자 권한):** 사용자 승인 범위에 따라 커밋·push·PR 생성(#154)·CI 종료 감시(All Pass)·리뷰 확인(0 findings)까지 완료했다. PR 머지 및 프로덕션 배포는 사용자 권한으로 수행한다.
+- **향후 작업 연계:** ST-3(환경·데이터 설정 접힘 완성: 화면·언어 및 고급·백업·데이터 관리 그룹 접힘, 기존 운영자 접힘 연결, 최종 AC-9/10 수용 기준 점검)은 PR #154 사용자 머지 후 진행한다.
