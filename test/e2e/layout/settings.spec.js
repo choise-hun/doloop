@@ -538,6 +538,82 @@ test('ST1-06 auth delay, latest hash resolution, role change, and focus cancella
   expect(errors).toEqual([]);
 });
 
+test('ST1-P1 profile saves preserve the current switch focus', async ({ page }) => {
+  let saves = 0;
+  await mockApp(page, { ...COMMUNITY_PRO, routes: [...COMMUNITY_PRO.routes, [
+    url => url.pathname === '/api/v1/me',
+    route => {
+      const patch = route.request().method() === 'PATCH' ? route.request().postDataJSON() : {};
+      if (route.request().method() === 'PATCH') saves++;
+      return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, ...patch } });
+    },
+  ]] });
+  await page.goto('/settings.html#account');
+  await expect(page.locator('#account')).toBeFocused();
+  for (const id of ['commAutosync', 'commPracticeLog']) {
+    const input = page.locator(`#${id}`);
+    await input.focus();
+    await input.press('Space');
+    await expect.poll(() => saves).toBe(id === 'commAutosync' ? 1 : 2);
+    await expect(input).toBeEnabled();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(input).toBeFocused();
+  }
+});
+
+for (const [target, state, response] of [
+  ['creditNext', USER_PRO, { monthlyGrant: 170, nextGrantAt: '2026-11-30T15:00:00Z' }],
+  ['creditExpire', USER_GRACE, { monthlyGrant: 0, nextGrantAt: null, monthlyExpiresAt: '2026-11-30T15:00:00Z' }],
+]) {
+  test(`ST1-P2 delayed credits focus ${target}`, async ({ page }) => {
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let requested = false;
+    await mockApp(page, { ...state, routes: [[url => url.pathname === '/api/v1/credits', async route => {
+      requested = true;
+      await gate;
+      await route.fulfill({ json: { monthly: 152, purchased: 40, total: 192, ...response } });
+    }]] });
+    await page.goto(`/settings.html#${target}`);
+    await expect.poll(() => requested).toBe(true);
+    await expect(page.locator(`#${target}`)).toHaveCount(0);
+    release();
+    await expect(page.locator(`#${target}`)).toBeFocused();
+  });
+}
+
+for (const action of ['hashchange', 'signout']) {
+  test(`ST1-P2 delayed credits discard old navigation after ${action}`, async ({ page }) => {
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let requested = false;
+    await mockApp(page, { ...USER_PRO, routes: [[url => url.pathname === '/api/v1/credits', async route => {
+      requested = true;
+      await gate;
+      await CREDITS_ROUTE[1](route);
+    }]] });
+    await page.goto('/settings.html#creditNext');
+    await expect.poll(() => requested).toBe(true);
+    if (action === 'hashchange') {
+      await page.evaluate(() => { location.hash = 'screen'; });
+      await expect(page.locator('#screen')).toBeFocused();
+    } else {
+      await page.evaluate(() => window.__supabaseAuthListener('SIGNED_OUT', null));
+      await expect(page.locator('#accGuest')).toBeVisible();
+    }
+    const control = page.locator('#langSelect button').first();
+    await control.focus();
+    await expect(control).toBeFocused();
+    const response = page.waitForResponse(url => url.url().includes('/api/v1/credits'));
+    release();
+    await response;
+    if (action === 'hashchange') await expect(page.locator('#creditNext')).toBeVisible();
+    else await expect(page.locator('#creditNext')).toHaveCount(0);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(control).toBeFocused();
+  });
+}
+
 test('ST1-07 conditional elements and descendant IDs across free, pro, grace, and expired states', async ({ page }) => {
   // 1. Guest state
   await mockApp(page, STATES.guest);

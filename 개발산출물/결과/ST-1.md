@@ -120,5 +120,12 @@ PR #153에 대해 Codex 자동 리뷰에서 2건의 인라인 코멘트(P2)가 �
    - **지적:** 크레딧 응답 후 생성되는 해시 대상(#creditNext, #creditExpire) 보류 및 재처리.
    - **분석:** Pro 사용자 `#creditNext` 또는 유예 사용자 `#creditExpire` 직접 진입 시 `creditSummary`가 없어 최초 탐색에서 DOM이 미존재 (`if (!target) return;`). 크레딧 API 완료 후 `creditSummary`가 렌더되어도 `authState.me` 불변으로 재탐색 미실행. 대상 미존재 시 보류 후 크레딧 데이터 마운트 시 재처리 필요 (타당).
 
-**후속 조치 (시니어 3-P 핀포인트 인계):**
-- CI 7개 전수 통과 완료 후 특정 파일(`SettingsPage.tsx`)의 2개 P2 결함만 남았으므로, 협업 설명서 §1.2 및 프롬프트 템플릿 §3-P에 따라 시니어 3-P 핀포인트 결함 수정으로 인계한다.
+**시니어 3-P 반영 — 2026-11-10:**
+- 두 지적 모두 타당하여 반영. `SettingsPage.tsx:232`의 의존성을 인증/권한 원시 값으로 한정하여 일반 프로필 저장의 재탐색 방지. `:174,216,235`의 보류 플래그·성공 시 해제·크레딧 렌더 재시도로 늦게 생성되는 목표를 처리한다. 현재 URL 및 기존 인증 세대/uid/owner/unmount 가드는 유지한다.
+- 시작 local/PR `c4773562dbbf8a204fce712b087f497af29519b5`, clean. 사용자 입력 `97e9152` 이후 1커밋은 문서만 변경. 양 head의 CI `42734890210`/`42736541502` success 확인.
+- 수정 전 `npm run build` 통과 후 `npx playwright test test/e2e/layout/settings.spec.js -g 'ST1-P'` **3 failed**: 공유 저장 후 `commAutosync` 포커스 이탈, 지연 응답 후 `creditNext`/`creditExpire` 미포커스.
+- 수정 후 `npm run build` 통과 (172 modules, 3.41s; 기존 Vite CJS/config/chunk 경고). 신규 회귀는 공유 스위치 2개 저장, Pro/유예 초기 해시, 응답 전 해시 변경/로그아웃 총 5개 테스트.
+- `npx playwright test test/e2e/layout/settings.spec.js -g 'ST1-'`: **10 passed / 1 failed (48.2s)**. 실패는 기존 ST1-06의 `page.goto(...#ops)` load 대기 30초 timeout으로 해시 단언 도달 전 발생. 해당 테스트 단독 `-g 'ST1-06'` 재실행 **1 passed (2.2s)**. 첫 수정 후 실행에서도 ST1-06은 통과했다. 전체 11개 관련 테스트 통과 증거가 있으나 단일 실행 전부 통과로 표현하지 않는다.
+- 추가 취소 테스트의 초기 div 직접 focus 오류는 실제 언어 버튼으로 교정하고 응답 전 포커스도 단언. 기존 테스트/skip/단언 완화 없음.
+- 제품 1파일·테스트 1파일·기록 2파일. 전체 PR 재검증/전체 settings·9개 spec/Node/Gradle/실계정·DB/운영/스크린샷 재검증 미실행. **읽지 않은 범위 = 미검증**. 기존 문서의 전체 검증 결과는 이전 head 이력이다.
+- Git 게시와 최신 head CI·새 리뷰 확인 결과는 아래에 추가한다. 댓글/답글·리액션·스레드 resolve는 미승인으로 수행하지 않는다.

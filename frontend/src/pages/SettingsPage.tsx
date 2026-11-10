@@ -166,22 +166,25 @@ export function SettingsPage(): React.ReactElement {
 
   // Resolve only registered IDs. A new hash or auth generation cancels queued focus.
   const navigateHashRef = useRef<() => void>(() => {});
+  const retryPendingHashRef = useRef<() => void>(() => {});
   useEffect(() => {
     let sequence = 0;
     let frame = 0;
     let disposed = false;
+    let pending = false;
     const navigate = () => {
       const current = ++sequence;
       cancelAnimationFrame(frame);
       const hash = window.location.hash;
       const destination = resolveSettingsHash(hash, SETTINGS_GROUPS);
+      pending = Boolean(destination);
       if (!destination) return;
       const item = SETTINGS_GROUPS.flatMap(group => group.items).find(item => item.renderKey === destination.renderKey);
       if (!item) return;
       if (item.availability === 'signedIn' && !signedIn) return;
       if (item.availability === 'owner' && (!signedIn || authState.me?.id !== activeUid || authState.me?.role !== 'owner')) return;
       const target = document.getElementById(destination.targetId);
-      if (!target) return; // Re-evaluate the current URL when auth/me finishes loading.
+      if (!target) return; // Retry after auth or conditional credit targets render.
       const generation = auth.getSessionGeneration();
       if (destination.renderKey === 'advanced') setAdvOpen(true);
       // Clicking the native summary also updates the existing React onToggle owner.
@@ -210,10 +213,12 @@ export function SettingsPage(): React.ReactElement {
           if (!focusTarget.matches('a[href], button, input, select, textarea, summary, [tabindex]')) focusTarget.tabIndex = -1;
           focusTarget.scrollIntoView({ block: 'start', behavior: 'instant' });
           focusTarget.focus({ preventScroll: true });
+          pending = false;
         });
       });
     };
     navigateHashRef.current = navigate;
+    retryPendingHashRef.current = () => { if (pending) navigate(); };
     window.addEventListener('hashchange', navigate);
     navigate();
     return () => {
@@ -221,9 +226,14 @@ export function SettingsPage(): React.ReactElement {
       sequence++;
       cancelAnimationFrame(frame);
       navigateHashRef.current = () => {};
+      retryPendingHashRef.current = () => {};
       window.removeEventListener('hashchange', navigate);
     };
-  }, [activeUid, signedIn, authState.me]);
+  }, [activeUid, signedIn, authState.me?.id, authState.me?.role]);
+
+  useEffect(() => {
+    retryPendingHashRef.current();
+  }, [creditSummary]);
 
   const [langChoice, setLangChoiceState] = useState<LangChoice>(() => getLangChoice());
   const pendingLocaleRef = useRef<{ locale: LocaleCode | null; generation: number } | undefined>(undefined);
