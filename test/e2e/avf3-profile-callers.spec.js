@@ -12,6 +12,7 @@ for(const operation of ['enable','disable'])for(const outcome of ['success','fai
    };
   });
  },{operation,outcome});
+ await page.locator('#account > details > summary').click();
  await page.locator(operation==='enable'?'#btnDriveEnable':'#btnDriveDisable').click();await page.waitForFunction(()=>window.__driveEntered);
  const id='00000000-0000-4000-8000-000000000099';await page.route('**/api/v1/me',route=>route.fulfill({json:{...DEFAULT_ME,id,email:'b@example.com'}}));
  await page.evaluate(id=>{
@@ -34,6 +35,7 @@ for(const selector of ['#commAutosync','#commPracticeLog'])test(`AVF3 refreshed 
   window.ULAuth.getClient().auth.getSession=async()=>({data:{session:{...session}}});
  });
  await page.route('**/api/v1/me',route=>route.request().method()==='PATCH'?route.fulfill({status:500,json:{code:'INTERNAL_ERROR'}}):route.fallback());
+ await page.locator('#community > details > summary').click();
  await page.locator(selector).click();
  await expect(page.locator(selector)).toHaveAttribute('aria-checked','true');
  await expect(page.locator('#commErrMsg')).toHaveText('요청을 처리하지 못했어요');
@@ -49,6 +51,7 @@ for(const operation of ['enable','disable'])for(const outcome of ['success','fai
    if(outcome==='failure')throw new Error('current Drive failure');
   };
  },{operation,outcome});
+ await page.locator('#account > details > summary').click();
  await page.locator(operation==='enable'?'#btnDriveEnable':'#btnDriveDisable').click();
  if(outcome==='failure')await expect(page.locator('#driveStatusMsg')).toHaveText('current Drive failure');
  else await expect(page.locator('#driveStatusMsg')).not.toBeEmpty();
@@ -75,6 +78,7 @@ for(const firstFails of [false,true])test(`AVF3 overlapping settings firstFails=
    return new Promise(resolve=>{window.__releaseToken=async()=>resolve(await original())});
   };
  });
+ await page.locator('#community > details > summary').click();
  await page.locator('#commAutosync').click();await page.waitForFunction(()=>window.__tokenEntered);
  await page.locator('#commPracticeLog').click();
  await page.evaluate(()=>window.__releaseToken());

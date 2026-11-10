@@ -111,7 +111,7 @@ const SETTINGS_STATES = {
 };
 
 async function settingsReady(page, state) {
-  if (state === 'guest') await page.locator('#accGuest').waitFor();
+  if (state === 'guest') await page.locator('#accGuest').waitFor({ state: 'attached' });
   else await expect(page.locator('#accEmail')).toHaveText('a@example.com');
   if (state === 'userPro' || state === 'communityPro') await expect(page.locator('#creditNext')).toContainText('170');
   if (state === 'userGrace') await expect(page.locator('#creditExpire')).toContainText('무료');
@@ -130,6 +130,499 @@ async function settingsReady(page, state) {
     await expect(page.locator('.opsItem')).toHaveCount(5);
   }
 }
+
+async function openServiceGroups(page) {
+  for (const detail of await page.locator('[data-setting-disclosure]').all()) {
+    if (!await detail.evaluate(node => node.open)) await detail.locator(':scope > summary').click();
+    await expect(detail).toHaveAttribute('open', '');
+  }
+}
+
+test('ST2-01-03 native disclosure, canonical hashes and mounted input', async ({ browser }) => {
+  for (const [role, state] of [['guest', STATES.guest], ['user', STATES.user], ['owner', USER_OWNER]]) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await mockApp(page, state);
+      const mutations = [], reads = [];
+      page.on('request', request => {
+        if (['POST', 'PATCH', 'DELETE'].includes(request.method())) mutations.push(request.url());
+        if (request.url().includes('/api/v1/')) reads.push(request.url());
+      });
+      await page.goto('/settings.html');
+      await settingsReady(page, role === 'guest' ? 'guest' : 'user');
+      const ids = role === 'guest' ? ['account', 'credits'] : ['account', 'credits', 'community'];
+      await expect(page.locator('[data-setting-disclosure]')).toHaveCount(ids.length);
+      const url = page.url();
+      for (const id of ids) {
+        const detail = page.locator(`#${id} > details[data-setting-disclosure="${id}"]`);
+        await expect(detail).not.toHaveAttribute('open', '');
+        await expect(detail.locator(':scope > div')).toBeAttached();
+        await expect(detail.locator(':scope > div')).toBeHidden();
+        const summary = detail.locator(':scope > summary');
+        await summary.focus();
+        await page.keyboard.press('Tab');
+        expect(await page.evaluate(id => document.activeElement.closest(`#${id} details > div`) !== null, id)).toBe(false);
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(detail.locator(':scope > div')).toBeVisible();
+        await page.keyboard.press('Space');
+        await expect(detail).not.toHaveAttribute('open', '');
+        await summary.click();
+        await expect(detail).toHaveAttribute('open', '');
+        expect(await detail.evaluate(node => {
+          const summary = node.firstElementChild.getBoundingClientRect();
+          const body = node.lastElementChild.getBoundingClientRect();
+          return { left: body.left - summary.left, right: body.right - summary.right, gap: body.top - summary.bottom, touch: summary.height >= 44 };
+        })).toEqual({ left: 0, right: 0, gap: 16, touch: true });
+      }
+      expect(page.url()).toBe(url);
+      await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(ids.length);
+      if (role === 'guest') await expect(page.locator('#community')).toHaveCount(0);
+      else {
+        const inner = page.locator('#accUser details');
+        await inner.locator(':scope > summary').click();
+        await page.locator('#delConfirm').fill('keep this draft');
+        const input = await page.locator('#delConfirm').elementHandle();
+        const before = reads.length;
+        await page.locator('#account > details > summary').click();
+        await expect(page.locator('#delConfirm')).toBeHidden();
+        await page.locator('#account > details > summary').click();
+        await expect(page.locator('#delConfirm')).toHaveValue('keep this draft');
+        await expect(inner).toHaveAttribute('open', '');
+        expect(await input.evaluate(node => node === document.getElementById('delConfirm'))).toBe(true);
+        expect(reads.length).toBe(before);
+        await inner.locator(':scope > summary').click();
+        await page.locator('#account > details > summary').click();
+        await page.evaluate(() => { location.hash = 'delConfirm'; });
+        await expect(page.locator('#delConfirm')).toBeFocused();
+        await expect(inner).toHaveAttribute('open', '');
+        await page.evaluate(() => { location.hash = 'commPracticeLog'; });
+        await expect(page.locator('#hCommunity')).toBeFocused();
+        await expect(page.locator('#hCommunity')).toBeInViewport();
+      }
+      for (const id of ids) {
+        await page.locator(`#${id} > details[open] > summary`).click();
+        await page.locator(`#settingsGroups a[href="#${id}"]`).click();
+        await expect(page.locator(`#${id}`)).toBeFocused();
+        await expect(page.locator(`#${id} > details`)).toHaveAttribute('open', '');
+        await expect(page.locator(`#${id} h2`)).toBeInViewport();
+        await page.locator(`#${id} > details > summary`).click();
+        await page.locator(`#settingsGroups a[href="#${id}"]`).click();
+        await expect(page.locator(`#${id} h2`)).toBeVisible();
+      }
+      expect(mutations).toEqual([]);
+      await page.goto('/settings.html#account');
+      await expect(page.locator('#account')).toBeFocused();
+      await expect(page.locator('#hAccount')).toBeVisible();
+    } finally { await context.close(); }
+  }
+});
+
+test('ST2-04-06 pending save, rollback, identity and delayed credit navigation', async ({ page }) => {
+  let releaseSave, releaseCredits;
+  let saved = { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, shareAutosync: false };
+  const patches = [];
+  const creditGate = new Promise(resolve => { releaseCredits = resolve; });
+  await mockApp(page, { ...COMMUNITY_PRO, routes: [
+    [url => url.pathname === '/api/v1/credits', async route => {
+      await creditGate;
+      await CREDITS_ROUTE[1](route);
+    }],
+    [url => url.pathname === '/api/v1/me', async route => {
+      if (route.request().method() === 'PATCH') {
+        patches.push(route.request().postDataJSON());
+        const status = await new Promise(resolve => { releaseSave = resolve; });
+        if (status !== 200) return route.fulfill({ status, json: { code: 'INTERNAL_ERROR' } });
+        saved = { ...saved, ...patches.at(-1) };
+      }
+      await route.fulfill({ json: saved });
+    }],
+  ] });
+  await page.goto('/settings.html#account');
+  await expect(page.locator('#account')).toBeFocused();
+  const community = page.locator('#community > details');
+  const summary = community.locator(':scope > summary');
+  await summary.click();
+  const toggle = page.locator('#commAutosync');
+  for (const status of [200, 500]) {
+    await toggle.click();
+    await expect.poll(() => patches.length).toBe(status === 200 ? 1 : 2);
+    await expect(toggle).toHaveAttribute('aria-checked', String(status === 200));
+    await toggle.click(); // Existing commBusyRef rejects duplicate saves; it does not disable the button.
+    await summary.click();
+    await summary.click();
+    await expect(toggle).toHaveAttribute('aria-checked', String(status === 200));
+    await summary.click();
+    const response = page.waitForResponse(response => response.url().endsWith('/api/v1/me') && response.request().method() === 'PATCH');
+    releaseSave(status);
+    await response;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(toggle).toBeEnabled();
+    await expect(community).not.toHaveAttribute('open', '');
+    await expect(summary).toBeFocused();
+    await summary.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    if (status === 500) await expect(page.locator('#commErrMsg')).toHaveText('요청을 처리하지 못했어요');
+  }
+  expect(patches).toEqual([{ shareAutosync: true }, { shareAutosync: false }]);
+  await page.locator('#account > details > summary').click();
+  await page.evaluate(() => window.ULAuth.fetchMe());
+  await expect(page.locator('#account > details')).not.toHaveAttribute('open', '');
+  await expect(community).toHaveAttribute('open', '');
+  await page.evaluate(() => { location.hash = 'creditNext'; });
+  await expect(page.locator('#creditNext')).toHaveCount(0);
+  await page.evaluate(() => { location.hash = 'screen'; });
+  await expect(page.locator('#screen')).toBeFocused();
+  releaseCredits();
+  await expect(page.locator('#creditNext')).toContainText('170');
+  await expect(page.locator('#credits > details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#screen')).toBeFocused();
+  await page.evaluate(() => { location.hash = 'creditNext'; });
+  await expect(page.locator('#creditNext')).toBeFocused();
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+  saved = { ...saved, id: '00000000-0000-4000-8000-000000000099', email: 'b@example.com' };
+  await page.evaluate(id => {
+    location.hash = 'screen';
+    const session = { access_token: 'b-token', user: { id, email: 'b@example.com' } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, saved.id);
+  await expect(page.locator('#accEmail')).toHaveText('b@example.com');
+  await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(0);
+  await expect(page.locator('#screen')).toBeFocused();
+});
+
+test('ST2-02 canonical initial, history, h2 and active aliases', async ({ page }) => {
+  await mockApp(page, COMMUNITY_PRO);
+  await page.goto('/settings.html#credits');
+  await settingsReady(page, 'communityPro');
+  await expect(page.locator('#credits')).toBeFocused();
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#account > details')).not.toHaveAttribute('open', '');
+
+  await page.goto('/settings.html#community');
+  await settingsReady(page, 'communityPro');
+  await expect(page.locator('#community')).toBeFocused();
+  await expect(page.locator('#community > details')).toHaveAttribute('open', '');
+
+  await page.evaluate(() => { location.hash = 'hAccount'; });
+  await expect(page.locator('#hAccount')).toBeFocused();
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+
+  await page.evaluate(() => { location.hash = 'hCredits'; });
+  await expect(page.locator('#hCredits')).toBeFocused();
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.evaluate(() => { location.hash = 'btnLogout'; });
+  await expect(page.locator('#btnLogout')).toBeFocused();
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+
+  await page.locator('#account > details > summary').click();
+  if (!await page.locator('#credits > details').evaluate(node => node.open)) {
+    await page.locator('#credits > details > summary').click();
+  }
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.evaluate(() => { location.hash = 'community'; });
+  await expect(page.locator('#community')).toBeFocused();
+  await expect(page.locator('#community > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.goBack();
+  await expect(page.locator('#btnLogout')).toBeFocused();
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.goForward();
+  await expect(page.locator('#community')).toBeFocused();
+  await expect(page.locator('#community > details')).toHaveAttribute('open', '');
+});
+
+test('ST2-04 error codes 403, 409, serialization and retry', async ({ page }) => {
+  const patches = [];
+  let releaseFirstPatch;
+  const firstPatchGate = new Promise(resolve => { releaseFirstPatch = resolve; });
+  let patchCounter = 0;
+
+  await mockApp(page, {
+    ...COMMUNITY_PRO,
+    routes: [
+      CREDITS_ROUTE,
+      ...communityRoutes(),
+      [
+        url => url.pathname === '/api/v1/me',
+        async route => {
+          if (route.request().method() === 'PATCH') {
+            patchCounter++;
+            const body = route.request().postDataJSON();
+            patches.push(body);
+            if (patchCounter === 1) {
+              return route.fulfill({ status: 403, json: { code: 'TIER_UPGRADE_REQUIRED' } });
+            }
+            if (patchCounter === 2) {
+              return route.fulfill({ status: 409, json: { code: 'PUBLIC_NAME_REQUIRED' } });
+            }
+            if (patchCounter === 3) {
+              await firstPatchGate;
+              return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, shareAutosync: false } });
+            }
+            if (patchCounter === 4) {
+              return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, shareAutosync: false, sharePracticeLog: false } });
+            }
+            return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, shareAutosync: true } });
+          }
+          return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME } });
+        },
+      ],
+    ],
+  });
+
+  await page.goto('/settings.html#community');
+  await settingsReady(page, 'communityPro');
+  const community = page.locator('#community > details');
+  const summary = community.locator(':scope > summary');
+
+  const toggleSync = page.locator('#commAutosync');
+  await toggleSync.click();
+  await summary.click();
+  await expect(toggleSync).toBeHidden();
+  await summary.click();
+  await expect(toggleSync).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('#commErrMsg')).toHaveText('Pro로 업그레이드하면 쓸 수 있어요');
+
+  const toggleLog = page.locator('#commPracticeLog');
+  await toggleLog.click();
+  await summary.click();
+  await expect(toggleLog).toBeHidden();
+  await summary.click();
+  await expect(toggleLog).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('#commErrMsg')).toHaveText('커뮤니티 이름을 먼저 정해 주세요');
+
+  await toggleSync.click();
+  await expect.poll(() => patches.length).toBe(3);
+  await toggleLog.click();
+  expect(patches.length).toBe(3);
+  releaseFirstPatch();
+  await expect.poll(() => patches.length).toBe(4);
+  await expect(page.locator('#commErrMsg')).toHaveCount(0);
+});
+
+test('ST2-05 drive enable/disable delay and migration confirm cancel', async ({ browser }) => {
+  const ctx1 = await browser.newContext();
+  const page1 = await ctx1.newPage();
+  try {
+    await mockApp(page1, STATES.user);
+    await page1.goto('/settings.html#account');
+    await settingsReady(page1, 'user');
+
+    await page1.evaluate(() => {
+      window.__driveCalls = [];
+      window.ULDrive.enableDriveStorage = () => new Promise(resolve => {
+        window.__resolveEnable = () => {
+          window.__driveCalls.push('enable');
+          resolve({ id: window.ULAuth.getUser().id });
+        };
+      });
+    });
+
+    const account = page1.locator('#account > details');
+    const summary = account.locator(':scope > summary');
+
+    await page1.locator('#btnDriveEnable').click();
+    await expect(page1.locator('#btnDriveEnable')).toBeDisabled();
+    await summary.click();
+    await expect(page1.locator('#btnDriveEnable')).toBeHidden();
+    await page1.evaluate(() => window.__resolveEnable());
+    await summary.click();
+    await expect(page1.locator('#driveStatusMsg')).toContainText('Google Drive 저장소로 전환되었어요');
+    await expect(page1.locator('#btnDriveEnable')).toBeEnabled();
+  } finally {
+    await ctx1.close();
+  }
+
+  const ctx2 = await browser.newContext();
+  const page2 = await ctx2.newPage();
+  try {
+    await mockApp(page2, { ...STATES.user, me: { storageProvider: 'drive' } });
+    await page2.goto('/settings.html#account');
+    await settingsReady(page2, 'user');
+    await page2.evaluate(() => {
+      window.__driveCalls = [];
+      window.ULDrive.disableDriveStorage = () => new Promise((_, reject) => {
+        window.__rejectDisable = () => {
+          window.__driveCalls.push('disable');
+          reject(new Error('드라이브 해제 중 네트워크 오류'));
+        };
+      });
+      window.ULDrive.migrateAllToDrive = (onProgress) => new Promise(resolve => {
+        window.__driveCalls.push('migrate');
+        onProgress({ current: 2, total: 5 });
+        resolve({ migrated: 4, skipped: 1 });
+      });
+    });
+
+    const account = page2.locator('#account > details');
+    const summary = account.locator(':scope > summary');
+
+    await page2.locator('#btnDriveDisable').click();
+    await expect(page2.locator('#btnDriveDisable')).toBeDisabled();
+    await summary.click();
+    await page2.evaluate(() => window.__rejectDisable());
+    await summary.click();
+    await expect(page2.locator('#driveStatusMsg')).toHaveText('드라이브 해제 중 네트워크 오류');
+    await expect(page2.locator('#btnDriveDisable')).toBeEnabled();
+
+    let dialogAction = 'dismiss';
+    page2.on('dialog', dialog => {
+      if (dialogAction === 'dismiss') dialog.dismiss();
+      else dialog.accept();
+    });
+    await page2.locator('#btnDriveMigrate').click();
+    expect(await page2.evaluate(() => window.__driveCalls.includes('migrate'))).toBe(false);
+
+    dialogAction = 'accept';
+    await page2.locator('#btnDriveMigrate').click();
+    await expect(page2.locator('#driveStatusMsg')).toContainText('이전 완료: 4개 성공, 1개 건너뜀');
+    expect(await page2.evaluate(() => window.__driveCalls.includes('migrate'))).toBe(true);
+  } finally {
+    await ctx2.close();
+  }
+});
+
+test('ST2-06-07 creditExpire pending, same uid refresh, roles, tiers and conditional IDs', async ({ page }) => {
+  let releaseGraceCredits;
+  const graceGate = new Promise(resolve => { releaseGraceCredits = resolve; });
+
+  await mockApp(page, {
+    ...USER_GRACE,
+    routes: [
+      [
+        url => url.pathname === '/api/v1/credits',
+        async route => {
+          await graceGate;
+          await GRACE_CREDITS_ROUTE[1](route);
+        },
+      ],
+    ],
+  });
+
+  await page.goto('/settings.html#creditExpire');
+  await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+  await expect(page.locator('#creditExpire')).toHaveCount(0);
+  await page.evaluate(() => { location.hash = 'screen'; });
+  await expect(page.locator('#screen')).toBeFocused();
+  releaseGraceCredits();
+  await expect(page.locator('#creditExpire')).toContainText('12월 1일');
+  await expect(page.locator('#credits > details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#screen')).toBeFocused();
+
+  await page.locator('#account > details > summary').click();
+  await page.locator('#credits > details > summary').click();
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.locator('#langSelect button[data-lang="en"]').click();
+  await expect(page.locator('#account > details > summary')).toHaveText(/Account/);
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.evaluate(() => window.ULAuth.fetchMe());
+  await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+  await expect(page.locator('#credits > details')).toHaveAttribute('open', '');
+
+  await page.locator('#langSelect button[data-lang="ko"]').click();
+  await expect(page.locator('#account > details > summary')).toHaveText(/계정/);
+
+  await page.locator('#btnLogout').click();
+  await expect(page.locator('#accGuest')).toBeAttached();
+  await expect(page.locator('[data-setting-disclosure][open]')).toHaveCount(0);
+
+  await expect(page.locator('#community')).toHaveCount(0);
+  await expect(page.locator('#ops')).toHaveCount(0);
+  await page.locator('#account > details > summary').click();
+  await expect(page.locator('#accGuest')).toBeVisible();
+  await expect(page.locator('#accUser')).toBeHidden();
+
+  await mockApp(page, STATES.user);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'user');
+  await openServiceGroups(page);
+  await expect(page.locator('#community')).toHaveCount(1);
+  await expect(page.locator('#commAutosync')).toBeDisabled();
+  await expect(page.locator('#commProNotice')).toBeVisible();
+  await expect(page.locator('#creditTier')).toHaveText('무료');
+  await expect(page.locator('#ops')).toHaveCount(0);
+});
+
+test('ST2-08 open disclosures across 4 widths, 3 languages and dark mode', async ({ page }) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const widths = [390, 768, 1150, 1280];
+  const langs = ['ko', 'en', 'ja'];
+
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, COMMUNITY_PRO);
+    await page.goto('/settings.html');
+    await settingsReady(page, 'communityPro');
+    await openServiceGroups(page);
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const id of ['account', 'credits', 'community']) {
+      const detail = page.locator(`#${id} > details`);
+      const layout = await detail.evaluate(node => {
+        const summary = node.firstElementChild.getBoundingClientRect();
+        const body = node.lastElementChild.getBoundingClientRect();
+        return {
+          left: Math.round(body.left - summary.left),
+          right: Math.round(body.right - summary.right),
+          gap: Math.round(body.top - summary.bottom),
+          height: summary.height >= 44,
+        };
+      });
+      expect(layout).toEqual({ left: 0, right: 0, gap: 16, height: true });
+    }
+
+    const inputs = await page.locator('main input:visible, main button:visible, main select:visible').count();
+    expect(inputs).toBeGreaterThan(5);
+
+    if (process.env.LAYOUT_SHOTS) {
+      const dir = path.join(process.cwd(), 'test-results', 'layout-shots');
+      fs.mkdirSync(dir, { recursive: true });
+      await page.screenshot({ path: path.join(dir, `settings-open-userPro-${width}.png`), fullPage: true });
+    }
+  }
+
+  for (const lang of langs) {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await mockApp(page, COMMUNITY_PRO);
+    await page.goto('/settings.html');
+    await settingsReady(page, 'communityPro');
+    await page.locator(`#langSelect button[data-lang="${lang}"]`).click();
+    await openServiceGroups(page);
+    await page.evaluate(() => document.fonts.ready);
+    for (const id of ['account', 'credits', 'community']) {
+      const summary = page.locator(`#${id} > details > summary`);
+      expect((await summary.textContent()).trim().length).toBeGreaterThan(0);
+      expect(await summary.evaluate(el => el.getBoundingClientRect().height >= 44)).toBe(true);
+    }
+  }
+
+  await page.setViewportSize({ width: 768, height: 900 });
+  await mockApp(page, COMMUNITY_PRO);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'communityPro');
+  await page.locator('#screen [data-theme="dark"]').click();
+  await openServiceGroups(page);
+  await page.evaluate(() => document.fonts.ready);
+  if (process.env.LAYOUT_SHOTS) {
+    const dir = path.join(process.cwd(), 'test-results', 'layout-shots');
+    fs.mkdirSync(dir, { recursive: true });
+    await page.screenshot({ path: path.join(dir, `settings-open-userPro-768-dark.png`), fullPage: true });
+  }
+});
+
 
 layoutSuite({
   name: 'settings',
@@ -156,6 +649,7 @@ for (const state of ['guest', 'user', 'userPro', 'userGrace']) {
     await page.goto('/settings.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
     await settingsReady(page, state);
+    await openServiceGroups(page);
     for (const id of ['#keys', '#gemKey', '#gemModel', '#geminiKeyStatus', '#btnOpenGeminiModal', '#geminiOnboardingModal']) {
       await expect(page.locator(id)).toHaveCount(0);
     }
@@ -256,9 +750,14 @@ for (const state of ['guest', 'user', 'userPro', 'userGrace', 'userOwner', 'user
       await page.goto('/settings.html', { waitUntil: 'load' });
       test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
       await settingsReady(page, state);
+      await openServiceGroups(page);
       await page.evaluate(() => document.fonts.ready);
       // 접힌 details(고급 설정·계정 삭제 등)를 모두 펼쳐 안쪽 버튼도 잰다
-      await page.evaluate(() => document.querySelectorAll('main details').forEach((d) => (d.open = true)));
+      for (const detail of await page.locator('main details:visible').all()) {
+        if (!await detail.evaluate(node => node.open)) await detail.locator(':scope > summary').click();
+      }
+      if (state !== 'guest') await expect(page.locator('#btnDeleteAcc')).toBeVisible();
+      await expect(page.locator('#btnLogin:visible, #btnLogout:visible')).toHaveCount(1);
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       expect(await page.evaluate(collectWrappedPills)).toEqual([]);
     });
@@ -272,6 +771,9 @@ for (const width of WIDTHS) {
     await page.goto('/settings.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
     await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+    await openServiceGroups(page);
+    await expect(page.locator('#btnLogout')).toBeVisible();
+    await expect(page.locator('#commAutosync')).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const problems = await page.evaluate(collectGapProblems, SCALE);
@@ -293,6 +795,7 @@ for (const [state, width] of ['userOwner', 'userOwnerData', 'communityFree', 'co
     await page.goto('/settings.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
     await settingsReady(page, state);
+    await openServiceGroups(page);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
@@ -517,7 +1020,7 @@ test('ST1-06 auth delay, latest hash resolution, role change, and focus cancella
 
   // Resolve /me with owner
   resolveMe();
-  await page.locator('#accEmail').waitFor();
+  await expect(page.locator('#accEmail')).toHaveText('a@example.com');
 
   // Only latest hash #nx must be focused, not the stale #ops
   await expect(page.locator('#nx')).toBeFocused();
@@ -550,6 +1053,7 @@ test('ST1-P1 profile saves preserve the current switch focus', async ({ page }) 
   ]] });
   await page.goto('/settings.html#account');
   await expect(page.locator('#account')).toBeFocused();
+  await page.locator('#community > details > summary').click();
   for (const id of ['commAutosync', 'commPracticeLog']) {
     const input = page.locator(`#${id}`);
     await input.focus();
@@ -597,8 +1101,11 @@ for (const action of ['hashchange', 'signout']) {
     if (action === 'hashchange') {
       await page.evaluate(() => { location.hash = 'screen'; });
       await expect(page.locator('#screen')).toBeFocused();
+      await page.locator('#credits > details > summary').click();
     } else {
       await page.evaluate(() => window.__supabaseAuthListener('SIGNED_OUT', null));
+      await expect(page.locator('#accGuest')).not.toHaveAttribute('hidden', '');
+      await page.locator('#account > details > summary').click();
       await expect(page.locator('#accGuest')).toBeVisible();
     }
     const control = page.locator('#langSelect button').first();
@@ -619,6 +1126,7 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   await mockApp(page, STATES.guest);
   await page.goto('/settings.html');
   await settingsReady(page, 'guest');
+  await openServiceGroups(page);
   await expect(page.locator('#creditMsg')).toBeVisible();
   await expect(page.locator('#creditTier')).toHaveCount(0);
   await expect(page.locator('#creditTotal')).toHaveCount(0);
@@ -631,6 +1139,7 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   await mockApp(page, STATES.user);
   await page.goto('/settings.html');
   await settingsReady(page, 'user');
+  await openServiceGroups(page);
   await expect(page.locator('#creditTier')).toHaveText('무료');
   await expect(page.locator('#creditMsg')).toContainText('Pro 플랜');
   await expect(page.locator('#creditTotal')).toHaveCount(0);
@@ -644,6 +1153,7 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   await mockApp(page, USER_PRO);
   await page.goto('/settings.html');
   await settingsReady(page, 'userPro');
+  await openServiceGroups(page);
   await expect(page.locator('#creditTier')).toHaveText('Pro');
   await expect(page.locator('#creditTotal')).toHaveText('192');
   await expect(page.locator('#creditBuckets')).toContainText('152');
@@ -655,6 +1165,7 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   await mockApp(page, USER_GRACE);
   await page.goto('/settings.html');
   await settingsReady(page, 'userGrace');
+  await openServiceGroups(page);
   await expect(page.locator('#creditTier')).toHaveText('Pro');
   await expect(page.locator('#creditTotal')).toHaveText('192');
   await expect(page.locator('#creditBuckets')).toContainText('152');
@@ -679,7 +1190,8 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   };
   await mockApp(page, USER_EXPIRED);
   await page.goto('/settings.html');
-  await page.locator('#accEmail').waitFor();
+  await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+  await openServiceGroups(page);
   await expect(page.locator('#creditTier')).toHaveText('무료');
   await expect(page.locator('#creditMsg')).toContainText('Pro 플랜');
   await expect(page.locator('#creditTotal')).toHaveCount(0);
@@ -697,6 +1209,7 @@ test('ST1-07 conditional elements and descendant IDs across free, pro, grace, an
   await mockApp(page, USER_PRO_NO_NAME);
   await page.goto('/settings.html');
   await settingsReady(page, 'userPro');
+  await openServiceGroups(page);
   await expect(page.locator('#commNameRequiredNotice')).toBeVisible();
   await expect(page.locator('#commProNotice')).toHaveCount(0);
 });

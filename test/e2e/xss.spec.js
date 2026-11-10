@@ -345,6 +345,8 @@ test('E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교', asyn
 test('E6 설정 화면(settings.html) 계정 프로필 표시', async ({ page }) => {
   await setupMockAuthAndApi(page);
   await page.goto('/settings.html');
+  await page.locator('#account > details > summary').click();
+  await expect(page.locator('#accEmail')).toBeVisible();
 
   // 프로필 정보 표시 대기
   const accEmail = page.locator('#accEmail');

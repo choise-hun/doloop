@@ -167,6 +167,14 @@ export function SettingsPage(): React.ReactElement {
   // Resolve only registered IDs. A new hash or auth generation cancels queued focus.
   const navigateHashRef = useRef<() => void>(() => {});
   const retryPendingHashRef = useRef<() => void>(() => {});
+  // Reset only the outer disclosures, before this identity's hash navigation.
+  // The mounted body and nested account-deletion disclosure retain their state.
+  useEffect(() => {
+    for (const id of ['account', 'credits', 'community']) {
+      const detail = document.getElementById(id)?.querySelector<HTMLDetailsElement>(`:scope > details[data-setting-disclosure="${id}"]`);
+      if (detail) detail.open = false;
+    }
+  }, [activeUid]);
   useEffect(() => {
     let sequence = 0;
     let frame = 0;
@@ -193,6 +201,10 @@ export function SettingsPage(): React.ReactElement {
         if (parent instanceof HTMLDetailsElement) details.unshift(parent);
       }
       if (target instanceof HTMLDetailsElement) details.push(target);
+      if (['account', 'credits', 'community'].includes(destination.targetId)) {
+        const ownDetails = target.querySelector<HTMLDetailsElement>(`:scope > details[data-setting-disclosure="${destination.targetId}"]`);
+        if (ownDetails) details.push(ownDetails);
+      }
       if (destination.targetId === 'ops') {
         const ownDetails = target.querySelector('details');
         if (ownDetails) details.push(ownDetails);
@@ -208,7 +220,7 @@ export function SettingsPage(): React.ReactElement {
           if (details.some(detail => !detail.open)) return;
           const section = target.closest<HTMLElement>('section');
           const disabled = target.matches(':disabled, [aria-disabled="true"]');
-          const focusTarget = disabled ? section?.querySelector<HTMLElement>('h2, summary') : target;
+          const focusTarget = disabled ? (section?.querySelector<HTMLElement>('h2') ?? section?.querySelector<HTMLElement>('summary')) : target;
           if (!focusTarget || !focusTarget.checkVisibility({ visibilityProperty: true })) return;
           if (!focusTarget.matches('a[href], button, input, select, textarea, summary, [tabindex]')) focusTarget.tabIndex = -1;
           focusTarget.scrollIntoView({ block: 'start', behavior: 'instant' });
@@ -429,7 +441,10 @@ export function SettingsPage(): React.ReactElement {
       </nav>
 
       {/* 1. 계정 및 Google Drive 저장소 */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="account" data-setting-render-key="account" aria-labelledby="hAccount">
+      <section className={`set-sec ${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right" id="account" data-setting-render-key="account" aria-labelledby="hAccount">
+        <details className={styles.serviceDisclosure} data-setting-disclosure="account">
+          <summary className={styles.serviceSummary} data-align-group="accountDisclosure:left,right"><span>{t('settings.groups.accountStorage')}</span></summary>
+          <div className={styles.serviceBody} data-align-group="accountDisclosure:left,right">
         <h2 id="hAccount">{t('settings.secAccount')}</h2>
         <p id="accDesc">{t('settings.accDesc')}</p>
 
@@ -657,6 +672,8 @@ export function SettingsPage(): React.ReactElement {
         <p className="hint">
           <SafeLink href="privacy.html">{t('settings.privacyLink')}</SafeLink>
         </p>
+          </div>
+        </details>
       </section>
 
       {/* 2. 데이터 백업 */}
@@ -722,7 +739,10 @@ export function SettingsPage(): React.ReactElement {
       </section>
 
       {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
-      <section className={`set-sec ${styles.setSec}`} data-align-group="col: left; secs: right" id="credits" data-setting-render-key="credits" aria-labelledby="hCredits">
+      <section className={`set-sec ${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right" id="credits" data-setting-render-key="credits" aria-labelledby="hCredits">
+        <details className={styles.serviceDisclosure} data-setting-disclosure="credits">
+          <summary className={styles.serviceSummary} data-align-group="creditsDisclosure:left,right"><span>{t('settings.groups.subscriptionCredits')}</span></summary>
+          <div className={styles.serviceBody} data-align-group="creditsDisclosure:left,right">
         <h2 id="hCredits">{t('settings.secCredits')}</h2>
         <p>{t('settings.creditsDesc')}</p>
         <div className={styles.panel}>
@@ -766,16 +786,21 @@ export function SettingsPage(): React.ReactElement {
             </>
           )}
         </div>
+          </div>
+        </details>
       </section>
 
       {/* 3-b. 커뮤니티 (M2-23 D5) */}
       {signedIn ? (
         <section
-          className={`set-sec ${styles.setSec}`}
+          className={`set-sec ${styles.setSec} ${styles.serviceSection}`}
           data-align-group="col: left; secs: right"
           id="community" data-setting-render-key="community"
           aria-labelledby="hCommunity"
         >
+          <details className={styles.serviceDisclosure} data-setting-disclosure="community">
+            <summary className={styles.serviceSummary} data-align-group="communityDisclosure:left,right"><span>{t('settings.groups.publicIntegration')}</span></summary>
+            <div className={styles.serviceBody} data-align-group="communityDisclosure:left,right">
           <h2 id="hCommunity">{t('community.settingsTitle')}</h2>
           <div className={styles.panel}>
             <a id="settingsProfileLink" className="ghostBtn" href="profile.html#profileNames">
@@ -834,6 +859,8 @@ export function SettingsPage(): React.ReactElement {
               </p>
             ) : null}
           </div>
+            </div>
+          </details>
         </section>
       ) : null}
 

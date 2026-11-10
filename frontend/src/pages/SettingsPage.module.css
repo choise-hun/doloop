@@ -32,6 +32,41 @@
   gap: 16px;
 }
 
+.serviceSection {
+  padding: 12px 16px;
+}
+
+.serviceDisclosure {
+  min-width: 0;
+  width: 100%;
+}
+
+.serviceSummary {
+  box-sizing: border-box;
+  min-height: 44px;
+  width: 100%;
+  padding: 12px 0;
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.serviceSummary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-card);
+}
+
+.serviceBody {
+  min-width: 0;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .setSec h2 {
   font-family: var(--font-display);
   font-weight: 900;
