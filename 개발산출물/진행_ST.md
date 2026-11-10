@@ -1,6 +1,6 @@
 # ST 진행 — 설정 그룹·접힘·딥링크·Registry 검증
 
-> 2026-11-10 / ST-1 PR #153 리뷰 2건 시니어 3-P 수정·표적 검증 중. 최신 실행은 §10, 재개는 §5.
+> 2026-11-10 / ST-1 PR #153 리뷰 2건 시니어 3-P 수정·표적 검증 및 코드 head CI 7개 통과. 사용자 머지 대기. 최신 실행은 §10, 다음 ST-2 명세는 §5.
 
 ## 1. 목표·입력·승인 경계
 
@@ -68,27 +68,21 @@ ST는 하나의 Feature로 유지한다. 설정을 찾고 열어 값을 유지/�
 
 ## 5. 검토 관문·다음 행동
 
-**현재 지시:** 아래 3-P 시작 멘트는 과거 입력이다. §10의 수정·표적 검증 후 같은 브랜치에 커밋·push하고 최신 head CI 종료 및 리뷰를 조회한다. 일반 댓글/답글·리액션·resolve는 승인되지 않아 수행하지 않는다. ST-1 완료 후 사용자 PR #153 실제 머지와 사용자 변경 보존·main 안전 동기화를 확인하고, ST-2 세부 명세 작성으로 이어간다. ST-1 전체 PR 재검증·머지·배포는 이번 범위가 아니다.
+- 현재: §10의 두 결함 수정·표적 검증과 코드 커밋 `8920ebbe287603955a94d9b4b1cd80a8380dd483` push 완료. [CI 42739045764](https://github.com/choise-hun/doloop/actions/runs/42739045764) **7개 job success**. 결과 기록 게시 후 최신 문서 head CI·리뷰 확인, 사용자 머지 대기.
+- 댓글/답글·리액션·스레드 resolve는 미승인으로 수행하지 않는다. 코드 반영과 스레드 상태는 구별한다.
+- 다음: 사용자 PR #153 실제 머지 확인 → 사용자 변경 보존 및 main 안전 동기화 → ST-2 세부 명세. 완료한 ST-1 전체 PR 검증을 반복하지 않는다. ST-2 구현/Git 게시·머지·배포는 이번 승인에 포함되지 않는다.
 
-1. **ST-1 Git 게시 및 CI 통과 완료:** 커밋 `97e9152b74`, PR [#153](https://github.com/choise-hun/doloop/pull/153) 생성, GitHub Actions 7개 CI 전수 통과 확인.
-2. **리뷰 코멘트 확인:** Codex 리뷰 코멘트 2건(P2, SettingsPage.tsx 런타임 포커스 가드) 확인 완료.
-3. **다음 행동:**
-   - **시니어 3-P 핀포인트 수정:** GPT-6.1 Sol 시니어가 2개 결함 확인 후 최소 수정 및 표적 검증, 커밋/push 및 최신 CI 확인 진행.
-   - **머지 대기:** 3-P 수정 및 CI 완료 후 사용자 PR #153 머지 진행.
-
-다음 세션 시작 멘트(시니어 3-P 핀포인트 결함 수정용):
+다음 세션 시작 멘트(머지 확인 후 ST-2 명세):
 
 ```text
-# GPT-6.1 Sol (시니어) — ST-1 PR #153 핀포인트 결함 수정
-개발산출물/프롬프트_템플릿_4단계.md §3-P와 협업_시니어주니어.md를 따른다.
-목표: 아래 2개 리뷰 결함만 확인하고 최소 수정한다. 전체 PR 재검증은 하지 않는다.
-입력: PR #153, head 97e9152b740f984018bc1a030997dd8ea373155e, 최신 CI 결과 https://github.com/choise-hun/doloop/actions/runs/42734890210
-결함 목록:
-1. frontend/src/pages/SettingsPage.tsx:226 — 일반 프로필 저장 시 기존 해시로 포커스 재이동 방지 (https://github.com/choise-hun/doloop/pull/153#discussion_r4520014227)
-2. frontend/src/pages/SettingsPage.tsx:184 — 크레딧 응답 후 렌더되는 해시 대상(#creditNext, #creditExpire) 보류 및 재처리 (https://github.com/choise-hun/doloop/pull/153#discussion_r4520014235)
-읽기 범위: SettingsPage.tsx의 해당 effect/핸들러 및 settings.spec.js 관련 테스트만.
-Git 처리: step/ST-1 브랜치 커밋·push·CI 확인 승인. 머지·배포는 하지 않는다.
-[필수 가드레일] 권장 Effort: 중간
+# GPT-6.1 Sol (시니어) — ST-2 세부 명세
+개발산출물/프롬프트_템플릿_4단계.md §1과 협업_시니어주니어.md를 따른다.
+목표: 설정 앞 3그룹의 기본 접힘·딥링크를 위한 ST-2 세부 명세 작성·검토.
+선행 조건: PR #153 실제 머지 확인, 사용자 변경 보존, main 안전 동기화.
+범위: 진행_ST.md §3·§5 및 계획 ST-2에 따른 명세·읽기·검색만. 완료한 ST-1을 반복 검증하지 않는다.
+완료 기준: 현재 코드 근거, 동작·실패·권한·상태 보존·검증 기준과 구현 담당/승인 경계 명시.
+Git 처리: 로컬 명세·진행 기록만. 구현·커밋·push·PR·머지·배포는 별도 지시 전 수행하지 않는다.
+인수인계_메모.md와 실제 활성 진행 파일·Git 상태를 먼저 확인한다.
 ```
 
 ## 6. 명세 작성 당시 최종 정적 확인 — 2026-11-10 (과거 기록)
@@ -220,3 +214,4 @@ Codex 자동 리뷰에서 2건의 인라인 코멘트(P2) 확인:
 - Red: `npm run build` 후 `npx playwright test test/e2e/layout/settings.spec.js -g 'ST1-P'`: **3 failed**, 공유 스위치 포커스 이탈 및 creditNext/creditExpire 미포커스 단언으로 각각 재현.
 - 수정 후 build 통과. 추가한 취소 테스트 2건은 처음에 포커스 불가능한 div(`#langSelect`)를 직접 focus한 테스트 구성 오류로 실패하여, 실제 언어 버튼을 focus하고 응답 전 포커스 단언을 추가했다. 제품 가드 변경/단언 완화 없음.
 - 최종 관련 스위트·Git/CI 결과는 [결과 ST-1 §6](결과/ST-1.md)에 기록한다. **읽지 않은 범위 = 미검증**. 전체 PR/9개 spec/Node/Gradle/실계정/운영/스크린샷 재검증은 하지 않는다.
+- 코드 push `8920ebbe287603955a94d9b4b1cd80a8380dd483`, [run 42739045764](https://github.com/choise-hun/doloop/actions/runs/42739045764) **completed/success, 7 successful / 0 failed / 0 skipped**. CI 대기 중 및 종료 후 리뷰 조회: 새 리뷰/코멘트 없음. 두 기존 스레드는 코드 반영 완료·GitHub outdated/unresolved 상태이며 resolve하지 않았다. 머지/배포 미실행.

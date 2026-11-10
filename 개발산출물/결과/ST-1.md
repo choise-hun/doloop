@@ -128,4 +128,5 @@ PR #153에 대해 Codex 자동 리뷰에서 2건의 인라인 코멘트(P2)가 �
 - `npx playwright test test/e2e/layout/settings.spec.js -g 'ST1-'`: **10 passed / 1 failed (48.2s)**. 실패는 기존 ST1-06의 `page.goto(...#ops)` load 대기 30초 timeout으로 해시 단언 도달 전 발생. 해당 테스트 단독 `-g 'ST1-06'` 재실행 **1 passed (2.2s)**. 첫 수정 후 실행에서도 ST1-06은 통과했다. 전체 11개 관련 테스트 통과 증거가 있으나 단일 실행 전부 통과로 표현하지 않는다.
 - 추가 취소 테스트의 초기 div 직접 focus 오류는 실제 언어 버튼으로 교정하고 응답 전 포커스도 단언. 기존 테스트/skip/단언 완화 없음.
 - 제품 1파일·테스트 1파일·기록 2파일. 전체 PR 재검증/전체 settings·9개 spec/Node/Gradle/실계정·DB/운영/스크린샷 재검증 미실행. **읽지 않은 범위 = 미검증**. 기존 문서의 전체 검증 결과는 이전 head 이력이다.
-- Git 게시와 최신 head CI·새 리뷰 확인 결과는 아래에 추가한다. 댓글/답글·리액션·스레드 resolve는 미승인으로 수행하지 않는다.
+- Git: `step/ST-1`에 `8920ebbe287603955a94d9b4b1cd80a8380dd483` 커밋·push. [CI run 42739045764](https://github.com/choise-hun/doloop/actions/runs/42739045764) **completed/success, 7 successful / 0 failed / 0 skipped** (Detect / Node 22 / Node 24 / Kotlin / Docker / E2E / CI ok).
+- CI 대기 중·종료 후 리뷰 조회: 새 리뷰/코멘트 없음. 기존 두 지적은 코드 반영 완료이며 GitHub 스레드는 outdated/unresolved. 댓글/답글·리액션·resolve·추가 리뷰 호출은 미승인으로 미실행. 기록만 추가하는 후속 head의 CI 결과는 최종 보고에서 별도 확인한다. 머지/배포 미실행.
