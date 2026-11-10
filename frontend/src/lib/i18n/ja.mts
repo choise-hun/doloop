@@ -2,6 +2,13 @@
 import type { I18nKey } from '../i18n.mts';
 
 export const JA: Record<I18nKey, string> = {
+  'settings.groups.navigation': "設定グループ",
+  'settings.groups.accountStorage': "アカウント・ストレージ",
+  'settings.groups.subscriptionCredits': "プラン・クレジット",
+  'settings.groups.publicIntegration': "公開・連携",
+  'settings.groups.appearanceLanguage': "表示・言語",
+  'settings.groups.advancedData': "詳細・バックアップ・データ管理",
+  'settings.groups.operations': "管理者",
   'profile.namesTitle': "自分の名前",
   'profile.displayNameLabel': "表示名",
   'profile.displayNameHint': "自分だけに表示される名前です。100文字まで入力できます。",

@@ -3,7 +3,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
-const { mockApp, STATES } = require('../support/mock-app');
+const { mockApp, STATES, DEFAULT_ME } = require('../support/mock-app');
 const { COMMUNITY_FREE_ME, COMMUNITY_PRO_ME, communityRoutes } = require('../support/community-fixtures');
 
 // M1-3c: 유료(Pro) 계정 — /me 티어·잔액 + GET /credits(다음 지급). 무료는 STATES.user(DEFAULT_ME = free)
@@ -298,3 +298,442 @@ for (const [state, width] of ['userOwner', 'userOwnerData', 'communityFree', 'co
     expect(await page.evaluate(collectGapProblems, SCALE)).toEqual([]);
   });
 }
+
+// Snapshot of the existing JSX contract, independent of SETTINGS_GROUPS.
+// Conditional descendants are checked when present; full branch coverage is part of ST1-07/09.
+const ST1_RENDERED = [
+  { renderKey: 'account', targetId: 'account', availability: 'always', kind: 'fixed',
+    descendantIds: ["hAccount", "accDesc", "accGuest", "btnLogin", "btnLoginBlank", "accUser", "accEmail", "accName", "accQuota", "quotaText", "quotaBar", "driveStoragePanel", "driveProviderText", "driveStatusMsg", "driveConflictNotice", "btnDriveEnable", "btnDriveDisable", "btnDriveMigrate", "btnLogout", "delConfirm", "btnDeleteAcc", "accMsg"] },
+  { renderKey: 'backup', targetId: 'nx', availability: 'always', kind: 'fixed',
+    descendantIds: ["hNx", "chkExportAudio", "btnExportZip", "nxMsg"] },
+  { renderKey: 'credits', targetId: 'credits', availability: 'always', kind: 'fixed',
+    descendantIds: ["hCredits", "creditTier", "creditMsg", "creditTotal", "creditBuckets", "creditNext", "creditExpire"] },
+  { renderKey: 'community', targetId: 'community', availability: 'signedIn', kind: 'fixed',
+    descendantIds: ["hCommunity", "settingsProfileLink", "commAutosync", "commPracticeLog", "commProNotice", "commNameRequiredNotice", "commErrMsg"] },
+  { renderKey: 'screen', targetId: 'screen', availability: 'always', kind: 'fixed',
+    descendantIds: ["hScreen"] },
+  { renderKey: 'language', targetId: 'langSec', availability: 'always', kind: 'fixed',
+    descendantIds: ["hLang", "langDesc", "langSelect"] },
+  { renderKey: 'advanced', targetId: 'advanced', availability: 'always', kind: 'fixed',
+    descendantIds: ["advNotion", "hAdvanced", "btnNotionTemplate", "notion", "notionKeyStatus", "ntnGuide", "ntnToken", "ntnSongsDb", "ntnSessionsDb", "ntnNotesDb", "btnSaveNotionKey", "btnCheckNotionKey", "btnDelNotionKey", "ntnKeyMsg", "notionSyncPanel", "syncStatusText", "syncErrorText", "btnSyncEnable", "btnSyncDisable", "btnSyncPull", "btnSyncPush", "syncMsg", "inpImportZip", "btnPreviewZip", "nxPreviewBox", "nxPreviewSummary", "nxPreviewList", "btnConfirmZip", "btnCancelZip", "links", "hLinks", "nlPractice", "nlNotes", "nlSave", "nlMsg"] },
+  { renderKey: 'opsHost', targetId: 'ops', availability: 'owner', kind: 'dynamicHost',
+    descendantIds: ["opsDetails", "hOps", "opsForbidden", "opsCreator", "opsEmail", "opsSearch", "opsNoUser", "opsCreatorForm", "opsUserInfo", "opsIsCreator", "opsBadge", "opsBio", "opsReason", "opsCreatorSave", "opsMsg"] },
+];
+
+async function st1Modules() {
+  const [{ SETTINGS_GROUPS, validateSettingsRegistry, resolveSettingsHash }, { KO }, { EN }, { JA }] = await Promise.all([
+    import('../../../frontend/src/lib/settingsRegistry.mts'), import('../../../frontend/src/lib/i18n/ko.mts'),
+    import('../../../frontend/src/lib/i18n/en.mts'), import('../../../frontend/src/lib/i18n/ja.mts'),
+  ]);
+  return { groups: SETTINGS_GROUPS, validate: validateSettingsRegistry, resolve: resolveSettingsHash, dictionaries: { ko: KO, en: EN, ja: JA } };
+}
+
+test('ST1-02-04 registry validation and hash errors', async () => {
+  const { groups, validate, resolve, dictionaries } = await st1Modules();
+  const before = JSON.stringify({ groups, rendered: ST1_RENDERED, dictionaries });
+  expect(validate(groups, ST1_RENDERED, dictionaries)).toEqual([]);
+  const check = (mutate, expected) => {
+    const input = structuredClone({ groups, rendered: ST1_RENDERED, dictionaries });
+    mutate(input);
+    expect(validate(input.groups, input.rendered, input.dictionaries)).toEqual(expected);
+  };
+  check(x => x.groups[1].id = 'account', [{ code: 'DUPLICATE_ID', subject: 'account' }]);
+  check(x => x.groups[1].items[0].aliases.push('account'), [{ code: 'DUPLICATE_ALIAS', subject: 'account' }, { code: 'UNKNOWN_TARGET', subject: 'account' }]);
+  check(x => x.groups[0].items[0].aliases.push('absent'), [{ code: 'UNKNOWN_TARGET', subject: 'absent' }]);
+  check(x => x.groups[0].items[0].targetId = 'absent', [{ code: 'UNKNOWN_TARGET', subject: 'absent' }]);
+  check(x => x.rendered.shift(), [{ code: 'UNKNOWN_RENDER_KEY', subject: 'account' }]);
+  check(x => x.rendered.push({ ...x.rendered[0], renderKey: 'extra' }), [{ code: 'MISSING_RENDER_KEY', subject: 'extra' }]);
+  check(x => x.rendered.push(x.rendered[0]), [{ code: 'DUPLICATE_RENDER_KEY', subject: 'account' }]);
+  check(x => x.groups[0].items.push({ ...x.groups[0].items[0], id: 'copy', targetId: 'copy', aliases: [] }), [
+    { code: 'DUPLICATE_RENDER_KEY', subject: 'account' }, { code: 'UNKNOWN_TARGET', subject: 'copy' },
+  ]);
+  check(x => x.groups[0].items = [], [{ code: 'MISSING_RENDER_KEY', subject: 'account' }]);
+  for (const locale of ['ko', 'en', 'ja']) {
+    for (const empty of [false, true]) {
+      check(x => { if (empty) x.dictionaries[locale]['settings.secAccount'] = ' '; else delete x.dictionaries[locale]['settings.secAccount']; },
+        [{ code: 'MISSING_I18N_KEY', subject: `${locale}:settings.secAccount` }]);
+    }
+  }
+  expect(JSON.stringify({ groups, rendered: ST1_RENDERED, dictionaries })).toBe(before);
+  expect(resolve('#%6cinks', groups)).toEqual({ groupId: 'advancedData', renderKey: 'advanced', targetId: 'links' });
+  for (const hash of ['', '#', '#%', '#%256cinks', '#[id=account]', '#unknown']) expect(resolve(hash, groups)).toBeNull();
+});
+
+test('ST1-01 role DOM, group navigation, keyboard and hash focus', async ({ browser }) => {
+  test.setTimeout(60000);
+  const { groups, dictionaries } = await st1Modules();
+  const cases = [
+    { role: 'guest', lang: 'ko', width: 390, state: STATES.guest, keys: ['account', 'backup', 'credits', 'screen', 'language', 'advanced'], targets: ['account', 'credits', 'screen', 'nx'] },
+    { role: 'user', lang: 'en', width: 768, state: STATES.user, keys: ['account', 'backup', 'credits', 'community', 'screen', 'language', 'advanced'], targets: ['account', 'credits', 'community', 'screen', 'nx'] },
+    { role: 'owner', lang: 'ja', width: 1280, state: USER_OWNER, keys: ['account', 'backup', 'credits', 'community', 'screen', 'language', 'advanced', 'opsHost'], targets: ['account', 'credits', 'community', 'screen', 'nx', 'ops'] },
+  ];
+  for (const entry of cases) {
+    const context = await browser.newContext({ viewport: { width: entry.width, height: 900 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    try {
+      await mockApp(page, { ...entry.state, local: { 'ulp:lang': entry.lang }, me: { ...entry.state.me, locale: entry.lang } });
+      const mutations = [], admin = [], errors = [];
+      page.on('request', request => {
+        if (['POST', 'PATCH', 'DELETE'].includes(request.method())) mutations.push(request.url());
+        if (request.url().includes('/api/v1/admin/')) admin.push(request.url());
+      });
+      page.on('pageerror', error => errors.push(error.message));
+      await page.goto('/settings.html');
+      await settingsReady(page, entry.role === 'guest' ? 'guest' : 'user');
+      const nav = page.locator('#settingsGroups');
+      await expect(nav).toHaveAttribute('aria-label', dictionaries[entry.lang]['settings.groups.navigation']);
+      const dom = await page.locator('[data-setting-render-key]').evaluateAll(nodes => nodes.map(node => {
+        const section = node.tagName === 'SECTION' ? node : node.querySelector('section');
+        return { key: node.dataset.settingRenderKey, target: section.id, descendants: [...section.querySelectorAll('[id]')].map(el => el.id) };
+      }));
+      expect(dom.map(item => item.key)).toEqual(entry.keys);
+      for (const item of dom) {
+        const contract = ST1_RENDERED.find(contract => contract.renderKey === item.key);
+        expect(item.target).toBe(contract.targetId);
+        // Dynamic server rows belong to OpsPanel; the registry owns only its fixed host.
+        if (contract.kind === 'fixed') {
+          expect(item.descendants.filter(id => !contract.descendantIds.includes(id))).toEqual([]);
+          // These IDs depend on tier/error state; all other baseline IDs must remain mounted.
+          const conditional = ['creditTier', 'creditMsg', 'creditTotal', 'creditBuckets', 'creditNext', 'creditExpire', 'commProNotice', 'commNameRequiredNotice', 'commErrMsg'];
+          expect(item.descendants).toEqual(expect.arrayContaining(contract.descendantIds.filter(id => !conditional.includes(id))));
+        } else expect(item.descendants).toEqual(expect.arrayContaining(['hOps', 'opsDetails', 'opsCreator']));
+        const metadata = groups.flatMap(group => group.items).find(candidate => candidate.renderKey === item.key);
+        expect(metadata.targetId).toBe(item.target);
+      }
+      const links = nav.locator('a');
+      await expect(links).toHaveCount(entry.targets.length);
+      const bounds = await nav.evaluate(node => {
+        const rect = node.getBoundingClientRect(), account = document.getElementById('account').getBoundingClientRect();
+        return { left: rect.left - account.left, right: rect.right - account.right, gap: account.top - rect.bottom };
+      });
+      expect(bounds).toEqual({ left: 0, right: 0, gap: 16 });
+      for (let index = 0; index < entry.targets.length; index++) {
+        const link = links.nth(index), target = entry.targets[index];
+        await expect(link).toHaveAttribute('href', `#${target}`);
+        const groupId = await link.getAttribute('data-setting-group');
+        const group = groups.find(group => group.id === groupId);
+        await expect(link.locator('strong')).toHaveText(dictionaries[entry.lang][group.titleKey]);
+        await link.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator(`#${target}`)).toBeFocused();
+        await expect(page.locator(`#${target}`)).toBeInViewport();
+      }
+      const audio = page.locator('#chkExportAudio');
+      await audio.uncheck();
+      await links.first().click();
+      await expect(page.locator('#account')).toBeFocused();
+      await page.locator('h1').evaluate(node => { node.tabIndex = -1; node.focus(); });
+      await links.first().click(); // Same hash must still move focus.
+      await expect(page.locator('#account')).toBeFocused();
+      for (const hash of ['langSec', 'links', 'hAdvanced']) {
+        await page.evaluate(hash => { location.hash = hash; }, hash);
+        await expect(page.locator(`#${hash}`)).toBeFocused();
+        await expect(page.locator(`#${hash}`)).toBeVisible();
+      }
+      await page.goBack();
+      await expect(page.locator('#links')).toBeFocused();
+      await page.goForward();
+      await expect(page.locator('#hAdvanced')).toBeFocused();
+      await expect(audio).not.toBeChecked();
+      for (const hash of ['%', '[id=account]', 'unknown', ...(entry.role === 'guest' ? ['community', 'ops'] : entry.role === 'user' ? ['ops'] : [])]) {
+        await page.locator('h1').evaluate(node => { node.tabIndex = -1; node.focus(); });
+        const originalHash = await page.evaluate(hash => { location.hash = hash; return location.hash; }, hash);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await expect(page.locator('h1')).toBeFocused();
+        expect(await page.evaluate(() => location.hash)).toBe(originalHash);
+      }
+      if (entry.role !== 'owner') { expect(admin).toEqual([]); await expect(page.locator('#ops')).toHaveCount(0); }
+      if (entry.role === 'guest') await expect(page.locator('#community')).toHaveCount(0);
+      expect(mutations).toEqual([]);
+      expect(errors).toEqual([]);
+      await page.goto('/settings.html#links');
+      await expect(page.locator('#links')).toBeFocused();
+    } finally { await context.close(); }
+  }
+});
+
+test('ST1-05 internal targets, accordion auto-expansion, and hash history', async ({ page }) => {
+  await mockApp(page, USER_OWNER);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'userOwner');
+
+  // 1. Details auto-expansion: #advNotion and #advanced should expand when targeting an internal element.
+  await expect(page.locator('#advNotion')).not.toHaveAttribute('open', '');
+  await page.evaluate(() => { location.hash = 'links'; });
+  await expect(page.locator('#links')).toBeFocused();
+  await expect(page.locator('#links')).toBeVisible();
+
+  // Target internal notion link
+  await page.evaluate(() => { location.hash = 'nlPractice'; });
+  await expect(page.locator('#nlPractice')).toBeFocused();
+
+  // 2. Targets across various groups
+  await page.evaluate(() => { location.hash = 'accQuota'; });
+  await expect(page.locator('#accQuota')).toBeFocused();
+
+  await page.evaluate(() => { location.hash = 'chkExportAudio'; });
+  await expect(page.locator('#chkExportAudio')).toBeFocused();
+
+  await page.evaluate(() => { location.hash = 'langSelect'; });
+  await expect(page.locator('#langSelect')).toBeFocused();
+
+  await page.evaluate(() => { location.hash = 'opsDetails'; });
+  await expect(page.locator('#opsDetails')).toBeFocused();
+
+  // 3. History navigation (back and forward)
+  await page.goBack();
+  await expect(page.locator('#langSelect')).toBeFocused();
+  await page.goBack();
+  await expect(page.locator('#chkExportAudio')).toBeFocused();
+  await page.goForward();
+  await expect(page.locator('#langSelect')).toBeFocused();
+  await page.goForward();
+  await expect(page.locator('#opsDetails')).toBeFocused();
+});
+
+test('ST1-06 auth delay, latest hash resolution, role change, and focus cancellation', async ({ page }) => {
+  let resolveMe;
+  const mePromise = new Promise((resolve) => { resolveMe = resolve; });
+  const DELAYED_ME_ROUTE = [
+    (url) => url.pathname.startsWith('/api/v1/me'),
+    async (route) => {
+      await mePromise;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({ ...DEFAULT_ME, role: 'owner' }),
+      });
+    },
+  ];
+
+  await mockApp(page, { ...USER_OWNER, routes: [DELAYED_ME_ROUTE, ...USER_OWNER.routes] });
+  await page.goto('/settings.html#ops');
+
+  // While /me is pending, #ops is not yet rendered for owner
+  await expect(page.locator('#ops')).toHaveCount(0);
+
+  // User navigates to #nx before /me resolves
+  await page.evaluate(() => { location.hash = 'nx'; });
+
+  // Resolve /me with owner
+  resolveMe();
+  await page.locator('#accEmail').waitFor();
+
+  // Only latest hash #nx must be focused, not the stale #ops
+  await expect(page.locator('#nx')).toBeFocused();
+  await expect(page.locator('#ops')).toHaveCount(1);
+
+  // Now explicitly navigate to #ops
+  await page.evaluate(() => { location.hash = 'ops'; });
+  await expect(page.locator('#ops')).toBeFocused();
+
+  // Test queued focus cancellation on auth generation change / sign out
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await page.evaluate(() => {
+    location.hash = 'account';
+    if (window.__supabaseAuthListener) window.__supabaseAuthListener('SIGNED_OUT', null);
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(errors).toEqual([]);
+});
+
+test('ST1-P1 profile saves preserve the current switch focus', async ({ page }) => {
+  let saves = 0;
+  await mockApp(page, { ...COMMUNITY_PRO, routes: [...COMMUNITY_PRO.routes, [
+    url => url.pathname === '/api/v1/me',
+    route => {
+      const patch = route.request().method() === 'PATCH' ? route.request().postDataJSON() : {};
+      if (route.request().method() === 'PATCH') saves++;
+      return route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, ...patch } });
+    },
+  ]] });
+  await page.goto('/settings.html#account');
+  await expect(page.locator('#account')).toBeFocused();
+  for (const id of ['commAutosync', 'commPracticeLog']) {
+    const input = page.locator(`#${id}`);
+    await input.focus();
+    await input.press('Space');
+    await expect.poll(() => saves).toBe(id === 'commAutosync' ? 1 : 2);
+    await expect(input).toBeEnabled();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(input).toBeFocused();
+  }
+});
+
+for (const [target, state, response] of [
+  ['creditNext', USER_PRO, { monthlyGrant: 170, nextGrantAt: '2026-11-30T15:00:00Z' }],
+  ['creditExpire', USER_GRACE, { monthlyGrant: 0, nextGrantAt: null, monthlyExpiresAt: '2026-11-30T15:00:00Z' }],
+]) {
+  test(`ST1-P2 delayed credits focus ${target}`, async ({ page }) => {
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let requested = false;
+    await mockApp(page, { ...state, routes: [[url => url.pathname === '/api/v1/credits', async route => {
+      requested = true;
+      await gate;
+      await route.fulfill({ json: { monthly: 152, purchased: 40, total: 192, ...response } });
+    }]] });
+    await page.goto(`/settings.html#${target}`);
+    await expect.poll(() => requested).toBe(true);
+    await expect(page.locator(`#${target}`)).toHaveCount(0);
+    release();
+    await expect(page.locator(`#${target}`)).toBeFocused();
+  });
+}
+
+for (const action of ['hashchange', 'signout']) {
+  test(`ST1-P2 delayed credits discard old navigation after ${action}`, async ({ page }) => {
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let requested = false;
+    await mockApp(page, { ...USER_PRO, routes: [[url => url.pathname === '/api/v1/credits', async route => {
+      requested = true;
+      await gate;
+      await CREDITS_ROUTE[1](route);
+    }]] });
+    await page.goto('/settings.html#creditNext');
+    await expect.poll(() => requested).toBe(true);
+    if (action === 'hashchange') {
+      await page.evaluate(() => { location.hash = 'screen'; });
+      await expect(page.locator('#screen')).toBeFocused();
+    } else {
+      await page.evaluate(() => window.__supabaseAuthListener('SIGNED_OUT', null));
+      await expect(page.locator('#accGuest')).toBeVisible();
+    }
+    const control = page.locator('#langSelect button').first();
+    await control.focus();
+    await expect(control).toBeFocused();
+    const response = page.waitForResponse(url => url.url().includes('/api/v1/credits'));
+    release();
+    await response;
+    if (action === 'hashchange') await expect(page.locator('#creditNext')).toBeVisible();
+    else await expect(page.locator('#creditNext')).toHaveCount(0);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(control).toBeFocused();
+  });
+}
+
+test('ST1-07 conditional elements and descendant IDs across free, pro, grace, and expired states', async ({ page }) => {
+  // 1. Guest state
+  await mockApp(page, STATES.guest);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'guest');
+  await expect(page.locator('#creditMsg')).toBeVisible();
+  await expect(page.locator('#creditTier')).toHaveCount(0);
+  await expect(page.locator('#creditTotal')).toHaveCount(0);
+  await expect(page.locator('#creditBuckets')).toHaveCount(0);
+  await expect(page.locator('#creditNext')).toHaveCount(0);
+  await expect(page.locator('#creditExpire')).toHaveCount(0);
+  await expect(page.locator('#community')).toHaveCount(0);
+
+  // 2. Free user state
+  await mockApp(page, STATES.user);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'user');
+  await expect(page.locator('#creditTier')).toHaveText('무료');
+  await expect(page.locator('#creditMsg')).toContainText('Pro 플랜');
+  await expect(page.locator('#creditTotal')).toHaveCount(0);
+  await expect(page.locator('#creditBuckets')).toHaveCount(0);
+  await expect(page.locator('#creditNext')).toHaveCount(0);
+  await expect(page.locator('#creditExpire')).toHaveCount(0);
+  await expect(page.locator('#commProNotice')).toBeVisible();
+  await expect(page.locator('#commNameRequiredNotice')).toHaveCount(0);
+
+  // 3. Pro user state
+  await mockApp(page, USER_PRO);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'userPro');
+  await expect(page.locator('#creditTier')).toHaveText('Pro');
+  await expect(page.locator('#creditTotal')).toHaveText('192');
+  await expect(page.locator('#creditBuckets')).toContainText('152');
+  await expect(page.locator('#creditNext')).toContainText('170');
+  await expect(page.locator('#creditMsg')).toHaveCount(0);
+  await expect(page.locator('#creditExpire')).toHaveCount(0);
+
+  // 4. Grace user state
+  await mockApp(page, USER_GRACE);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'userGrace');
+  await expect(page.locator('#creditTier')).toHaveText('Pro');
+  await expect(page.locator('#creditTotal')).toHaveText('192');
+  await expect(page.locator('#creditBuckets')).toContainText('152');
+  await expect(page.locator('#creditExpire')).toContainText('무료 플랜으로 바뀌어요');
+  await expect(page.locator('#creditNext')).toHaveCount(0);
+
+  // 5. Expired user state (free after grace period has fully lapsed)
+  const USER_EXPIRED = {
+    ...STATES.user,
+    me: { ...PRO_ME, tier: 'free', billingTier: 'free', limits: { ...DEFAULT_ME.limits }, credits: { monthly: 0, purchased: 40 } },
+    routes: [
+      [
+        (url) => url.pathname === '/api/v1/credits',
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify({ monthly: 0, purchased: 40, total: 40, monthlyGrant: 0, nextGrantAt: null, monthlyExpiresAt: null }),
+          }),
+      ],
+    ],
+  };
+  await mockApp(page, USER_EXPIRED);
+  await page.goto('/settings.html');
+  await page.locator('#accEmail').waitFor();
+  await expect(page.locator('#creditTier')).toHaveText('무료');
+  await expect(page.locator('#creditMsg')).toContainText('Pro 플랜');
+  await expect(page.locator('#creditTotal')).toHaveCount(0);
+  await expect(page.locator('#creditBuckets')).toHaveCount(0);
+  await expect(page.locator('#creditNext')).toHaveCount(0);
+  await expect(page.locator('#creditExpire')).toHaveCount(0);
+  await expect(page.locator('#commProNotice')).toBeVisible();
+
+  // 6. Pro community state without publicName
+  const USER_PRO_NO_NAME = {
+    ...STATES.user,
+    me: { ...COMMUNITY_PRO_ME, publicName: '' },
+    routes: [CREDITS_ROUTE, ...communityRoutes()],
+  };
+  await mockApp(page, USER_PRO_NO_NAME);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'userPro');
+  await expect(page.locator('#commNameRequiredNotice')).toBeVisible();
+  await expect(page.locator('#commProNotice')).toHaveCount(0);
+});
+
+test('ST1-08-09 disabled target focus to section title, deep scroll, and edge cases', async ({ page }) => {
+  // 1. Disabled target focus fallback
+  await mockApp(page, STATES.user);
+  await page.goto('/settings.html');
+  await settingsReady(page, 'user');
+
+  // commPracticeLog is disabled for free tier without communityWrite permission
+  await expect(page.locator('#commPracticeLog')).toBeDisabled();
+  await page.evaluate(() => { location.hash = 'commPracticeLog'; });
+  // Focus should fallback to section title #hCommunity
+  await expect(page.locator('#hCommunity')).toBeFocused();
+
+  // Enabled link target should focus directly
+  await page.evaluate(() => { location.hash = 'settingsProfileLink'; });
+  await expect(page.locator('#settingsProfileLink')).toBeFocused();
+
+  // 2. Deep scroll at 390px, 768px, 1280px
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/settings.html#links');
+    await expect(page.locator('#links')).toBeFocused();
+    await expect(page.locator('#links')).toBeInViewport();
+    const scrollY = await page.evaluate(() => window.scrollY);
+    expect(scrollY).toBeGreaterThan(100);
+  }
+
+  // 3. Edge cases: malformed percent encoding and selector-like hashes
+  for (const malformed of ['#%', '#%256cinks', '#[id=account]', '#invalidTarget']) {
+    await page.locator('h1').evaluate((el) => { el.tabIndex = -1; el.focus(); });
+    await page.evaluate((h) => { location.hash = h; }, malformed);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    // Should not crash and should keep h1 focused
+    await expect(page.locator('h1')).toBeFocused();
+    expect(await page.evaluate(() => location.hash)).toBe(malformed);
+  }
+});
