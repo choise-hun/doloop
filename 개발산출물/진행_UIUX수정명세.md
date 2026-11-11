@@ -54,6 +54,7 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 | 2026-11-11 | Claude UXR-2 구현 | `step/UXR-2` 구현. 악기 버튼군·접이식 설정·스케일 4행·재해석 2열. 표적 109 통과, P5 hidden 전제 오류 기록 → [결과](결과/UXR-2.md) |
 | 2026-11-11 | Gemini UXR-2 4단계 | 전체 회귀·LAYOUT_SHOTS 4폭·다크·1023/1024 Q1~Q9 검토(108 passed), feat/docs 분리 커밋, PR #1 생성 및 CI 전 항목 통과 |
 | 2026-11-11 | Gemini 리뷰 대응 | Codex P2 리뷰 반영: chords_instruments.spec.js UXR2-1의 lang을 ulp:lang 및 html[lang] 단언으로 교체(9 passed) |
+| 2026-11-11 | Claude CI 수정 | 레포 이전(choise-hun/doloop public)으로 PR 번호 #160→#1 정정. `62da217` E2E ubuntu-24.04 고정·PR Node 22만·Kotlin 백엔드 변경 시만. push 후 pull_request 이벤트 CI가 시작되지 않아(원인 미확인) `workflow_dispatch`(run 42986479700, head `0dbd5a1`)로 대체 검증: 전 job 성공(playwright install 포함 E2E 통과). PR 리뷰·코멘트 0건 → 처리할 지적 없음. `CI_셀프호스티드_러너_설정_프롬프트.md`는 public 레포라 적용 보류(미커밋) |
 
 ## 6. 검증·미실행
 
