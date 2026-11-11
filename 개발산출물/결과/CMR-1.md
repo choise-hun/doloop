@@ -1,6 +1,6 @@
 # CMR-1 결과 — 커뮤니티 탐색 구조(LOGS 탭·선반 순서·게시물 선반·LOGS 마소니)
 
-> 2026-11-11 / Claude(시니어 직접 구현, 로컬 커밋까지). 명세 [CMR-1](../명세/CMR-1_구현명세.md). 브랜치 `step/CMR-1`(base `main`=`9925b8b`, PR #2 머지 확인). **push·PR·CI·스크린샷 Q1~Q9는 주니어 4단계 인계.**
+> 2026-11-11 / Claude(시니어 직접 구현) + Gemini(주니어 4단계 전체 검증·스크린샷 Q1~Q9 판정·PR/CI 확인). 명세 [CMR-1](../명세/CMR-1_구현명세.md). 브랜치 `step/CMR-1`(base `main`=`9925b8b`, PR #2 머지 확인). PR 생성 및 CI 확인 완료. 머지는 사용자 대기.
 
 ## 1. 구현 요약
 
@@ -32,8 +32,35 @@
 - 명세 §1의 `main=d42e28e` 기준과 달리 실제 main은 PR #2 머지 후(`9925b8b`)다. 충돌 없음.
 - `waitForTimeout` 금지 규칙(testing-security.md)에 따라 CMR1-11은 응답 완료 + rAF로 결정적으로 기다린다.
 
-## 5. 주니어 4단계로 넘길 일
+## 5. 주니어 4단계 검증 및 화면 검토 (2026-11-11, Gemini)
 
-1. 전체 회귀(`npm test`, 전체 Playwright) 실행, 필요 시 회귀 수정.
-2. `LAYOUT_SHOTS=1` 4폭(390·768·1150·1280)+다크 캡처, Q1~Q9 판정 → 이 파일에 추가(특히 게시물 선반 가로 카드, LOGS 1/2/3열, 빈 상태).
-3. push → PR(base main) → `gh pr checks --watch`, 리뷰 코멘트 확인·처리. 머지는 사용자.
+### 5.1 검증 결과
+
+| 명령 | 결과 | 상세 |
+| --- | --- | --- |
+| `npm run build` | 통과 | `tsc --noEmit && vite build` 정상 빌드 완료 |
+| `npm test` | 416 pass / 0 fail | Node 테스트 스위트 58개 전체 통과 |
+| 커뮤니티 핵심 E2E | 97 pass / 0 fail | `cm-ui.spec.js`, `community.spec.js`, `layout/community.spec.js`, `layout/home.spec.js` |
+| `LAYOUT_SHOTS=1` 레이아웃 | 21 pass / 0 fail | `layout/community.spec.js` (guest, pro, logs, empty × 4폭 + 다크) |
+| 전체 E2E (`npx playwright test`) | 658 pass / 0 fail | 658 passed (12.3m), 회귀 결함 0건 |
+
+- **체크리스트 정적 점검:**
+  - `git grep -n "CommunityPane" -- frontend/src test`: 0건 (삭제 확인)
+  - `git grep -E -n "recentFolders|loadRecent|recentMoreBtn" -- frontend/src`: 0건 (제거 확인)
+  - `git diff origin/main -- frontend/src/components/community/CurationRows.tsx`: `variant === 'home'` 분기 변경 0줄 확인
+
+### 5.2 4폭(390·768·1150·1280) + 다크 스크린샷 Q1~Q9 판정
+
+캡처 파일: `test-results/layout-shots/community-{guest,pro,logs,empty}-{390,768,1150,1280,1280-dark}.png`
+
+| # | 질문 | 판정 | 상세 근거 (게시물 선반 가로 카드·LOGS 1/2/3열·빈 상태·탭 칩 중점) |
+|---|---|:---:|---|
+| Q1 | 가장 중요한 것 하나 / 강한 버튼 필 하나 | ○ | 활성 탭 칩(`모두` 또는 `LOGS`) 하나만 강조되어 현재 위치가 명확하며, 선반별 '모두 표시' 버튼은 절제된 보조 텍스트 버튼으로 위계 유지 |
+| Q2 | 같은 위계 칸 사이 여백 / 한쪽 빈 덩어리 없음 | ○ | 큐레이션 및 게시물 선반 스택 간 수직 여백이 균일하고, 게시물 선반 내 카드 간격(16px gap) 및 패딩 일관 |
+| Q3 | 기준선 어긋남 없음 / 약속 준수 | ○ | 게시물 선반 머리줄 `postsHead:center-y`, 카드 `postsRow:top`, LOGS 열 `logsColumns:top@768` 약속이 모두 준수되어 기준선 어긋남 0px |
+| Q4 | 크기·굵기·명도 위계 / 무분별한 색 없음 | ○ | 제목(14px/700), 부제목, 본문, 메타 정보가 글자 크기·굵기·무채색 명도로 단계적으로 구분됨 |
+| Q5 | 빈 상태가 고장 같지 않고 자연스러움 | ○ | 큐레이션 4종 및 피드가 모두 비어있을 때 `#communityAllEmpty`("아직 공유된 연습이 없어요")가 단정하게 노출되어 고장으로 보이지 않고 명확한 상태 안내 |
+| Q6 | 390 1열 순서 / 768 2열 빈칸 없음 | ○ | 390px에서 following→monthly→posts→curated→showcase 순서로 1열 수직 스택, 게시물 카드는 가로 스크롤(85% 폭), 768px에서 LOGS 2열 마소니 및 1150/1280px에서 3열 마소니로 안정적 배치 |
+| Q7 | 유채색 절제 | ○ | 파란색 링크는 필요한 액션("구간 재생", "내 보관함 담기")에만 국한되어 작은 면적으로 사용됨 |
+| Q8 | 곡률 조화 / 1px 라인 준수 | ○ | 카드 테두리(`1px solid var(--line)`), 탭 칩의 라운드 필과 카드의 절제된 곡률이 DESIGN.md 규격에 맞게 조화로움 |
+| Q9 | 다크 모드 대비 | ○ | 다크 모드 1280px 캡처에서 카드 경계선, 글자 명도, 배지(PRO 등) 대비가 충분하고 시인성 우수 |
