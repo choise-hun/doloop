@@ -22,6 +22,8 @@ export interface CurationRowsProps {
   postsSlot?: React.ReactNode;
   /** community 변형 전용: 게시물 피드가 성공했고 0건일 때 true */
   postsEmpty?: boolean;
+  /** community 변형 전용(CMR-2 D11): 전체 빈 상태 문구 아래에 붙이는 안내·CTA */
+  emptyExtra?: React.ReactNode;
 }
 
 export function CurationRows({
@@ -29,6 +31,7 @@ export function CurationRows({
   me,
   postsSlot,
   postsEmpty,
+  emptyExtra,
 }: CurationRowsProps) {
   const [data, setData] = useState<CurationHomeDto | null>(null);
   const [error, setError] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
@@ -137,7 +140,10 @@ export function CurationRows({
       ) : null}
 
       {data && !error && !hasHomeRows && postsEmpty === true ? (
-        <p id="communityAllEmpty" className={styles.emptyMsg}>{t('community.allEmpty')}</p>
+        <div id="communityAllEmpty" className={styles.emptyMsg}>
+          <p>{t('community.allEmpty')}</p>
+          {emptyExtra}
+        </div>
       ) : null}
 
       <FolderRow

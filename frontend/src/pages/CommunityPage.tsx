@@ -8,11 +8,22 @@ import { communityErrorKey } from '../lib/community.mts';
 import { t } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
 import { MySharesPanel } from '../components/community/MySharesPanel';
-import { PublicNameForm } from '../components/community/PublicNameForm';
+import { PublicNameModal } from '../components/community/PublicNameModal';
 import { LogCard } from '../components/community/CommunityParts';
 import { EpisodeLogFeed } from '../components/community/EpisodeLogFeed';
 
 type CommunityTab = 'all' | 'logs' | 'summary' | 'my-shares';
+
+// CMR-2 D6·D7: 이름 모달 건너뛰기 기억 (계정별, sessionStorage 예외는 "기억 안 됨")
+type NameGate = { reason: 'first' | 'share'; pending: 'navigate' | null; returnFocus: HTMLElement | null } | null;
+const skipKey = (uid: string) => `ulp:community-name-skip:${uid}`;
+function readSkip(uid: string): boolean {
+  try { return sessionStorage.getItem(skipKey(uid)) === '1'; } catch { return false; }
+}
+function writeSkip(uid: string): void {
+  try { sessionStorage.setItem(skipKey(uid), '1'); } catch { /* 기억 안 됨: 다음 진입에 다시 연다 */ }
+}
+const SHARE_HREF = 'log.html';
 
 function parseTabFromHash(): CommunityTab {
   if (typeof window === 'undefined') return 'all';
@@ -52,6 +63,44 @@ function OwnedCommunityPage(): React.ReactElement {
   }, [currentUid, authState.me?.id, profileAttempt]);
 
   const [postsStatus, setPostsStatus] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
+
+  // CMR-2: 이름 모달·공유 가드 (명세 D2·D3·D6~D10)
+  const readyMe = currentUid && authState.me && authState.me.id === currentUid ? authState.me : null;
+  const hasName = Boolean(readyMe?.publicName);
+  const [gate, setGate] = useState<NameGate>(null);
+  useEffect(() => {
+    if (!currentUid || !readyMe || readyMe.publicName || readSkip(currentUid)) return;
+    setGate((g) => g ?? {
+      reason: 'first', pending: null,
+      returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    });
+  }, [currentUid, readyMe?.id, readyMe?.publicName]);
+
+  const openShareGate = (pending: 'navigate' | null, returnFocus: HTMLElement | null) =>
+    setGate({ reason: 'share', pending, returnFocus });
+  const onShareClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (hasName) return;
+    e.preventDefault();
+    openShareGate('navigate', e.currentTarget);
+  };
+  const requireName = () => {
+    if (auth.getMe()?.publicName) return true;
+    openShareGate(null, document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    return false;
+  };
+  const dismissGate = () => {
+    if (currentUid) writeSkip(currentUid);
+    const focus = gate?.returnFocus ?? null;
+    setGate(null);
+    focus?.focus();
+  };
+  const onNameSaved = () => {
+    const pending = gate?.pending ?? null;
+    const focus = gate?.returnFocus ?? null;
+    setGate(null);
+    if (pending === 'navigate') window.location.assign(SHARE_HREF);
+    else focus?.focus();
+  };
 
   // hashchange 이벤트 감지
   useEffect(() => {
@@ -137,6 +186,21 @@ function OwnedCommunityPage(): React.ReactElement {
           </h1>
         </header>
 
+        {/* CMR-2 D1·D2: 소개 + 내 연습 공유하기 (모든 상태에서 탭보다 먼저) */}
+        <section className={styles.intro} id="communityIntro">
+          <p className={styles.introDesc} id="communityIntroDesc" data-align-group="communityIntro:center-y@768">
+            {t('community.introDesc')}
+          </p>
+          {readyMe ? (
+            <div className={styles.introCta} data-align-group="communityIntro:center-y@768">
+              <a href={SHARE_HREF} id="communityShareCta" className={`pillBtn ${styles.shareCta}`} onClick={onShareClick}>
+                {t('community.shareCta')}
+              </a>
+              <p className={styles.introHint} id="communityShareHint">{t('community.shareCtaHint')}</p>
+            </div>
+          ) : null}
+        </section>
+
         {/* 비로그인 화면 */}
         {!authState.user ? (
           <div className={`card ${styles.guestCard}`} id="communityGuest">
@@ -208,18 +272,6 @@ function OwnedCommunityPage(): React.ReactElement {
               </div>
             </div>
 
-            {/* 공개 이름 폼 (이름이 아직 없을 때 배너 표시) */}
-            {!authState.me?.publicName && (
-              <div id="communityNameBanner" className={styles.nameBanner}>
-                <p className={styles.bannerTitle}>{t('community.nameBanner')}</p>
-                <PublicNameForm
-                  me={authState.me}
-                  inputId="communityBannerNameInput"
-                  submitId="communityBannerNameSave"
-                />
-              </div>
-            )}
-
             {/* [모두 탭] 선반: 팔로잉 → 이달의 곡 → 새 연습 게시물 → 큐레이션 → 쇼케이스 */}
             {activeTab === 'all' && (
               <div className={styles.tabContent}>
@@ -227,6 +279,18 @@ function OwnedCommunityPage(): React.ReactElement {
                   variant="community"
                   me={authState.me}
                   postsEmpty={postsStatus === 'empty'}
+                  emptyExtra={
+                    <>
+                      <ol id="communityEmptySteps" className={styles.emptySteps}>
+                        <li>{t('community.emptyStepPick')}</li>
+                        <li>{t('community.emptyStepCheck')}</li>
+                        <li>{t('community.emptyStepAgree')}</li>
+                      </ol>
+                      <a href={SHARE_HREF} id="communityEmptyShareCta" className={`ghostBtn ${styles.emptyShareCta}`} onClick={onShareClick}>
+                        {t('community.shareCta')}
+                      </a>
+                    </>
+                  }
                   postsSlot={
                     <section
                       id="communityPostsRow"
@@ -330,11 +394,19 @@ function OwnedCommunityPage(): React.ReactElement {
             {/* [내 공유 폴더 관리 탭] */}
             {activeTab === 'my-shares' && (
               <div className={styles.tabContent} id="mySharesTabPane">
-                <MySharesPanel me={authState.me} />
+                <MySharesPanel
+                  me={authState.me}
+                  requireName={requireName}
+                  onRequireName={() => openShareGate(null, null)}
+                />
               </div>
             )}
           </>
         )}
+
+        {gate && readyMe ? (
+          <PublicNameModal me={readyMe} reason={gate.reason} onDismiss={dismissGate} onSaved={onNameSaved} />
+        ) : null}
       </div>
     </AppShell>
   );

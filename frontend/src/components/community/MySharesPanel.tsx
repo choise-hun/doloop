@@ -20,9 +20,11 @@ interface ShareRowState {
 export interface MySharesPanelProps {
   me: MeProfile | null;
   onRequireName?: () => void;
+  /** CMR-2 D9: 공개 켜기·다시 게시 직전 이름 확인. false면 상태·요청 변화 없이 중단 */
+  requireName?: () => boolean;
 }
 
-export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
+export function MySharesPanel({ me, onRequireName, requireName }: MySharesPanelProps) {
   useAuth(); // COMMUNITY also needs same-uid session generation changes.
   const identityNow = () => `${auth.getUser()?.id ?? ''}:${auth.getSessionGeneration()}`;
   const identity = identityNow();
@@ -96,6 +98,7 @@ export function MySharesPanel({ me, onRequireName }: MySharesPanelProps) {
       setErr({ key: 'community.err.upgrade' }); return;
     }
     if (kind !== 'public' && !row.share?.isPublic) return;
+    if (requireName && ((kind === 'public' && nextPublic) || kind === 'republish') && !requireName()) return;
     const controller = new AbortController();
     busy.current.set(row.cat.id, controller);
     ++seq.current;

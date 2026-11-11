@@ -575,15 +575,15 @@ test('PF2-08 공용 폼: 토큰 조회 중 A→B 전환 시 이전 PUT 전송 0�
     return route.fulfill({ json: { publicName: 'nameFromA' } });
   });
   await page.goto('/community.html');
-  await expect(page.locator('#communityBannerNameInput')).toBeVisible();
+  await expect(page.locator('#communityNameModalInput')).toBeVisible();
   await page.evaluate(() => {
     const client = window.ULAuth.getClient();
     client.auth.getSession = () => new Promise(resolve => { window.__releaseToken = resolve; });
     const save = window.ULData.community.setPublicName;
     window.ULData.community.setPublicName = (...args) => save(...args).finally(() => { window.__saveSettled = true; });
   });
-  await page.locator('#communityBannerNameInput').fill('nameFromA');
-  await page.locator('#communityBannerNameSave').click();
+  await page.locator('#communityNameModalInput').fill('nameFromA');
+  await page.locator('#communityNameModalSave').click();
   await expect.poll(() => page.evaluate(() => typeof window.__releaseToken)).toBe('function');
   switched = true;
   await page.evaluate(bId => {
@@ -594,7 +594,7 @@ test('PF2-08 공용 폼: 토큰 조회 중 A→B 전환 시 이전 PUT 전송 0�
   }, bId);
   await expect.poll(() => page.evaluate(() => window.__saveSettled)).toBe(true);
   await expect.poll(() => page.evaluate(() => window.ULAuth.getMe()?.id)).toBe(bId);
-  await expect(page.locator('#communityBannerNameInput')).toHaveValue('');
+  await expect(page.locator('#communityNameModalInput')).toHaveValue('');
   expect(puts).toBe(0);
 });
 
