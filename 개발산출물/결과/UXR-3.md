@@ -1,6 +1,6 @@
 # UXR-3 결과 — 연습 화면 배치·선택 폴더 곡 목록
 
-> 2026-11-11 / Claude(시니어 0단계 직접 구현) + Gemini(주니어 4단계 검증·회귀 수정·PR). 명세 [UXR-3](../명세/UXR-3_구현명세.md). 브랜치 `step/UXR-3`.
+> 2026-11-11 / Claude(시니어 0단계 직접 구현) + Gemini(주니어 4단계 검증·회귀 수정·PR). 명세 [UXR-3](../명세/UXR-3_구현명세.md). 브랜치 `step/UXR-3`. [PR #2](https://github.com/choise-hun/doloop/pull/2). CI 전 항목 통과(run `43019870416`).
 
 ## 1. 작업 개요
 
@@ -82,6 +82,7 @@
 | 홈 레이아웃 E2E | `npx playwright test test/e2e/layout/home.spec.js` | **21 passed** | 홈 화면 레이아웃 회귀 없음 |
 | 커뮤니티 레이아웃 E2E | `npx playwright test test/e2e/layout/community.spec.js` | **11 passed** | 커뮤니티 화면 회귀 없음 |
 | 전체 E2E 회귀 테스트 | `npx playwright test` | **635 passed / 0 failed** (10.6m) | categories 엄격 envelope 관련 공용 소비자 회귀 전무 |
+| GitHub Actions CI | `gh workflow run ci.yml --ref step/UXR-3` | **전 job 통과 (success)** | run ID `43019870416` (Node 22/24, E2E, Kotlin, Docker smoke) |
 
 ## 6. 미실행·기기/인증 의존 항목 (명세 §9 준수)
 
