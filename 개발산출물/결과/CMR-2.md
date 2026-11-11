@@ -105,5 +105,16 @@
 ## 5. Git 처리 및 CI 확인
 
 - **브랜치:** `step/CMR-2`
-- **PR:** (main 대상 PR 생성 예정)
+- **PR:** [PR #6](https://github.com/choise-hun/doloop/pull/6) (base `main`)
+- **로컬 검증:**
+  - `npm test`: 416 pass (전수 통과)
+  - `npx playwright test`: 680 passed (100% 전수 통과, 9.4m)
+  - `LAYOUT_SHOTS=1`: 26 passed (100% 전수 통과)
+- **GitHub Actions CI 확인:**
+  - `CI/Detect code changes`: 통과 (5s)
+  - `CI/Test (Node 22)`: 통과 (22s) (`npm run build`, `npm test` 통과)
+  - `CI/Docker build & smoke`: 통과 (1m 58s)
+  - `CI/E2E XSS & CSP (Playwright, spa)`: 실패 (러너의 apt DNS 해석 일시 장애: `Temporary failure resolving 'azure.archive.ubuntu.com'`)
+  - **인프라 원인 및 해결책:** GitHub Actions의 ubuntu-24.04 러너에서 `playwright install --with-deps` 중 Ubuntu 미러 DNS 장애로 패키지 다운로드가 중단되는 현상이며(PR #3, #4에서도 동일 발생), 이를 공식 Playwright 컨테이너로 해결하는 [PR #5](https://github.com/choise-hun/doloop/pull/5)(CI 전 항목 통과 완료)가 이미 준비되어 있습니다. PR #5가 main에 머지된 후 본 PR에 반영하면 CI 전 항목이 즉시 녹색으로 완료됩니다.
+- **PR 리뷰 / 코멘트:** 0건 (지적사항 없음)
 - **미실행 명시 대상:** 실제 백엔드 서버의 공개 이름 7일 변경 제한·금칙어 DB 검사(가짜 API로 형식/중복 검증 완료), 실기기 물리 키보드/스크린리더 음성 출력.

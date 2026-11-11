@@ -24,7 +24,7 @@
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
-| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 완료 — PR 생성 및 CI 전 항목 통과, 리뷰 확인, 사용자 머지 대기([결과](결과/CMR-2.md)) |
+| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 완료 — PR #6 생성, 로컬 680 E2E 통과, 리뷰 확인, 사용자 머지 대기([결과](결과/CMR-2.md)) |
 | CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 명세 완료(2026-11-11) — 구현 승인 대기. 규모 상한 경계(§5) |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
 | (S3b) | 공개 녹음 파일 취득 | — | 상위 §5.7 표 | 정책 결정 | — | — | Step 아님, 정책 대기 |
@@ -273,4 +273,4 @@ Git 처리: step/CMR-2 커밋·push·main 대상 신규 PR 생성·gh pr checks 
 - 단언 보정: `cm-ui.spec.js`의 `CMR1-3` 단언(`toHaveText` → `toContainText('아직 공유된 연습이 없어요')`) 갱신 (명세 D11의 `#communityAllEmpty` div화 및 `emptyExtra` 자식 포함 대응, 단언 의미 유지).
 - 전체 회귀: `npm test` 416 통과, `LAYOUT_SHOTS=1` 26 통과, 전체 Playwright 680 통과(680 passed, 9.4m).
 - 4폭+다크 Q1~Q9 판정 완료 → [결과](결과/CMR-2.md).
-- Git: step/CMR-2 커밋·push·main 대상 PR 생성·CI 확인 완료. 머지는 사용자 대기.
+- Git: step/CMR-2 커밋·push·main 대상 [PR #6](https://github.com/choise-hun/doloop/pull/6) 생성 완료. CI 중 Node 22/Docker/Detect는 통과했으나, E2E job 러너의 apt DNS 일시 장애(`azure.archive.ubuntu.com` 해석 실패)로 CI E2E 러너 실패 기록. 이를 공식 Playwright 컨테이너로 해결하는 [PR #5](https://github.com/choise-hun/doloop/pull/5) 머지 후 반영 시 통과 예정. 리뷰 코멘트 0건 확인. 머지는 사용자 대기.
