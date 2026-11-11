@@ -1,5 +1,5 @@
 // frontend/src/components/songRecord/SongRecordPanel.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SafeLink } from '../common/SafeLink';
 import { auth, useAuth } from '../../lib/auth';
 import { apiClient, SongDetailResponse, TakeDto } from '../../lib/apiClient';
@@ -74,6 +74,16 @@ function OwnedSongRecordPanel({
     void loadSongRecord(songId, activeUid);
   }, [songId, loggedIn, reloadKey, activeUid]);
 
+  // A/B 쌍은 두 테이크 객체가 바뀔 때만 새로 만든다. 렌더마다 새 배열이면 AbCompare가
+  // 부모 재렌더(영상 재생 중 250ms·녹음 중 50ms 갱신)마다 진행 중 재생 요청을 버린다(RECFIX-1).
+  const pairTakes = detailData?.takes;
+  const pairA = pairTakes?.find((x) => x.id === (abSelected[0] || ''));
+  const pairB = pairTakes?.find((x) => x.id === (abSelected[1] || ''));
+  const abPair = useMemo<[TakeDto, TakeDto] | null>(
+    () => (pairA && pairB ? [pairA, pairB] : null),
+    [pairA, pairB]
+  );
+
   if (!loggedIn || !songId) {
     return (
       <div className={`panel ${styles.panel}`} data-align-group="sr-left:left">
@@ -93,10 +103,7 @@ function OwnedSongRecordPanel({
   const unlinkedTakes = takes.filter((x) => !sessionIdSet.has(x.sessionId));
 
   const abSelection = { a: abSelected[0] || '', b: abSelected[1] || '' };
-  const tA = takes.find((x) => x.id === abSelection.a);
-  const tB = takes.find((x) => x.id === abSelection.b);
-  const abPair: [TakeDto, TakeDto] | null = tA && tB ? [tA, tB] : null;
-  const filled = (tA ? 1 : 0) + (tB ? 1 : 0);
+  const filled = (pairA ? 1 : 0) + (pairB ? 1 : 0);
 
   const selectAbSlot = (takeId: string, next: 'a' | 'b' | '') => {
     setAbSelected((prev) => {
