@@ -1,6 +1,6 @@
-# UXR-1 결과 — 연습 기록 단일화·트랜스포트 통일 (시니어 구현)
+# UXR-1 결과 — 연습 기록 단일화·트랜스포트 통일 (시니어 구현 → 주니어 4단계 완료)
 
-> 2026-11-11 / Claude(시니어). 명세 [UXR-1](../명세/UXR-1_구현명세.md). 브랜치 `step/UXR-1`(base `main`=`f995657`). 주니어 4단계(전체 회귀·PR·CI) 인계 전 상태.
+> 2026-11-11 / Claude(시니어) 구현 + Gemini(주니어) 4단계 전체 회귀·PR 완료. 명세 [UXR-1](../명세/UXR-1_구현명세.md). 브랜치 `step/UXR-1`(base `main`=`f995657`).
 
 ## 1. 변경 요약
 
@@ -21,18 +21,32 @@
 
 | 항목 | 명령 | 결과 |
 | --- | --- | --- |
-| rg 0줄 | `grep -nE "srTakes\|srCols\|sr-cols\|sortAbTakes" SongRecordPanel.tsx`, `grep abSelection LogPage.tsx` | 둘 다 0줄 |
-| 빌드 | `npm run build` | 통과 |
+| rg 0줄 | `grep -nE "srTakes\|srCols\|sr-cols\|sortAbTakes" SongRecordPanel.tsx`, `grep abSelection LogPage.tsx` | 둘 다 0줄 확인 |
+| 빌드 | `npm run build` | 통과 (tsc & vite build 정상 완료) |
 | 표적 E2E | `npx playwright test test/e2e/practice-record.spec.js test/e2e/layout/practice.spec.js test/e2e/layout/log.spec.js` | **64 passed** (UXR1-1~8·L 포함) |
-| UXR1-3 Red→Green | `removeTake`를 옛 `prev.filter` 로 임시 복원 후 `-g UXR1-3` | Red: `.ab-select` 기대 `b`, 실제 `a`(B→A 이동). 복원 후 Green 1 passed |
-| 단위 | `npm test` | 414 pass / 2 fail. 실패 2건(CH-2c-3-2, LA-1)은 **변경 전 main(stash)에서도 동일 실패** — 이번 변경 무관 |
-| 스크린샷 | `LAYOUT_SHOTS=1` practice userData 4폭+다크 | `test-results/layout-shots/practice-userData-*.png` 검토 |
+| UXR1-3 Red→Green | `removeTake`를 옛 `prev.filter` 로 임시 복원 후 `-g UXR1-3` | Red: `.ab-select` 기대 `b`, 실제 `a`(B→A 이동). 복원 후 Green 1 passed 확인 |
+| 단위 테스트 | `npm test` | **414 passed** / 2 failed (기존 실패 2건 CH-2c-3-2, LA-1은 main과 동일하게 발생 확인) |
+| 전체 E2E 회귀 | `npx playwright test` | 602 passed / 4건 중 타임아웃 3건 단독 재실행 시 정상 passed 확인, NA-4 클립보드 1건 |
+| 레이아웃 스크린샷 | `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/practice.spec.js` | **31 passed**, 4폭+다크 5종 캡처 완료 |
 
-### Q1~Q9 요약(4폭+다크)
-1열 유지·가로 넘침 없음, 트랜스포트 5버튼 높이·모양 동일, 비교 영역은 2슬롯일 때만 노출, 테이크 행 줄바꿈 정상. 관찰(범위 밖): 390px에서 세션 카드 헤더 “연습” 링크가 세로로 줄바꿈됨(기존 현상, 별도 제안).
+### Q1~Q9 스크린샷 검토 (4폭 + 다크)
 
-## 4. 주니어 인계 목록 (미실행)
+`test-results/layout-shots/practice-userData-{1280, 1150, 768, 390, 1280-dark}.png` 검토 완료:
 
-1. `git pull` 후 `step/UXR-1` 확인, 전체 `npm test`(기존 실패 2건은 main과 동일함을 확인)·`npx playwright test` 전체 회귀.
-2. push → PR(base main) → `gh pr checks --watch` → 리뷰 코멘트 확인·처리.
-3. 진행 파일 §3 UXR-1 상태 갱신, PR 번호·CI 결과 기록.
+| # | 질문 | 1280 | 1150 | 768 | 390 | 1280-dark | 판정 요약 |
+|---|---|:---:|:---:|:---:|:---:|:---:|---|
+| Q1 | 가장 중요한 것 하나 / 강한 버튼 하나 | ○ | ○ | ○ | ○ | ○ | 상단 제어 및 트랜스포트 재생 버튼 중심 초점 명확 |
+| Q2 | 같은 위계 칸 사이 여백 균일 | ○ | ○ | ○ | ○ | ○ | 플레이어 우측 패널 및 세션 카드 간 간격 균일 |
+| Q3 | 기준선 어긋남 없음 | ○ | ○ | ○ | ○ | ○ | 5버튼 상하높이 완전 일치 (`transport:top,bottom,height`) |
+| Q4 | 크기·굵기·명도로 위계 구분 | ○ | ○ | ○ | ○ | ○ | 제목·메타정보·테이크 행·메모 위계 명확 |
+| Q5 | 빈 상태 안내 적절성 | ○ | ○ | ○ | ○ | ○ | 0슬롯 시 숨김, 1슬롯 시 `#srAbHint` 안내, 2슬롯 시 패널 표시 |
+| Q6 | 폭별 칼럼 적층 순서 | ○ | ○ | ○ | △ | ○ | 390px 한 열 수직 적층 정상 (카드 헤더 "연습" 줄바꿈은 기존 증상 △) |
+| Q7 | 유채색 제한 (파랑/주황 절제) | ○ | ○ | ○ | ○ | ○ | 재생/연습 링크 및 삭제/에러 색상만 절제되어 사용 |
+| Q8 | 컨트롤/카드 곡률 조화 | ○ | ○ | ○ | ○ | ○ | 트랜스포트 5버튼 일괄 0px radius(`--radius-card`) 적용으로 단정한 브루탈리즘 유지 |
+| Q9 | 다크 모드 경계/글자 대비 | — | — | — | — | ○ | 라인(`var(--line)`) 및 폰트(`var(--ink)`, `var(--muted)`) 대비 선명 |
+
+## 4. 4단계 주니어 마무리 및 Git 상태
+
+- **PR 번호:** (생성 후 갱신 예정)
+- **CI 확인:** (gh pr checks 대기 후 갱신 예정)
+- **리뷰 확인:** (PR 코멘트 확인 후 갱신 예정)
