@@ -681,24 +681,6 @@ for (const endpoint of ['feed', 'mine']) {
   });
 }
 
-test('SR-11 recent folder pages are loaded on the independent ALL tab', async ({ page }) => {
-  const { FOLDER_SHOWCASE_1, FOLDER_FOLLOWING_1 } = require('./support/community-fixtures');
-  let calls = 0;
-  await mockApp(page, { ...COMMUNITY_PRO,
-    routes: communityRoutes({ onFolders: (route, json) => {
-      calls++;
-      const cursor = new URL(route.request().url()).searchParams.get('cursor');
-      return json(route, { folders: [cursor ? FOLDER_FOLLOWING_1 : FOLDER_SHOWCASE_1], next: cursor ? null : 'recent-page2' });
-    } }),
-  });
-  await page.goto('/community.html');
-  await expect(page.locator('[data-row="recent"]')).toContainText(FOLDER_SHOWCASE_1.title);
-  await page.locator('#recentMoreBtn').click();
-  await expect(page.locator('[data-row="recent"]')).toContainText(FOLDER_FOLLOWING_1.title);
-  await expect(page.locator('#recentMoreBtn')).toHaveCount(0);
-  expect(calls).toBe(2);
-});
-
 test('SR-12 account switch immediately discards A summary while B is pending', async ({ page }) => {
   const { PRACTICE_LOGS_FIXTURE } = require('./support/community-fixtures');
   const bId = '00000000-0000-4000-8000-000000000099';
@@ -853,4 +835,167 @@ test('SR-19 tab height tracks content changes without resize', async ({ page }) 
     const shell = el.parentElement;
     return parseFloat(getComputedStyle(shell).paddingBottom) - el.getBoundingClientRect().height;
   })).toBeGreaterThanOrEqual(16);
+});
+
+// ── CMR-1: 커뮤니티 탐색 구조 (모두 탭 선반·LOGS 마소니) ─────────────────────
+// SR-11(최근 공개 줄 더보기)은 승인된 요구 변경(UIUX-R §5.2 최근 공개 제거)으로 CMR1-2로 대체했다.
+const CMR_EMPTY_CURATION = { curated: [], monthlyPick: null, showcase: [], following: [] };
+function cmrPosts(n) {
+  return Array.from({ length: n }, (_, i) => ({
+    ...EPISODE_POST_1,
+    postId: `00000000-0000-4000-8000-00000000a${String(i).padStart(3, '0')}`,
+    title: `CMR post ${i}`,
+  }));
+}
+
+test('CMR1-1 community shelves keep following → monthly → posts → curated → showcase order', async ({ page }) => {
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onEpisodeLogs: (r, json) => json(r, { posts: cmrPosts(3), next: null }) }) });
+  await page.goto('/community.html');
+  await page.locator('#communityPostsRow [data-post-id]').first().waitFor();
+  const order = await page.evaluate(() => [...document.querySelectorAll('[data-row], #communityPostsRow')]
+    .map((el) => el.id === 'communityPostsRow' ? 'posts' : el.getAttribute('data-row')));
+  expect(order).toEqual(['following', 'monthly', 'posts', 'curated', 'showcase']);
+});
+
+test('CMR1-2 ALL tab no longer requests recent public folders', async ({ page }) => {
+  let recentCalls = 0;
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onFolders: (r, json) => { recentCalls++; return json(r, { folders: [], next: null }); } }) });
+  await page.goto('/community.html');
+  await page.locator('#communityPostsRow').waitFor();
+  await expect(page.locator('#recentMoreBtn')).toHaveCount(0);
+  await expect(page.locator('[data-row="recent"]')).toHaveCount(0);
+  expect(recentCalls).toBe(0);
+});
+
+test('CMR1-3 everything empty shows only the community empty state', async ({ page }) => {
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ curationHome: CMR_EMPTY_CURATION, onEpisodeLogs: (r, json) => json(r, { posts: [], next: null }) }) });
+  await page.goto('/community.html');
+  await expect(page.locator('#communityAllEmpty')).toHaveCount(1);
+  await expect(page.locator('#communityAllEmpty')).toHaveText('아직 공유된 연습이 없어요');
+  await expect(page.locator('#communityPostsRow')).toBeHidden();
+  await expect(page.locator('#communityPage')).not.toContainText('아직 공개된 플레이리스트가 없어요');
+});
+
+test('CMR1-4 partial empty: curation empty + feed present shows posts shelf only', async ({ page }) => {
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ curationHome: CMR_EMPTY_CURATION, onEpisodeLogs: (r, json) => json(r, { posts: cmrPosts(2), next: null }) }) });
+  await page.goto('/community.html');
+  await expect(page.locator('#communityPostsRow [data-post-id]')).toHaveCount(2);
+  await expect(page.locator('#communityAllEmpty')).toHaveCount(0);
+});
+
+test('CMR1-5 curation failure keeps the posts shelf and retries curation only', async ({ page }) => {
+  let curationCalls = 0; let feedCalls = 0;
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({
+    onCurationHome: (r) => { curationCalls++; return curationCalls === 1 ? r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }) : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(CMR_EMPTY_CURATION) }); },
+    onEpisodeLogs: (r, json) => { feedCalls++; return json(r, { posts: cmrPosts(2), next: null }); },
+  }) });
+  await page.goto('/community.html');
+  await expect(page.locator('#communityPage [role="alert"]').first()).toBeVisible();
+  await expect(page.locator('#communityPostsRow [data-post-id]')).toHaveCount(2);
+  await page.locator('#communityPage [role="alert"] button').first().click();
+  await expect.poll(() => curationCalls).toBe(2);
+  expect(feedCalls).toBe(1);
+  await expect(page.locator('#communityPostsRow [data-post-id]')).toHaveCount(2);
+});
+
+test('CMR1-6 feed failure keeps curation rows and offers retry', async ({ page }) => {
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onEpisodeLogs: (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }) }) });
+  await page.goto('/community.html');
+  await expect(page.locator('#episodeError')).toBeVisible();
+  await expect(page.locator('[data-row="curated"]')).toBeVisible();
+  await expect(page.locator('#episodeError button')).toBeVisible();
+});
+
+test('CMR1-7 show-all button moves to LOGS tab', async ({ page }) => {
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onEpisodeLogs: (r, json) => json(r, { posts: cmrPosts(3), next: null }) }) });
+  await page.goto('/community.html');
+  await page.locator('#communityPostsAll').click();
+  await expect(page).toHaveURL(/#logs$/);
+  await expect(page.locator('#chipLog')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#episodeScopeAll')).toBeVisible();
+});
+
+for (const hash of ['#log', '#logs']) {
+  test(`CMR1-8 legacy and new hash ${hash} open the LOGS tab`, async ({ page }) => {
+    await mockApp(page, COMMUNITY_PRO);
+    await page.goto(`/community.html${hash}`);
+    await expect(page.locator('#chipLog')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#chipLog')).toHaveText('LOGS');
+  });
+}
+
+test('CMR1-9 LOGS masonry uses 1/2/3 columns with round-robin distribution', async ({ page }) => {
+  const posts = cmrPosts(7);
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onEpisodeLogs: (r, json) => json(r, { posts, next: null }) }) });
+  for (const [w, cols] of [[390, 1], [768, 2], [1150, 3]]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.goto('/community.html#logs');
+    await page.locator('.masonryCol, [data-align-group="logsColumns:top@768"]').first().waitFor();
+    await expect(page.locator('[data-align-group="logsColumns:top@768"]')).toHaveCount(cols);
+    if (cols === 3) {
+      const ids = await page.locator('[data-align-group="logsColumns:top@768"]').first().locator('[data-post-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-post-id')));
+      expect(ids).toEqual([0, 3, 6].map((i) => posts[i].postId));
+    }
+  }
+});
+
+for (const fail of [false, true]) {
+test(`CMR1-10 load more ${fail ? 'failure keeps existing cards' : 'keeps column placement'}`, async ({ page }) => {
+  const posts = cmrPosts(6);
+  {
+    await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({
+      onEpisodeLogs: (r, json, _s, cursor) => {
+        if (!cursor) return json(r, { posts: posts.slice(0, 3), next: 'p2' });
+        return fail ? r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }) : json(r, { posts: posts.slice(3), next: null });
+      } }) });
+    await page.setViewportSize({ width: 1150, height: 900 });
+    await page.goto('/community.html#logs');
+    const col0 = page.locator('[data-align-group="logsColumns:top@768"]').first();
+    await expect(col0.locator('[data-post-id]')).toHaveCount(1);
+    await page.locator('#episodeMore').click();
+    if (fail) {
+      await expect(page.locator('#episodeMoreError')).toBeVisible();
+      await expect(page.locator('#episodeMore')).toBeVisible();
+      await expect(page.locator('#episodeFeed [data-post-id]')).toHaveCount(3);
+    } else {
+      await expect(page.locator('#episodeFeed [data-post-id]')).toHaveCount(6);
+      const ids = await col0.locator('[data-post-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-post-id')));
+      expect(ids).toEqual([posts[0].postId, posts[3].postId]);
+    }
+  }
+});
+}
+
+test('CMR1-11 account switch discards a late feed response from A', async ({ page }) => {
+  const { DEFAULT_ME } = require('./support/mock-app');
+  const bId = '00000000-0000-4000-8000-000000000099';
+  let accountB = false; let release; let entered;
+  const gate = new Promise((r) => { release = r; });
+  const started = new Promise((r) => { entered = r; });
+  await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ onEpisodeLogs: async (r, json) => {
+    if (!accountB) { entered(); await gate; return json(r, { posts: [{ ...EPISODE_POST_1, title: 'A-PRIVATE-POST' }], next: null }); }
+    return json(r, { posts: [], next: null });
+  } }) });
+  await page.route('**/api/v1/me', (route) => route.fulfill({ json: { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, id: accountB ? bId : DEFAULT_ME.id } }));
+  await page.goto('/community.html');
+  await started;
+  accountB = true;
+  await page.evaluate((id) => {
+    const session = { access_token: 'b-token', user: { id } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session }, error: null });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, bId);
+  const late = page.waitForResponse((r) => r.url().includes('/community/episode-logs') && r.status() === 200);
+  release();
+  await (await late).finished();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await expect(page.locator('#communityPage')).not.toContainText('A-PRIVATE-POST');
+});
+
+test('CMR1-12 home discover rows keep their order and copy', async ({ page }) => {
+  await mockApp(page, COMMUNITY_PRO);
+  await page.goto('/index.html');
+  await page.locator('#discover').waitFor();
+  const order = await page.evaluate(() => [...document.querySelectorAll('#discover [data-row]')].map((e) => e.getAttribute('data-row')));
+  expect(order).toEqual(['curated', 'monthly', 'showcase', 'following']);
 });

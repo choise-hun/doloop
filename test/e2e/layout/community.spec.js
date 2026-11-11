@@ -33,6 +33,17 @@ layoutSuite({
   dark: 'communityPro',
 });
 
+// CMR-1: LOGS 탭(마소니 열·범위 칩)도 같은 검사기로 본다
+layoutSuite({
+  name: 'community-logs',
+  path: '/community.html#logs',
+  states: [{ name: 'communityPro', mock: COMMUNITY_PRO }],
+  ready: async (page) => {
+    await page.locator('#episodeScopeAll').waitFor();
+    await page.locator(`[data-post-id="${EPISODE_POST_1.postId}"]`).waitFor();
+  },
+});
+
 test('CM-UI CUI-01 커뮤니티 제목과 탭 렌더 검증', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const { mockApp } = require('../support/mock-app');

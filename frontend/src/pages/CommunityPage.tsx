@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import styles from './CommunityPage.module.css';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth, auth } from '../lib/auth';
-import { apiClient, type PublicFolderDto, type PracticeLogDto } from '../lib/apiClient';
+import { apiClient, type PracticeLogDto } from '../lib/apiClient';
 import { communityErrorKey } from '../lib/community.mts';
 import { t } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
@@ -12,12 +12,12 @@ import { PublicNameForm } from '../components/community/PublicNameForm';
 import { LogCard } from '../components/community/CommunityParts';
 import { EpisodeLogFeed } from '../components/community/EpisodeLogFeed';
 
-type CommunityTab = 'all' | 'log' | 'summary' | 'my-shares';
+type CommunityTab = 'all' | 'logs' | 'summary' | 'my-shares';
 
 function parseTabFromHash(): CommunityTab {
   if (typeof window === 'undefined') return 'all';
   const h = window.location.hash.toLowerCase();
-  if (h === '#log') return 'log';
+  if (h === '#logs' || h === '#log') return 'logs';
   if (h === '#summary') return 'summary';
   if (h === '#my-shares') return 'my-shares';
   return 'all';
@@ -51,43 +51,7 @@ function OwnedCommunityPage(): React.ReactElement {
     return () => { alive = false; };
   }, [currentUid, authState.me?.id, profileAttempt]);
 
-  const [recentFolders, setRecentFolders] = useState<PublicFolderDto[]>([]);
-  const [recentNext, setRecentNext] = useState<string | null>(null);
-  const [recentError, setRecentError] = useState(false);
-  const [recentPending, setRecentPending] = useState(false);
-  const [recentAttempt, setRecentAttempt] = useState(0);
-  const recentSeq = useRef(0);
-  const recentBusy = useRef(false);
-  async function loadRecent(cursor: string | null = null) {
-    if (!currentUid || !authState.me || recentBusy.current) return;
-    const seq = ++recentSeq.current;
-    const uid = currentUid;
-    recentBusy.current = true;
-    setRecentPending(true);
-    setRecentError(false);
-    try {
-      const res = await apiClient.community.folders('recent', cursor);
-      if (seq !== recentSeq.current || uid !== auth.getUser()?.id) return;
-      setRecentFolders((prev) => cursor ? [...prev, ...res.folders.filter((f) => !prev.some((p) => p.id === f.id))] : res.folders);
-      setRecentNext(res.next);
-    } catch {
-      if (seq === recentSeq.current && uid === auth.getUser()?.id) setRecentError(true);
-    } finally {
-      if (seq === recentSeq.current && uid === auth.getUser()?.id) {
-        recentBusy.current = false;
-        setRecentPending(false);
-      }
-    }
-  }
-  useEffect(() => {
-    if (activeTab !== 'all' || !authState.me) return;
-    recentBusy.current = false;
-    setRecentFolders([]);
-    setRecentNext(null);
-    void loadRecent();
-    return () => { recentSeq.current++; recentBusy.current = false; };
-  }, [activeTab, currentUid, authState.me?.id, recentAttempt]);
-
+  const [postsStatus, setPostsStatus] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
 
   // hashchange 이벤트 감지
   useEffect(() => {
@@ -208,12 +172,12 @@ function OwnedCommunityPage(): React.ReactElement {
               <button
                 type="button"
                 id="chipLog"
-                className={`${styles.chipBtn} ${activeTab === 'log' ? styles.chipBtnOn : ''}`}
+                className={`${styles.chipBtn} ${activeTab === 'logs' ? styles.chipBtnOn : ''}`}
                 role="tab"
-                aria-selected={activeTab === 'log'}
-                aria-pressed={activeTab === 'log'}
+                aria-selected={activeTab === 'logs'}
+                aria-pressed={activeTab === 'logs'}
                 data-align-group="chips:center-y"
-                onClick={() => switchTab('log')}
+                onClick={() => switchTab('logs')}
               >
                 {t('community.chipLog')}
               </button>
@@ -256,25 +220,51 @@ function OwnedCommunityPage(): React.ReactElement {
               </div>
             )}
 
-            {/* [모두 탭] 큐레이션 + 새 게시물 피드 */}
+            {/* [모두 탭] 선반: 팔로잉 → 이달의 곡 → 새 연습 게시물 → 큐레이션 → 쇼케이스 */}
             {activeTab === 'all' && (
               <div className={styles.tabContent}>
-                <CurationRows variant="community" me={authState.me} recentFolders={recentFolders} recentNext={recentPending ? null : recentNext}
-                  onLoadMoreRecent={() => void loadRecent(recentNext)}
-                  onPatchRecent={(id, patch) => setRecentFolders((prev) => prev.map((f) => f.id === id ? { ...f, ...patch } : f))} />
-                {recentPending && <p role="status">{t('episode.loading')}</p>}
-                {recentError && <div id="recentErrMsg" role="alert"><p>{t('episode.err.generic')}</p><button type="button" className="ghost mini" onClick={() => recentNext ? void loadRecent(recentNext) : setRecentAttempt((n) => n + 1)}>{t('episode.retry')}</button></div>}
-                <section className={styles.feedSection} aria-label={t('community.newPostsHeading')}>
-                  <h2 className={styles.sectionTitle}>{t('community.newPostsHeading')}</h2>
-                  <EpisodeLogFeed key={`${currentUid}:all`} initialScope="all" showScopeChips={false} />
-                </section>
+                <CurationRows
+                  variant="community"
+                  me={authState.me}
+                  postsEmpty={postsStatus === 'empty'}
+                  postsSlot={
+                    <section
+                      id="communityPostsRow"
+                      className={styles.postsRow}
+                      hidden={postsStatus === 'empty'}
+                      aria-label={t('community.newPostsHeading')}
+                    >
+                      <div className={styles.postsHead}>
+                        <h3 className={styles.postsTitle} data-align-group="postsHead:center-y">
+                          {t('community.newPostsHeading')}
+                        </h3>
+                        <button
+                          type="button"
+                          id="communityPostsAll"
+                          className={styles.postsAllBtn}
+                          data-align-group="postsHead:center-y"
+                          onClick={() => switchTab('logs')}
+                        >
+                          {t('community.showAllLogs')}
+                        </button>
+                      </div>
+                      <EpisodeLogFeed
+                        key={`${currentUid}:all`}
+                        initialScope="all"
+                        showScopeChips={false}
+                        layout="row"
+                        onStatusChange={setPostsStatus}
+                      />
+                    </section>
+                  }
+                />
               </div>
             )}
 
-            {/* [LOG 탭] 개별 세션 피드 전용 (all/following 범위 선택) */}
-            {activeTab === 'log' && (
+            {/* [LOGS 탭] 개별 세션 피드 (범위 칩 + 마소니) */}
+            {activeTab === 'logs' && (
               <div className={styles.tabContent}>
-                <EpisodeLogFeed key={`${currentUid}:log`} initialScope="all" showScopeChips={true} />
+                <EpisodeLogFeed key={`${currentUid}:logs`} initialScope="all" showScopeChips={true} layout="masonry" />
               </div>
             )}
 

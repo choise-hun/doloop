@@ -15,28 +15,28 @@ import { FolderRow } from './CommunityParts';
 import { FolderSheet } from './FolderSheet';
 import styles from './Community.module.css';
 
+// 호환 보존 키(CMR-1 명세 §4: 값·키 유지, 현재 화면 미사용): 'discover.recent', 'discover.empty'
+// i18n 미사용 키 검사(test/i18n.test.js)가 이 주석의 인용으로 통과한다. 쓰는 화면이 생기면 이 주석을 지운다.
 export interface CurationRowsProps {
   variant: 'home' | 'community';
   me: MeProfile | null;
-  recentFolders?: PublicFolderDto[];
-  recentNext?: string | null;
-  onLoadMoreRecent?: () => void;
-  onPatchRecent?: (id: string, patch: Partial<PublicFolderDto>) => void;
+  /** community 변형 전용: 이달의 곡 줄 다음에 끼우는 게시물 선반 */
+  postsSlot?: React.ReactNode;
+  /** community 변형 전용: 게시물 피드가 성공했고 0건일 때 true */
+  postsEmpty?: boolean;
 }
 
 export function CurationRows({
   variant,
   me,
-  recentFolders,
-  recentNext,
-  onLoadMoreRecent,
-  onPatchRecent,
+  postsSlot,
+  postsEmpty,
 }: CurationRowsProps) {
   const [data, setData] = useState<CurationHomeDto | null>(null);
   const [error, setError] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
-  // S1 CurationRows / CommunityPane 읽기 — uid + seq (frontend-state.md §1)
+  // S1 CurationRows 읽기 — uid + seq (frontend-state.md §1)
   const seq = useRef(0);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -69,14 +69,12 @@ export function CurationRows({
         following: patchList(prev.following),
       };
     });
-    onPatchRecent?.(id, patch);
   }
 
   const curated = data?.curated ?? [];
   const monthlyItems = data?.monthlyPick?.items ?? [];
   const showcase = data?.showcase ?? [];
   const following = data?.following ?? [];
-  const recent = recentFolders ?? [];
 
   const hasHomeRows =
     curated.length > 0 ||
@@ -131,8 +129,6 @@ export function CurationRows({
     );
   }
 
-  const hasCommunityRows = hasHomeRows || recent.length > 0;
-
   return (
     <div className={styles.rowsStack}>
       {error ? (
@@ -142,14 +138,14 @@ export function CurationRows({
         </p>
       ) : null}
 
-      {data && !error && !hasCommunityRows ? (
-        <p className={styles.emptyMsg}>{t('discover.empty')}</p>
+      {data && !error && !hasHomeRows && postsEmpty === true ? (
+        <p id="communityAllEmpty" className={styles.emptyMsg}>{t('community.allEmpty')}</p>
       ) : null}
 
       <FolderRow
-        rowKey="curated"
-        title={t('discover.curated')}
-        folders={curated}
+        rowKey="following"
+        title={t('discover.following')}
+        folders={following}
         onOpenFolder={setActiveFolderId}
       />
       <FolderRow
@@ -158,35 +154,18 @@ export function CurationRows({
         songItems={monthlyItems}
         onOpenFolder={setActiveFolderId}
       />
+      {postsSlot}
+      <FolderRow
+        rowKey="curated"
+        title={t('discover.curated')}
+        folders={curated}
+        onOpenFolder={setActiveFolderId}
+      />
       <FolderRow
         rowKey="showcase"
         title={t('discover.showcase')}
         folders={showcase}
         onOpenFolder={setActiveFolderId}
-      />
-      <FolderRow
-        rowKey="following"
-        title={t('discover.following')}
-        folders={following}
-        onOpenFolder={setActiveFolderId}
-      />
-      <FolderRow
-        rowKey="recent"
-        title={t('discover.recent')}
-        folders={recent}
-        onOpenFolder={setActiveFolderId}
-        footerAction={
-          recentNext && onLoadMoreRecent ? (
-            <button
-              type="button"
-              id="recentMoreBtn"
-              className={styles.rowToggle}
-              onClick={onLoadMoreRecent}
-            >
-              {t('discover.more')}
-            </button>
-          ) : null
-        }
       />
 
       <FolderSheet

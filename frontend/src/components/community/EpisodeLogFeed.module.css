@@ -77,3 +77,46 @@
   padding: 8px 24px;
   font-weight: 700;
 }
+
+/* 모두 탭 게시물 선반: 첫 페이지 가로 스크롤 한 줄 */
+.postsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 4px;
+}
+
+.postsRowItem {
+  flex: 0 0 300px;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+/* LOGS 탭: JS 라운드로빈 열 */
+.postsMasonry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.masonryCol {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .postsRowItem {
+    flex-basis: 85%;
+  }
+}
