@@ -22,7 +22,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | UXR-1 | 연습 기록 단일화(미연결 녹음·A/B 교차·삭제 슬롯 결함) + 트랜스포트 통일 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-1_구현명세.md) → `결과/UXR-1.md` | 없음 | 명세 §9 체크리스트, PR CI 통과·리뷰 처리 | 시니어 high / 주니어 medium | 완료 — PR #159 CI 통과·Codex 리뷰 확인, 사용자 머지 대기([결과](결과/UXR-1.md)) |
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
-| UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 제안, 실행 담당 미확정 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 문서 작성만 승인·구현/Git 게시 미승인, §8 참조 |
+| UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | [시니어] 구현·표적 Green·로컬 커밋 완료(`step/UXR-3`). 전체 회귀·push·PR·CI·스크린샷 검토·결과 파일은 주니어 4단계 대기, §8 참조 |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 세부 명세 완료, 구현 승인 대기 |
 | CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 예정 | 상위 §5.2a·§5.4 → `명세/CMR-2_구현명세.md` | CMR-1 머지 | 세부 명세 작성 후 확정 | — | 대기(CMR-1 마크업 확정 후 명세) |
 | CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 예정 | 상위 §5.2·§5.3·§5.8 → `명세/CMR-3_구현명세.md` | CMR-1 머지 | 같음 | — | 대기 |
@@ -95,12 +95,38 @@ Git 처리: 로컬 구현·표적 테스트까지(전체 회귀·PR/CI는 주니
 - 다음 행동: 사용자가 UXR-3 명세를 검토한다. 구현 요청을 받으면 먼저 git 상태·main/UXR-1 반영 상태·충돌을 확인하고 명세 §7의 범위와 담당을 확정한다. Git 게시 요청이 없으면 로컬 구현·검증까지만 수행한다. 과거 §7의 UXR-1 시작 멘트로 UXR-3을 실행하지 않는다.
 
 ```text
-목표: 개발산출물/명세/UXR-3_구현명세.md를 기준으로 연습 화면 배치·선택 폴더 목록을 구현한다.
-선행 조건: UXR-3 명세 구현 승인을 확인하고 UXR-1 실제 머지/반영 상태와 최신 main을 확인한다.
-git status·브랜치·diff를 확인하고 사용자 CLAUDE.md 변경을 보존한다.
-이미 반영된 UXR-1 작업을 반복하지 말고 충돌 없이 작업 브랜치를 준비한다.
-범위: 명세 §7의 파일. 서버/API/DB 계약·공용 기록 컴포넌트 변경 없음.
-완료 기준: PL-01~12 관련 검증·4폭/다크 Q1~Q9 및 미실행 범위를 결과에 기록한다.
-Git 처리: 이 멘트만으로 커밋·push·PR·배포는 승인되지 않는다. 별도 승인 범위에 따른다. 머지는 사용자가 한다.
-구체적인 재개는 개발산출물/진행_UIUX수정명세.md §8을 따른다.
+# Claude (시니어) — UXR-3 핵심 구현 및 주니어 인계 (템플릿 §0)
+목표: 개발산출물/명세/UXR-3_구현명세.md 기준으로 연습 화면 재배치·선택 폴더 곡 목록을 구현한다. 담당 [시니어] 직접 구현(명세 §7, 협업 §1.2).
+선행 조건: git status·브랜치 확인, 사용자 변경 보존, 최신 main에서 step/UXR-3 생성. UXR-1(PR #159) 머지 여부 확인, 미반영이면 충돌 경계를 기록한다.
+범위: 명세 §7의 7파일만. 서버/API/DB 계약·공용 기록 컴포넌트 변경 없음. 7파일·600줄 초과 전망이면 구현 전에 분할 필요성을 기록한다.
+방식: 규칙 확인 → 배치 약속·Red 확인 → 구현 → practice.spec.js 표적 1~2개 Green까지만.
+중단 지점: step/UXR-3 로컬 커밋까지. 전체 회귀·push·PR·CI 대기·4폭 스크린샷 전수 검토·결과 파일은 주니어 4단계(문서_운영 §6 우선).
+완료 기준: diff 요약·표적 Red→Green 근거·주니어 실행 목록을 이 파일 §8에 기록하고 주니어 4단계 시작 멘트를 제공한다.
+Git 처리: 로컬 커밋만. push·PR·배포는 이 멘트로 승인되지 않는다. 머지는 사용자가 한다.
 ```
+
+### 8.1 UXR-3 시니어 구현 결과 (2026-11-11, 로컬 커밋까지)
+
+- 선행 확인: UXR-1(PR #159)·UXR-2(#160 계열)는 main에 머지됨(`60d097e`, `05143ad`). `main`에서 `step/UXR-3` 생성. 사용자 변경(`AGENTS.md`·`CLAUDE.md`·이 진행 파일의 기존 수정)은 커밋에서 제외하고 보존했다. 이 PC는 `node_modules`가 없어 `npm ci` + `playwright install chromium`을 새로 했다(커밋 대상 아님).
+- 변경 7파일: `PracticePage.tsx`·`PracticePage.module.css`·`apiClient.ts`·`i18n/{ko,en,ja}.mts`·`test/e2e/layout/practice.spec.js`. 서버/API/DB 계약·공용 기록 컴포넌트 변경 없음.
+- 규모: 7파일, 공백 무시 +700/−182줄. 600줄 경고선을 넘었다. 이유는 재생·녹음·구간 JSX 블록 이동(주로 위치 이동)과 신규 테스트 139줄이며, 기능 경계는 한 화면이라 분할하지 않았다(DOM만 떼면 단독 검증 불가).
+- 구현 요약
+  - DOM: `ppMain` 안에 `ppStage`(영상·타임라인) → `ppActions`(`#ppPlayCard` 재생 5버튼+단축키 안내, `#ppRecCard` 녹음) → `ppSide`(`#ppCtl` 속도·A/B·대기·프리셋, `#ppFolderPanel` 선택 폴더 곡 목록). 단일 DOM을 CSS grid로 재배치(≥961 2열, ≤960 1열, 읽기 순서 = 명세 §3.2). 녹음 묶음의 ID는 그대로 하나씩 유지, 오류 메시지를 Drive 안내보다 앞에 둠.
+  - 배치 약속: `practice-top:top@961`(`#videoBox`·`#ppCtl`), `practice-actions:top@961`(재생·녹음 카드), `practice-side:left,right@961`(`#ppCtl`·`#ppFolderPanel`). 기존 `transport`·`sr-left` 유지.
+  - 목록: `loadSongList()`가 곡·분류를 한 요청 세대(`songsListReqSeqRef`)로 읽고 서랍과 공유(uid+seq 검사, 소유 uid가 다르면 렌더에서 loading 처리). 선택 폴더(`__all`/분류 ID/`__uncategorized`)·네이티브 select(`#folderSelect`)·곡 수(`#folderCount`)·모바일 접기(`#folderToggle`, `aria-expanded/controls`, 접힌 본문 `display:none`)·오류+`#folderRetry`·guest 안내·현재 곡 `aria-current`/폴더 밖 안내. 곡 이동은 `openSongById` 재사용, 전환 중 `aria-disabled`로 중복 클릭 차단(초점 유지), 현재 곡 재클릭 no-op. 서랍은 유지하고 서랍에서 고른 곡의 폴더를 인라인 선택에 반영.
+  - 홈 분류 전달값은 목록 조회 성공 뒤에만 소비한다(실패는 삭제로 보지 않음). 없는 분류면 전체 + 안내. 자동 서랍 개방은 인라인 선택+모바일 펼침으로 대체했다.
+  - `apiClient`: `listSongs`·`categoryList`가 잘못된 envelope를 예외로 올린다(올바른 `[]`는 성공). 시그니처·export 유지.
+  - Drive 연결 버튼은 녹음 중·업로드 중 비활성화. 배너는 compact 스타일(문구 축약 키는 추가하지 않음 — 기존 문구 유지).
+- 표적 Red→Green(`npx playwright test test/e2e/layout/practice.spec.js -g UXR3`): 구현 전 5건 모두 실패(`#ppPlayCard` 등 부재), 구현 후 PL-01(1280·1150)·PL-02·PL-05·PL-06 통과. `practice.spec.js` 전체 36 passed(기존 G0~G8 레이아웃 스위트·T1~T6·UXR1-L 포함), `tsc --noEmit` 통과, `node --test test/*.test.js` 416 pass.
+- 알려진 회귀(의도된 계약 변경의 결과 — 주니어 4단계에서 수정, 승인 7파일 밖): `home-category.spec.js` C4a-5, `player-category.spec.js` P4b-1·P4b-4(자동 서랍 개방 기대 → 인라인 선택 `#folderSelect` 값·모바일 펼침 기대로 변경), `practice-record.spec.js` SR1-4(mock이 `/api/v1/categories`에 `{}`를 주어 엄격 envelope에서 오류 → 이 mock에 `{categories: []}` 추가). 같은 원인이 다른 spec에 더 있을 수 있어 `test/e2e/support/mock-app.js`에 `categories` 기본 응답(`{categories: []}`)을 두는 방안을 권장한다(이 경우 사용자에게 파일 추가를 한 줄 보고).
+- 미구현·미실행(주니어/후속): PL-04 일부(삭제된 분류 → 전체+안내의 E2E), PL-07(A→B→A 계정 경합 E2E: 현 mock은 지연 응답 해제 후 DOM 단언이 필요하고 계정 전환 스텁이 없어 미작성), PL-08~PL-11 전용 테스트, 30곡 스크롤(PL-03) 테스트, 녹음 카드 상태 캡처, 실제 마이크·Drive. 구현은 해당 경로를 처리하지만 테스트로 증명되지 않았다 — 주니어는 통과로 적지 말고 미실행/미작성으로 기록한다.
+
+### 8.2 주니어 4단계가 실행할 목록
+
+1. `git status`로 `step/UXR-3` 로컬 커밋과 사용자 변경(`AGENTS.md`·`CLAUDE.md`·이 파일 외 미커밋분)을 확인·보존. `npm ci`가 필요하면 실행.
+2. 알려진 회귀 4건 수정(위 8.1), 필요 시 `mock-app.js` 기본 categories 응답 추가.
+3. 부족한 PL 테스트 작성: PL-04 삭제 분류, PL-07 계정 경합(지연 응답), PL-03 30곡 스크롤(높이 ≤320, 마지막 곡 도달), PL-09 현재 곡 재클릭 no-op·전환 중 잠금, PL-10 Drive/녹음 상태. 단언 완화·skip 금지.
+4. 검증: `npm run build`, `npm test`, `npx playwright test test/e2e/layout/practice.spec.js test/e2e/player-category.spec.js test/e2e/home-category.spec.js test/e2e/practice-record.spec.js`, 그리고 홈·커뮤니티 레이아웃 spec(`test/e2e/layout/home.spec.js` 등)과 전체 `npx playwright test`(categories 엄격 envelope의 공용 소비자 회귀 확인).
+5. `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/practice.spec.js`로 4폭(390·768·1150·1280)의 guest/영상 없음/userData/userEmpty + 다크 userData 캡처, 목록 실패·30곡·녹음 실패는 390·1280. Q1~Q9 폭별 판정을 `개발산출물/결과/UXR-3.md`에 표로 기록(특히 961~1150 구간에서 재생 카드 5버튼 폭, 녹음 카드 wrap).
+6. push → main 대상 PR 생성 → `gh pr checks --watch` → PR 리뷰 확인 → 결과 파일·이 파일 갱신. 머지는 사용자가 한다.
+
