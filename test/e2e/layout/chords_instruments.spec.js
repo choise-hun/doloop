@@ -89,9 +89,9 @@ test.describe('UXR-2', () => {
     for (const lang of ['ko', 'en', 'ja']) {
       test(`UXR2-1 악기 버튼군 ${width} ${lang}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
-        await page.addInitScript((l) => { try { localStorage.setItem('lang', l); } catch (_) { /* 무시 */ } }, lang);
-        await mockApp(page, STATES.guest);
+        await mockApp(page, { ...STATES.guest, local: { 'ulp:lang': lang } });
         await page.goto('/chords.html#scale');
+        await expect(page.locator('html')).toHaveAttribute('lang', lang);
         const rects = [];
         for (const kind of ['guitar', 'bass', 'keyboard']) {
           const r = await rectOf(page, `#instrument-${kind}`);
