@@ -37,6 +37,7 @@ export const JA: Record<I18nKey, string> = {
   'chords.instrumentBass': 'ベース',
   'chords.instrumentKeyboard': '鍵盤',
   'chords.instrumentTuning': '弦数・チューニング',
+  'chords.instrumentSettings': '楽器設定',
   'chords.keyboardNote': '音を選択',
   'chords.keyboardToggleNote': '音の追加・削除',
   'nav.ariaSite': "サイト",
