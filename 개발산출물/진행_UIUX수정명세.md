@@ -24,8 +24,8 @@
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
-| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 예정 | 상위 §5.2a·§5.4 → `명세/CMR-2_구현명세.md` | CMR-1 머지 | 세부 명세 작성 후 확정 | — | 대기(CMR-1 마크업 확정 후 명세) |
-| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 예정 | 상위 §5.2·§5.3·§5.8 → `명세/CMR-3_구현명세.md` | CMR-1 머지 | 같음 | — | 대기 |
+| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 시니어 핵심 구현 완료(2026-11-11, `step/CMR-2` 로컬 커밋, §11) — 주니어 4단계 대기 |
+| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 명세 완료(2026-11-11) — 구현 승인 대기. 규모 상한 경계(§5) |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
 | (S3b) | 공개 녹음 파일 취득 | — | 상위 §5.7 표 | 정책 결정 | — | — | Step 아님, 정책 대기 |
 
@@ -57,6 +57,8 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 | 2026-11-11 | Claude CI 수정 | 레포 이전(choise-hun/doloop public)으로 PR 번호 #160→#1 정정. `62da217` E2E ubuntu-24.04 고정·PR Node 22만·Kotlin 백엔드 변경 시만. push 후 pull_request 이벤트 CI가 시작되지 않아(원인 미확인) `workflow_dispatch`(run 42986479700, head `0dbd5a1`)로 대체 검증: 전 job 성공(playwright install 포함 E2E 통과). PR 리뷰·코멘트 0건 → 처리할 지적 없음. `CI_셀프호스티드_러너_설정_프롬프트.md`는 public 레포라 적용 보류(미커밋) |
 | 2026-11-11 | Claude CMR-1 구현 | `step/CMR-1` 시니어 핵심 구현 및 로컬 커밋(`c2d667c`, `eb36c02`). 표적 97 passed 확인 후 주니어 4단계 인계 → [결과](결과/CMR-1.md) |
 | 2026-11-11 | Gemini CMR-1 4단계 | 전체 회귀(`npm test` 416 통과, 전체 Playwright 658 통과)·`LAYOUT_SHOTS=1` 4폭 및 다크 Q1~Q9 검토(21 passed), empty 레이아웃 스위트 보강, PR 생성 및 CI 대기 |
+| 2026-11-11 | Claude CMR-2·CMR-3 세부 명세 | PR #3 머지(`e28421d`) 확인 후 main 최신화, 사용자 변경(`AGENTS.md`·`CLAUDE.md`) 보존. 실제 코드 대조로 명세 2건 작성(소스·테스트 무변경, 빌드·테스트 미실행). 상위 보정 결정: 곡 항목 길이 필드 없음 → 길이·총 길이 미표시(CMR-3 D15), `SONG_LIMIT_EXCEEDED` 프런트 미매핑 → 화면 전용 매핑(D11), 폴더 딥링크 신설 `community.html#folder=<id>`(D20·D21, 프런트 해시만), 곡 카드 본체는 연습 이동 유지(D27), 이름 저장 후 공유 스위치 자동 재실행 없음(CMR-2 D10), `DEFAULT_ME` 이름 없음 → 기존 E2E에 `skipNameModal` 헬퍼(CMR-2 §8) |
+| 2026-11-11 | Claude 기존 명세 재검토·결정 기록 | 사용자 결정 Q5~Q7 = 추천대로. UXR-1·2·3·CMR-1 명세를 main `e28421d` 코드와 대조 → 실제 결함 1(F1), 정정 문서 3곳, 검증 기록 과대 1(F7) — [결과](결과/UIUX-R_명세재검토.md) |
 
 ## 6. 검증·미실행
 
@@ -73,7 +75,7 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 
 - 다음 행동: 사용자가 §4 Q1~Q3에 답한다. 승인되면 UXR-1부터(또는 세 Step 병렬로) 템플릿 §0 시니어 직접 구현 → 주니어 4단계.
 - 구현 시작 시: `git status`·브랜치·사용자 변경(HomePage.module.css·report.md) 보존 확인, main 최신화 후 `step/<ID>` 생성. 세부 명세 §1 전제 `file:line`을 다시 확인(어긋나면 명세를 고친 뒤 진행).
-- CMR-1 머지 후: CMR-2·CMR-3 세부 명세 작성(실제 마크업 기준).
+- CMR-1 머지 후: CMR-2·CMR-3 세부 명세 작성(실제 마크업 기준) → **완료(2026-11-11)**, 재개는 [§10](#10-cmr-2cmr-3-세부-명세-2026-11-11).
 
 ```text
 # Claude(시니어) — UXR-1 핵심 구현 및 검증 인계
@@ -173,3 +175,92 @@ Git 처리: 로컬 커밋만. push·PR·배포는 이 멘트로 승인되지 않
   - 전체 E2E (`npx playwright test`): **658 passed / 0 failed** (12.3m).
 - **결과 문서:** [결과/CMR-1.md](결과/CMR-1.md) 작성 완료.
 - **Git 처리:** `step/CMR-1` 푸시 및 [PR #3](https://github.com/choise-hun/doloop/pull/3) 생성, GitHub Actions CI 전 항목 통과(success), PR 리뷰/코멘트 0건 확인 완료. 사용자 머지 대기.
+
+## 10. CMR-2·CMR-3 세부 명세 (2026-11-11)
+
+- 요청/승인: 사용자 지시 “CMR-2·CMR-3 세부 명세 작성(템플릿 §1)”, Tool Lock(소스·테스트 수정, 빌드·테스트 실행 금지). 승인 범위 = 명세 작성·이 파일 갱신(문서만). 구현·Git 게시는 미승인.
+- 선행 확인: PR #3 MERGED(2026-11-11T13:57:50Z, merge `e28421d`). `step/CMR-1` → `main` 전환 후 `git pull --ff-only`, 사용자 변경 `AGENTS.md`·`CLAUDE.md` 보존.
+- 산출물: [CMR-2 구현 명세](명세/CMR-2_구현명세.md)(D1~D15, 테스트 CMR2-1~17), [CMR-3 구현 명세](명세/CMR-3_구현명세.md)(D1~D27, 테스트 CMR3-1~26).
+- 서버·API·DTO·DB 계약 변경 없음. 새 프런트 계약(선택 prop·새 export·해시): `MySharesPanelProps.requireName?`, `CurationRowsProps.emptyExtra?`, `PublicNameModal`(신규 파일), `FolderCardProps/SongCardProps/FolderRowProps.onQuickAdd?`, `QuickAddTarget`·`QuickAddSheet`·`useLongPress`·`songAddInput`·`songAddErrorKey`(신규 파일), `createSong` 입력 `a?`·`b?`(상위 §5.3 승인 범위), `lib/communityMock.ts`(DEV 전용), 해시 `community.html#folder=<id>`(CMR-3 D20·D21).
+- 규모: CMR-2 코드 6파일 약 +330/−60, CMR-3 코드 9파일(로직 5) 약 +720/−110 — CMR-3은 상한 경계이며 850줄 초과 시 mock을 별도 커밋으로 분리(명세 §5).
+- 검증(문서만): 링크·경로 존재, UTF-8/LF/마지막 개행, `git diff --check`. 코드·빌드·테스트는 Tool Lock으로 미실행.
+
+### 10.1 사용자 결정 대기
+
+| # | 질문 | 시니어 추천 | 답 |
+| --- | --- | --- | --- |
+| Q5 | CMR-2·CMR-3 구현 + 단계별 Git 게시(`step/CMR-2`·`step/CMR-3` 브랜치·커밋·push·main PR·CI) 승인? | 승인 — 서버 계약 변경 없음, 두 Step 병렬 가능 || 2026-11-11 사용자: 추천대로 진행 |
+| Q6 | 폴더 공유 딥링크 `community.html#folder=<id>` 신설(CMR-3 D20·D21) 수용? | 수용 — 상위 §5.3 “공유” 버튼에 공유할 주소가 없어 필요. 프런트 해시만, 공개 범위 변화 없음 || 2026-11-11 사용자: 추천대로 진행 |
+| Q7 | 상위 §5.3의 곡 “길이”·“총 길이” 미표시(DTO에 길이 없음, CMR-3 D15) 수용? | 수용 — 표시하려면 서버 DTO 변경(별도 승인)이 필요 || 2026-11-11 사용자: 추천대로 진행 |
+
+### 10.1a 기존 명세 재검토 (2026-11-11)
+
+- 사용자 요청: “명세대로 코드가 나왔다는 전제로 UXR-1·2·3·CMR-1 명세 검토”. 결과: [결과/UIUX-R_명세재검토.md](결과/UIUX-R_명세재검토.md).
+- 실제 결함 1건(F1): UXR-1 §6 전제 오류로 A/B 비교 재생이 영상 재생·녹음 중 무반응(`abPair` 매 렌더 새 참조). 추천 소작업 `fix(record)` — `useMemo` 고정 + 부모 재렌더 재현 테스트. **승인 대기(Q8).**
+- 문서 정정: 상위 RV-6(판정 오류), RV-8(§5.5·UR-15 대체), CMR-3 D4 격자 규칙 보강. UXR-3 결과 PL-08·PL-11은 전용 테스트 근거 부족(F7).
+
+| # | 질문 | 시니어 추천 | 답 |
+| --- | --- | --- | --- |
+| Q8 | F1 수정(`step/RECFIX-1`, `SongRecordPanel.tsx`·`LogPage.tsx` abPair 고정 + 테스트 1~2개 + PL-08·PL-11 테스트 보강)을 CMR-2 앞에 끼울까요? | 예 — 서버 계약 변경 없음, 2~3파일, CMR-2와 파일 비중복 | |
+
+### 10.2 다음 세션 시작 멘트
+
+```text
+# Claude (시니어) — CMR-2 핵심 구현 및 주니어 인계 (템플릿 §0)
+목표: 개발산출물/명세/CMR-2_구현명세.md 기준으로 커뮤니티 소개·“내 연습 공유하기” CTA·빈 상태 단계·이름 모달·공유 가드를 구현한다.
+선행 조건: 진행_UIUX수정명세.md §10.1 Q5 승인. git status·브랜치 확인, 사용자 변경 보존, 최신 main에서 step/CMR-2 생성. 명세 §1 전제 file:line 재확인(어긋나면 명세부터 고친다).
+범위: 명세 §4 파일만. 서버/API/DTO·ProfilePage·EpisodeShareDialog·CurationRows home 분기 변경 금지.
+방식: 규칙 확인 → layout spec(name-modal) Red 확인 → 구현 → CMR2-4·CMR2-6 표적 Green까지만.
+중단 지점: step/CMR-2 로컬 커밋까지. 전체 회귀·skipNameModal 적용 목록 확정·push·PR·CI·4폭 Q1~Q9·결과 파일은 주니어 4단계(문서_운영 §6 우선).
+완료 기준: diff 요약·표적 Red→Green 근거·주니어 실행 목록을 이 파일에 기록하고 주니어 4단계 멘트를 제공한다. 권장 effort high.
+Git 처리: 로컬 커밋만. 머지는 사용자가 한다. CMR-3은 같은 형식으로 별도 세션(명세 CMR-3, 선행 Q5·Q6·Q7).
+```
+
+## 11. CMR-2 시니어 핵심 구현 (2026-11-11)
+
+- 요청/승인: 사용자 세션 멘트 “CMR-2 핵심 구현 및 주니어 인계(템플릿 §0)”, Q5 승인. 범위 = 명세 §4 파일, 로컬 커밋까지. push·PR·CI·전체 회귀·결과 파일은 주니어 4단계. (Q8 RECFIX-1은 미답 — 사용자가 CMR-2를 먼저 지시)
+- 브랜치: `step/CMR-2` (base `main`=`e28421d`). 사용자 변경 `AGENTS.md`·`CLAUDE.md` 미커밋 보존, `명세/CMR-3_구현명세.md`는 CMR-3 세션용으로 미추적 유지.
+- 전제 P1~P14 재확인: 모두 일치. 명세 보정 3건(키 이름 숫자 금지, 전역 `cta` 미정의 → `pillBtn`, 배치 약속 대상) → [명세 §11](명세/CMR-2_구현명세.md).
+
+### 11.1 diff 요약
+
+| 파일 | 변경 |
+| --- | --- |
+| `frontend/src/components/community/PublicNameModal.tsx` | 신규(113줄). `PublicNameForm` 재사용, `acquireSave`로 저장 중 잠금, ESC/닫기/나중에/배경 = `onDismiss`(저장 중 무시), 입력 focus, Tab 순환, body overflow 잠금·복원 |
+| `frontend/src/pages/CommunityPage.tsx` | `#communityIntro`(설명 항상, CTA·힌트는 `me.id===user.id`일 때만), 인라인 배너 삭제, `NameGate` 상태·sessionStorage skip(`ulp:community-name-skip:<uid>`, try/catch), 첫 진입 자동 열기, CTA 가드(이름 없으면 preventDefault→`share` 모달, 저장 후 `log.html` 이동), `emptyExtra`(3단계 `ol` + `#communityEmptyShareCta`), `MySharesPanel`에 `requireName`·`onRequireName` |
+| `frontend/src/components/community/MySharesPanel.tsx` | `requireName?: () => boolean` — Pro 검사 뒤·낙관 갱신 앞, 공개 켜기·다시 게시만 |
+| `frontend/src/components/community/CurationRows.tsx` | `emptyExtra?`, `#communityAllEmpty` `p`→`div`(home 분기 무변경) |
+| `Community.module.css` / `CommunityPage.module.css` | `.nameModal*`(390 하단 시트·768↑ 중앙 480), `.emptyMsg` 열 flex, `.intro*`·`.emptySteps`·`.emptyShareCta`, 두 파일의 `.nameBanner/.bannerTitle` 삭제 |
+| `frontend/src/lib/i18n/{ko,en,ja}.mts` | 새 키 10개(명세 §5, 보정 키 이름) |
+| `test/e2e/community.spec.js` | CMR2-4·CMR2-6 추가, CM-10 id 치환(단언 의미 유지) |
+| `test/e2e/layout/community.spec.js` | `community-name-modal` suite(4폭+다크) |
+| `test/e2e/layout/profile.spec.js` | PF2-08 id 치환(단언 유지) |
+| `test/e2e/support/community-fixtures.js` | `skipNameModal(page, uid)` 헬퍼(아직 어느 테스트에도 미적용) |
+
+### 11.2 표적 Red → Green
+
+- Red(구현 전, 테스트만 추가): `npx playwright test test/e2e/layout/community.spec.js test/e2e/community.spec.js -g "name-modal|CMR2-"` → **7 failed**(CMR2-4·CMR2-6·name-modal 4폭+다크, 모달 미존재).
+- Green(구현 후): `npm run build` 성공 → 같은 명령에 `CM-10|community-empty` 추가 → **13 passed**.
+- 보조: `npx tsc --noEmit` exit 0, `node --test test/i18n.test.js` 14 pass(처음 `emptyStep1` 키 형식 실패 → 키 이름 보정 후 통과).
+- 미실행: `npm test` 전체, 전체 Playwright, `LAYOUT_SHOTS=1` 스크린샷, CMR2-1~3·5·7~17 테스트 작성.
+
+### 11.3 주니어 4단계 실행 목록
+
+1. 명세 §8의 CMR2-1~3·5·7~17을 `test/e2e/community.spec.js`(필요 시 `layout/profile.spec.js` CMR2-17)에 추가하고 통과시킨다. 구현 결함이 보이면 고치지 말고 결과 파일에 재현·근거를 적어 시니어 핀포인트로 넘긴다.
+2. `npm test` 전체, 전체 `npx playwright test`. 기본 `DEFAULT_ME`(이름 없음)로 `community.html`을 여는 기존 테스트의 실패(모달이 클릭 가로챔)는 해당 테스트에만 `skipNameModal(page)`를 `page.goto` 전에 넣는다. 단언은 바꾸지 않고, 적용 목록·사유를 결과 파일에 적는다.
+3. 명세 §9 체크리스트(`git grep` 0줄 — CMR2-4 부재 단언 1줄 예외, `ProfilePage.tsx` diff 0, home 분기 diff 0).
+4. `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js` 4폭+다크(guest·pro·logs·empty·name-modal) Q1~Q9 → `개발산출물/결과/CMR-2.md`.
+5. 이 파일 단계 표·§11 갱신, 커밋·push, main 대상 PR 생성, `gh pr checks --watch`, 리뷰 확인. 머지는 사용자.
+
+### 11.4 주니어 4단계 멘트
+
+```text
+# Gemini (주니어) — CMR-2 4단계 최종 테스트·문서·PR/CI 마무리
+개발산출물/협업_시니어주니어.md와 개발산출물/프롬프트_템플릿_4단계.md의 4단계를 따른다.
+목표: step/CMR-2 시니어 핵심 구현(이름 모달·공유 가드·소개 CTA·빈 상태 단계)을 최종 테스트·문서·PR/CI까지 마무리한다.
+기준: 개발산출물/명세/CMR-2_구현명세.md(§8 테스트 표·§9 체크리스트·§11 보정), 진행_UIUX수정명세.md §11.3 실행 목록.
+선행 조건: git status·브랜치 step/CMR-2 확인, 사용자 변경(AGENTS.md·CLAUDE.md)·미추적 명세/CMR-3_구현명세.md는 커밋에서 제외하고 보존.
+범위: CMR2-1~3·5·7~17 테스트 추가, 전체 회귀와 skipNameModal 적용(단언 불변), 4폭+다크 Q1~Q9, 결과/CMR-2.md·진행 파일 갱신. 구현 결함은 고치지 말고 근거와 함께 시니어 핀포인트로 넘긴다.
+완료 기준: npm test·전체 Playwright·LAYOUT_SHOTS 결과가 최신 head 기준으로 결과 파일에 기록되고, main 대상 PR의 최신 CI 통과·리뷰 확인이 끝난다.
+Git 처리: step/CMR-2 커밋·push·main 대상 신규 PR 생성·gh pr checks --watch까지. 머지는 사용자가 한다. 권장 effort medium.
+```
