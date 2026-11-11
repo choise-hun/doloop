@@ -47,6 +47,7 @@
 
 ## 4. 4단계 주니어 마무리 및 Git 상태
 
-- **PR 번호:** (생성 후 갱신 예정)
-- **CI 확인:** (gh pr checks 대기 후 갱신 예정)
-- **리뷰 확인:** (PR 코멘트 확인 후 갱신 예정)
+- **PR 링크:** https://github.com/choise-hun/doloop/pull/159 (#159)
+- **CI 확인:** 전 항목 통과 (Detect code changes, Docker build & smoke, E2E XSS & CSP, Kotlin test, Test Node 22/24, CI ok - `runs/42951514802`)
+- **리뷰 확인:** Codex 리뷰 통과 (0 findings, Clean)
+- **머지 대기:** 사용자 머지 대기 중 (에이전트 직접 머지 금지)
