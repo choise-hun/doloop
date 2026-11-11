@@ -45,11 +45,16 @@
 | 2026-11-11 | Claude 코드 재대조 | 해소 불가 문제 없음. 결함 실증 2건(RV-6 hidden, RV-7 A/B 슬롯), 명세 보정 1건(RV-4 `created` 필드 없음), 공용 영향 2건(RV-5 CoverArt, RV-9 미사용 CommunityPane) |
 | 2026-11-11 | Claude 세부 명세 3건 작성, 상위 명세 §1.1 추가 | 문서 검증은 §6 |
 | 2026-11-11 | Gemini Git 게시 | 사용자 지시에 따라 `docs/uiux-r-specs` 브랜치 생성, 커밋, push 및 PR 생성 |
+| 2026-11-11 | Gemini 리뷰 대응 | Codex P1 리뷰 반영: HomePage splitFrames 회귀 단언 추가 및 홈 레이아웃 Playwright 검증(21 passed) 완료 |
 
 ## 6. 검증·미실행
 
 - 문서 검증(2026-11-11): Python 검사로 세부 명세 3건·상위 명세·이 파일·계획·인수인계의 로컬 링크 존재, 명세 속 `file:line` 경로 존재·행 범위, UTF-8·BOM 없음·LF·마지막 개행 확인 → issues 0. `git diff --check` 통과.
-- 프론트엔드 검증(2026-11-11): `HomePage.module.css` 스타일 변경 후 `npm test` 통과(416 passed), `npm run build` 통과.
+- 프론트엔드 검증(2026-11-11):
+  - `npm test` 통과 (416 passed), `npm run build` 통과.
+  - `npx playwright test test/e2e/layout/home.spec.js` 통과 (21 passed):
+    - 4개 폭(1280px, 1150px, 768px, 390px) 반응형 검사 및 다크 모드 스크린샷·정렬 규격(G0~G8) 이상 없음.
+    - 신규 회귀 단언(UIUX-R T1): splitFrames 16px horizontal gap 및 `#betterFrame`·`#vaultFrame` 개별 카드 테두리(1px) 스타일 검증 통과.
 - 구현·빌드·Node/Playwright·스크린샷·CI·운영 확인: 명세 대상 기능(UXR-1·UXR-2·CMR-1)은 구현 전 상태.
 - Git 게시: 사용자 승인에 따라 `docs/uiux-r-specs` 브랜치로 커밋, push, PR 생성 진행.
 
