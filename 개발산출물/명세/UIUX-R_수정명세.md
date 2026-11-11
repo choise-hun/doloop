@@ -29,9 +29,9 @@
 | RV-3 | S3a는 “S1과 함께”에서 **CMR-4로 이동**한다. 현 DTO에 녹음 필드가 없어 S3a 버튼은 S3b 전까지 항상 비표시이므로 앞당겨도 사용자 가치가 없고, CMR-1에 넣으면 파일·diff 상한을 넘는다. 좋아요와 같은 카드 반응 영역을 공유한다 | RV-1, §5.7 |
 | RV-4 | `POST /api/v1/songs` 응답에는 `created` 필드가 없다(신규 201·기존 200, 본문 둘 다 `{song}` — `SongRoutes.kt:70-75`). 프런트 `apiFetch`는 상태 코드를 노출하지 않는다(`auth.ts:253`). 따라서 곡 추가 결과는 **“내 곡 리스트에 있음” 단일 성공**과 서버 오류(예: 403 `SONG_LIMIT_EXCEEDED`, `TierService.kt:175-184`)만 구분한다. 계약 변경 없음 | §5.3 보정 |
 | RV-5 | `CoverArt`는 홈 발견 줄·`FolderSheet`와 공용이다(`CommunityParts.tsx:20`, `FolderSheet.tsx:188`). 단일 썸네일은 이 세 곳 모두에 적용한다. `HomePage.module.css`는 수정하지 않는다 | §5.1, UR-13 |
-| RV-6 | 스케일 `hidden` 미작동은 추정이 아니라 실제 결함이다: `.field{display:flex}`(`ChordsPage.module.css:119`)가 `hidden`을 덮는다. `.field[hidden]` 규칙을 공용으로 추가해 전 탭에서 속성 의미를 복구한다 | §6.2 |
+| RV-6 | 스케일 `hidden` 미작동은 추정이 아니라 실제 결함이다: `.field{display:flex}`(`ChordsPage.module.css:119`)가 `hidden`을 덮는다. `.field[hidden]` 규칙을 공용으로 추가해 전 탭에서 속성 의미를 복구한다 | §6.2 — **정정 2026-11-11: 판정 오류.** 전역 `[hidden]{display:none!important}`(`frontend/src/styles/tokens.css:175`)가 이미 있어 결함이 없었다. UXR-2는 규칙을 추가하지 않고 회귀 방어 테스트만 두었다([UXR-2 결과](../결과/UXR-2.md)) |
 | RV-7 | A 삭제 시 B가 A로 이동하는 현행 결함을 확인했다(`SongRecordPanel.tsx:204`, `:224`의 `filter`). UXR-1에서 슬롯별 비우기로 수정한다 | §3.1 |
-| RV-8 | LOGS 마소니는 CSS columns 대신 **JS 라운드로빈 열**(matchMedia 열 수)로 구현한다. CSS columns는 세로 우선 배치라 최신 글이 한 열에 몰리고 더보기 시 카드가 열을 옮긴다 | §5.5 |
+| RV-8 | LOGS 마소니는 CSS columns 대신 **JS 라운드로빈 열**(matchMedia 열 수)로 구현한다. CSS columns는 세로 우선 배치라 최신 글이 한 열에 몰리고 더보기 시 카드가 열을 옮긴다 | §5.5. 따라서 §5.5·UR-15의 “CSS columns”는 이 결정으로 대체된다(구현: `EpisodeLogFeed.tsx` `useColumnCount`, ≥1150 3열·≥768 2열·그 외 1열) |
 | RV-9 | 미사용 `CommunityPane.tsx`(importer 0)는 최근 공개 prop 제거와 함께 CMR-1에서 삭제한다 | §5.2 |
 | RV-10 | 이름 모달의 공유 가드 대상은 커뮤니티 화면 안의 “내 연습 공유하기” CTA와 `MySharesPanel` 공개/재공개다. TRAILS의 `EpisodeShareDialog`는 현행(서버 가드) 유지 | §5.4, CMR-2 |
 | RV-11 | 번역은 새 키만 추가하고 기존 키는 삭제하지 않는다(값 변경은 `community.chipLog`→`LOGS` 1건) | §5.9 |
