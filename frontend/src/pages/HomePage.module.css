@@ -465,22 +465,19 @@
 .splitFrames {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface);
+  gap: 16px;
 }
 
 .frame {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
   min-width: 0;
   min-height: 400px;
-}
-
-.frame + .frame {
-  border-left: 1px solid var(--line);
 }
 
 .frameHead {
@@ -844,11 +841,6 @@
 
   .frame {
     min-height: 0;
-  }
-
-  .frame + .frame {
-    border-left: 0;
-    border-top: 1px solid var(--line);
   }
 
   .noteBox {

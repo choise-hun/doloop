@@ -181,8 +181,9 @@ test('E2E-L1-1 /settings.html #langSelect 클릭·유지 및 연속 클릭 시 P
 
   await expect(page.locator('#langSelect [data-lang="auto"]')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => localStorage.getItem('ulp:lang'))).toBeNull();
+  // 직렬화된 PATCH 사이에는 inFlight가 순간 0이 되므로, 마지막 선택({ locale: null })이 서버에 도달할 때까지 먼저 대기한다.
+  await expect.poll(() => patchCalls[patchCalls.length - 1]).toEqual({ locale: null });
   await expect.poll(() => inFlight).toBe(0);
-  await expect.poll(() => patchCalls.length).toBeGreaterThanOrEqual(1);
   expect(maxConcurrent).toBe(1);
   expect(patchCalls[patchCalls.length - 1]).toEqual({ locale: null });
 });

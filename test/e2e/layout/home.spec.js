@@ -60,3 +60,28 @@ test('UI-1 T3 버튼 폭 일치 검증: #betterChordsBtn의 너비가 상위 #mo
   expect(btnBox).not.toBeNull();
   expect(Math.abs(btnBox.width - listBox.width)).toBeLessThanOrEqual(1);
 });
+
+test('UIUX-R T1 홈 분할 대시보드 검증: splitFrames 그리드 16px 간격 및 개별 카드 스타일 적용', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#betterFrame').waitFor();
+  await page.locator('#vaultFrame').waitFor();
+
+  const better = page.locator('#betterFrame');
+  const vault = page.locator('#vaultFrame');
+  const betterBox = await better.boundingBox();
+  const vaultBox = await vault.boundingBox();
+
+  expect(betterBox).not.toBeNull();
+  expect(vaultBox).not.toBeNull();
+  // 데스크톱 2열 배치에서 좌우 카드 사이 간격이 16px (오차 1px 이내)
+  const horizontalGap = vaultBox.x - (betterBox.x + betterBox.width);
+  expect(Math.abs(horizontalGap - 16)).toBeLessThanOrEqual(1);
+
+  // 개별 프레임 카드의 테두리(border) 독립 분리 검증
+  const betterBorder = await better.evaluate((el) => window.getComputedStyle(el).borderWidth);
+  const vaultBorder = await vault.evaluate((el) => window.getComputedStyle(el).borderWidth);
+  expect(betterBorder).toBe('1px');
+  expect(vaultBorder).toBe('1px');
+});
