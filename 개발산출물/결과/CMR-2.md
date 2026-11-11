@@ -114,7 +114,7 @@
   - `CI/Detect code changes`: 통과 (5s)
   - `CI/Test (Node 22)`: 통과 (22s) (`npm run build`, `npm test` 통과)
   - `CI/Docker build & smoke`: 통과 (1m 58s)
-  - `CI/E2E XSS & CSP (Playwright, spa)`: 실패 (러너의 apt DNS 해석 일시 장애: `Temporary failure resolving 'azure.archive.ubuntu.com'`)
-  - **인프라 원인 및 해결책:** GitHub Actions의 ubuntu-24.04 러너에서 `playwright install --with-deps` 중 Ubuntu 미러 DNS 장애로 패키지 다운로드가 중단되는 현상이며(PR #3, #4에서도 동일 발생), 이를 공식 Playwright 컨테이너로 해결하는 [PR #5](https://github.com/choise-hun/doloop/pull/5)(CI 전 항목 통과 완료)가 이미 준비되어 있습니다. PR #5가 main에 머지된 후 본 PR에 반영하면 CI 전 항목이 즉시 녹색으로 완료됩니다.
+  - `CI/E2E XSS & CSP (Playwright, spa)`: 첫 run(`43060006506`, head `2dc6273`)은 실패 — 코드 원인 아님. run이 [PR #5](https://github.com/choise-hun/doloop/pull/5) 머지(19:35Z)보다 먼저(16:36Z) 돌아 옛 워크플로의 `playwright install --with-deps` apt 단계가 러너 DNS 장애(`Temporary failure resolving 'azure.archive.ubuntu.com'`)로 종료(exit 100).
+  - **해결(2026-11-12, 시니어):** `origin/main`(PR #4 RECFIX-1·PR #5 포함)을 merge 커밋 `9df2bda`로 반영(rebase 없음, 충돌 0) + CMR-3 명세 커밋 `7d87379` push → run `43089852505`(head `7d87379`, Playwright 컨테이너): Detect·Node 22·Docker·**E2E(10m24s)**·CI ok 전 항목 통과, Kotlin은 변경 없음으로 skip.
 - **PR 리뷰 / 코멘트:** 0건 (지적사항 없음)
 - **미실행 명시 대상:** 실제 백엔드 서버의 공개 이름 7일 변경 제한·금칙어 DB 검사(가짜 API로 형식/중복 검증 완료), 실기기 물리 키보드/스크린리더 음성 출력.

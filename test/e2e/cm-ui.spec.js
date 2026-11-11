@@ -871,7 +871,7 @@ test('CMR1-3 everything empty shows only the community empty state', async ({ pa
   await mockApp(page, { ...COMMUNITY_PRO, routes: communityRoutes({ curationHome: CMR_EMPTY_CURATION, onEpisodeLogs: (r, json) => json(r, { posts: [], next: null }) }) });
   await page.goto('/community.html');
   await expect(page.locator('#communityAllEmpty')).toHaveCount(1);
-  await expect(page.locator('#communityAllEmpty')).toContainText('아직 공유된 연습이 없어요');
+  await expect(page.locator('#communityAllEmpty')).toHaveText('아직 공유된 연습이 없어요');
   await expect(page.locator('#communityPostsRow')).toBeHidden();
   await expect(page.locator('#communityPage')).not.toContainText('아직 공개된 플레이리스트가 없어요');
 });

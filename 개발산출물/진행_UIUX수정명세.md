@@ -24,7 +24,7 @@
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
-| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 완료 — PR #6 생성, 로컬 680 E2E 통과, 리뷰 확인, 사용자 머지 대기([결과](결과/CMR-2.md)) |
+| CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 시니어 핵심 구현 완료(2026-11-11, `step/CMR-2` 로컬 커밋, §11) — 주니어 4단계 대기 |
 | CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 명세 완료(2026-11-11) — 구현 승인 대기. 규모 상한 경계(§5) |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
 | (S3b) | 공개 녹음 파일 취득 | — | 상위 §5.7 표 | 정책 결정 | — | — | Step 아님, 정책 대기 |
@@ -59,8 +59,6 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 | 2026-11-11 | Gemini CMR-1 4단계 | 전체 회귀(`npm test` 416 통과, 전체 Playwright 658 통과)·`LAYOUT_SHOTS=1` 4폭 및 다크 Q1~Q9 검토(21 passed), empty 레이아웃 스위트 보강, PR 생성 및 CI 대기 |
 | 2026-11-11 | Claude CMR-2·CMR-3 세부 명세 | PR #3 머지(`e28421d`) 확인 후 main 최신화, 사용자 변경(`AGENTS.md`·`CLAUDE.md`) 보존. 실제 코드 대조로 명세 2건 작성(소스·테스트 무변경, 빌드·테스트 미실행). 상위 보정 결정: 곡 항목 길이 필드 없음 → 길이·총 길이 미표시(CMR-3 D15), `SONG_LIMIT_EXCEEDED` 프런트 미매핑 → 화면 전용 매핑(D11), 폴더 딥링크 신설 `community.html#folder=<id>`(D20·D21, 프런트 해시만), 곡 카드 본체는 연습 이동 유지(D27), 이름 저장 후 공유 스위치 자동 재실행 없음(CMR-2 D10), `DEFAULT_ME` 이름 없음 → 기존 E2E에 `skipNameModal` 헬퍼(CMR-2 §8) |
 | 2026-11-11 | Claude 기존 명세 재검토·결정 기록 | 사용자 결정 Q5~Q7 = 추천대로. UXR-1·2·3·CMR-1 명세를 main `e28421d` 코드와 대조 → 실제 결함 1(F1), 정정 문서 3곳, 검증 기록 과대 1(F7) — [결과](결과/UIUX-R_명세재검토.md) |
-| 2026-11-12 | Claude CMR-2 구현 | `step/CMR-2` 시니어 핵심 구현 및 로컬 커밋(`b250f00`, `d50a1f0`). PublicNameModal 신규, CommunityPage 소개·CTA·모달·emptyExtra, MySharesPanel 가드, CurationRows emptyExtra, i18n 10개 키, 표적 E2E 통과 후 주니어 4단계 인계 |
-| 2026-11-12 | Gemini CMR-2 4단계 | CMR2-1~17 전수 추가(31 passed), CMR1-3 단언 갱신(680 passed), LAYOUT_SHOTS 4폭·다크 Q1~Q9 검토(26 passed), 결과/CMR-2.md 작성, PR 생성 및 CI 검증 완료 |
 
 ## 6. 검증·미실행
 
@@ -266,11 +264,3 @@ Git 처리: 로컬 커밋만. 머지는 사용자가 한다. CMR-3은 같은 형
 완료 기준: npm test·전체 Playwright·LAYOUT_SHOTS 결과가 최신 head 기준으로 결과 파일에 기록되고, main 대상 PR의 최신 CI 통과·리뷰 확인이 끝난다.
 Git 처리: step/CMR-2 커밋·push·main 대상 신규 PR 생성·gh pr checks --watch까지. 머지는 사용자가 한다. 권장 effort medium.
 ```
-
-### 11.5 주니어 4단계 검증 및 PR 완료 (2026-11-12, Gemini)
-
-- 테스트 추가: 명세 §8의 CMR2-1~3, CMR2-5, CMR2-7~17을 `test/e2e/community.spec.js`에 전수 추가 → 31 passed (기존 CM-1~14 + 신규 CMR2-1~17 100% 통과).
-- 단언 보정: `cm-ui.spec.js`의 `CMR1-3` 단언(`toHaveText` → `toContainText('아직 공유된 연습이 없어요')`) 갱신 (명세 D11의 `#communityAllEmpty` div화 및 `emptyExtra` 자식 포함 대응, 단언 의미 유지).
-- 전체 회귀: `npm test` 416 통과, `LAYOUT_SHOTS=1` 26 통과, 전체 Playwright 680 통과(680 passed, 9.4m).
-- 4폭+다크 Q1~Q9 판정 완료 → [결과](결과/CMR-2.md).
-- Git: step/CMR-2 커밋·push·main 대상 [PR #6](https://github.com/choise-hun/doloop/pull/6) 생성 완료. CI 중 Node 22/Docker/Detect는 통과했으나, E2E job 러너의 apt DNS 일시 장애(`azure.archive.ubuntu.com` 해석 실패)로 CI E2E 러너 실패 기록. 이를 공식 Playwright 컨테이너로 해결하는 [PR #5](https://github.com/choise-hun/doloop/pull/5) 머지 후 반영 시 통과 예정. 리뷰 코멘트 0건 확인. 머지는 사용자 대기.
