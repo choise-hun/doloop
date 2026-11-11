@@ -52,7 +52,8 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 | 2026-11-11 | Gemini UXR-1 4단계 | 전체 회귀·LAYOUT_SHOTS 4폭·다크 Q1~Q9 검토(31 passed), PR #159 생성, CI 전 항목 통과, Codex 리뷰 확인 완료 |
 | 2026-11-11 | Gemini 리뷰 대응 | Codex P1 리뷰 반영: HomePage splitFrames 회귀 단언 추가 및 홈 레이아웃 Playwright 검증(21 passed) 완료 |
 | 2026-11-11 | Claude UXR-2 구현 | `step/UXR-2` 구현. 악기 버튼군·접이식 설정·스케일 4행·재해석 2열. 표적 109 통과, P5 hidden 전제 오류 기록 → [결과](결과/UXR-2.md) |
-| 2026-11-11 | Gemini UXR-2 4단계 | 전체 회귀·LAYOUT_SHOTS 4폭·다크·1023/1024 Q1~Q9 검토(108 passed), feat/docs 분리 커밋, PR #160 생성 및 CI·리뷰 확인 진행 |
+| 2026-11-11 | Gemini UXR-2 4단계 | 전체 회귀·LAYOUT_SHOTS 4폭·다크·1023/1024 Q1~Q9 검토(108 passed), feat/docs 분리 커밋, PR #160 생성 및 CI 전 항목 통과 |
+| 2026-11-11 | Gemini 리뷰 대응 | Codex P2 리뷰 반영: chords_instruments.spec.js UXR2-1의 lang을 ulp:lang 및 html[lang] 단언으로 교체(9 passed) |
 
 ## 6. 검증·미실행
 

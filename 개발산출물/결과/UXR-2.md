@@ -55,4 +55,5 @@
 
 1. **구현 커밋:** `feat(chords): UXR-2 악기 버튼군·접이식 설정·스케일 행·재해석 2열` (`2599701`, 6개 파일).
 2. **문서 커밋:** `docs(chords): UXR-2 4단계 전체 회귀 및 스크린샷 Q1~Q9 검토 결과 반영`.
-3. **PR 게시:** [PR #160](https://github.com/choise-hun/doloop/pull/160) (base `main`) 생성 및 CI 감시 완료.
+3. **PR 게시:** [PR #160](https://github.com/choise-hun/doloop/pull/160) (base `main`) 생성 및 CI 전 항목 통과 완료.
+4. **Codex 리뷰 대응:** P2 지적 (`UXR2-1`에서 `lang` 대신 실제 저장 키 `ulp:lang` 사용 및 `html[lang]` 검증) 반영 및 검증 (9 passed).
