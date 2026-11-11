@@ -212,7 +212,7 @@ test('C4a-4 삭제는 두 번 눌러야 하고, Esc는 이름 고치기만 취�
   await expect(pop).toHaveCount(0);
 });
 
-// 플레이어는 도착하자마자 sessionStorage 값을 읽고 지운다(G-4b) → 서랍이 열리고 값이 소비됐는지로 본다
+// 플레이어는 도착하자마자 sessionStorage 값을 읽고 지운다(G-4b) → 인라인 폴더가 선택·펼쳐지고 값이 소비됐는지로 본다
 test('C4a-5 분류 버튼 → URL 그대로 플레이어, 서랍이 열리고 넘긴 값은 소비됨', async ({ page }) => {
   const store = fakeCategoryStore();
   await setupLoggedIn(page, (route) => store.handle(route));
@@ -220,12 +220,15 @@ test('C4a-5 분류 버튼 → URL 그대로 플레이어, 서랍이 열리고 �
   await page.locator('#categorySettingsBtn').click();
   await addCategory(page, 'Jazz');
   const link = page.locator('#categoryRow a[data-category]').first();
+  const jazzId = await link.getAttribute('data-category');
   await page.keyboard.press('Escape');
   await link.click();
   await page.waitForURL(/\/practice\.html$/);
-  // 이 목은 곡이 0개라 폴더 없이 빈 안내만 보인다(폴더 펼침은 player-category.spec.js P4b-1)
-  await expect(page.locator('#lib')).toBeVisible();
-  await expect(page.locator('#songs')).toContainText('아직 곡이 없어요');
+  // UXR-3: 자동 서랍 개방 대신 인라인 폴더 선택 및 모바일 펼침
+  await expect(page.locator('#lib')).toBeHidden();
+  await expect(page.locator('#folderSelect')).toHaveValue(jazzId);
+  await expect(page.locator('#folderToggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#folderList')).toContainText('이 폴더에는 곡이 없습니다');
   expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
 });
 

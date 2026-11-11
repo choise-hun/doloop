@@ -43,15 +43,52 @@
   color: var(--bad);
 }
 
+/* UXR-3: 왼쪽 = 영상·타임라인·(재생|녹음), 오른쪽 = 구간 설정·선택 폴더 곡 목록. DOM 순서 = 모바일 읽기 순서 */
 .ppMain {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 16px;
+  grid-template-rows: auto 1fr;
+  column-gap: 16px;
+  row-gap: 16px;
   align-items: start;
+}
+
+.ppStage {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.ppActions {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.ppSide {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 @media (max-width: 960px) {
   .ppMain {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .ppStage,
+  .ppActions,
+  .ppSide {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .ppActions {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -192,16 +229,16 @@
   gap: 18px;
 }
 
-@media (max-width: 960px) and (min-width: 640px) {
-  .ppCtl {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 20px;
-  }
-  .ppTransport,
-  .ppHint {
-    grid-column: 1 / -1;
-  }
+/* 재생·녹음·폴더 카드 공통 */
+.ppCard {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ppGroup {
@@ -410,14 +447,24 @@
 /* 녹음 및 Google Drive 기본 연결 안내 배너 */
 .ppDriveBanner {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 10px;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   font-size: 12px;
   color: var(--ink);
+}
+
+.ppDriveBanner[hidden] {
+  display: none;
+}
+
+.ppDriveBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ppDriveBtn {
@@ -442,11 +489,13 @@
 
 .ppRecRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .ppRecBtn {
-  flex: 1;
+  flex: 1 1 120px;
+  min-width: 0;
   font-family: var(--font-mono);
 }
 
@@ -481,7 +530,7 @@
 
 .ppTransport {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
 }
@@ -584,6 +633,16 @@
 
 .ppSongTitle {
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ppSongBtn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ppSongBtn:focus-visible {
+  outline-offset: -2px;
 }
 
 .ppSongMeta {
@@ -877,4 +936,86 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   z-index: 2;
+}
+
+/* UXR-3: 선택 폴더 곡 목록 패널 */
+.ppFolderPanel {
+  gap: 8px;
+}
+
+.folderSelect {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.folderHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.folderName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.folderCountText {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.folderToggle {
+  display: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-card);
+}
+
+.folderStatus p {
+  margin: 0;
+}
+
+.folderStatus:empty {
+  display: none;
+}
+
+.folderErr {
+  color: var(--bad);
+}
+
+.folderBody {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.folderBody p {
+  margin: 0;
+  padding: 6px 2px;
+}
+
+@media (max-width: 960px) {
+  .folderToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .folderSelect {
+    height: 44px;
+  }
+  .folderBody[data-collapsed="true"] {
+    display: none;
+  }
 }

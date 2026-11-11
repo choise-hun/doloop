@@ -131,22 +131,18 @@ const folderState = (page) =>
     els.map((el) => [el.querySelector('button').textContent.replace(/[▾▸]/g, '').trim(), el.querySelector('button').getAttribute('aria-expanded')])
   );
 
-test('P4b-1 홈 분류 버튼 → 플레이어에서 서랍이 열리고 그 폴더만 펼쳐짐', async ({ page }) => {
+test('P4b-1 홈 분류 버튼 → 플레이어에서 인라인 폴더가 선택·펼쳐짐', async ({ page }) => {
   await setupLoggedIn(page);
   await page.goto('/index.html', { waitUntil: 'load' });
   test.skip(!(await isReact(page)), 'legacy 모드: React 화면 아님');
   await page.locator(`#categoryRow a[data-category="${CAT.pop}"]`).click();
   await page.waitForURL(/\/practice\.html$/);
 
-  await expect(page.locator('#lib')).toBeVisible();
-  await expect(page.locator('#songs > li[data-folder]')).toHaveCount(4);
-  expect(await folderState(page)).toEqual([
-    ['Jazz2', 'false'],
-    ['Pop1', 'true'],
-    ['빈 분류0', 'false'],
-    ['미분류1', 'false'],
-  ]);
-  await expect(page.locator(`#songs > li[data-folder="${CAT.pop}"]`)).toContainText('Song 1');
+  await expect(page.locator('#lib')).toBeHidden();
+  await expect(page.locator('#folderSelect')).toHaveValue(CAT.pop);
+  await expect(page.locator('#folderToggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#folderCount')).toHaveText('1곡');
+  await expect(page.locator('#folderList')).toContainText('Song 1');
   // 한 번 읽은 분류는 지워져 새로고침하면 서랍이 저절로 열리지 않는다
   expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
   await page.reload({ waitUntil: 'load' });
@@ -180,7 +176,7 @@ test('P4b-3 분류가 없는 사용자는 예전처럼 평면 목록', async ({ 
   await expect(page.locator('#songs > li')).toHaveCount(3);
 });
 
-test('P4b-4 지워진 분류로 넘어오면 전부 펼침', async ({ page }) => {
+test('P4b-4 지워진 분류로 넘어오면 전체 곡 선택 + 안내', async ({ page }) => {
   await setupLoggedIn(page);
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('seeded')) {
@@ -190,9 +186,10 @@ test('P4b-4 지워진 분류로 넘어오면 전부 펼침', async ({ page }) =>
   });
   await page.goto('/practice.html', { waitUntil: 'load' });
   test.skip(!(await isReact(page)), 'legacy 모드: React 화면 아님');
-  await expect(page.locator('#lib')).toBeVisible();
-  await expect(page.locator('#songs > li[data-folder]')).toHaveCount(4);
-  expect((await folderState(page)).map((f) => f[1])).toEqual(['true', 'true', 'true', 'true']);
+  await expect(page.locator('#lib')).toBeHidden();
+  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  await expect(page.locator('#ppFolderPanel')).toContainText('선택한 폴더를 찾을 수 없어 전체 곡을 표시합니다');
+  await expect(page.locator('#folderList button')).toHaveCount(3);
 });
 
 test('P4b-5 현재 곡 분류 붙이기·떼기 → 서랍 폴더에 반영, Esc로 닫힘', async ({ page }) => {

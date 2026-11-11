@@ -646,7 +646,9 @@ async function listSongs(status?: string): Promise<SongDto[]> {
   let path = '/api/v1/songs';
   if (status) path += '?status=' + encodeURIComponent(status);
   const r = await getAuthRef().apiFetch(path);
-  return r && Array.isArray(r.songs) ? r.songs : [];
+  // 응답 형태가 다르면 빈 목록으로 숨기지 않고 오류로 올린다(UXR-3: 성공 0곡과 구분)
+  if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.songsLoadFailed'));
+  return r.songs;
 }
 
 async function byVideo(videoId: string): Promise<SongDto | null> {
@@ -697,9 +699,10 @@ async function updateSong(
   return r ? r.song : null;
 }
 
-// 곡 분류 (docs/03-api-spec.md 3.7). 응답이 비거나 모양이 다르면 빈 목록
+// 곡 분류 (docs/03-api-spec.md 3.7). 응답 모양이 다르면 오류(올바른 []만 빈 목록)
 function categoryList(r: any): CategoryDto[] {
-  return r && Array.isArray(r.categories) ? r.categories : [];
+  if (!r || !Array.isArray(r.categories)) throw new Error(t('practice.songsLoadFailed'));
+  return r.categories;
 }
 
 async function listCategories(signal?: AbortSignal): Promise<CategoryDto[]> {
