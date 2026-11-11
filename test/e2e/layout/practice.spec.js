@@ -764,6 +764,66 @@ test('UXR3-PL09: 현재 곡 재클릭 no-op, 다른 곡 전환 중 잠금(aria-d
   await expect(song2Btn).not.toHaveAttribute('aria-disabled', 'true');
 });
 
+// RECFIX-1(F7): PL-08 — 현재 곡 분류 할당 성공이 인라인 선택 폴더 목록에 같은 데이터로 반영된다
+test('UXR3-PL08: 현재 곡을 빈 분류에 넣으면 그 폴더 목록·곡 수에 즉시 나타나고 실패하면 되돌린다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const mock = ux3Mock();
+  let patchFail = false;
+  const patches = [];
+  mock.routes.push([
+    (url) => /^\/api\/v1\/songs\/[^/]+$/.test(url.pathname),
+    (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      const body = route.request().postDataJSON();
+      patches.push(body);
+      if (patchFail) return UX3_JSON(route, { code: 'INTERNAL' }, 500);
+      return UX3_JSON(route, { song: { ...UX3_SONGS[0], categoryIds: body.categoryIds } });
+    },
+  ]);
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const items = page.locator('#folderList li button');
+  await page.locator('#folderSelect').selectOption(CAT_EMPTY);
+  await expect(items).toHaveCount(0);
+
+  await page.locator('#songCatBtn').click();
+  await page.locator(`#songCatPop [data-category="${CAT_EMPTY}"] input`).check();
+  await expect(items).toHaveText([/Song 1/]);
+  await expect(page.locator('#folderCount')).toHaveText(/1/);
+  expect(patches.at(-1).categoryIds).toContain(CAT_EMPTY);
+
+  // 실패하면 화면 반영을 되돌린다(성공으로 남기지 않음)
+  patchFail = true;
+  await page.locator(`#songCatPop [data-category="${CAT_EMPTY}"] input`).uncheck();
+  await expect(items).toHaveText([/Song 1/]);
+  await expect(page.locator(`#songCatPop [data-category="${CAT_EMPTY}"] input`)).toBeChecked();
+});
+
+// RECFIX-1(F7): PL-11 — 모바일에서 접힌 목록 본문은 키보드 Tab 순서에서 빠지고, 펼치면 첫 곡에 도달한다
+test('UXR3-PL11: 390 접힘 상태에서 #folderToggle 다음 Tab이 목록 안으로 들어가지 않고, 펼치면 첫 곡에 도달', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApp(page, ux3Mock());
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const toggle = page.locator('#folderToggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-controls', /.+/);
+  await toggle.focus();
+  const inList = async () => page.evaluate(() => Boolean(document.activeElement?.closest('#folderList')));
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab');
+    expect(await inList()).toBe(false);
+  }
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  let reached = false;
+  for (let i = 0; i < 6 && !reached; i++) {
+    await page.keyboard.press('Tab');
+    reached = await inList();
+  }
+  expect(reached).toBe(true);
+});
+
 test('UXR3-PL10: guest / Drive 미연결 / 녹음 상태 가드', async ({ page }) => {
   // 1) guest 상태: 드라이브 배너 없음, 폴더 로그인 유도
   await page.setViewportSize({ width: 1280, height: 900 });

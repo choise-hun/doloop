@@ -1,5 +1,5 @@
 // frontend/src/pages/LogPage.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
 import {
@@ -330,14 +330,13 @@ function OwnedLogPage(): React.ReactElement {
 
   // A/B 선택된 테이크 계산 (주니어 체크리스트 58·59행, PR #43 리뷰 1번)
   const detailTakes = detailData?.takes || [];
-  const abPair: [TakeDto, TakeDto] | null =
-    Boolean(abSelected[0] && abSelected[1])
-      ? (() => {
-          const t1 = detailTakes.find((t) => t.id === abSelected[0]);
-          const t2 = detailTakes.find((t) => t.id === abSelected[1]);
-          return t1 && t2 ? sortAbTakes(t1, t2) : null;
-        })()
-      : null;
+  // 두 테이크 객체가 바뀔 때만 새 쌍을 만든다(렌더마다 새 배열이면 AbCompare가 재생 요청을 버림, RECFIX-1)
+  const abT1 = abSelected[0] && abSelected[1] ? detailTakes.find((t) => t.id === abSelected[0]) : undefined;
+  const abT2 = abSelected[0] && abSelected[1] ? detailTakes.find((t) => t.id === abSelected[1]) : undefined;
+  const abPair = useMemo<[TakeDto, TakeDto] | null>(
+    () => (abT1 && abT2 ? sortAbTakes(abT1, abT2) : null),
+    [abT1, abT2]
+  );
 
   // 달력 84일 계산
   const today = getLogTodayStr();

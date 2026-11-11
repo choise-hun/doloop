@@ -45,3 +45,13 @@
 ## 5. 서버 DTO 대조 및 레이아웃 규격 (PR #29, #38, FT-3)
 - 프론트에서 읽는 API 필드는 추측하지 않고 src/main/kotlin/ulevelp/ 내 DTO 정의를 grep으로 반드시 대조한다.
 - 화면/배치 수정 시 data-align-group 지정 -> test/e2e/layout/<화면>.spec.js 실패 확인 -> 구현 -> LAYOUT_SHOTS=1 4개 폭(390·768·1150·1280px) 스크린샷 표 검증 순서를 지킨다.
+
+## 6. effect 의존성에 들어가는 파생 배열·객체는 참조를 고정한다 (RECFIX-1)
+- 렌더 중 만든 배열·객체 리터럴(`[a, b]`, `{...}`)을 자식 effect의 의존성이나 요청 토큰 기준으로 넘기면 부모가 다시 그려질 때마다 effect가 돌아 진행 중 요청이 버려진다. 연습 화면은 영상 재생 중 250ms·녹음 중 50ms마다 다시 그려진다.
+
+    // [필수 패턴] 원소 참조가 바뀔 때만 새 쌍을 만든다 (hook은 조기 return 앞에 둔다)
+    const pairA = takes.find((x) => x.id === slotA);
+    const pairB = takes.find((x) => x.id === slotB);
+    const abPair = useMemo(() => (pairA && pairB ? [pairA, pairB] : null), [pairA, pairB]);
+
+- 회귀 테스트는 요청을 붙잡은 상태에서 부모 상태만 바꿔 재렌더한 뒤 응답을 풀고 결과가 반영되는지 단언한다(`test/e2e/practice-record.spec.js` RECFIX1-1).

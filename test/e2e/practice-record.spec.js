@@ -582,6 +582,36 @@ test('UXR1-7: 늦게 도착한 A 재생 URL은 슬롯이 바뀐 뒤 audio에 할
   await expect(page.locator('#srAbAudioA')).not.toHaveAttribute('src', /./);
 });
 
+// RECFIX-1(F1): 슬롯이 그대로면 연습 화면이 다시 그려져도(영상 재생 중 250ms 갱신 등) 진행 중 A 재생 요청이 버려지면 안 된다
+test('RECFIX1-1: A 재생 URL 대기 중 부모 재렌더가 일어나도 응답 후 A audio에 src가 할당된다', async ({ page }) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await openUx(page, {
+    routes: [[
+      (url) => /\/api\/v1\/takes\/[^/]+\/url$/.test(url.pathname),
+      async (route) => {
+        if (route.request().url().includes(UX_IDS.t1)) await gate;
+        return json(route, { url: 'https://example.com/take.webm', expiresIn: 3600 });
+      },
+    ]],
+  });
+  await sel(page, UX_IDS.t1).selectOption('a');
+  await sel(page, UX_IDS.t3).selectOption('b');
+  await expect(page.locator('#srAbPanel')).toBeVisible();
+  const pending = page.waitForRequest((r) => r.url().includes(`${UX_IDS.t1}/url`));
+  await page.locator('#srAbPlayA').click();
+  await pending;
+  // 슬롯은 그대로 두고 연습 화면(부모) 상태만 바꿔 다시 그린다
+  const label = (await page.locator('#rates button:not([disabled])[aria-pressed="false"]').first().textContent()).trim();
+  const rateBtn = page.locator('#rates').getByRole('button', { name: label, exact: true });
+  await rateBtn.click();
+  await expect(rateBtn).toHaveAttribute('aria-pressed', 'true');
+  const answered = page.waitForResponse((r) => r.url().includes(`${UX_IDS.t1}/url`));
+  release();
+  await answered;
+  await expect(page.locator('#srAbAudioA')).toHaveAttribute('src', 'https://example.com/take.webm');
+});
+
 test('UXR1-8: TRAILS(log.html) 상세 타임라인 카드에는 A/B 선택이 새어 나가지 않는다', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, { ...STATES.userData, songs: [SONG_1], songDetail: UX_DETAIL });
