@@ -37,6 +37,7 @@ export const EN: Record<I18nKey, string> = {
   'chords.instrumentBass': 'Bass',
   'chords.instrumentKeyboard': 'Keyboard',
   'chords.instrumentTuning': 'Strings · tuning',
+  'chords.instrumentSettings': 'Instrument settings',
   'chords.keyboardNote': 'Select a note',
   'chords.keyboardToggleNote': 'Add · remove note',
   'nav.ariaSite': "Site",

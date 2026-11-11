@@ -651,3 +651,40 @@
   font-family: var(--font-mono);
   color: var(--muted);
 }
+
+/* UXR-2 */
+
+.instrumentControls > .instrumentField { flex: 0 0 auto; }
+.instrumentKind { flex-wrap: nowrap; gap: 8px; }
+.instrumentKind .chip { min-width: 72px; min-height: 44px; flex: 0 0 auto; white-space: nowrap; align-items: center; justify-content: center; }
+.instrumentSettings { flex: 1 1 220px; min-width: 0; }
+.instrumentSettings > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 13px; color: var(--muted); }
+.instrumentSettings[open] > summary { margin-bottom: 4px; }
+
+.scRows { display: flex; flex-direction: column; gap: 12px; }
+.scRow { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+.scField { flex: 0 1 auto; min-width: 0; }
+.scField select, .scField input, .scField .chip { min-height: 44px; }
+.scField .chips .chip { white-space: nowrap; align-items: center; justify-content: center; }
+.scField .selectField, .scField .numField { width: auto; min-width: 120px; }
+.scCheck { min-height: 44px; align-self: flex-end; align-items: center; padding-bottom: 0; }
+.scRow .playbtn { min-height: 44px; }
+.scStatus { flex: 1 1 200px; min-width: 0; align-self: center; }
+@media (max-width: 767px) {
+  .scRow { flex-direction: column; align-items: stretch; }
+  .scField .selectField, .scField .numField { width: 100%; }
+  .scStatus { flex: 0 0 auto; }
+}
+
+.riLayout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.riMain, .riQuiz { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.riSwap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.riSwap .cell svg { width: 100%; height: auto; max-width: 100%; }
+.riOpts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.riOpts .chip { white-space: normal; text-align: left; align-items: flex-start; }
+@media (min-width: 1024px) {
+  .riLayout { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .riSwap, .riOpts { grid-template-columns: minmax(0, 1fr); }
+}

@@ -35,6 +35,7 @@ export const KO = {
   'chords.instrumentBass': '베이스',
   'chords.instrumentKeyboard': '건반',
   'chords.instrumentTuning': '현 수 · 튜닝',
+  'chords.instrumentSettings': '악기 설정',
   'chords.keyboardNote': '음 선택',
   'chords.keyboardToggleNote': '음 추가 · 제거',
   // AppShell 위 메뉴·탭 바

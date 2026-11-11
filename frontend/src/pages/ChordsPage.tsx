@@ -1146,22 +1146,25 @@ export function ChordsPage(): React.ReactElement {
           {t('chords.pageSub')}
         </p>
         <div className={styles.instrumentControls} data-align-group="instrumentFlow:left">
-          <div className={styles.field}>
+          <div className={`${styles.field} ${styles.instrumentField}`}>
             <span id="instrument-label" className={styles.lab}>{t('chords.instrumentSelectLab')}</span>
-            <div id="instrument-kind" className={styles.chips} role="group" aria-labelledby="instrument-label">
+            <div id="instrument-kind" className={`${styles.chips} ${styles.instrumentKind}`} role="group" aria-labelledby="instrument-label">
               {(['guitar', 'bass', 'keyboard'] as const).map((kind) => <button
                 key={kind} id={`instrument-${kind}`} type="button" className={styles.chip}
-                data-align-group="instrumentButtons:height" aria-pressed={instrumentKind === kind}
+                data-align-group="instrumentButtons:top,height" aria-pressed={instrumentKind === kind}
                 onClick={() => changeInstrument(kind)}>{t(INSTRUMENT_NAME_KEY[kind])}</button>)}
             </div>
           </div>
-          {!isKeyboard && <div className={styles.field}>
-            <label htmlFor="instrument-tuning">{t('chords.instrumentTuning')}</label>
-            <select id="instrument-tuning" className={styles.selectField} value={selectedTuning}
-              onChange={(event) => changeTuning(event.target.value as TuningId)}>
-              {availableTunings.map((tuning) => <option key={tuning.id} value={tuning.id}>{t(TUNING_NAME_KEY[tuning.id])}</option>)}
-            </select>
-          </div>}
+          {!isKeyboard && <details id="instrument-settings" className={styles.instrumentSettings}>
+            <summary id="instrument-settings-summary">{t('chords.instrumentSettings')} · {t(TUNING_NAME_KEY[selectedTuning])}</summary>
+            <div className={styles.field}>
+              <label htmlFor="instrument-tuning">{t('chords.instrumentTuning')}</label>
+              <select id="instrument-tuning" className={styles.selectField} value={selectedTuning}
+                onChange={(event) => changeTuning(event.target.value as TuningId)}>
+                {availableTunings.map((tuning) => <option key={tuning.id} value={tuning.id}>{t(TUNING_NAME_KEY[tuning.id])}</option>)}
+              </select>
+            </div>
+          </details>}
         </div>
       </header>
 
@@ -1351,214 +1354,213 @@ export function ChordsPage(): React.ReactElement {
 
         {/* 프렛보드 및 스케일 설정 패널 */}
         <div className={styles.panel}>
-          <div className={styles.controls}>
-            <div className={styles.field}>
-              <span className={styles.lab}>{t('chords.practiceModeLab')}</span>
-              <div id="sc-mode" className={styles.chips}>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scMode === 'simple'}
-                  onClick={() => {
-                    setScMode('simple');
-                    setScCi(0);
-                  }}
-                >
-                  {t('chords.modeSimpleScale')}
-                </button>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scMode === 'circle'}
-                  onClick={() => {
-                    setScMode('circle');
-                    setScCi(0);
-                  }}
-                >
-                  {t('chords.modeCircleCycle')}
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.field}>
-              <label id="sc-root-lab" htmlFor="sc-root">
-                {scMode === 'circle' ? t('chords.startRootLabel') : t('chords.rootNoteLabel')}
-              </label>
-              <select
-                id="sc-root"
-                className={styles.selectField}
-                value={scRoot}
-                onChange={(e) => {
-                  setScRoot(+e.target.value);
-                  setScCi(0);
-                }}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="sc-type">{t('chords.scaleTypeLabel')}</label>
-              <select
-                id="sc-type"
-                className={styles.selectField}
-                value={scType}
-                onChange={(e) => setScType(e.target.value)}
-              >
-                {CT.SCALES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <span className={styles.lab}>{t('chords.noteLabelLab')}</span>
-              <div id="sc-label" className={styles.chips}>
-                {(['deg', 'name', 'none'] as const).map((l) => (
+          <div className={styles.scRows}>
+            <div id="sc-row-basic" className={styles.scRow}>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <span className={styles.lab}>{t('chords.practiceModeLab')}</span>
+                <div id="sc-mode" className={styles.chips} data-align-group="scRow1:bottom@1150">
                   <button
-                    key={l}
                     type="button"
                     className={styles.chip}
-                    aria-pressed={scLabel === l}
-                    onClick={() => setScLabel(l)}
+                    aria-pressed={scMode === 'simple'}
+                    onClick={() => {
+                      setScMode('simple');
+                      setScCi(0);
+                    }}
                   >
-                    {l === 'deg' ? t('chords.labelDegree') : l === 'name' ? t('chords.labelNoteName') : t('chords.none')}
+                    {t('chords.modeSimpleScale')}
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scMode === 'circle'}
+                    onClick={() => {
+                      setScMode('circle');
+                      setScCi(0);
+                    }}
+                  >
+                    {t('chords.modeCircleCycle')}
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <div className={styles.field} hidden={isKeyboard}>
-              <span className={styles.lab}>{t('chords.handednessLab')}</span>
-              <div id="sc-hand" className={styles.chips}>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scHand === 'right'}
-                  onClick={() => setScHand('right')}
-                >
-                  {t('chords.rightHand')}
-                </button>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scHand === 'left'}
-                  onClick={() => setScHand('left')}
-                >
-                  {t('chords.leftHand')}
-                </button>
-              </div>
-            </div>
-
-            <div id="sc-circle-opts" className={styles.field} hidden={scMode !== 'circle'}>
-              <span className={styles.lab}>{t('chords.cycleDirectionLab')}</span>
-              <div id="sc-dir" className={styles.chips}>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scDir === 1}
-                  onClick={() => {
-                    setScDir(1);
+              <div className={`${styles.field} ${styles.scField}`}>
+                <label id="sc-root-lab" htmlFor="sc-root">
+                  {scMode === 'circle' ? t('chords.startRootLabel') : t('chords.rootNoteLabel')}
+                </label>
+                <select
+                  id="sc-root"
+                  className={styles.selectField}
+                  data-align-group="scRow1:bottom@1150"
+                  value={scRoot}
+                  onChange={(e) => {
+                    setScRoot(+e.target.value);
                     setScCi(0);
                   }}
                 >
-                  {t('chords.fifthUp')}
-                </button>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scDir === -1}
-                  onClick={() => {
-                    setScDir(-1);
-                    setScCi(0);
-                  }}
+                  {CT.NAMES.map((name, i) => (
+                    <option key={name} value={i}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <label htmlFor="sc-type">{t('chords.scaleTypeLabel')}</label>
+                <select
+                  id="sc-type"
+                  className={styles.selectField}
+                  data-align-group="scRow1:bottom@1150"
+                  value={scType}
+                  onChange={(e) => setScType(e.target.value)}
                 >
-                  {t('chords.fourthUp')}
-                </button>
+                  {CT.SCALES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-
-            <div className={styles.field} hidden={scMode !== 'circle'}>
-              <label htmlFor="sc-bars">{t('chords.barsPerKeyLabel')}</label>
-              <select
-                id="sc-bars"
-                className={styles.selectField}
-                value={scBars}
-                onChange={(e) => setScBars(+e.target.value)}
+            <div id="sc-row-circle" className={styles.scRow} hidden={scMode !== 'circle'}>
+              <div id="sc-circle-opts" className={`${styles.field} ${styles.scField}`}>
+                <span className={styles.lab}>{t('chords.cycleDirectionLab')}</span>
+                <div id="sc-dir" className={styles.chips}>
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scDir === 1}
+                    onClick={() => {
+                      setScDir(1);
+                      setScCi(0);
+                    }}
+                  >
+                    {t('chords.fifthUp')}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scDir === -1}
+                    onClick={() => {
+                      setScDir(-1);
+                      setScCi(0);
+                    }}
+                  >
+                    {t('chords.fourthUp')}
+                  </button>
+                </div>
+              </div>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <label htmlFor="sc-bars">{t('chords.barsPerKeyLabel')}</label>
+                <select
+                  id="sc-bars"
+                  className={styles.selectField}
+                  value={scBars}
+                  onChange={(e) => setScBars(+e.target.value)}
+                >
+                  <option value={0}>{t('chords.scaleOneCycle')}</option>
+                  <option value={1}>{t('chords.barsOne')}</option>
+                  <option value={2}>{t('chords.barsTwo')}</option>
+                  <option value={4}>{t('chords.barsFour')}</option>
+                </select>
+              </div>
+            </div>
+            <div id="sc-row-display" className={styles.scRow}>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <span className={styles.lab}>{t('chords.noteLabelLab')}</span>
+                <div id="sc-label" className={styles.chips} data-align-group="scRow2:bottom@1150">
+                  {(['deg', 'name', 'none'] as const).map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      className={styles.chip}
+                      aria-pressed={scLabel === l}
+                      onClick={() => setScLabel(l)}
+                    >
+                      {l === 'deg' ? t('chords.labelDegree') : l === 'name' ? t('chords.labelNoteName') : t('chords.none')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className={`${styles.field} ${styles.scField}`} hidden={isKeyboard}>
+                <span className={styles.lab}>{t('chords.handednessLab')}</span>
+                <div id="sc-hand" className={styles.chips} data-align-group="scRow2:bottom@1150">
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scHand === 'right'}
+                    onClick={() => setScHand('right')}
+                  >
+                    {t('chords.rightHand')}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scHand === 'left'}
+                    onClick={() => setScHand('left')}
+                  >
+                    {t('chords.leftHand')}
+                  </button>
+                </div>
+              </div>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <span className={styles.lab}>{t('chords.playRangeLab')}</span>
+                <div id="sc-range" className={styles.chips} data-align-group="scRow2:bottom@1150">
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scRange === 'oct'}
+                    onClick={() => setScRange('oct')}
+                  >
+                    {t('chords.rangeOneOctave')}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={scRange === 'pos'}
+                    onClick={() => setScRange('pos')}
+                  >
+                    {t('chords.rangeVisibleAll')}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div id="sc-row-play" className={styles.scRow}>
+              <div className={`${styles.field} ${styles.scField}`}>
+                <label htmlFor="sc-bpm">{t('chords.bpmLabel')}</label>
+                <input
+                  id="sc-bpm"
+                  className={styles.numField}
+                  data-align-group="scRow3:bottom@1150; scRow3c:center-y"
+                  type="number"
+                  min="30"
+                  max="220"
+                  value={scBpm}
+                  onChange={(e) => setScBpm(+e.target.value)}
+                />
+              </div>
+              <label className={`${styles.check} ${styles.scCheck}`} data-align-group="scRow3:bottom@1150; scRow3c:center-y">
+                <input
+                  id="sc-rootonly"
+                  type="checkbox"
+                  checked={scRootOnly}
+                  onChange={(e) => setScRootOnly(e.target.checked)}
+                />
+                {t('chords.rootOnlyMem')}
+              </label>
+              <button
+                id="sc-play"
+                type="button"
+                className={styles.playbtn}
+                aria-pressed={scPlaying}
+                onClick={toggleScPlay}
               >
-                <option value={0}>{t('chords.scaleOneCycle')}</option>
-                <option value={1}>{t('chords.barsOne')}</option>
-                <option value={2}>{t('chords.barsTwo')}</option>
-                <option value={4}>{t('chords.barsFour')}</option>
-              </select>
+                {scPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
+              </button>
+              <span id="sc-status" className={`${styles.status} ${styles.scStatus}`}>
+                {isKeyboard ? t('chords.keyboardScaleCount', { from: `${CT.NAMES[scCurrentKey.root]}3`, to: `${CT.NAMES[scCurrentKey.root]}${scRange === 'oct' ? 4 : 5}`, count: new Set(scSeqNotes.map((note) => note.pitch)).size })
+                  : t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
+              </span>
             </div>
-
-            <div className={styles.field}>
-              <span className={styles.lab}>{t('chords.playRangeLab')}</span>
-              <div id="sc-range" className={styles.chips}>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scRange === 'oct'}
-                  onClick={() => setScRange('oct')}
-                >
-                  {t('chords.rangeOneOctave')}
-                </button>
-                <button
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={scRange === 'pos'}
-                  onClick={() => setScRange('pos')}
-                >
-                  {t('chords.rangeVisibleAll')}
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="sc-bpm">{t('chords.bpmLabel')}</label>
-              <input
-                id="sc-bpm"
-                className={styles.numField}
-                type="number"
-                min="30"
-                max="220"
-                value={scBpm}
-                onChange={(e) => setScBpm(+e.target.value)}
-              />
-            </div>
-
-            <label className={styles.check}>
-              <input
-                id="sc-rootonly"
-                type="checkbox"
-                checked={scRootOnly}
-                onChange={(e) => setScRootOnly(e.target.checked)}
-              />
-              {t('chords.rootOnlyMem')}
-            </label>
-          </div>
-
-          <div className={styles.row}>
-            <button
-              id="sc-play"
-              type="button"
-              className={styles.playbtn}
-              aria-pressed={scPlaying}
-              onClick={toggleScPlay}
-            >
-              {scPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
-            </button>
-            <span id="sc-status" className={styles.status}>
-              {isKeyboard ? t('chords.keyboardScaleCount', { from: `${CT.NAMES[scCurrentKey.root]}3`, to: `${CT.NAMES[scCurrentKey.root]}${scRange === 'oct' ? 4 : 5}`, count: new Set(scSeqNotes.map((note) => note.pitch)).size })
-                : t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
-            </span>
           </div>
         </div>
       </section>
@@ -2235,155 +2237,159 @@ export function ChordsPage(): React.ReactElement {
         </div>
 
         <div className={styles.panel}>
-          <div className={styles.riGrid}>
-            <div id="ri-shape">
-              {riNotes.length ? (
-                <figure className={styles.cell}>
-                  <>{isKeyboard ? <KeyboardDiagramSvg notes={riNotes} label={t('chords.currentShapeLabel')} /> : <ChordBoxSvg notes={riDegNotes} label={t('chords.currentShapeLabel')} />}</>
-                  <figcaption>
-                    <b>{isKeyboard ? riNotes.map((note) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(riNotes)}</b>
-                  </figcaption>
-                </figure>
-              ) : (
-                <div className={styles.empty}>{t('chords.reintEmptyPrompt')}</div>
-              )}
-            </div>
-
-            <div id="ri-list" className={styles.chips}>
-              {riInterpretList.map((interp: any, i: number) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={`${styles.chip} ${riPick === i ? styles.dsStepCardSel : ''}`}
-                  onClick={() => {
-                    setRiPick(riPick === i ? null : i);
-                    const nowTime = audioEngine.now() + 0.02;
-                    playInstrumentBass(36 + interp.root + (interp.root < 4 ? 12 : 0), nowTime, 2);
-                    playInstrumentChord(pitchesOf(riNotes), nowTime + 0.05, 2);
-                  }}
-                >
-                  <b>{interp.name}</b>
-                  <small>{ROLE_KEY[interp.role] ? t(ROLE_KEY[interp.role]) : interp.role}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <h3 className={styles.h3}>{t('chords.reintTwoFiveOneTitle')}</h3>
-          <div className={styles.controls}>
-            <div className={styles.field}>
-              <label htmlFor="ri-key">{t('chords.selectKeyLabel')}</label>
-              <select
-                id="ri-key"
-                className={styles.selectField}
-                value={riKey}
-                onChange={(e) => setRiKey(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className={styles.field}>
-              <label htmlFor="ri-bpm">BPM</label>
-              <input
-                id="ri-bpm"
-                className={styles.numField}
-                type="number"
-                min="40"
-                max="180"
-                value={riBpm}
-                onChange={(e) => setRiBpm(+e.target.value)}
-              />
-            </div>
-            <button
-              id="ri-play"
-              type="button"
-              className={styles.playbtn}
-              aria-pressed={riPlaying}
-              onClick={toggleRiPlay}
-            >
-              {riPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
-            </button>
-          </div>
-          <div id="ri-swap" className={styles.boxrow}>
-            {riSwapPlan.map((p, i) => (
-              <figure key={i} className={styles.cell}>
-                {!p.none ? (
-                  <>{isKeyboard ? <KeyboardDiagramSvg notes={p.notes} label={p.name!} /> : <ChordBoxSvg notes={p.notes} label={p.name} />}</>
-                ) : (
-                  <div className={styles.empty}>{t('chords.shapeImpossible')}</div>
-                )}
-                <figcaption>
-                  <b>{p.ro.r} {p.name}</b>
-                  <span>{p.notes ? isKeyboard ? p.notes.map((note: any) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(p.notes) : ''}</span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-
-          {/* 퀴즈 박스 */}
-          <h3 className={styles.h3}>{t('chords.quizTitle')}</h3>
-          <div className={styles.quiz}>
-            <div id="qz-box">
-              {quizQuestion && (
-                <>{isKeyboard ? <KeyboardDiagramSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} /> : <ChordBoxSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} />}</>
-              )}
-            </div>
-            <div className={styles.field}>
-              <div id="qz-score" className={styles.meta}>
-                {quizScore.n ? `${quizScore.score} / ${quizScore.n}` : t('chords.noSolvedQuiz')}
-              </div>
-              <div id="qz-text" className={styles.lead}>
-                {quizQuestion?.text}
-              </div>
-              <div id="qz-opts" className={styles.chips}>
-                {quizQuestion?.opts.map((o, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={styles.chip}
-                    disabled={quizDone}
-                    onClick={() => {
-                      if (quizDone) return;
-                      setQuizDone(true);
-                      setQuizScore((prev) => ({
-                        score: o.ok ? prev.score + 1 : prev.score,
-                        n: prev.n + 1,
-                      }));
-                      setQuizFeedback({
-                        text: (o.ok ? t('chords.quizCorrect') : t('chords.quizIncorrect')) + quizQuestion.explain,
-                        good: o.ok,
-                      });
-                    }}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-              {quizFeedback && (
-                <div id="qz-fb" className={styles.note}>
-                  {quizFeedback.text}
+          <div className={styles.riLayout}>
+            <div className={styles.riMain} data-align-group="reintPanels:top@1024">
+              <div className={styles.riGrid}>
+                <div id="ri-shape">
+                  {riNotes.length ? (
+                    <figure className={styles.cell}>
+                      <>{isKeyboard ? <KeyboardDiagramSvg notes={riNotes} label={t('chords.currentShapeLabel')} /> : <ChordBoxSvg notes={riDegNotes} label={t('chords.currentShapeLabel')} />}</>
+                      <figcaption>
+                        <b>{isKeyboard ? riNotes.map((note) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(riNotes)}</b>
+                      </figcaption>
+                    </figure>
+                  ) : (
+                    <div className={styles.empty}>{t('chords.reintEmptyPrompt')}</div>
+                  )}
                 </div>
-              )}
-              <div className={styles.row}>
+
+                <div id="ri-list" className={styles.chips}>
+                  {riInterpretList.map((interp: any, i: number) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`${styles.chip} ${riPick === i ? styles.dsStepCardSel : ''}`}
+                      onClick={() => {
+                        setRiPick(riPick === i ? null : i);
+                        const nowTime = audioEngine.now() + 0.02;
+                        playInstrumentBass(36 + interp.root + (interp.root < 4 ? 12 : 0), nowTime, 2);
+                        playInstrumentChord(pitchesOf(riNotes), nowTime + 0.05, 2);
+                      }}
+                    >
+                      <b>{interp.name}</b>
+                      <small>{ROLE_KEY[interp.role] ? t(ROLE_KEY[interp.role]) : interp.role}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <h3 className={styles.h3}>{t('chords.reintTwoFiveOneTitle')}</h3>
+              <div className={styles.controls}>
+                <div className={styles.field}>
+                  <label htmlFor="ri-key">{t('chords.selectKeyLabel')}</label>
+                  <select
+                    id="ri-key"
+                    className={styles.selectField}
+                    value={riKey}
+                    onChange={(e) => setRiKey(+e.target.value)}
+                  >
+                    {CT.NAMES.map((name, i) => (
+                      <option key={name} value={i}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.field}>
+                  <label htmlFor="ri-bpm">BPM</label>
+                  <input
+                    id="ri-bpm"
+                    className={styles.numField}
+                    type="number"
+                    min="40"
+                    max="180"
+                    value={riBpm}
+                    onChange={(e) => setRiBpm(+e.target.value)}
+                  />
+                </div>
                 <button
-                  id="qz-hear"
+                  id="ri-play"
                   type="button"
-                  className={styles.ghost}
-                  onClick={() => {
-                    if (quizQuestion) playInstrumentChord(pitchesOf(quizQuestion.notes), audioEngine.now() + 0.02);
-                  }}
+                  className={styles.playbtn}
+                  aria-pressed={riPlaying}
+                  onClick={toggleRiPlay}
                 >
-                  {t('chords.btnListenSound')}
-                </button>
-                <button id="qz-next" type="button" className={styles.btn} onClick={startNewQuiz}>
-                  {t('chords.btnNextQuiz')}
+                  {riPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
                 </button>
               </div>
+              <div id="ri-swap" className={`${styles.boxrow} ${styles.riSwap}`}>
+                {riSwapPlan.map((p, i) => (
+                  <figure key={i} className={styles.cell} data-align-group="reintSequence:top,height@768">
+                    {!p.none ? (
+                      <>{isKeyboard ? <KeyboardDiagramSvg notes={p.notes} label={p.name!} /> : <ChordBoxSvg notes={p.notes} label={p.name} />}</>
+                    ) : (
+                      <div className={styles.empty}>{t('chords.shapeImpossible')}</div>
+                    )}
+                    <figcaption>
+                      <b>{p.ro.r} {p.name}</b>
+                      <span>{p.notes ? isKeyboard ? p.notes.map((note: any) => `${CT.NAMES[CT.pc(note.pitch)]}${Math.floor(note.pitch / 12) - 1}`).join(' · ') : fretText(p.notes) : ''}</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
             </div>
+            <section className={styles.riQuiz} data-align-group="reintPanels:top@1024">
+              <h3 className={styles.h3}>{t('chords.quizTitle')}</h3>
+              <div className={styles.quiz}>
+                <div id="qz-box">
+                  {quizQuestion && (
+                    <>{isKeyboard ? <KeyboardDiagramSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} /> : <ChordBoxSvg notes={quizQuestion.notes} label={t('chords.quizShapeLabel')} />}</>
+                  )}
+                </div>
+                <div className={styles.field}>
+                  <div id="qz-score" className={styles.meta}>
+                    {quizScore.n ? `${quizScore.score} / ${quizScore.n}` : t('chords.noSolvedQuiz')}
+                  </div>
+                  <div id="qz-text" className={styles.lead}>
+                    {quizQuestion?.text}
+                  </div>
+                  <div id="qz-opts" className={`${styles.chips} ${styles.riOpts}`}>
+                    {quizQuestion?.opts.map((o, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={styles.chip}
+                        disabled={quizDone}
+                        onClick={() => {
+                          if (quizDone) return;
+                          setQuizDone(true);
+                          setQuizScore((prev) => ({
+                            score: o.ok ? prev.score + 1 : prev.score,
+                            n: prev.n + 1,
+                          }));
+                          setQuizFeedback({
+                            text: (o.ok ? t('chords.quizCorrect') : t('chords.quizIncorrect')) + quizQuestion.explain,
+                            good: o.ok,
+                          });
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {quizFeedback && (
+                    <div id="qz-fb" className={styles.note}>
+                      {quizFeedback.text}
+                    </div>
+                  )}
+                  <div className={styles.row}>
+                    <button
+                      id="qz-hear"
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() => {
+                        if (quizQuestion) playInstrumentChord(pitchesOf(quizQuestion.notes), audioEngine.now() + 0.02);
+                      }}
+                    >
+                      {t('chords.btnListenSound')}
+                    </button>
+                    <button id="qz-next" type="button" className={styles.btn} onClick={startNewQuiz}>
+                      {t('chords.btnNextQuiz')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+        
+            </section>
           </div>
         </div>
       </section>)}
