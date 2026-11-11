@@ -53,14 +53,23 @@ const SR_SONG_DETAIL = {
   })),
 };
 
+// UXR-3: 연습 화면은 분류 목록도 함께 읽는다. 오형태({})는 오류가 되므로 빈 분류를 명시한다
+const EMPTY_CATEGORIES_ROUTE = [
+  (url) => url.pathname === '/api/v1/categories',
+  (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify({ categories: [] }) }),
+];
+
 const USER_DATA_SR = {
   ...STATES.userData,
   songDetail: SR_SONG_DETAIL,
+  routes: [EMPTY_CATEGORIES_ROUTE],
 };
 
 const USER_EMPTY_SR = {
   ...STATES.userData,
   songDetail: { song: SONG_0, takes: [], sessions: [] },
+  routes: [EMPTY_CATEGORIES_ROUTE],
 };
 
 // 영상 없이 연 빈 화면
@@ -445,3 +454,133 @@ for (const width of [1280, 1150, 768, 390]) {
     expect(after.h).toBe(info.heights[0]);
   });
 }
+
+// ---------- UXR-3: 연습 화면 재배치 + 선택 폴더 곡 목록 ----------
+const CAT_JAZZ = '00000000-0000-4000-8000-000000000301';
+const CAT_POP = '00000000-0000-4000-8000-000000000302';
+const CAT_EMPTY = '00000000-0000-4000-8000-000000000303';
+const UX3_CATEGORIES = [
+  { id: CAT_JAZZ, name: 'Jazz', sortOrder: 0, onHome: true, songCount: 2 },
+  { id: CAT_POP, name: 'Pop', sortOrder: 1, onHome: true, songCount: 1 },
+  { id: CAT_EMPTY, name: '빈 분류', sortOrder: 2, onHome: false, songCount: 0 },
+];
+// 곡1: Jazz+Pop(두 폴더), 곡2: Jazz, 곡3: 미분류
+const UX3_SONGS = FIXTURES.longSongs(3).map((s, i) => ({
+  ...s,
+  title: `Song ${i + 1}`,
+  categoryIds: [[CAT_JAZZ, CAT_POP], [CAT_JAZZ], []][i],
+}));
+const UX3_JSON = (route, body, status = 200) =>
+  route.fulfill({ status, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body) });
+
+function ux3Mock({ categories = () => ({ categories: UX3_CATEGORIES }), songs, count = {} } = {}) {
+  const base = { ...STATES.userData, songs: songs || UX3_SONGS, songDetail: SR_SONG_DETAIL };
+  return {
+    ...base,
+    routes: [
+      [
+        (url) => url.pathname === '/api/v1/categories',
+        (route) => {
+          count.cat = (count.cat || 0) + 1;
+          const r = categories(count.cat);
+          return r && r.__status ? UX3_JSON(route, r.body, r.__status) : UX3_JSON(route, r);
+        },
+      ],
+    ],
+  };
+}
+
+for (const width of [1280, 1150]) {
+  test(`UXR3-PL01: 데스크톱 2열 배치 — 영상/설정 윗선, 재생/녹음 윗선, 기록은 아래 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, ux3Mock());
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#songRecord').waitFor();
+    const r = await page.evaluate(() => {
+      const b = (sel) => document.querySelector(sel).getBoundingClientRect();
+      const ctl = document.getElementById('ppCtl');
+      return {
+        video: b('#videoBox'), seek: b('#seekRow'), play: b('#ppPlayCard'), rec: b('#ppRecCard'),
+        ctl: ctl.getBoundingClientRect(), folder: b('#ppFolderPanel'), record: b('#songRecord'),
+        back: b('#backBtn'), recBtn: b('#recBtn'),
+      };
+    });
+    expect(Math.abs(r.video.top - r.ctl.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.play.top - r.rec.top)).toBeLessThanOrEqual(1);
+    expect(r.play.left).toBeLessThan(r.rec.left); // 재생(왼) · 녹음(오)
+    expect(r.play.top).toBeGreaterThanOrEqual(r.seek.bottom - 1); // 타임라인 아래
+    expect(r.ctl.left).toBeGreaterThan(r.rec.right - 1); // 설정은 오른쪽 열
+    expect(Math.abs(r.ctl.left - r.folder.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.ctl.right - r.folder.right)).toBeLessThanOrEqual(1);
+    expect(r.folder.top).toBeGreaterThanOrEqual(r.ctl.bottom - 1);
+    expect(r.record.top).toBeGreaterThanOrEqual(Math.max(r.rec.bottom, r.folder.bottom) - 1);
+    expect(r.recBtn.top).toBeGreaterThanOrEqual(r.rec.top);
+  });
+}
+
+test('UXR3-PL02: 모바일 단일 열·DOM 순서·접힘, 960↔961에서 플레이어 노드·선택 폴더 유지', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApp(page, ux3Mock());
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#ppFolderPanel').waitFor();
+  const order = await page.evaluate(() => {
+    const ids = ['videoBox', 'seekRow', 'ppPlayCard', 'ppRecCard', 'ppCtl', 'ppFolderPanel', 'songRecord'];
+    const tops = ids.map((i) => document.getElementById(i).getBoundingClientRect().top);
+    return { tops, hScroll: document.documentElement.scrollWidth > window.innerWidth };
+  });
+  expect([...order.tops].sort((a, b) => a - b)).toEqual(order.tops);
+  expect(order.hScroll).toBe(false);
+  // 모바일은 기본 접힘: 본문은 Tab/탐색에서 제외(display:none)
+  const toggle = page.locator('#folderToggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#folderList')).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#folderList')).toBeVisible();
+  await page.locator('#folderSelect').selectOption(CAT_POP);
+
+  await page.evaluate(() => { window.__playerEl = document.getElementById('player'); });
+  await page.setViewportSize({ width: 961, height: 900 });
+  await page.setViewportSize({ width: 960, height: 900 });
+  await page.setViewportSize({ width: 961, height: 900 });
+  expect(await page.evaluate(() => window.__playerEl === document.getElementById('player'))).toBe(true);
+  await expect(page.locator('#folderSelect')).toHaveValue(CAT_POP);
+  await expect(page.locator('#folderList')).toBeVisible(); // 데스크톱은 항상 표시
+});
+
+test('UXR3-PL05: 전체/폴더/미분류 필터·곡 수·중복 소속·빈 폴더', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, ux3Mock());
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const items = page.locator('#folderList li button');
+  await expect(items).toHaveCount(3); // 기본값: 전체 곡
+  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  await page.locator('#folderSelect').selectOption(CAT_JAZZ);
+  await expect(items).toHaveText([/Song 1/, /Song 2/]);
+  await expect(page.locator('#folderCount')).toHaveText(/2/);
+  await page.locator('#folderSelect').selectOption(CAT_POP);
+  await expect(items).toHaveText([/Song 1/]); // 곡1은 Pop에도 한 번만
+  await page.locator('#folderSelect').selectOption('__uncategorized');
+  await expect(items).toHaveText([/Song 3/]);
+  await page.locator('#folderSelect').selectOption(CAT_EMPTY);
+  await expect(items).toHaveCount(0);
+  await expect(page.locator('#folderList')).toContainText('이 폴더에는 곡이 없습니다');
+});
+
+test('UXR3-PL06: 곡 GET 실패→재시도 성공, 분류 envelope 오형태는 오류(빈 목록과 구분)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // 1) 분류 응답이 잘못된 형태 → 오류 + 재시도로 복구
+  const count = {};
+  await mockApp(
+    page,
+    ux3Mock({ count, categories: (n) => (n === 1 ? { categories: { oops: true } } : { categories: UX3_CATEGORIES }) })
+  );
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const panel = page.locator('#ppFolderPanel');
+  await expect(panel).toContainText('곡 목록을 불러오지 못했습니다');
+  await expect(page.locator('#folderList li button')).toHaveCount(0);
+  await expect(panel).not.toContainText('저장한 곡이 없습니다');
+  await page.locator('#folderRetry').click();
+  await expect(page.locator('#folderList li button')).toHaveCount(3);
+  await expect(panel).not.toContainText('곡 목록을 불러오지 못했습니다');
+});

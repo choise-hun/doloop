@@ -102,6 +102,10 @@ export interface PendingTakeState {
 
 // 서랍에서 어떤 분류에도 속하지 않은 곡을 모으는 폴더 id
 const UNCATEGORIZED_FOLDER = '__uncategorized';
+// 인라인 곡 목록의 "전체 곡" 가상 선택지(서버 분류 ID와 겹치지 않는다)
+const ALL_FOLDER = '__all';
+
+type ListStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function PracticePage(): React.ReactElement {
   const authState = useAuth();
@@ -143,6 +147,16 @@ export function PracticePage(): React.ReactElement {
   const [libOpen, setLibOpen] = useState(false);
   const [songsList, setSongsList] = useState<SongDto[] | null>(null);
   const [songsErr, setSongsErr] = useState('');
+  // 선택 폴더 곡 목록(인라인). 요청 세대(songsListReqSeqRef)는 서랍과 공유한다
+  const [listStatus, setListStatus] = useState<ListStatus>('idle');
+  const [listUid, setListUid] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState(ALL_FOLDER);
+  const [folderNotice, setFolderNotice] = useState('');
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [switchingSong, setSwitchingSong] = useState(false);
+  const folderBodyRef = useRef<HTMLDivElement | null>(null);
+  const listStatusRef = useRef<ListStatus>('idle');
+  const selectedFolderRef = useRef(ALL_FOLDER);
 
   // 곡 분류: 서랍 폴더(null = 전부 펼침)와 현재 곡 분류 팝업
   const [categories, setCategories] = useState<CategoryDto[]>([]);
@@ -327,7 +341,7 @@ export function PracticePage(): React.ReactElement {
     if (!created) throw new Error(t('practice.errCreateSongFailed'));
     stRef.current.song = created;
     setSong(created);
-    setSongsList(null);
+    void loadSongList({ silent: true });
     return created;
   };
 
@@ -1151,35 +1165,65 @@ export function PracticePage(): React.ReactElement {
     else void startRecordingNow();
   };
 
-  // ---------- 곡 목록 서랍 ----------
-  const loadSongsDrawerList = async () => {
-    if (!apiClient.isLoggedIn()) {
+  // ---------- 곡 목록(인라인 선택 폴더 + 서랍 공용) ----------
+  // 곡·분류를 한 요청 세대로 묶는다. silent: 이미 성공한 목록은 그대로 두고 조용히 다시 읽는다
+  const loadSongList = async (opts?: { silent?: boolean }) => {
+    const myUid = auth.getUser()?.id ?? null;
+    if (!apiClient.isLoggedIn() || !myUid) {
+      songsListReqSeqRef.current++;
       setSongsList(null);
       setSongsErr('');
+      setListStatus('idle');
+      setListUid(null);
       return;
     }
     const mySeq = ++songsListReqSeqRef.current;
-    const myUid = auth.getUser()?.id ?? null;
-    setSongsList(null);
-    setSongsErr('');
+    if (!opts?.silent || listStatusRef.current !== 'success') {
+      setSongsList(null);
+      setSongsErr('');
+      setListStatus('loading');
+      setListUid(myUid);
+    }
     try {
-      const [list, cats] = await Promise.all([
-        apiClient.songs.list(),
-        apiClient.categories.list().catch(() => [] as CategoryDto[]),
-      ]);
+      const [list, cats] = await Promise.all([apiClient.songs.list(), apiClient.categories.list()]);
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
       setCategories(cats);
-      setSongsList(Array.isArray(list) ? list : []);
+      setSongsList(list);
+      setSongsErr('');
+      setListStatus('success');
+      setListUid(myUid);
+      // 홈에서 넘어온 분류 선택(성공 확인 뒤 소비). 조회 실패는 삭제로 보지 않는다
+      const wanted = pendingCategoryRef.current;
+      const known = (id: string) => cats.some((c) => c.id === id);
+      if (wanted) {
+        pendingCategoryRef.current = '';
+        if (known(wanted)) {
+          setSelectedFolderId(wanted);
+          setFolderNotice('');
+          setFolderOpen(true);
+        } else {
+          setSelectedFolderId(ALL_FOLDER);
+          setFolderNotice(t('practice.folderMissing'));
+        }
+      } else {
+        const sel = selectedFolderRef.current;
+        if (sel !== ALL_FOLDER && sel !== UNCATEGORIZED_FOLDER && !known(sel)) {
+          setSelectedFolderId(ALL_FOLDER);
+          setFolderNotice(t('practice.folderMissing'));
+        }
+      }
     } catch (e: any) {
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
       setSongsList([]);
       setSongsErr((e && e.message) || t('practice.songsLoadFailed'));
+      setListStatus('error');
+      setListUid(myUid);
     }
   };
 
   const openDrawer = () => {
     setLibOpen(true);
-    void loadSongsDrawerList();
+    void loadSongList({ silent: true });
   };
 
   const closeDrawer = () => {
@@ -1283,7 +1327,7 @@ export function PracticePage(): React.ReactElement {
             if (!r) return;
             if (r.status === 'done') {
               setSyncMsg({ text: t('practice.migratedCount', { count: r.created }), err: false });
-              setSongsList(null);
+              void loadSongList({ silent: true });
             } else if (r.status === 'failed') {
               setSyncMsg({ text: r.message, err: true });
             }
@@ -1449,22 +1493,13 @@ export function PracticePage(): React.ReactElement {
   useEffect(() => {
     setCategories([]);
     setCatPopOpen(false);
-    if (activeUid && apiClient.isLoggedIn()) {
-      apiClient.categories
-        .list()
-        .then((cats) => {
-          if (auth.getUser()?.id === activeUid) setCategories(cats);
-        })
-        .catch(() => {
-          /* 분류 없이도 플레이어는 쓸 수 있다 */
-        });
-    }
+    setSelectedFolderId(ALL_FOLDER);
+    setFolderNotice('');
+    setFolderOpen(false);
+    setSwitchingSong(false);
     if (pendingCategoryRef.current === null) pendingCategoryRef.current = takeOpenCategory();
-    const wanted = pendingCategoryRef.current;
-    if (!wanted || !activeUid) return;
-    pendingCategoryRef.current = '';
-    setOpenFolders(new Set([wanted]));
-    openDrawer();
+    // 로그인 상태면 영상이 없어도 곡 목록을 읽는다. guest·로그아웃은 loadSongList가 idle로 초기화
+    void loadSongList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUid]);
 
@@ -1532,21 +1567,79 @@ export function PracticePage(): React.ReactElement {
   // 홈에서 고른 분류가 지워졌으면 전부 펼친다
   const effectiveOpen = openFolders && folderIds.some((id) => openFolders.has(id)) ? openFolders : null;
 
-  const renderSongItem = (s: SongDto) => {
+  // 인라인 선택 폴더: 삭제된 분류 ID는 렌더 시점에 전체로 정규화한다
+  listStatusRef.current = listStatus;
+  selectedFolderRef.current = selectedFolderId;
+  const knownCategoryIds = new Set(sortedCategories.map((c) => c.id));
+  const folderId =
+    selectedFolderId === ALL_FOLDER || selectedFolderId === UNCATEGORIZED_FOLDER || knownCategoryIds.has(selectedFolderId)
+      ? selectedFolderId
+      : ALL_FOLDER;
+  // 계정이 바뀐 첫 렌더에 이전 사용자 목록이 비치지 않게, 소유 uid가 다르면 로딩으로 본다
+  const listState: ListStatus | 'guest' =
+    !activeUid || !apiClient.isLoggedIn() ? 'guest' : listUid !== activeUid ? 'loading' : listStatus;
+  const allSongs = listState === 'success' && songsList ? songsList : [];
+  const visibleSongs =
+    folderId === ALL_FOLDER
+      ? allSongs
+      : folderId === UNCATEGORIZED_FOLDER
+        ? allSongs.filter((x) => !(x.categoryIds || []).some((id) => knownCategoryIds.has(id)))
+        : allSongs.filter((x) => (x.categoryIds || []).includes(folderId));
+  const folderName =
+    folderId === ALL_FOLDER
+      ? t('practice.folderAll')
+      : folderId === UNCATEGORIZED_FOLDER
+        ? t('practice.uncategorized')
+        : sortedCategories.find((c) => c.id === folderId)?.name || '';
+  const currentNotInFolder =
+    listState === 'success' && Boolean(song) && Boolean(videoId) && !visibleSongs.some((x) => x.videoId === videoId);
+
+  // 폴더를 바꾸면 목록 안에서만 맨 위로 되돌리고, 현재 곡이 있으면 그 행만 보이게 한다(문서 스크롤 없음)
+  useEffect(() => {
+    const body = folderBodyRef.current;
+    if (!body) return;
+    body.scrollTop = 0;
+    const cur = body.querySelector<HTMLElement>('[aria-current="true"]');
+    if (cur) {
+      const top = cur.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      const bottom = top + cur.offsetHeight;
+      if (bottom > body.clientHeight) body.scrollTop = bottom - body.clientHeight;
+    }
+  }, [folderId, listState === 'success']);
+
+  const switchToSong = async (s: SongDto) => {
+    setSwitchingSong(true);
+    try {
+      await openSongById(s.videoId, { song: s });
+    } finally {
+      setSwitchingSong(false);
+    }
+  };
+
+  // folderId: 서랍에서 고른 곡이 속한 폴더(인라인 선택에도 반영). inline: 인라인 목록 항목
+  const renderSongItem = (s: SongDto, itemFolderId: string = ALL_FOLDER, inline = false) => {
     const parts: string[] = [];
     if (s.status) parts.push(s.status);
     if (s.a != null && s.b != null) parts.push(`${formatPlayerTime(s.a)}–${formatPlayerTime(s.b)}`);
     if (s.rate) parts.push(`${s.rate}×`);
     if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
+    const isCurrent = s.videoId === videoId;
     return (
       <li key={s.id}>
         <button
           type="button"
           className={styles.ppSongBtn}
-          aria-current={s.videoId === videoId ? 'true' : undefined}
+          aria-current={isCurrent ? 'true' : undefined}
+          aria-disabled={switchingSong || undefined}
           onClick={() => {
-            closeDrawer();
-            void openSongById(s.videoId, { song: s });
+            if (!inline) closeDrawer();
+            // 현재 곡 재클릭은 재시작·녹음 중지를 일으키지 않는다. 전환 중에는 중복 클릭을 막는다
+            if (isCurrent || switchingSong) return;
+            if (!inline) {
+              setSelectedFolderId(itemFolderId);
+              setFolderNotice('');
+            }
+            void switchToSong(s);
           }}
         >
           <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
@@ -1645,7 +1738,7 @@ export function PracticePage(): React.ReactElement {
 
         <div className={`pp-main ${styles.ppMain}`}>
           <section className={`pp-stage ${styles.ppStage}`} data-align-group="sr-left:left">
-            <div className={`pp-video ${styles.ppVideo}`} id="videoBox">
+            <div className={`pp-video ${styles.ppVideo}`} id="videoBox" data-align-group="practice-top:top@961">
               <div className={styles.playerMount}>
                 <div id="player" />
               </div>
@@ -1774,7 +1867,167 @@ export function PracticePage(): React.ReactElement {
             </div>
           </section>
 
-          <section className={`pp-ctl ${styles.ppCtl}`} aria-label={t('practice.ariaPracticeControls')}>
+          <div className={styles.ppActions}>
+            <section
+              id="ppPlayCard"
+              className={`${styles.ppCard} ${styles.ppPlayCard}`}
+              aria-label={t('practice.ariaPlayControls')}
+              data-align-group="practice-actions:top@961"
+            >
+            <div className={`pp-transport ${styles.ppTransport}`}>
+              <button
+                type="button"
+                className={`pp-tbtn ${styles.ppTbtn}`}
+                id="backBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={t('practice.ariaRewind')}
+                onClick={() => handleSkip(-5)}
+              >
+                −5
+              </button>
+              <button
+                type="button"
+                className={`pp-tbtn ${styles.ppTbtn}`}
+                id="startBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={t('practice.ariaRestartSegment')}
+                onClick={jumpToLoopStart}
+              >
+                ⏮
+              </button>
+              <button
+                type="button"
+                className={`pp-tbtn pp-play ${styles.ppTbtn} ${styles.ppPlayBtn}`}
+                id="playBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={playing ? t('practice.ariaPause') : t('practice.ariaPlay')}
+                onClick={handleTogglePlay}
+              >
+                {playing ? '❚❚' : '▶'}
+              </button>
+              <button
+                type="button"
+                className={`pp-tbtn ${styles.ppTbtn}`}
+                id="fwdBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={t('practice.ariaForward')}
+                onClick={() => handleSkip(5)}
+              >
+                +5
+              </button>
+              <button
+                type="button"
+                className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
+                id="saveBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={t('practice.btnSave')}
+                disabled={!videoId}
+                onClick={() => void saveProgressNow('manual')}
+              >
+                {saveBtnLabel}
+              </button>
+            </div>
+            <p className={`note pp-hint ${styles.ppHint}`} id="kbdHint">
+              {t('practice.shortcutsHint')}
+            </p>
+            </section>
+            <section
+              id="ppRecCard"
+              className={`pp-group ${styles.ppCard} ${styles.ppRecCard}`}
+              aria-label={t('practice.secRecToday')}
+              data-align-group="practice-actions:top@961"
+            >
+              <div className={`pp-lab ${styles.ppLab}`}>
+                <span>{t('practice.secRecToday')}</span>
+                <span
+                  className={styles.ppDriveBadge}
+                  id="recDriveBadge"
+                  hidden={!activeUid || !isDrive}
+                  title={t('practice.driveUnlimitedActive')}
+                >
+                  {t('practice.driveConnectedShort')}
+                </span>
+              </div>
+
+              <div className={`pp-recrow ${styles.ppRecRow}`}>
+                <button
+                  type="button"
+                  className={`pp-toggle pp-rec ${styles.ppToggle} ${styles.ppRecBtn}`}
+                  id="recBtn"
+                  aria-pressed={recording}
+                  aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
+                  disabled={!recording && (!videoId || uploadingTake)}
+                  onClick={handleToggleRec}
+                >
+                  {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
+                </button>
+                <button
+                  type="button"
+                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
+                  id="recRetry"
+                  hidden={!(take && !take.done && !uploadingTake && !recording)}
+                  onClick={() => void uploadTakeNow()}
+                >
+                  {t('practice.btnReupload')}
+                </button>
+                <a
+                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
+                  id="recSave"
+                  href={take && take.url.startsWith('blob:') ? take.url : undefined}
+                  download={
+                    take
+                      ? sanitizeDownloadName(take.date, take.time, take.song?.title || displayTitle, take.mime)
+                      : undefined
+                  }
+                  hidden={!take || recording}
+                >
+                  {t('practice.btnSaveFile')}
+                </a>
+              </div>
+              <SafeAudio
+                id="recPlay"
+                className={styles.ppRecAudio}
+                srcUrl={take ? take.url : null}
+                preload="metadata"
+                hidden={!take || recording}
+              />
+              <p
+                className={`note pp-recmsg ${styles.ppRecMsg} ${recMsg.err ? `err ${styles.ppRecMsgErr}` : ''}`}
+                id="recMsg"
+                aria-live="polite"
+              >
+                {recMsg.text}
+              </p>
+
+              {/* RN-D3: Google Drive 미연결 시 기본 연결 유도 배너 */}
+              <div
+                className={`pp-drive-banner ${styles.ppDriveBanner}`}
+                id="recDriveBanner"
+                hidden={!activeUid || isDrive}
+              >
+                <span id="recDriveBannerText">
+                  {t('practice.driveNotConnectedNotice')}
+                </span>
+                <button
+                  type="button"
+                  className={styles.ppDriveBtn}
+                  id="btnRecDriveConnect"
+                  disabled={busyDriveConnect || recording || uploadingTake}
+                  onClick={handleConnectDriveFromPlayer}
+                >
+                  {t('practice.btnConnectDrive')}
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div className={styles.ppSide}>
+            <section
+              id="ppCtl"
+              className={`pp-ctl ${styles.ppCtl}`}
+              aria-label={t('practice.ariaPracticeControls')}
+              data-align-group="practice-top:top@961; practice-side:left,right@961"
+            >
             <div className={`pp-group ${styles.ppGroup}`}>
               <div className={`pp-lab ${styles.ppLab}`}>{t('practice.labSpeed')}</div>
               <div className={`pp-seg ${styles.ppSeg}`} id="rates" role="group" aria-label={t('practice.ariaPlaySpeed')}>
@@ -2013,148 +2266,85 @@ export function PracticePage(): React.ReactElement {
                 </div>
               </div>
             </div>
-
-            <div className={`pp-group ${styles.ppGroup}`}>
+            </section>
+            <section
+              id="ppFolderPanel"
+              className={`${styles.ppCard} ${styles.ppFolderPanel}`}
+              aria-label={t('practice.folderTitle')}
+              data-align-group="practice-side:left,right@961"
+            >
               <div className={`pp-lab ${styles.ppLab}`}>
-                <span>{t('practice.secRecToday')}</span>
-                <span
-                  className={styles.ppDriveBadge}
-                  id="recDriveBadge"
-                  hidden={!activeUid || !isDrive}
-                  title={t('practice.driveUnlimitedActive')}
-                >
-                  {t('practice.driveConnectedShort')}
-                </span>
+                <label htmlFor="folderSelect">{t('practice.folderChange')}</label>
               </div>
-
-              {/* RN-D3: Google Drive 미연결 시 기본 연결 유도 배너 */}
+              <select
+                id="folderSelect"
+                className={styles.folderSelect}
+                value={folderId}
+                disabled={listState !== 'success'}
+                onChange={(e) => {
+                  setSelectedFolderId(e.target.value);
+                  setFolderNotice('');
+                }}
+              >
+                <option value={ALL_FOLDER}>{t('practice.folderAll')}</option>
+                {sortedCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value={UNCATEGORIZED_FOLDER}>{t('practice.uncategorized')}</option>
+              </select>
+              <div className={styles.folderHead}>
+                <span className={styles.folderName}>{folderName}</span>
+                {listState === 'success' && (
+                  <span id="folderCount" className={styles.folderCountText}>
+                    {t('practice.folderCount', { count: visibleSongs.length })}
+                  </span>
+                )}
+                {listState === 'success' && (
+                  <button
+                    type="button"
+                    id="folderToggle"
+                    className={`ghostBtn ${styles.folderToggle}`}
+                    aria-expanded={folderOpen}
+                    aria-controls="folderList"
+                    onClick={() => setFolderOpen((v) => !v)}
+                  >
+                    {folderOpen ? t('practice.folderCollapse') : t('practice.folderExpand')}
+                  </button>
+                )}
+              </div>
+              <div className={styles.folderStatus} aria-live="polite" aria-busy={listState === 'loading'}>
+                {listState === 'guest' && <p className="note">{t('practice.folderLoginPrompt')}</p>}
+                {listState === 'loading' && <p className="note">{t('practice.folderLoading')}</p>}
+                {listState === 'error' && (
+                  <>
+                    <p className={`note ${styles.folderErr}`}>{t('practice.folderLoadFailed')}</p>
+                    <button type="button" id="folderRetry" className="ghostBtn" onClick={() => void loadSongList()}>
+                      {t('practice.folderRetry')}
+                    </button>
+                  </>
+                )}
+                {folderNotice && <p className="note">{folderNotice}</p>}
+                {currentNotInFolder && <p className="note">{t('practice.folderCurrentNotIn')}</p>}
+              </div>
               <div
-                className={`pp-drive-banner ${styles.ppDriveBanner}`}
-                id="recDriveBanner"
-                hidden={!activeUid || isDrive}
+                id="folderList"
+                ref={folderBodyRef}
+                className={styles.folderBody}
+                data-collapsed={!folderOpen}
+                hidden={listState !== 'success'}
               >
-                <span id="recDriveBannerText">
-                  {t('practice.driveNotConnectedNotice')}
-                </span>
-                <button
-                  type="button"
-                  className={styles.ppDriveBtn}
-                  id="btnRecDriveConnect"
-                  disabled={busyDriveConnect}
-                  onClick={handleConnectDriveFromPlayer}
-                >
-                  {t('practice.btnConnectDrive')}
-                </button>
+                {listState !== 'success' ? null : visibleSongs.length === 0 ? (
+                  <p className="note">
+                    {folderId === ALL_FOLDER ? t('practice.folderEmptyAll') : t('practice.folderEmptyFolder')}
+                  </p>
+                ) : (
+                  <ul className={styles.ppSongs}>{visibleSongs.map((s) => renderSongItem(s, folderId, true))}</ul>
+                )}
               </div>
-
-              <div className={`pp-recrow ${styles.ppRecRow}`}>
-                <button
-                  type="button"
-                  className={`pp-toggle pp-rec ${styles.ppToggle} ${styles.ppRecBtn}`}
-                  id="recBtn"
-                  aria-pressed={recording}
-                  aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
-                  disabled={!recording && (!videoId || uploadingTake)}
-                  onClick={handleToggleRec}
-                >
-                  {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
-                </button>
-                <button
-                  type="button"
-                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
-                  id="recRetry"
-                  hidden={!(take && !take.done && !uploadingTake && !recording)}
-                  onClick={() => void uploadTakeNow()}
-                >
-                  {t('practice.btnReupload')}
-                </button>
-                <a
-                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
-                  id="recSave"
-                  href={take && take.url.startsWith('blob:') ? take.url : undefined}
-                  download={
-                    take
-                      ? sanitizeDownloadName(take.date, take.time, take.song?.title || displayTitle, take.mime)
-                      : undefined
-                  }
-                  hidden={!take || recording}
-                >
-                  {t('practice.btnSaveFile')}
-                </a>
-              </div>
-              <SafeAudio
-                id="recPlay"
-                className={styles.ppRecAudio}
-                srcUrl={take ? take.url : null}
-                preload="metadata"
-                hidden={!take || recording}
-              />
-              <p
-                className={`note pp-recmsg ${styles.ppRecMsg} ${recMsg.err ? `err ${styles.ppRecMsgErr}` : ''}`}
-                id="recMsg"
-                aria-live="polite"
-              >
-                {recMsg.text}
-              </p>
-            </div>
-
-            <div className={`pp-transport ${styles.ppTransport}`}>
-              <button
-                type="button"
-                className={`pp-tbtn ${styles.ppTbtn}`}
-                id="backBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.ariaRewind')}
-                onClick={() => handleSkip(-5)}
-              >
-                −5
-              </button>
-              <button
-                type="button"
-                className={`pp-tbtn ${styles.ppTbtn}`}
-                id="startBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.ariaRestartSegment')}
-                onClick={jumpToLoopStart}
-              >
-                ⏮
-              </button>
-              <button
-                type="button"
-                className={`pp-tbtn pp-play ${styles.ppTbtn} ${styles.ppPlayBtn}`}
-                id="playBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={playing ? t('practice.ariaPause') : t('practice.ariaPlay')}
-                onClick={handleTogglePlay}
-              >
-                {playing ? '❚❚' : '▶'}
-              </button>
-              <button
-                type="button"
-                className={`pp-tbtn ${styles.ppTbtn}`}
-                id="fwdBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.ariaForward')}
-                onClick={() => handleSkip(5)}
-              >
-                +5
-              </button>
-              <button
-                type="button"
-                className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
-                id="saveBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.btnSave')}
-                disabled={!videoId}
-                onClick={() => void saveProgressNow('manual')}
-              >
-                {saveBtnLabel}
-              </button>
-            </div>
-            <p className={`note pp-hint ${styles.ppHint}`} id="kbdHint">
-              {t('practice.shortcutsHint')}
-            </p>
-          </section>
+            </section>
+          </div>
         </div>
 
         {Boolean(videoId) && (
@@ -2235,7 +2425,7 @@ export function PracticePage(): React.ReactElement {
                       {f.songs.length === 0 ? (
                         <li className={`note ${styles.ppSongNote}`}>{t('practice.drawerEmptyCategory')}</li>
                       ) : (
-                        f.songs.map(renderSongItem)
+                        f.songs.map((x) => renderSongItem(x, f.id))
                       )}
                     </ul>
                   )}
@@ -2243,7 +2433,7 @@ export function PracticePage(): React.ReactElement {
               );
             })
           ) : (
-            songsList.map(renderSongItem)
+            songsList.map((x) => renderSongItem(x))
           )}
         </ul>
       </aside>
@@ -2313,7 +2503,7 @@ export function PracticePage(): React.ReactElement {
         url={importModalUrl}
         me={authState.me}
         onClose={() => setImportModalUrl(null)}
-        onImported={() => setSongsList(null)}
+        onImported={() => void loadSongList({ silent: true })}
         onOnlyThis={(vid) => {
           void openSongById(vid);
         }}
