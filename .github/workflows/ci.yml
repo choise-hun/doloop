@@ -92,6 +92,12 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     # Playwright가 ubuntu 26.04를 지원하지 않아(2026-11-11 새 레포 CI에서 확인) 24.04로 고정한다
     runs-on: ubuntu-24.04
+    # `playwright install --with-deps`의 apt 단계가 러너 DNS 장애(azure.archive.ubuntu.com 해석 실패)로
+    # 반복 실패해(2026-11-11 run 43033920534·43040606154) 브라우저·OS 의존성이 들어 있는 공식 이미지에서 돌린다.
+    # 이미지 태그는 package.json의 @playwright/test 버전과 반드시 같게 올린다(다르면 브라우저 실행 파일 불일치).
+    container:
+      image: mcr.microsoft.com/playwright:v1.51.1-noble
+      options: --user 1001
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -99,8 +105,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Playwright 버전과 컨테이너 이미지 일치 확인
+        run: |
+          want="$(node -p "require('./package.json').devDependencies['@playwright/test']")"
+          have="$(npx playwright --version | awk '{print $2}')"
+          echo "package.json=$want installed=$have image=v1.51.1"
+          test "$want" = "1.51.1" && test "$have" = "1.51.1"
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
 
   # Kotlin 서버(K0-1 이후). gradlew가 생기면 CI 수정 없이 ./gradlew test가 돌기 시작합니다
