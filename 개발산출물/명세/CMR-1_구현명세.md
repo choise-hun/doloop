@@ -55,7 +55,7 @@
 | `community.showAllLogs` | 모두 표시 | Show all | すべて表示 | 신규 |
 | `community.allEmpty` | 아직 공유된 연습이 없어요 | No practice has been shared yet | まだ共有された練習はありません | 신규 |
 
-`discover.empty`·`discover.recent`는 값·키를 그대로 둔다(홈/호환). 다른 기존 키 삭제 금지.
+`discover.empty`·`discover.recent`는 **삭제**한다(2026-11-11 재검토: 홈은 빈 상태에서 줄 자체를 숨겨 `discover.empty`를 쓰지 않고, recent 줄 제거 후 두 키를 쓰는 화면이 0 → `test/i18n.test.js` I0-6 미사용 키 금지와 충돌). 다른 기존 키 삭제 금지.
 
 ## 5. 상태 흐름
 

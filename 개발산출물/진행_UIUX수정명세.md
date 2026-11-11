@@ -23,7 +23,7 @@
 | UXR-1 | 연습 기록 단일화(미연결 녹음·A/B 교차·삭제 슬롯 결함) + 트랜스포트 통일 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-1_구현명세.md) → `결과/UXR-1.md` | 없음 | 명세 §9 체크리스트, PR CI 통과·리뷰 처리 | 시니어 high / 주니어 medium | 완료 — PR #159 CI 통과·Codex 리뷰 확인, 사용자 머지 대기([결과](결과/UXR-1.md)) |
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
-| CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 세부 명세 완료, 구현 승인 대기 |
+| CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
 | CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 예정 | 상위 §5.2a·§5.4 → `명세/CMR-2_구현명세.md` | CMR-1 머지 | 세부 명세 작성 후 확정 | — | 대기(CMR-1 마크업 확정 후 명세) |
 | CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 예정 | 상위 §5.2·§5.3·§5.8 → `명세/CMR-3_구현명세.md` | CMR-1 머지 | 같음 | — | 대기 |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
@@ -55,6 +55,8 @@ UXR-3 후속 요청의 승인·재개 상태는 §8에서 별도로 관리한다
 | 2026-11-11 | Gemini UXR-2 4단계 | 전체 회귀·LAYOUT_SHOTS 4폭·다크·1023/1024 Q1~Q9 검토(108 passed), feat/docs 분리 커밋, PR #1 생성 및 CI 전 항목 통과 |
 | 2026-11-11 | Gemini 리뷰 대응 | Codex P2 리뷰 반영: chords_instruments.spec.js UXR2-1의 lang을 ulp:lang 및 html[lang] 단언으로 교체(9 passed) |
 | 2026-11-11 | Claude CI 수정 | 레포 이전(choise-hun/doloop public)으로 PR 번호 #160→#1 정정. `62da217` E2E ubuntu-24.04 고정·PR Node 22만·Kotlin 백엔드 변경 시만. push 후 pull_request 이벤트 CI가 시작되지 않아(원인 미확인) `workflow_dispatch`(run 42986479700, head `0dbd5a1`)로 대체 검증: 전 job 성공(playwright install 포함 E2E 통과). PR 리뷰·코멘트 0건 → 처리할 지적 없음. `CI_셀프호스티드_러너_설정_프롬프트.md`는 public 레포라 적용 보류(미커밋) |
+| 2026-11-11 | Claude CMR-1 구현 | `step/CMR-1` 시니어 핵심 구현 및 로컬 커밋(`c2d667c`, `eb36c02`). 표적 97 passed 확인 후 주니어 4단계 인계 → [결과](결과/CMR-1.md) |
+| 2026-11-11 | Gemini CMR-1 4단계 | 전체 회귀(`npm test` 416 통과, 전체 Playwright 658 통과)·`LAYOUT_SHOTS=1` 4폭 및 다크 Q1~Q9 검토(21 passed), empty 레이아웃 스위트 보강, PR 생성 및 CI 대기 |
 
 ## 6. 검증·미실행
 
@@ -154,4 +156,20 @@ Git 처리: 로컬 커밋만. push·PR·배포는 이 멘트로 승인되지 않
 - **결과 문서:** [결과/UXR-3.md](결과/UXR-3.md) 작성 완료.
 - **Git 처리:** `step/UXR-3` 푸시 및 [PR #2](https://github.com/choise-hun/doloop/pull/2) 생성. GitHub Actions CI(run `43019870416`) 전 항목 통과(success), PR 리뷰/코멘트 0건 확인 완료. 사용자 머지 대기.
 
+## 9. CMR-1 커뮤니티 탐색 구조 4단계 결과
 
+### 9.1 CMR-1 주니어 4단계 검증 및 마무리 결과 (2026-11-11)
+
+- **선행 및 보존:** `AGENTS.md`, `CLAUDE.md` 사용자 변경 보존.
+- **체크리스트 점검:**
+  - `CommunityPane` 삭제 및 참조 0건 확인.
+  - `recentFolders|loadRecent|recentMoreBtn` 프론트엔드 코드 참조 0건 확인.
+  - `CurationRows.tsx` 내 `variant === 'home'` 분기 diff 0줄 확인.
+- **검증 결과:**
+  - `npm run build`: 성공 (`tsc --noEmit && vite build`).
+  - `npm test`: 416 passed / 0 failed.
+  - 커뮤니티 핵심 E2E (`cm-ui.spec.js`, `community.spec.js`, `layout/community.spec.js`, `layout/home.spec.js`): 97 passed / 0 failed.
+  - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js`: 21 passed (guest, pro, logs, empty 4폭 + 다크 캡처 정상 생성, Q1~Q9 전 항목 ○ 판정).
+  - 전체 E2E (`npx playwright test`): **658 passed / 0 failed** (12.3m).
+- **결과 문서:** [결과/CMR-1.md](결과/CMR-1.md) 작성 완료.
+- **Git 처리:** `step/CMR-1` 푸시 및 [PR #3](https://github.com/choise-hun/doloop/pull/3) 생성, GitHub Actions CI 전 항목 통과(success), PR 리뷰/코멘트 0건 확인 완료. 사용자 머지 대기.
