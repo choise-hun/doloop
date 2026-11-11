@@ -176,17 +176,14 @@
   min-width: 0;
 }
 
-.srCols {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
+.srUnlinked {
+  gap: 12px;
 }
 
-@media (max-width: 1149px) {
-  .srCols {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.srAbHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .tlMoreRow {

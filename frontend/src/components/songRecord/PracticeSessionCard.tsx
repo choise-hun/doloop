@@ -18,6 +18,8 @@ export interface PracticeSessionCardProps {
   onTakeRemoved?: (sessionId: string, takeId: string) => void;
   onTakeCompleted?: (take: TakeDto) => void;
   onMemoSaved?: (sessionId: string, memo: string) => void;
+  abSelection?: { a: string; b: string };
+  onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
 }
 
 export function PracticeSessionCard(props: PracticeSessionCardProps): React.ReactElement {
@@ -31,6 +33,8 @@ function OwnedPracticeSessionCard({
   onTakeRemoved,
   onTakeCompleted,
   onMemoSaved,
+  abSelection,
+  onSelectAbSlot,
 }: PracticeSessionCardProps): React.ReactElement {
   const authState = useAuth();
   const me = authState.me;
@@ -196,14 +200,22 @@ function OwnedPracticeSessionCard({
       {/* 6. 테이크 목록 */}
       {takes.length > 0 && (
         <div className={styles.takesList}>
-          {takes.map((take) => (
+          {takes.map((take) => {
+            const abSlot: 'a' | 'b' | '' = abSelection
+              ? abSelection.a === take.id ? 'a' : abSelection.b === take.id ? 'b' : ''
+              : '';
+            return (
             <TakeItemRow
               key={take.id}
               take={take}
+              {...(abSelection && onSelectAbSlot
+                ? { showAbCheck: true, abSlot, abChecked: abSlot !== '', onSelectAbSlot }
+                : {})}
               onCompleted={onTakeCompleted}
               onDeleted={(takeId) => onTakeRemoved?.(session.sessionId, takeId)}
             />
-          ))}
+            );
+          })}
         </div>
       )}
 

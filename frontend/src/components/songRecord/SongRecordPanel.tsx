@@ -8,7 +8,6 @@ import {
   AbCompare,
   fmtDuration,
   SessionTimeline,
-  sortAbTakes,
   TakeItemRow,
 } from './SongRecordParts';
 import styles from './SongRecordParts.module.css';
@@ -90,14 +89,47 @@ function OwnedSongRecordPanel({
   const takes = detailData?.takes || [];
   const sessions = detailData?.sessions || [];
 
-  const abPair: [TakeDto, TakeDto] | null =
-    Boolean(abSelected[0] && abSelected[1])
-      ? (() => {
-          const t1 = takes.find((t) => t.id === abSelected[0]);
-          const t2 = takes.find((t) => t.id === abSelected[1]);
-          return t1 && t2 ? sortAbTakes(t1, t2) : null;
-        })()
-      : null;
+  const sessionIdSet = new Set(sessions.map((x) => x.id));
+  const unlinkedTakes = takes.filter((x) => !sessionIdSet.has(x.sessionId));
+
+  const abSelection = { a: abSelected[0] || '', b: abSelected[1] || '' };
+  const tA = takes.find((x) => x.id === abSelection.a);
+  const tB = takes.find((x) => x.id === abSelection.b);
+  const abPair: [TakeDto, TakeDto] | null = tA && tB ? [tA, tB] : null;
+  const filled = (tA ? 1 : 0) + (tB ? 1 : 0);
+
+  const selectAbSlot = (takeId: string, next: 'a' | 'b' | '') => {
+    setAbSelected((prev) => {
+      let slotA = prev[0] || '';
+      let slotB = prev[1] || '';
+      if (!next) {
+        if (slotA === takeId) slotA = '';
+        if (slotB === takeId) slotB = '';
+      } else if (next === 'a') {
+        if (slotB === takeId) slotB = '';
+        slotA = takeId;
+      } else if (next === 'b') {
+        if (slotA === takeId) slotA = '';
+        slotB = takeId;
+      }
+      return slotA || slotB ? [slotA, slotB] : [];
+    });
+  };
+  // 삭제한 테이크의 슬롯만 비운다. 남은 슬롯은 제자리에 둔다.
+  const removeTake = (takeId: string) => {
+    setAbSelected((prev) => {
+      const slotA = prev[0] === takeId ? '' : prev[0] || '';
+      const slotB = prev[1] === takeId ? '' : prev[1] || '';
+      return slotA || slotB ? [slotA, slotB] : [];
+    });
+    setDetailData((prev) =>
+      prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev
+    );
+  };
+  const replaceTake = (take: TakeDto) =>
+    setDetailData((prev) =>
+      prev ? { ...prev, takes: prev.takes.map((it) => (it.id === take.id ? take : it)) } : prev
+    );
 
   const summaryMeta = detailSong
     ? detailSong.lastDate
@@ -139,92 +171,21 @@ function OwnedSongRecordPanel({
           </button>
         </div>
       ) : (
-        <div className={styles.srCols}>
-          <div className={`panel ${styles.panel}`}>
-            <div className={`head-row ${styles.headRow}`}>
-              <h3 className={`h3 ${styles.h3}`} data-align-group="sr-cols:top@1150">
-                {t('record.tabTakes')}
-              </h3>
-            </div>
-            <div id="srTakes" className={styles.takesList}>
-              {notLoaded ? (
-                <p className={`empty ${styles.empty}`}>{t('record.loading')}</p>
-              ) : takes.length === 0 ? (
-                <p className={`empty ${styles.empty}`}>{t('record.emptyTakes')}</p>
-              ) : (
-                takes.map((t) => {
-                  const slot: 'a' | 'b' | '' =
-                    abSelected[0] === t.id ? 'a' : abSelected[1] === t.id ? 'b' : '';
-                  return (
-                    <TakeItemRow
-                      key={t.id}
-                      take={t}
-                      showAbCheck
-                      abChecked={abSelected.includes(t.id)}
-                      abSlot={slot}
-                      onSelectAbSlot={(takeId, nextSlot) => {
-                        setAbSelected((prev) => {
-                          let slotA = prev[0] || '';
-                          let slotB = prev[1] || '';
-                          if (!nextSlot) {
-                            if (slotA === takeId) slotA = '';
-                            if (slotB === takeId) slotB = '';
-                          } else if (nextSlot === 'a') {
-                            if (slotB === takeId) slotB = '';
-                            slotA = takeId;
-                          } else if (nextSlot === 'b') {
-                            if (slotA === takeId) slotA = '';
-                            slotB = takeId;
-                          }
-                          return (slotA || slotB) ? [slotA, slotB] : [];
-                        });
-                      }}
-                      onToggleAb={(takeId, checked) => {
-                        setAbSelected((prev) => {
-                          let slotA = prev[0] || '';
-                          let slotB = prev[1] || '';
-                          if (checked) {
-                            if (!slotA) {
-                              slotA = takeId;
-                            } else if (!slotB) {
-                              slotB = takeId;
-                            } else {
-                              slotA = slotB;
-                              slotB = takeId;
-                            }
-                          } else {
-                            if (slotA === takeId) slotA = '';
-                            if (slotB === takeId) slotB = '';
-                          }
-                          return (slotA || slotB) ? [slotA, slotB] : [];
-                        });
-                      }}
-                      onCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
-                      onDeleted={(takeId) => {
-                        setAbSelected((prev) => prev.filter((id) => id !== takeId));
-                        setDetailData((prev) =>
-                          prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev
-                        );
-                      }}
-                    />
-                  );
-                })
-              )}
-            </div>
-            <AbCompare abPair={abPair} activeUid={activeUid} idPrefix="sr" />
-          </div>
+        <>
+          {!notLoaded && filled === 1 && (
+            <p id="srAbHint" className={`meta ${styles.meta} ${styles.srAbHint}`} role="status">
+              {t('record.abNeedTwo')}
+            </p>
+          )}
+          <AbCompare abPair={abPair} activeUid={activeUid} idPrefix="sr" />
 
           <div className={`panel ${styles.panel}`}>
             <div className={`head-row ${styles.headRow}`}>
-              <h3 className={`h3 ${styles.h3}`} data-align-group="sr-cols:top@1150">
-                {t('record.tabSessions')}
-              </h3>
+              <h3 className={`h3 ${styles.h3}`}>{t('record.tabSessions')}</h3>
             </div>
-            <SessionTimeline onTakeRemoved={(_sessionId, takeId) => {
-                setAbSelected((prev) => prev.filter((id) => id !== takeId));
-                setDetailData((prev) => prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev);
-              }}
-              onTakeCompleted={(take) => setDetailData((prev) => prev ? { ...prev, takes: prev.takes.map((it) => it.id === take.id ? take : it) } : prev)}
+            <SessionTimeline
+              onTakeRemoved={(_sessionId, takeId) => removeTake(takeId)}
+              onTakeCompleted={replaceTake}
               onMemoSaved={(sessionId, memo) => setDetailData((prev) => prev ? { ...prev, sessions: prev.sessions.map((it) => it.id === sessionId ? { ...it, memo } : it) } : prev)}
               sessions={sessions}
               song={detailSong}
@@ -232,9 +193,43 @@ function OwnedSongRecordPanel({
               loading={notLoaded}
               idPrefix="sr"
               initialLimit={5}
+              abSelection={abSelection}
+              onSelectAbSlot={selectAbSlot}
             />
           </div>
-        </div>
+
+          {!notLoaded && unlinkedTakes.length > 0 && (
+            <section
+              id="srUnlinked"
+              className={`panel ${styles.panel} ${styles.srUnlinked}`}
+              aria-labelledby="srUnlinkedTitle"
+            >
+              <div className={`head-row ${styles.headRow}`}>
+                <h3 id="srUnlinkedTitle" className={`h3 ${styles.h3}`}>
+                  {t('record.unlinkedTitle')}
+                </h3>
+              </div>
+              <div className={styles.takesList}>
+                {unlinkedTakes.map((tk) => {
+                  const slot: 'a' | 'b' | '' =
+                    abSelection.a === tk.id ? 'a' : abSelection.b === tk.id ? 'b' : '';
+                  return (
+                    <TakeItemRow
+                      key={tk.id}
+                      take={tk}
+                      showAbCheck
+                      abChecked={slot !== ''}
+                      abSlot={slot}
+                      onSelectAbSlot={selectAbSlot}
+                      onCompleted={replaceTake}
+                      onDeleted={removeTake}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
