@@ -3,7 +3,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
-const { mockApp, STATES, FIXTURES } = require('../support/mock-app');
+const { mockApp, STATES, FIXTURES, DEFAULT_ME, LONG_TITLE } = require('../support/mock-app');
 
 const SONG_0 = FIXTURES.longSongs(1)[0];
 
@@ -583,4 +583,200 @@ test('UXR3-PL06: 곡 GET 실패→재시도 성공, 분류 envelope 오형태는
   await page.locator('#folderRetry').click();
   await expect(page.locator('#folderList li button')).toHaveCount(3);
   await expect(panel).not.toContainText('곡 목록을 불러오지 못했습니다');
+});
+
+test('UXR3-PL03: 긴 폴더/곡 제목·30곡 스크롤(높이 ≤320, scrollHeight > clientHeight, 마지막 곡 도달/선택)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const longSongs = FIXTURES.longSongs(30).map((s, i) => ({
+    ...s,
+    title: `Song ${i + 1} — ${LONG_TITLE}`,
+    categoryIds: [CAT_JAZZ],
+  }));
+  const longCategories = [
+    { id: CAT_JAZZ, name: 'Very Long Category Name That Should Wrap Or Ellipsize Gracefully', sortOrder: 0, onHome: true, songCount: 30 },
+  ];
+  await mockApp(page, ux3Mock({ songs: longSongs, categories: () => ({ categories: longCategories }) }));
+  await page.goto('/practice.html?v=abcdefghij1', { waitUntil: 'load' });
+  await page.locator('#ppFolderPanel').waitFor();
+
+  const folderBody = page.locator('#folderList');
+  await expect(folderBody).toBeVisible();
+  const box = await folderBody.boundingBox();
+  expect(box.height).toBeLessThanOrEqual(321);
+
+  const scroll = await folderBody.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+  expect(scroll.sh).toBeGreaterThan(scroll.ch);
+
+  const items = folderBody.locator('li button');
+  await expect(items).toHaveCount(30);
+
+  // 마지막 곡(30번째 곡)까지 목록 내부 스크롤하여 도달
+  await folderBody.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const lastBtn = items.last();
+  await expect(lastBtn).toBeVisible();
+  await expect(lastBtn).toContainText('Song 30');
+
+  // 목록 내부 스크롤 조작 중 페이지 전체 스크롤 점프 없음
+  const pageY = await page.evaluate(() => window.scrollY);
+  expect(pageY).toBeLessThanOrEqual(10);
+});
+
+test('UXR3-PL04: 홈에서 삭제/미존재 분류 전달 시 전체 곡 복구 및 안내', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, ux3Mock());
+  // 존재하지 않는 분류 ID를 sessionStorage에 설정
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ulp:open-category', '00000000-0000-4000-8000-000000000399');
+  });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#ppFolderPanel').waitFor();
+
+  // 삭제된 분류는 전체로 복구되고 안내 메시지 표시
+  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  const panel = page.locator('#ppFolderPanel');
+  await expect(panel).toContainText('선택한 폴더를 찾을 수 없어 전체 곡을 표시합니다');
+  // 세션 스토리지 값은 소비됨
+  expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
+  // 현재 곡이 다중 분류(곡1: Jazz+Pop)여도 임의로 폴더가 변경되지 않고 __all 유지
+  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+});
+
+test('UXR3-PL07: A 조회 중 B 로그인 계정 경합 — 지연 응답 해제 후 B 화면에 A 데이터 없음', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let resolveUserASongs;
+  const userASongsDelayed = new Promise((r) => { resolveUserASongs = r; });
+  let resolveUserBSongs;
+  const userBSongsDelayed = new Promise((r) => { resolveUserBSongs = r; });
+
+  const userAId = '00000000-0000-4000-8000-000000000001';
+  const userBId = '00000000-0000-4000-8000-000000000002';
+  const songA = { ...UX3_SONGS[0], id: 'song-a-1', title: 'User A Secret Song' };
+  const songB = { ...UX3_SONGS[1], id: 'song-b-1', title: 'User B Welcome Song' };
+
+  let currentUid = userAId;
+  let songsReqCount = 0;
+  await mockApp(page, {
+    ...STATES.userData,
+    routes: [
+      [
+        (url) => url.pathname.startsWith('/api/v1/me'),
+        (route) => UX3_JSON(route, { ...DEFAULT_ME, id: currentUid, email: currentUid === userAId ? 'a@example.com' : 'b@example.com' }),
+      ],
+      [
+        (url) => url.pathname === '/api/v1/songs' && url.searchParams.get('brief') !== '1',
+        async (route) => {
+          songsReqCount++;
+          if (songsReqCount === 1) {
+            await userASongsDelayed;
+            return UX3_JSON(route, { songs: [songA] });
+          }
+          await userBSongsDelayed;
+          return UX3_JSON(route, { songs: [songB] });
+        },
+      ],
+      [
+        (url) => url.pathname === '/api/v1/categories',
+        (route) => UX3_JSON(route, { categories: UX3_CATEGORIES }),
+      ],
+    ],
+  });
+
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#ppFolderPanel').waitFor();
+
+  // A 요청이 진행 중인 상태에서 B로 로그인 전환
+  currentUid = userBId;
+  await page.evaluate((bId) => {
+    window.__supabaseAuthListener('SIGNED_IN', {
+      access_token: 'fake-jwt-token-b',
+      user: { id: bId, email: 'b@example.com', user_metadata: {} },
+    });
+  }, userBId);
+
+  // A 응답 먼저 해제
+  resolveUserASongs();
+
+  // B 화면에는 여전히 A 데이터가 노출되지 않음
+  const panel = page.locator('#ppFolderPanel');
+  await expect(panel).not.toContainText('User A Secret Song');
+
+  // 이제 B 응답 해제
+  resolveUserBSongs();
+
+  // B 화면에는 B의 곡만 표시되고 A 곡은 없음
+  await expect(panel).toContainText('User B Welcome Song');
+  await expect(panel).not.toContainText('User A Secret Song');
+});
+
+test('UXR3-PL09: 현재 곡 재클릭 no-op, 다른 곡 전환 중 잠금(aria-disabled)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let resolveSaveProgress;
+  const saveProgressDelayed = new Promise((r) => { resolveSaveProgress = r; });
+  let saveReqCount = 0;
+
+  await mockApp(page, {
+    ...STATES.userData,
+    songs: UX3_SONGS,
+    songDetail: { song: UX3_SONGS[0], sessions: [], takes: [] },
+    routes: [
+      [
+        (url) => url.pathname === '/api/v1/practice/save',
+        async (route) => {
+          saveReqCount++;
+          await saveProgressDelayed;
+          return UX3_JSON(route, { ok: true, song: UX3_SONGS[0] });
+        },
+      ],
+      [
+        (url) => url.pathname === '/api/v1/categories',
+        (route) => UX3_JSON(route, { categories: UX3_CATEGORIES }),
+      ],
+    ],
+  });
+
+  // 곡1로 진입 (videoId = UX3_SONGS[0].videoId)
+  await page.goto(`/practice.html?v=${UX3_SONGS[0].videoId}`, { waitUntil: 'load' });
+  await page.locator('#ppFolderPanel').waitFor();
+
+  const song1Btn = page.locator('#folderList li button').first();
+  const song2Btn = page.locator('#folderList li button').nth(1);
+
+  // 현재 곡은 aria-current="true"
+  await expect(song1Btn).toHaveAttribute('aria-current', 'true');
+  await expect(song2Btn).not.toHaveAttribute('aria-current', 'true');
+
+  // 현재 곡 재클릭: no-op (진행 저장이나 전환 발생 안 함)
+  await song1Btn.click();
+  expect(saveReqCount).toBe(0);
+
+  // 배속 버튼을 클릭하여 변경 사항(dirty)을 생성
+  await page.locator('#rates button', { hasText: '0.75' }).click();
+
+  // 다른 곡 클릭: 진행 저장 완료까지 곡 버튼들에 aria-disabled="true"
+  await song2Btn.click();
+  await expect(song1Btn).toHaveAttribute('aria-disabled', 'true');
+  await expect(song2Btn).toHaveAttribute('aria-disabled', 'true');
+
+  // 지연된 저장 응답 완료 후 잠금 해제 및 aria-current 이동
+  resolveSaveProgress();
+  await expect(song2Btn).toHaveAttribute('aria-current', 'true');
+  await expect(song1Btn).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(song2Btn).not.toHaveAttribute('aria-disabled', 'true');
+});
+
+test('UXR3-PL10: guest / Drive 미연결 / 녹음 상태 가드', async ({ page }) => {
+  // 1) guest 상태: 드라이브 배너 없음, 폴더 로그인 유도
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await expect(page.locator('#recDriveBanner')).toBeHidden();
+  await expect(page.locator('#ppFolderPanel')).toContainText('로그인하면 폴더별 곡 목록을 볼 수 있어요');
+
+  // 2) 로그인 + Drive 미연결: 배너 노출, 영상 없음일 때 녹음 버튼 disabled
+  await mockApp(page, ux3Mock());
+  await page.goto('/practice.html', { waitUntil: 'load' }); // 영상 없음
+  await expect(page.locator('#recDriveBanner')).toBeVisible();
+  await expect(page.locator('#recBtn')).toBeDisabled();
+  // 로그인 목록은 영상이 없어도 사용 가능
+  await expect(page.locator('#folderList li button')).toHaveCount(3);
 });

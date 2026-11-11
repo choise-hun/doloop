@@ -87,16 +87,19 @@ function supabaseStub(sessionUser) {
   return `
     window.supabase = {
       createClient: function() {
-        const fakeSession = ${session};
+        let fakeSession = ${session};
         return {
           auth: {
             getSession: async function() { return { data: { session: fakeSession }, error: null }; },
             onAuthStateChange: function(cb) {
-              window.__supabaseAuthListener = cb;
+              window.__supabaseAuthListener = function(event, session) {
+                fakeSession = session;
+                return cb(event, session);
+              };
               return { data: { subscription: { unsubscribe: function() {} } } };
             },
             signInWithOAuth: async function() { return { error: null }; },
-            signOut: async function() { return { error: null }; }
+            signOut: async function() { fakeSession = null; return { error: null }; }
           }
         };
       }
@@ -178,6 +181,13 @@ async function mockApp(page, opts = {}) {
   if (opts.sessions !== undefined) {
     await page.route((url) => url.pathname === '/api/v1/sessions' || url.pathname === '/api/v1/sessions/', (route) => json(route, opts.sessions));
   }
+  const categories = opts.categories !== undefined ? opts.categories : [];
+  await page.route((url) => url.pathname === '/api/v1/categories' || url.pathname === '/api/v1/categories/', (route) => {
+    if (route.request().method() === 'GET') {
+      return json(route, { categories });
+    }
+    return json(route, {});
+  });
   if (opts.takeUrl !== undefined) {
     await page.route((url) => url.pathname.startsWith('/api/v1/takes'), (route) => {
       if (new URL(route.request().url()).pathname.endsWith('/url')) return json(route, opts.takeUrl);
