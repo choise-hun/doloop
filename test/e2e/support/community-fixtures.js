@@ -2,7 +2,7 @@
 // M2-23 커뮤니티·큐레이션·재생목록 가져오기 고정 응답 및 route 생성기
 'use strict';
 
-const { LONG_TITLE } = require('./mock-app');
+const { LONG_TITLE, DEFAULT_ME } = require('./mock-app');
 
 const COMMUNITY_FREE_ME = {
   tier: 'free',
@@ -621,6 +621,16 @@ const MY_EPISODE_LOG_1 = {
 const EPISODE_POSTS_FIXTURE = [EPISODE_POST_1, EPISODE_POST_FOLLOWING];
 const MY_EPISODE_LOGS_FIXTURE = [MY_EPISODE_LOG_1];
 
+/**
+ * CMR-2: 이름 없는 계정의 커뮤니티 첫 진입 이름 모달을 건너뛴 상태로 시작한다.
+ * 모달 자체가 검증 대상이 아닌 테스트에만 쓴다(명세 CMR-2 §8). page.goto 전에 부른다.
+ */
+async function skipNameModal(page, uid = DEFAULT_ME.id) {
+  await page.addInitScript((id) => {
+    try { sessionStorage.setItem(`ulp:community-name-skip:${id}`, '1'); } catch { /* 저장 불가 환경 */ }
+  }, uid);
+}
+
 module.exports = {
   COMMUNITY_FREE_ME,
   COMMUNITY_PRO_ME,
@@ -643,4 +653,5 @@ module.exports = {
   EPISODE_POSTS_FIXTURE,
   MY_EPISODE_LOGS_FIXTURE,
   communityRoutes,
+  skipNameModal,
 };

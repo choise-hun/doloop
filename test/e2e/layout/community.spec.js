@@ -65,6 +65,23 @@ layoutSuite({
   dark: 'communityEmpty',
 });
 
+// CMR-2: 이름 없는 계정의 첫 진입 이름 모달 4폭+다크 검사
+const COMMUNITY_NO_NAME = {
+  ...STATES.userData,
+  me: { ...COMMUNITY_PRO_ME, publicName: null, publicNameNextChangeAt: null },
+  routes: communityRoutes(),
+};
+
+layoutSuite({
+  name: 'community-name-modal',
+  path: '/community.html',
+  states: [{ name: 'communityNoName', mock: COMMUNITY_NO_NAME }],
+  ready: async (page) => {
+    await page.locator('#communityNameModalInput').waitFor();
+  },
+  dark: 'communityNoName',
+});
+
 test('CM-UI CUI-01 커뮤니티 제목과 탭 렌더 검증', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const { mockApp } = require('../support/mock-app');

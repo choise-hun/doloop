@@ -210,23 +210,72 @@
   padding: 12px 0;
 }
 
-.nameBanner {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  padding: 18px 20px;
+/* CMR-2 소개·내 연습 공유하기: 390 세로, 768 이상 설명 좌·CTA 묶음 우 */
+.intro {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  margin-bottom: 8px;
 }
 
-.bannerTitle {
+.introDesc {
   margin: 0;
+  min-width: 0;
   font-size: 15px;
-  font-weight: 700;
   color: var(--ink);
+}
+
+.introCta {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shareCta {
+  width: 100%;
+}
+
+.introHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.emptySteps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink);
+}
+
+.emptyShareCta {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .intro {
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .introDesc {
+    flex: 1 1 auto;
+  }
+
+  .introCta {
+    flex: 0 0 auto;
+    align-items: flex-end;
+  }
+
+  .shareCta,
+  .emptyShareCta {
+    width: auto;
+  }
 }
 
 @media (max-width: 600px) {

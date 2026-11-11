@@ -266,24 +266,6 @@
   min-width: 0;
 }
 
-.nameBanner {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
-.bannerTitle {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
 .chipRow,
 .scopeRow {
   display: flex;
@@ -324,6 +306,104 @@
   border-radius: var(--radius-card);
   color: var(--muted);
   font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.emptyMsg > p {
+  margin: 0;
+}
+
+/* CMR-2 커뮤니티 이름 모달: 390 하단 시트, 768 이상 중앙 카드 */
+.nameModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.nameModalCard {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nameModalTitle {
+  margin: 0;
+  padding-right: 48px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.nameModalDesc,
+.nameModalReason {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.nameModalReason {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.nameModalFoot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nameModalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nameModalClose:disabled,
+.nameModalFoot button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 767px) {
+  .nameModalBackdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .nameModalCard {
+    width: 100%;
+    padding: 24px 16px;
+  }
+
+  .nameModalFoot button {
+    width: 100%;
+  }
 }
 
 /* 커뮤니티 이름 폼 (설정·TRAILS 배너 공용, 간격 스케일 6·12 준수) */

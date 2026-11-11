@@ -310,7 +310,7 @@ test('CM-9 TRAILS LOG: /community.html#summary → 84일 집계 탭 → 팔로�
   expect(scopesCalled).toContain('following');
 });
 
-test('CM-10 이름: 이름 없는 상태에서 배너 폼에 공백 이름 입력 시 요청 0 + 형식 문구, 중복 이름 409 시 중복 문구', async ({ page }) => {
+test('CM-10 이름: 이름 없는 상태에서 이름 모달 폼에 공백 이름 입력 시 요청 0 + 형식 문구, 중복 이름 409 시 중복 문구', async ({ page }) => {
   let nameCalls = 0;
   await mockApp(page, {
     ...STATES.userData,
@@ -329,16 +329,16 @@ test('CM-10 이름: 이름 없는 상태에서 배너 폼에 공백 이름 입�
   await page.goto('/community.html', { waitUntil: 'load' });
   test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
 
-  const banner = page.locator('#communityNameBanner');
+  const banner = page.locator('#communityNameModal');
   await expect(banner).toBeVisible();
 
-  await page.locator('#communityBannerNameInput').fill('존 메이어');
-  await page.locator('#communityBannerNameSave').click();
+  await page.locator('#communityNameModalInput').fill('존 메이어');
+  await page.locator('#communityNameModalSave').click();
   await expect(banner.locator('[role="alert"]')).toHaveText('2~20자, 띄어쓰기 없이 입력해 주세요');
   expect(nameCalls).toBe(0);
 
-  await page.locator('#communityBannerNameInput').fill('존메이어');
-  await page.locator('#communityBannerNameSave').click();
+  await page.locator('#communityNameModalInput').fill('존메이어');
+  await page.locator('#communityNameModalSave').click();
   await expect(banner.locator('[role="alert"]')).toHaveText('이미 쓰는 이름이에요');
   expect(nameCalls).toBe(1);
 });
@@ -488,4 +488,44 @@ test('CM-14 개인정보: /privacy.html에 #privH5(5. 커뮤니티 공개 범위
   await expect(h5).toHaveText('5. 커뮤니티 공개 범위');
   const section = page.locator('section[aria-labelledby="privH5"]');
   await expect(section.locator('ul > li')).toHaveCount(7);
+});
+
+// CMR-2: 이름 모달·공유 가드 (명세 개발산출물/명세/CMR-2_구현명세.md §8)
+const NO_NAME_ME = { ...COMMUNITY_PRO_ME, publicName: null, publicNameNextChangeAt: null };
+
+test('CMR2-4 첫 진입 모달: 이름 없으면 모달 자동 열림·입력 focus·배너 0·사유 0·body 스크롤 잠금', async ({ page }) => {
+  await mockApp(page, { ...STATES.userData, me: NO_NAME_ME, routes: communityRoutes() });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  const modal = page.locator('#communityNameModal');
+  await expect(modal).toHaveCount(1);
+  await expect(modal).toHaveAttribute('role', 'dialog');
+  await expect(modal).toHaveAttribute('aria-modal', 'true');
+  await expect(page.locator('#communityNameModalInput')).toBeFocused();
+  await expect(page.locator('#communityNameModalReason')).toHaveCount(0);
+  await expect(page.locator('#communityNameBanner')).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+});
+
+test('CMR2-6 공유 가드: 건너뛴 뒤 CTA 클릭 시 share 모달·URL 유지·이름/공유 요청 0', async ({ page }) => {
+  const calls = [];
+  page.on('request', (req) => {
+    const p = new URL(req.url()).pathname;
+    if (req.method() !== 'GET' && (p.includes('/public-name') || p.includes('/share') || p.includes('/episode'))) calls.push(`${req.method()} ${p}`);
+  });
+  await mockApp(page, { ...STATES.userData, me: NO_NAME_ME, routes: communityRoutes() });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await page.locator('#communityNameModalSkip').click();
+  await expect(page.locator('#communityNameModal')).toHaveCount(0);
+
+  const cta = page.locator('#communityShareCta');
+  await expect(cta).toHaveAttribute('href', /log\.html$/);
+  await cta.click();
+  await expect(page.locator('#communityNameModal')).toHaveCount(1);
+  await expect(page.locator('#communityNameModalReason')).toBeVisible();
+  await expect(page).toHaveURL(/community\.html/);
+  expect(calls).toEqual([]);
 });
