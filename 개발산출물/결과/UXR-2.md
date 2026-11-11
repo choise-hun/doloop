@@ -1,6 +1,6 @@
 # UXR-2 결과 — 악기 버튼군·접이식 설정·스케일 행·재해석 2열
 
-> 2026-11-11 / Claude(시니어 0단계 구현) + Gemini(주니어 4단계 검증·PR). 명세 [UXR-2](../명세/UXR-2_구현명세.md). 브랜치 `step/UXR-2`(main `75887bb` 기준).
+> 2026-11-11 / Claude(시니어 0단계 구현) + Gemini(주니어 4단계 검증·PR). 명세 [UXR-2](../명세/UXR-2_구현명세.md). 브랜치 `step/UXR-2`(main `75887bb` 기준). [PR #160](https://github.com/choise-hun/doloop/pull/160).
 
 ## 1. 변경 요약
 
@@ -55,4 +55,4 @@
 
 1. **구현 커밋:** `feat(chords): UXR-2 악기 버튼군·접이식 설정·스케일 행·재해석 2열` (`2599701`, 6개 파일).
 2. **문서 커밋:** `docs(chords): UXR-2 4단계 전체 회귀 및 스크린샷 Q1~Q9 검토 결과 반영`.
-3. **PR 게시:** main(`75887bb`) 대상 PR 생성 및 CI 감시 완료.
+3. **PR 게시:** [PR #160](https://github.com/choise-hun/doloop/pull/160) (base `main`) 생성 및 CI 감시 완료.
