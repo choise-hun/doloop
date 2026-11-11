@@ -22,7 +22,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | UXR-1 | 연습 기록 단일화(미연결 녹음·A/B 교차·삭제 슬롯 결함) + 트랜스포트 통일 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-1_구현명세.md) → `결과/UXR-1.md` | 없음 | 명세 §9 체크리스트, PR CI 통과·리뷰 처리 | 시니어 high / 주니어 medium | 완료 — PR #159 CI 통과·Codex 리뷰 확인, 사용자 머지 대기([결과](결과/UXR-1.md)) |
 | UXR-2 | 악기 버튼군·접이식 설정·스케일 의미별 행(hidden 결함)·재해석 2열 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/UXR-2_구현명세.md) → `결과/UXR-2.md` | 없음 | 명세 §7 체크리스트 | 시니어 medium / 주니어 medium | 완료 — PR #1 CI 통과·리뷰 확인, 사용자 머지 대기([결과](결과/UXR-2.md)) |
-| UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | [시니어] 구현·표적 Green·로컬 커밋 완료(`step/UXR-3`). 전체 회귀·push·PR·CI·스크린샷 검토·결과 파일은 주니어 4단계 대기, §8 참조 |
+| UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — 주니어 4단계 전체 회귀(635 passed)·PL 테스트 보강·회귀 4건 해결 완료, PR 및 CI 검증 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 세부 명세 완료, 구현 승인 대기 |
 | CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 예정 | 상위 §5.2a·§5.4 → `명세/CMR-2_구현명세.md` | CMR-1 머지 | 세부 명세 작성 후 확정 | — | 대기(CMR-1 마크업 확정 후 명세) |
 | CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 예정 | 상위 §5.2·§5.3·§5.8 → `명세/CMR-3_구현명세.md` | CMR-1 머지 | 같음 | — | 대기 |
@@ -129,4 +129,28 @@ Git 처리: 로컬 커밋만. push·PR·배포는 이 멘트로 승인되지 않
 4. 검증: `npm run build`, `npm test`, `npx playwright test test/e2e/layout/practice.spec.js test/e2e/player-category.spec.js test/e2e/home-category.spec.js test/e2e/practice-record.spec.js`, 그리고 홈·커뮤니티 레이아웃 spec(`test/e2e/layout/home.spec.js` 등)과 전체 `npx playwright test`(categories 엄격 envelope의 공용 소비자 회귀 확인).
 5. `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/practice.spec.js`로 4폭(390·768·1150·1280)의 guest/영상 없음/userData/userEmpty + 다크 userData 캡처, 목록 실패·30곡·녹음 실패는 390·1280. Q1~Q9 폭별 판정을 `개발산출물/결과/UXR-3.md`에 표로 기록(특히 961~1150 구간에서 재생 카드 5버튼 폭, 녹음 카드 wrap).
 6. push → main 대상 PR 생성 → `gh pr checks --watch` → PR 리뷰 확인 → 결과 파일·이 파일 갱신. 머지는 사용자가 한다.
+
+### 8.3 UXR-3 주니어 4단계 검증 및 마무리 결과 (2026-11-11)
+
+- **선행 및 보존:** `AGENTS.md`, `CLAUDE.md` 사용자 변경 보존.
+- **회귀 4건 해결:**
+  - `mock-app.js`: `/api/v1/categories` GET 기본 응답(`{ categories: [] }`) 등록 및 `supabaseStub` 내 `fakeSession` 세션 갱신 반영 (사용자 보고 완료).
+  - `home-category.spec.js` C4a-5: 인라인 폴더 선택 및 모바일 펼침 기대 단언으로 갱신 통과.
+  - `player-category.spec.js` P4b-1, P4b-4: 인라인 선택 및 삭제 분류 시 전체 복구·안내 문구 검증 통과.
+  - `practice-record.spec.js` SR1-4: mock categories 기본 응답 등록으로 통과.
+- **부족한 PL 테스트 작성 (`practice.spec.js`):**
+  - PL-03: 30곡 긴 제목 스크롤(높이 ≤320px, scrollHeight > clientHeight, 목록 내부 스크롤로 마지막 곡 도달 및 선택, 페이지 스크롤 점프 없음).
+  - PL-04: 홈에서 삭제된 분류 전달 시 `__all` 복구 및 안내 문구 표시.
+  - PL-07: A 조회 중 B 로그인 계정 경합 시 A 지연 응답 해제 후 B 화면에 A 데이터 오염 없음 검증.
+  - PL-09: 현재 곡 재클릭 no-op, 다른 곡 전환 중 버튼 잠금(`aria-disabled="true"`) 및 저장 완료 후 해제.
+  - PL-10: guest / Drive 미연결 / 영상 없음 가드 검증.
+- **검증 결과:**
+  - `npm run build`: 성공 (`tsc --noEmit && vite build`).
+  - `npm test`: 416 passed / 0 failed.
+  - 핵심 4개 E2E: 66 passed.
+  - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/practice.spec.js`: 41 passed, 4폭 및 다크 캡처 정상 생성, Q1~Q9 판정 완료.
+  - 홈·커뮤니티 레이아웃: 각각 21 passed, 11 passed.
+  - 전체 E2E: **635 passed / 0 failed** (10.6m).
+- **결과 문서:** [결과/UXR-3.md](결과/UXR-3.md) 작성 완료.
+
 
