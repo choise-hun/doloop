@@ -64,3 +64,16 @@
 | Q7 | 유채색 절제 | ○ | 파란색 링크는 필요한 액션("구간 재생", "내 보관함 담기")에만 국한되어 작은 면적으로 사용됨 |
 | Q8 | 곡률 조화 / 1px 라인 준수 | ○ | 카드 테두리(`1px solid var(--line)`), 탭 칩의 라운드 필과 카드의 절제된 곡률이 DESIGN.md 규격에 맞게 조화로움 |
 | Q9 | 다크 모드 대비 | ○ | 다크 모드 1280px 캡처에서 카드 경계선, 글자 명도, 배지(PRO 등) 대비가 충분하고 시인성 우수 |
+
+### 5.3 Git 처리 및 CI 확인
+
+- **브랜치:** `step/CMR-1`
+- **PR:** [PR #3](https://github.com/choise-hun/doloop/pull/3) (base `main`)
+- **GitHub Actions CI:** 전 항목 통과 (success)
+  - `CI/Detect code changes`: 통과 (6s)
+  - `CI/Test (Node 22)`: 통과 (34s)
+  - `CI/Docker build & smoke`: 통과 (1m 29s)
+  - `CI/E2E XSS & CSP (Playwright)`: 통과 (10m 42s)
+  - `CI/CI ok (pull_request)`: 통과 (2s)
+- **PR 리뷰 / 코멘트:** 0건 (지적사항 없음)
+- **상태:** 구현부터 PR 검증까지 완료. 사용자 머지 대기.
