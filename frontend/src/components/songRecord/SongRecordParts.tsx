@@ -424,6 +424,8 @@ export interface SessionTimelineProps {
   idPrefix?: string;
   initialLimit?: number;
   loading?: boolean;
+  abSelection?: { a: string; b: string };
+  onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
 }
 
 export function SessionTimeline({
@@ -436,6 +438,8 @@ export function SessionTimeline({
   idPrefix = '',
   initialLimit,
   loading = false,
+  abSelection,
+  onSelectAbSlot,
 }: SessionTimelineProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
 
@@ -465,6 +469,8 @@ export function SessionTimeline({
                 onTakeRemoved={onTakeRemoved}
                 onTakeCompleted={onTakeCompleted}
                 onMemoSaved={onMemoSaved}
+                abSelection={abSelection}
+                onSelectAbSlot={onSelectAbSlot}
                 surface={idPrefix === 'sr' ? 'player' : 'detail'}
               />
             ))}

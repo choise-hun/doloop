@@ -1,4 +1,4 @@
-// 연습 화면 정렬 검사 (FT-2 · SR-1): 공통 검사 G0~G8 + #songRecord 배치 약속(sr-left, sr-cols)
+// 연습 화면 정렬 검사 (FT-2 · SR-1): 공통 검사 G0~G8 + #songRecord 배치 약속(sr-left, 1열) + 트랜스포트(transport)
 // 규격: 개발산출물/프론트_정렬규격.md · 명세: 개발산출물/명세/SR-1_구현명세.md §3
 'use strict';
 const { test, expect } = require('@playwright/test');
@@ -87,10 +87,10 @@ layoutSuite({
     await page.locator('#seekRow').waitFor();
     await page.locator('#songRecord').waitFor();
     if (state === 'userData') {
-      await expect(page.locator('#srTakes .take-row')).toHaveCount(2);
+      await expect(page.locator('#songRecord .take-row')).toHaveCount(2);
       await expect(page.locator('#srTimeline .tl-row')).toHaveCount(5);
     } else if (state === 'userEmpty') {
-      await expect(page.locator('#srTakes')).toContainText('아직 녹음이 없어요');
+      await expect(page.locator('#songRecord .take-row')).toHaveCount(0);
       await expect(page.locator('#srTimeline')).toContainText('아직 연습 세션 기록이 없어요');
     }
   },
@@ -268,16 +268,16 @@ test('T4: 테이크 .ab-select 매핑 및 구간 완료 토글', async ({ page }
 
   await mockApp(page, mockWithPatch);
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
-  await page.locator('#srTakes').waitFor();
+  await page.locator('#srTimeline .take-row').first().waitFor();
 
-  const abSelects = page.locator('#srTakes .ab-select');
+  const abSelects = page.locator('#songRecord .ab-select');
   await expect(abSelects).toHaveCount(2);
   await abSelects.nth(0).selectOption('a');
   await abSelects.nth(1).selectOption('b');
   await expect(abSelects.nth(0)).toHaveValue('a');
   await expect(abSelects.nth(1)).toHaveValue('b');
 
-  const btnComp = page.locator('#srTakes .btnComplete').first();
+  const btnComp = page.locator('#songRecord .btnComplete').first();
   await expect(btnComp).toBeVisible();
   await btnComp.click();
   await expect.poll(() => patchCompleted).not.toBeNull();
@@ -306,9 +306,9 @@ test('T5 (UI-3): 시작/끝 라벨, 대기 드롭다운, 1120px 정렬 및 재�
   const box = await shell.boundingBox();
   expect(box.width).toBeLessThanOrEqual(1120);
 
-  // 4. 재생 버튼(#playBtn)은 원형/필 곡률 유지, 보조 버튼(#backBtn)은 0px 직각
+  // 4. 재생 버튼(#playBtn)도 보조 버튼(#backBtn)과 같은 0px 직각(UXR-1 D8)
   const playRadius = await page.locator('#playBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
-  expect(playRadius).toBe('9999px');
+  expect(playRadius).toBe('0px'); // UXR-1 D8: 단독 pill 제거, 5버튼 동일 모양
   const backRadius = await page.locator('#backBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
   expect(backRadius).toBe('0px');
 });
@@ -410,3 +410,38 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
 });
 
 
+
+// UXR-1 D8: 트랜스포트 5버튼은 같은 모양(단독 pill·반전 채움 없음) — 4개 폭
+for (const width of [1280, 1150, 768, 390]) {
+  test(`UXR1-L: 트랜스포트 5버튼 top/bottom/height 일치·재생 버튼 동일 스타일 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#seekRow').waitFor();
+    const info = await page.evaluate(() => {
+      const ids = ['backBtn', 'startBtn', 'playBtn', 'fwdBtn', 'saveBtn'];
+      const els = ids.map((i) => document.getElementById(i));
+      const cs = (el) => getComputedStyle(el);
+      const rects = els.map((el) => el.getBoundingClientRect());
+      return {
+        tops: rects.map((r) => Math.round(r.top * 10) / 10),
+        bottoms: rects.map((r) => Math.round(r.bottom * 10) / 10),
+        heights: rects.map((r) => Math.round(r.height * 10) / 10),
+        play: { radius: cs(els[2]).borderRadius, bg: cs(els[2]).backgroundColor, color: cs(els[2]).color, border: cs(els[2]).borderTopColor },
+        back: { radius: cs(els[0]).borderRadius, bg: cs(els[0]).backgroundColor, color: cs(els[0]).color, border: cs(els[0]).borderTopColor },
+      };
+    });
+    for (const k of ['tops', 'bottoms', 'heights']) expect(new Set(info[k]).size, k + ' ' + info[k]).toBe(1);
+    expect(info.play).toEqual(info.back);
+    // 재생 중으로 바뀌어도 모양 유지
+    await page.locator('#playBtn').click();
+    const after = await page.evaluate(() => {
+      const el = document.getElementById('playBtn');
+      const c = getComputedStyle(el);
+      return { radius: c.borderRadius, bg: c.backgroundColor, h: el.getBoundingClientRect().height };
+    });
+    expect(after.radius).toBe(info.back.radius);
+    expect(after.bg).toBe(info.back.bg);
+    expect(after.h).toBe(info.heights[0]);
+  });
+}

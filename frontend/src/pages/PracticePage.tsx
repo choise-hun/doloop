@@ -2103,6 +2103,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="backBtn"
+                data-align-group="transport:top,bottom,height"
                 aria-label={t('practice.ariaRewind')}
                 onClick={() => handleSkip(-5)}
               >
@@ -2112,6 +2113,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="startBtn"
+                data-align-group="transport:top,bottom,height"
                 aria-label={t('practice.ariaRestartSegment')}
                 onClick={jumpToLoopStart}
               >
@@ -2121,6 +2123,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn pp-play ${styles.ppTbtn} ${styles.ppPlayBtn}`}
                 id="playBtn"
+                data-align-group="transport:top,bottom,height"
                 aria-label={playing ? t('practice.ariaPause') : t('practice.ariaPlay')}
                 onClick={handleTogglePlay}
               >
@@ -2130,6 +2133,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
                 id="fwdBtn"
+                data-align-group="transport:top,bottom,height"
                 aria-label={t('practice.ariaForward')}
                 onClick={() => handleSkip(5)}
               >
@@ -2139,6 +2143,7 @@ export function PracticePage(): React.ReactElement {
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
                 id="saveBtn"
+                data-align-group="transport:top,bottom,height"
                 aria-label={t('practice.btnSave')}
                 disabled={!videoId}
                 onClick={() => void saveProgressNow('manual')}
