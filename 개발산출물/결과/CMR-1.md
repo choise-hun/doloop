@@ -26,7 +26,9 @@
 
 ## 4. 결정·주의
 
-- **`discover.recent`·`discover.empty` 키 유지**(명세 §4)와 `test/i18n.test.js` I0-6(모든 키가 `'키'`로 소스에 등장해야 함)이 충돌했다. `CurationRows.tsx` 상단 주석에 두 키를 인용해 통과시켰다(임시). 홈/타 화면이 쓰게 되거나 키를 지우기로 하면 이 주석과 사전을 함께 정리한다.
+- **`discover.recent`·`discover.empty` 키 삭제(재검토 결정 2026-11-11):** 명세 §4의 "홈/호환 유지" 전제가 틀렸다 — 홈 `#discover`는 빈 상태에 줄을 숨겨 `discover.empty`를 쓰지 않고, recent 줄 제거 후 `frontend/src`·`public` 어디에도 사용처가 없다. 처음에 주석 인용으로 I0-6을 통과시켰으나 미사용 키 검사를 무력화하는 우회라 되돌리고 ko/en/ja 사전에서 두 키를 지웠다. 명세 §4도 같이 고쳤다. 문구 키는 CLAUDE.md의 계약 항목이 아니다.
+- **SR-11 → CMR1-2 대체 유지:** 원래 SR-11이 지키던 동작(최근 공개 줄 더보기)이 승인된 요구 변경으로 없어졌으므로 의미를 바꾸는 게 맞다. CMR1-2는 요청 0건과 `[data-row="recent"]`·`#recentMoreBtn` 0개를 함께 봐서 제거가 되돌아오면 잡아낸다.
+- **`EpisodeLogFeed` 초기 `loading=true` 유지:** 사용처는 CommunityPage 두 곳뿐(row·masonry)이고, 마운트 직후 첫 페이지 조회가 항상 돌아 바로 true→결과로 이어진다. false로 두면 첫 렌더에서 status가 `empty`로 보고돼 선반이 숨었다가 나오고, D4 빈 상태가 잘못 뜰 수 있다. `fetchMore`의 `loading` 가드도 첫 페이지 전 더보기를 막아 오히려 안전하다.
 - 명세 §1의 `main=d42e28e` 기준과 달리 실제 main은 PR #2 머지 후(`9925b8b`)다. 충돌 없음.
 - `waitForTimeout` 금지 규칙(testing-security.md)에 따라 CMR1-11은 응답 완료 + rAF로 결정적으로 기다린다.
 

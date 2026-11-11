@@ -15,8 +15,6 @@ import { FolderRow } from './CommunityParts';
 import { FolderSheet } from './FolderSheet';
 import styles from './Community.module.css';
 
-// 호환 보존 키(CMR-1 명세 §4: 값·키 유지, 현재 화면 미사용): 'discover.recent', 'discover.empty'
-// i18n 미사용 키 검사(test/i18n.test.js)가 이 주석의 인용으로 통과한다. 쓰는 화면이 생기면 이 주석을 지운다.
 export interface CurationRowsProps {
   variant: 'home' | 'community';
   me: MeProfile | null;
