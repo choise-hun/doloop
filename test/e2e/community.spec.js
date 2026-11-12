@@ -1001,3 +1001,158 @@ test('CMR2-17 프로필 보존: 프로필 화면에서 이름 없어도 공유 �
   expect(shareCalls).toEqual(['cat-2']);
   await expect(page.locator('#communityNameModal')).toHaveCount(0);
 });
+
+// ---- CMR-3: 단일 표지·빠른 추가·상세 화면 (명세 CMR-3 §9, 시니어 핵심 표적) ----
+const { MONTHLY_ITEMS } = require('./support/community-fixtures');
+const CMR3_CURATED = `[data-row="curated"] [data-folder-id="${FOLDER_CURATED_1.id}"]`;
+
+async function openCommunityPro(page, curationHome) {
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: communityRoutes(curationHome ? { curationHome } : {}),
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator(CMR3_CURATED)).toBeVisible();
+}
+
+async function touchEvent(locator, type) {
+  const box = await locator.boundingBox();
+  await locator.dispatchEvent(type, {
+    pointerType: 'touch', isPrimary: true, pointerId: 1,
+    clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,
+  });
+}
+
+async function captureSongPost(page, status, body) {
+  const posts = [];
+  await page.route((url) => url.pathname === '/api/v1/songs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    posts.push(JSON.parse(route.request().postData() || '{}'));
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  return posts;
+}
+
+test('CMR3-1 단일 표지: coverVideoIds 4개여도 모자이크 0, 표지 img 1개(coverVideoId 우선, 없으면 첫 ID)', async ({ page }) => {
+  const withCover = { ...FOLDER_CURATED_2, coverVideoId: 'abcdefghij9' };
+  await openCommunityPro(page, { ...CURATION_HOME_FIXTURE, curated: [FOLDER_CURATED_1, withCover] });
+
+  await expect(page.locator('[class*="coverMosaic"]')).toHaveCount(0);
+  const imgs = page.locator(`${CMR3_CURATED} [class*="cardCoverWrap"] img`);
+  await expect(imgs).toHaveCount(1);
+  await expect(imgs).toHaveAttribute('src', /abcdefghij1/);
+  const second = page.locator(`[data-row="curated"] [data-folder-id="${withCover.id}"] [class*="cardCoverWrap"] img`);
+  await expect(second).toHaveAttribute('src', /abcdefghij9/);
+});
+
+test('CMR3-3 홈 보존: #discover 카드에 셸·빠른 추가 0, 표지 단일', async ({ page }) => {
+  await mockApp(page, { ...STATES.userData, me: COMMUNITY_PRO_ME, routes: communityRoutes() });
+  await page.goto('/index.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator('#discover')).toBeVisible();
+  await expect(page.locator('#discover [class*="cardShell"]')).toHaveCount(0);
+  await expect(page.locator('#discover [data-quick-add]')).toHaveCount(0);
+  await expect(page.locator('#discover [class*="coverMosaic"]')).toHaveCount(0);
+});
+
+test('CMR3-4 + 노출: 1280 hover 시 opacity 1, 클릭하면 빠른 추가 시트만 열림', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const plus = page.locator(CMR3_CURATED).locator('xpath=..').locator('[data-quick-add]');
+  await page.locator(CMR3_CURATED).hover();
+  await expect.poll(() => plus.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  await plus.click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+  await expect(page.locator('#quickAddClone')).toBeVisible();
+  await expect(page.locator('#quickAddTitle')).toBeFocused();
+});
+
+test.describe('CMR-3 터치', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('CMR3-6 꾹 누르기: 500ms 유지 시 빠른 추가 시트, 뒤따른 click으로 상세 0', async ({ page }) => {
+    await page.clock.install();
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    await expect(card.locator('xpath=..').locator('[data-quick-add]')).toBeHidden();
+    await touchEvent(card, 'pointerdown');
+    await page.clock.runFor(500);
+    await touchEvent(card, 'pointerup');
+    await card.dispatchEvent('click');
+    await expect(page.locator('#quickAddSheet')).toBeVisible();
+    await expect(page.locator('#folderSheet')).toHaveCount(0);
+  });
+
+  test('CMR3-8 짧은 탭: 200ms 뒤 손 떼고 click하면 시트 0, 상세 열림', async ({ page }) => {
+    await page.clock.install();
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    await touchEvent(card, 'pointerdown');
+    await page.clock.runFor(200);
+    await touchEvent(card, 'pointerup');
+    await card.dispatchEvent('click');
+    await page.clock.runFor(600);
+    await expect(page.locator('#folderSheet')).toBeVisible();
+    await expect(page.locator('#quickAddSheet')).toHaveCount(0);
+  });
+});
+
+test('CMR3-9 곡 추가 a/b: 이달의 곡 + → 추가 시 본문에 rate·a·b, 성공 문구', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const posts = await captureSongPost(page, 201, { song: { id: 's-1', videoId: MONTHLY_ITEMS[0].videoId } });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${MONTHLY_ITEMS[0].videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddStatus')).toHaveText('내 곡 리스트에 있어요');
+  expect(posts).toEqual([{
+    videoId: MONTHLY_ITEMS[0].videoId, title: MONTHLY_ITEMS[0].title, artist: 'John Mayer', rate: 0.75, a: 38, b: 55,
+  }]);
+});
+
+test('CMR3-11 a≥b·범위 밖: a·b·rate 키 없이 전송', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const bad = { ...MONTHLY_ITEMS[0], a: 60, b: 30, rate: 3 };
+  await openCommunityPro(page, {
+    ...CURATION_HOME_FIXTURE,
+    monthlyPick: { ...CURATION_HOME_FIXTURE.monthlyPick, items: [bad] },
+  });
+  const posts = await captureSongPost(page, 200, { song: { id: 's-1', videoId: bad.videoId } });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${bad.videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddStatus')).toHaveText('내 곡 리스트에 있어요');
+  expect(posts).toHaveLength(1);
+  expect(Object.keys(posts[0]).sort()).toEqual(['artist', 'title', 'videoId']);
+});
+
+test('CMR3-15 상세 구조: 히어로 → 컨트롤 바 → 곡 목록, 바 순서, 제목 focus, ESC 닫기 후 카드 focus', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const card = page.locator('[data-row="showcase"] [data-folder-id]').first();
+  await card.click();
+  const sheet = page.locator('#folderSheet');
+  await expect(sheet.locator('#folderSheetItems li')).toHaveCount(2);
+  await expect(page.locator('#folderSheetTitle')).toBeFocused();
+
+  const ordered = await sheet.evaluate((root) => {
+    const els = ['[class*="detailHero"]', '#folderSheetControls', '#folderSheetItems'].map((s) => root.querySelector(s));
+    if (els.some((x) => !x)) return false;
+    return els.every((el, i) => i === 0 || Boolean(els[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  expect(ordered).toBe(true);
+  const ids = await page.locator('#folderSheetControls > button').evaluateAll((els) => els.map((e) => e.id));
+  expect(ids.slice(0, 4)).toEqual(['folderClone', 'folderSelectMode', 'folderShare', 'folderLike']);
+  await expect(page.locator('#folderSheetControls')).toHaveAttribute('role', 'toolbar');
+  await expect(sheet.locator('[class*="practiceLink"]')).toHaveCount(0);
+  await expect(sheet.locator('a[class*="detailTrackLink"]').first()).toHaveAttribute('href', /practice\.html\?v=abcdefghij1/);
+
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(card).toBeFocused();
+});

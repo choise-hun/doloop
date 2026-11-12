@@ -51,7 +51,7 @@ export function folderSubtitle(artists: unknown, itemCount: unknown): string {
   return list.join(', ') + (count > list.length ? t('community.etcSuffix') : '');
 }
 
-/** 문자열만, 최대 4. 4 미만이면 앞 1개만(모자이크는 4장일 때만) */
+/** 문자열만, 최대 4. 4 미만이면 앞 1개만. 표지는 첫 1개만 쓴다(CMR-3 RV-5) */
 export function coverIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   const list = ids

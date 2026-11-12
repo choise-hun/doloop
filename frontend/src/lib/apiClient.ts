@@ -658,13 +658,15 @@ async function byVideo(videoId: string): Promise<SongDto | null> {
   return r && r.song !== undefined ? r.song : null;
 }
 
-async function createSong(input: { videoId: string; title?: string; artist?: string; rate?: number }): Promise<SongDto | null> {
+async function createSong(input: { videoId: string; title?: string; artist?: string; rate?: number; a?: number; b?: number }): Promise<SongDto | null> {
   requireLogin();
   const body = JSON.stringify({
     videoId: input?.videoId,
     title: input?.title,
     artist: input?.artist,
     rate: input?.rate,
+    a: input?.a,
+    b: input?.b,
   });
   const r = await getAuthRef().apiFetch('/api/v1/songs', {
     method: 'POST',

@@ -11,9 +11,18 @@ import {
   normalizeCurationHome,
 } from '../../lib/community.mts';
 import { t } from '../../lib/i18n.mts';
-import { FolderRow } from './CommunityParts';
+import { FolderRow, type QuickAddTarget } from './CommunityParts';
 import { FolderSheet } from './FolderSheet';
+import { QuickAddSheet } from './QuickAddSheet';
 import styles from './Community.module.css';
+
+// CMR-3 D21: 공유 딥링크 community.html#folder=<id>
+const FOLDER_HASH = /^#folder=([A-Za-z0-9_-]{1,64})$/;
+function folderIdFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const m = FOLDER_HASH.exec(window.location.hash);
+  return m ? m[1] : null;
+}
 
 export interface CurationRowsProps {
   variant: 'home' | 'community';
@@ -36,6 +45,9 @@ export function CurationRows({
   const [data, setData] = useState<CurationHomeDto | null>(null);
   const [error, setError] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  // CMR-3: community 변형 전용 상태(빠른 추가 대상, 해시로 연 상세, dev mock)
+  const [quick, setQuick] = useState<QuickAddTarget | null>(null);
+  const openedByHash = useRef(false);
 
   // S1 CurationRows 읽기 — uid + seq (frontend-state.md §1)
   const seq = useRef(0);
@@ -45,6 +57,7 @@ export function CurationRows({
     setData(null);                                   // D16: 계정 바뀌면 이전 줄 즉시 비움
     setError(null);
     setActiveFolderId(null);
+    setQuick(null);
     if (!uid) return;
     apiClient.curation.home().then((raw) => {
       if (my !== seq.current || uid !== (auth.getMe()?.id ?? null)) return;
@@ -57,6 +70,33 @@ export function CurationRows({
     });
     return () => { seq.current++; };
   }, [me?.id, variant, retry]);
+
+  // CMR-3 D21: 마운트·hashchange 때 #folder=<id>면 상세를 연다(community 변형만)
+  useEffect(() => {
+    if (variant !== 'community' || !me?.id) return;
+    const sync = () => {
+      const id = folderIdFromHash();
+      if (!id) return;
+      openedByHash.current = true;
+      setQuick(null);
+      setActiveFolderId(id);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, [variant, me?.id]);
+
+  function closeCommunityFolder() {
+    setActiveFolderId(null);
+    if (openedByHash.current) {
+      openedByHash.current = false;
+      if (folderIdFromHash()) history.replaceState(null, '', '#all');
+    }
+  }
+
+  function openCommunityFolder(id: string) {
+    setActiveFolderId(id);
+  }
 
   function handlePatchFolder(id: string, patch: Partial<PublicFolderDto>) {
     setData((prev) => {
@@ -150,32 +190,44 @@ export function CurationRows({
         rowKey="following"
         title={t('discover.following')}
         folders={following}
-        onOpenFolder={setActiveFolderId}
+        onOpenFolder={openCommunityFolder}
+        onQuickAdd={setQuick}
       />
       <FolderRow
         rowKey="monthly"
         title={t('discover.monthly')}
         songItems={monthlyItems}
-        onOpenFolder={setActiveFolderId}
+        onOpenFolder={openCommunityFolder}
+        onQuickAdd={setQuick}
       />
       {postsSlot}
       <FolderRow
         rowKey="curated"
         title={t('discover.curated')}
         folders={curated}
-        onOpenFolder={setActiveFolderId}
+        onOpenFolder={openCommunityFolder}
+        onQuickAdd={setQuick}
       />
       <FolderRow
         rowKey="showcase"
         title={t('discover.showcase')}
         folders={showcase}
-        onOpenFolder={setActiveFolderId}
+        onOpenFolder={openCommunityFolder}
+        onQuickAdd={setQuick}
       />
 
       <FolderSheet
         folderId={activeFolderId}
         me={me}
-        onClose={() => setActiveFolderId(null)}
+        onClose={closeCommunityFolder}
+        onPatchFolder={handlePatchFolder}
+      />
+      <QuickAddSheet
+        target={quick}
+        me={me}
+        mock={false}
+        onClose={() => setQuick(null)}
+        onOpenDetail={(id) => { setQuick(null); openCommunityFolder(id); }}
         onPatchFolder={handlePatchFolder}
       />
     </div>
