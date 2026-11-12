@@ -1,16 +1,22 @@
 # Backend (Kotlin / Ktor / Exposed) 필수 설계 패턴
 
-부정형 지시 대신 아래의 검증된 코드 템플릿(Positive Pattern)을 그대로 사용할 것.
+부정형 지시 대신 아래의 검증된 코드 템플릿(Positive Pattern)을 사용할 것.
+
+> 제목 옆 `PR #n`·`RECFIX-1` 같은 출처는 규칙이 생긴 리뷰를 가리킨다. `PR #n`은 **옛 저장소 번호**이며 이 저장소(`choise-hun/doloop`)의 PR 번호와 다르다.
+> 코드 조각은 패턴을 보여 주는 예시다. 식별자와 시그니처는 적힌 기준 구현 파일에서 확인해 맞춘다.
 
 ## 1. Exposed 트랜잭션 & 코루틴 취소 전파 (PR #12)
 newSuspendedTransaction(Dispatchers.IO)처럼 디스패처를 단독 인자로 넘기면 부모 Job 계층이 끊긴다. 반드시 아래와 같이 작성한다:
 
     // [필수 패턴] 부모 컨텍스트 유지 및 취소 시 롤백 보장
-    suspend fun <T> dbQuery(block: suspend Transaction.() -> T): T =
+    // 기준 구현: src/main/kotlin/ulevelp/db/DatabaseFactory.kt 의 dbQuery — 새로 만들지 말고 이것을 호출한다
+    suspend fun <T> dbQuery(db: Database? = null, block: suspend Transaction.() -> T): T =
         withContext(Dispatchers.IO) {
             newSuspendedTransaction(db = db) {
-                ensureActive()
-                block()
+                currentCoroutineContext().ensureActive()
+                val result = block()
+                currentCoroutineContext().ensureActive()   // 블록 뒤 취소도 커밋 전에 잡는다
+                result
             }
         }
 

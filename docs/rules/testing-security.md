@@ -1,5 +1,7 @@
 # Testing, Security & Ops 필수 규칙
 
+> 제목 옆 `PR #n`·`RECFIX-1` 같은 출처는 규칙이 생긴 리뷰를 가리킨다. `PR #n`은 **옛 저장소 번호**이며 이 저장소(`choise-hun/doloop`)의 PR 번호와 다르다.
+
 ## 1. 테스트 단언문(Assertion) 왜곡 절대 금지 (PR #8, #11, #13, #33)
 - 비동기 인터페이스(Promise 반환 함수)가 동기로 throw하는 버그를 잡기 위해 assert.rejects에 async () =>를 씌우지 않는다:
 

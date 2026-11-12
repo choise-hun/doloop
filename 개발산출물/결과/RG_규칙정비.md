@@ -80,3 +80,17 @@ $ ls 개발산출물/진행_*.md      # 이 작업 파일 이동 전
 $ python3 linkcheck.py (인수인계·계획·docs/rules·정렬 규격·진입 문서 14개)
 깨진 링크 2 — 둘 다 완료/진행_규칙정비.md(RG-3 끝에 이동하면 해소)
 ```
+
+## 4. RG-3 규칙 정비
+
+| 항목 | 바꾼 것 |
+| --- | --- |
+| 중복 축소 | Step 개수·크기 규칙의 원본을 [협업 설명서 §1.2](../협업_시니어주니어.md)로 정하고, `docs/문서_운영.md` §4.1과 4단계 템플릿 §1·2는 요약과 링크로 줄였다. CLAUDE.md는 Step 줄을 원본 링크로 바꾸고, 두 번 적혀 있던 시니어 직접 구현 예외 문장을 한 번으로 줄였다 |
+| 손대지 않은 중복 | AGENTS.md·GEMINI.md의 종료 보고 형식과 한 줄 요약은 그대로 뒀다. 각 모델이 자기 진입 문서만 읽고 움직이도록 조정해 온 문구라, 줄이면 다른 모델의 동작이 달라질 수 있다 |
+| 옛 PR 번호 | `docs/rules/` 3개 파일과 주니어 체크리스트 머리에 "PR #n은 옛 저장소 번호" 안내를 넣었다. 본문의 출처 표기 78개는 이력이라 그대로 뒀다 |
+| 코드 조각 | `backend-kotlin.md` §1을 실제 `DatabaseFactory.dbQuery`(인자 `db`, 블록 앞뒤 `ensureActive`)와 같게 고쳤다. `frontend-state.md` §1의 `filterReqSeq`를 실제 이름 `reqSeqRef`로 바꾸고 기준 구현 파일을 적었다. §4는 코드에 없는 키 목록(`rec.take.song` 등) 대신 `auth.ts` `signOut()`의 실제 순서로 다시 썼다. 줄 번호는 금방 어긋나므로 파일·함수 이름만 적었다 |
+| 시니어 직접 구현 | "로컬 커밋까지" → "커밋·작업 브랜치 push까지, PR은 만들지 않는다". 고친 곳: CLAUDE.md, AGENTS.md, GEMINI.md §0 [A], 문서_운영 §6, 협업 설명서 §1.2의 표와 노동 분리 줄, 4단계 템플릿 0단계. 전체 회귀·PR 생성·CI 대기·결과 파일을 주니어가 맡는 것은 그대로다 |
+| 낡은 고정 참조 | 협업 설명서 §0의 "2026-11-07 기준 … `완료/진행_프론트기반.md`" 문구를 "인수인계 메모 §2와 실제 목록으로 확인"으로 바꿨다 |
+| config 동기화 | 원본은 이 저장소, config는 보관본으로 정했다. `scripts/check-config-sync.sh`(대조)와 `--copy`(복사)를 추가하고 절차를 문서_운영 §5에 적었다. `docs/rules/frontend-layout.md`는 config 쪽이 여러 프로젝트용 범용판이라 대조에서 뺐다. `frontend-design.md`는 `ULevelP/rules/frontend-design.md.template`로 새로 보관한다 |
+
+하지 않은 것: 문서 제목 `ULeveLP`·패키지 이름 `guitar-chord-lab`·저장소 이름 `doloop`의 통일(이름 결정이 필요), 계획 문서의 옛 PR 링크 6개 교체(주의 문구만 추가).

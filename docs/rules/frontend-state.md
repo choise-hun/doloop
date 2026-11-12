@@ -1,14 +1,18 @@
-# Frontend (React frontend/src & Legacy public/) 필수 패턴
+# Frontend (React frontend/src) 필수 패턴
+
+> 제목 옆 `PR #n`·`RECFIX-1` 같은 출처는 규칙이 생긴 리뷰를 가리킨다. `PR #n`은 **옛 저장소 번호**이며 이 저장소(`choise-hun/doloop`)의 PR 번호와 다르다.
+> 코드 조각은 패턴을 보여 주는 예시다. 식별자와 시그니처는 적힌 기준 구현 파일에서 확인해 맞춘다.
 
 ## 1. 비동기 요청 레이스 컨디션 방어 (uid + seq 캡처) (PR #19, #23, #28, #39)
 목록·단건 조회·미디어 URL 발급 시 이전 사용자 응답이나 늦게 도착한 응답이 화면을 덮어쓰지 않도록 한다. 백그라운드 폴링과 필터 조회의 시퀀스는 분리한다:
 
-    // [필수 패턴] 요청 진입 시 uid 및 seq 캡처, 상태 변경(저장/로그아웃/계정전환) 시 seq++
-    const mySeq = ++filterReqSeq.current;
-    const myUid = currentMe?.uid ?? null;
+    // [필수 패턴] 요청 진입 시 uid 및 seq 캡처, 상태 변경(저장/로그아웃/계정전환)·언마운트 시 seq++
+    // 기준 구현: frontend/src/components/community/EpisodeLogFeed.tsx 의 reqSeqRef
+    const mySeq = ++reqSeqRef.current;
+    const myUid = auth.getUser()?.id || null;
 
     const data = await fetchNotes(latestFilterRef.current);
-    if (mySeq !== filterReqSeq.current || myUid !== (currentMe?.uid ?? null)) {
+    if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) {
         return; // 무효화된 지연 응답 폐기
     }
 
@@ -40,7 +44,8 @@
 - 비동기 재생(play()): 매 await 복귀 직후 및 src 할당·play() 직전에 (1) reqToken 일치, (2) uid 일치, (3) 슬롯의 take.id 일치 3가지를 모두 검증한다.
 
 ## 4. 로그아웃 / 계정 전환 / /me 실패 시 전역 상태 완전 초기화 (PR #9, #13, #18, #22, #28, #29)
-- signOut({ scope: 'local' }) 호출과 함께 currentMe, ulp:keys, st.song, rec.take.song, rec.meta.song, currentNote, 숨겨진 DOM 입력값, 인메모리 OAuth 토큰을 빠짐없이 초기화하고 모든 비동기 시퀀스 토큰을 증가시킨다.
+- 기준 구현은 `frontend/src/lib/auth.ts`의 `signOut()`이다. `signOut({ scope: 'local' })` 호출 **전에** 세대·시퀀스 토큰(`authGeneration`, `profileSeq`)을 올리고, 사용자별 메모리 상태(`currentMe`, `currentSession`, `lastFetchedUid`, 키 캐시 `clearKeysCache()`, 대기 중인 프로필 저장 큐)를 비운 뒤 구독자에게 알린다. 저장된 세션(`ulp:auth`)은 SDK 로그아웃이 끝난 뒤, 그 사이 다시 로그인하지 않았을 때만 지운다.
+- 화면·훅이 사용자별 상태(선택한 곡·테이크·노트, 숨겨진 입력값, 인메모리 OAuth 토큰 등)를 새로 가지면, 사용자 변경을 구독해 그 상태를 비우고 자기 요청 시퀀스를 올린다. 초기화 대상을 빠뜨리지 않았는지는 사용자 A→B 전환 테스트로 확인한다.
 
 ## 5. 서버 DTO 대조 및 레이아웃 규격 (PR #29, #38, FT-3)
 - 프론트에서 읽는 API 필드는 추측하지 않고 src/main/kotlin/ulevelp/ 내 DTO 정의를 grep으로 반드시 대조한다.
