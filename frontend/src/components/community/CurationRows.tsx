@@ -48,6 +48,9 @@ export function CurationRows({
   // CMR-3: community 변형 전용 상태(빠른 추가 대상, 해시로 연 상세, dev mock)
   const [quick, setQuick] = useState<QuickAddTarget | null>(null);
   const openedByHash = useRef(false);
+  // D26: 프로덕션 빌드에서는 import.meta.env.DEV=false로 아래 mock 경로와 동적 import가 통째로 빠진다
+  const mock = import.meta.env.DEV && variant === 'community'
+    && new URLSearchParams(window.location.search).get('mock') === '1';
 
   // S1 CurationRows 읽기 — uid + seq (frontend-state.md §1)
   const seq = useRef(0);
@@ -59,6 +62,12 @@ export function CurationRows({
     setActiveFolderId(null);
     setQuick(null);
     if (!uid) return;
+    if (import.meta.env.DEV && mock) {               // CMR-3 D24: DEV ?mock=1만
+      void import('../../lib/communityMock').then((m) => {
+        if (my === seq.current && m.communityMockOn()) setData(m.MOCK_CURATION);
+      });
+      return;
+    }
     apiClient.curation.home().then((raw) => {
       if (my !== seq.current || uid !== (auth.getMe()?.id ?? null)) return;
       setData(normalizeCurationHome(raw) as CurationHomeDto);            // D12
@@ -69,7 +78,7 @@ export function CurationRows({
       }
     });
     return () => { seq.current++; };
-  }, [me?.id, variant, retry]);
+  }, [me?.id, variant, retry, mock]);
 
   // CMR-3 D21: 마운트·hashchange 때 #folder=<id>면 상세를 연다(community 변형만)
   useEffect(() => {
@@ -94,8 +103,9 @@ export function CurationRows({
     }
   }
 
+  // D25: mock 폴더는 상세를 열지 않는다
   function openCommunityFolder(id: string) {
-    setActiveFolderId(id);
+    if (!id.startsWith('mock-')) setActiveFolderId(id);
   }
 
   function handlePatchFolder(id: string, patch: Partial<PublicFolderDto>) {
@@ -225,7 +235,7 @@ export function CurationRows({
       <QuickAddSheet
         target={quick}
         me={me}
-        mock={false}
+        mock={mock}
         onClose={() => setQuick(null)}
         onOpenDetail={(id) => { setQuick(null); openCommunityFolder(id); }}
         onPatchFolder={handlePatchFolder}

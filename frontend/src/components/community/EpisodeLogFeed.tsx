@@ -70,7 +70,10 @@ export function EpisodeLogFeed({
       cursorRef.current = null;
 
       try {
-        const res = await apiClient.community.episodeLogs(targetScope, null);
+        // CMR-3 D24: DEV ?mock=1이면 첫 페이지만 mock(더보기 없음). D26: 프로덕션 빌드에서는 분기째 빠진다
+        const res = import.meta.env.DEV && new URLSearchParams(window.location.search).get('mock') === '1'
+          ? await import('../../lib/communityMock').then((m) => ({ posts: m.MOCK_POSTS, next: null }))
+          : await apiClient.community.episodeLogs(targetScope, null);
         if (mySeq !== reqSeqRef.current || myUid !== (auth.getUser()?.id || null)) return;
 
         setPosts(Array.isArray(res.posts) ? res.posts : []);
