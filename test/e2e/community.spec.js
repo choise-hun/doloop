@@ -1001,3 +1001,721 @@ test('CMR2-17 프로필 보존: 프로필 화면에서 이름 없어도 공유 �
   expect(shareCalls).toEqual(['cat-2']);
   await expect(page.locator('#communityNameModal')).toHaveCount(0);
 });
+
+// ---- CMR-3: 단일 표지·빠른 추가·상세 화면 (명세 CMR-3 §9, 시니어 핵심 표적) ----
+const { MONTHLY_ITEMS } = require('./support/community-fixtures');
+const CMR3_CURATED = `[data-row="curated"] [data-folder-id="${FOLDER_CURATED_1.id}"]`;
+
+async function openCommunityPro(page, curationHome) {
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: communityRoutes(curationHome ? { curationHome } : {}),
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator(CMR3_CURATED)).toBeVisible();
+}
+
+async function touchEvent(locator, type) {
+  const box = await locator.boundingBox();
+  await locator.dispatchEvent(type, {
+    pointerType: 'touch', isPrimary: true, pointerId: 1,
+    clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,
+  });
+}
+
+async function captureSongPost(page, status, body) {
+  const posts = [];
+  await page.route((url) => url.pathname === '/api/v1/songs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    posts.push(JSON.parse(route.request().postData() || '{}'));
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  return posts;
+}
+
+test('CMR3-1 단일 표지: coverVideoIds 4개여도 모자이크 0, 표지 img 1개(coverVideoId 우선, 없으면 첫 ID)', async ({ page }) => {
+  const withCover = { ...FOLDER_CURATED_2, coverVideoId: 'abcdefghij9' };
+  await openCommunityPro(page, { ...CURATION_HOME_FIXTURE, curated: [FOLDER_CURATED_1, withCover] });
+
+  await expect(page.locator('[class*="coverMosaic"]')).toHaveCount(0);
+  const imgs = page.locator(`${CMR3_CURATED} [class*="cardCoverWrap"] img`);
+  await expect(imgs).toHaveCount(1);
+  await expect(imgs).toHaveAttribute('src', /abcdefghij1/);
+  const second = page.locator(`[data-row="curated"] [data-folder-id="${withCover.id}"] [class*="cardCoverWrap"] img`);
+  await expect(second).toHaveAttribute('src', /abcdefghij9/);
+});
+
+test('CMR3-2 빈 표지: coverVideoId null·coverVideoIds 빈 배열이면 .coverEmpty(배경 --ink 계산값) 안에 .coverLabel(제목, aria-hidden)', async ({ page }) => {
+  const emptyCover = { ...FOLDER_CURATED_1, id: 'empty-1', coverVideoId: null, coverVideoIds: [], title: '빈 표지 폴더', titleI18n: { ko: '빈 표지 폴더' } };
+  await openCommunityPro(page, { ...CURATION_HOME_FIXTURE, curated: [FOLDER_CURATED_1, emptyCover] });
+
+  const card = page.locator(`[data-row="curated"] [data-folder-id="${emptyCover.id}"]`);
+  const emptyDiv = card.locator('[class*="coverEmpty"]');
+  await expect(emptyDiv).toHaveCount(1);
+  await expect(emptyDiv).toHaveAttribute('aria-hidden', 'true');
+  const label = emptyDiv.locator('[class*="coverLabel"]');
+  await expect(label).toHaveText('빈 표지 폴더');
+
+  const isMatch = await page.evaluate(() => {
+    const el = document.querySelector('[class*="coverEmpty"]');
+    if (!el) return false;
+    const tester = document.createElement('div');
+    tester.style.color = 'var(--ink)';
+    document.body.appendChild(tester);
+    const inkColor = getComputedStyle(tester).color;
+    tester.remove();
+    return getComputedStyle(el).backgroundColor === inkColor;
+  });
+  expect(isMatch).toBe(true);
+});
+
+test('CMR3-3 홈 보존: #discover 카드에 셸·빠른 추가 0, 표지 단일', async ({ page }) => {
+  await mockApp(page, { ...STATES.userData, me: COMMUNITY_PRO_ME, routes: communityRoutes() });
+  await page.goto('/index.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator('#discover')).toBeVisible();
+  await expect(page.locator('#discover [class*="cardShell"]')).toHaveCount(0);
+  await expect(page.locator('#discover [data-quick-add]')).toHaveCount(0);
+  await expect(page.locator('#discover [class*="coverMosaic"]')).toHaveCount(0);
+});
+
+test('CMR3-4 + 노출: 1280 hover 시 opacity 1, 클릭하면 빠른 추가 시트만 열림', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const plus = page.locator(CMR3_CURATED).locator('xpath=..').locator('[data-quick-add]');
+  await page.locator(CMR3_CURATED).hover();
+  await expect.poll(() => plus.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  await plus.click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+  await expect(page.locator('#quickAddClone')).toBeVisible();
+  await expect(page.locator('#quickAddTitle')).toBeFocused();
+});
+
+test.describe('CMR-3 터치', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('CMR3-5 + 숨김: hasTouch+isMobile 390에서 [data-quick-add] display:none', async ({ page }) => {
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    const plus = card.locator('xpath=..').locator('[data-quick-add]');
+    await expect(plus).toHaveCSS('display', 'none');
+  });
+
+  test('CMR3-6 꾹 누르기: 500ms 유지 시 빠른 추가 시트, 뒤따른 click으로 상세 0', async ({ page }) => {
+    await page.clock.install();
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    await expect(card.locator('xpath=..').locator('[data-quick-add]')).toBeHidden();
+    await touchEvent(card, 'pointerdown');
+    await page.clock.runFor(500);
+    await touchEvent(card, 'pointerup');
+    await card.dispatchEvent('click');
+    await expect(page.locator('#quickAddSheet')).toBeVisible();
+    await expect(page.locator('#folderSheet')).toHaveCount(0);
+  });
+
+  test('CMR3-7 꾹 누르기 취소: pointermove 20px 후에는 600ms 지나도 시트 0, 이후 click은 본체 실행', async ({ page }) => {
+    await page.clock.install();
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    const box = await card.boundingBox();
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 3;
+
+    await card.dispatchEvent('pointerdown', {
+      pointerType: 'touch', isPrimary: true, pointerId: 1,
+      clientX: startX, clientY: startY,
+    });
+    await card.dispatchEvent('pointermove', {
+      pointerType: 'touch', isPrimary: true, pointerId: 1,
+      clientX: startX + 20, clientY: startY,
+    });
+    await page.clock.runFor(600);
+    await card.dispatchEvent('pointerup', {
+      pointerType: 'touch', isPrimary: true, pointerId: 1,
+      clientX: startX + 20, clientY: startY,
+    });
+
+    await expect(page.locator('#quickAddSheet')).toHaveCount(0);
+    await card.dispatchEvent('click');
+    await expect(page.locator('#folderSheet')).toBeVisible();
+  });
+
+  test('CMR3-8 짧은 탭: 200ms 뒤 손 떼고 click하면 시트 0, 상세 열림', async ({ page }) => {
+    await page.clock.install();
+    await openCommunityPro(page);
+    const card = page.locator(CMR3_CURATED);
+    await touchEvent(card, 'pointerdown');
+    await page.clock.runFor(200);
+    await touchEvent(card, 'pointerup');
+    await card.dispatchEvent('click');
+    await page.clock.runFor(600);
+    await expect(page.locator('#folderSheet')).toBeVisible();
+    await expect(page.locator('#quickAddSheet')).toHaveCount(0);
+  });
+});
+
+test('CMR3-9 곡 추가 a/b: 이달의 곡 + → 추가 시 본문에 rate·a·b, 성공 문구', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const posts = await captureSongPost(page, 201, { song: { id: 's-1', videoId: MONTHLY_ITEMS[0].videoId } });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${MONTHLY_ITEMS[0].videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddStatus')).toHaveText('내 곡 리스트에 있어요');
+  expect(posts).toEqual([{
+    videoId: MONTHLY_ITEMS[0].videoId, title: MONTHLY_ITEMS[0].title, artist: 'John Mayer', rate: 0.75, a: 38, b: 55,
+  }]);
+});
+
+test('CMR3-10 멱등: POST 200(기존 곡)에도 내 곡 리스트에 있어요 성공 문구 표시', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const posts = await captureSongPost(page, 200, { song: { id: 's-existing', videoId: MONTHLY_ITEMS[0].videoId } });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${MONTHLY_ITEMS[0].videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddStatus')).toHaveText('내 곡 리스트에 있어요');
+  expect(posts).toHaveLength(1);
+});
+
+test('CMR3-11 a≥b·범위 밖: a·b·rate 키 없이 전송', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const bad = { ...MONTHLY_ITEMS[0], a: 60, b: 30, rate: 3 };
+  await openCommunityPro(page, {
+    ...CURATION_HOME_FIXTURE,
+    monthlyPick: { ...CURATION_HOME_FIXTURE.monthlyPick, items: [bad] },
+  });
+  const posts = await captureSongPost(page, 200, { song: { id: 's-1', videoId: bad.videoId } });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${bad.videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddStatus')).toHaveText('내 곡 리스트에 있어요');
+  expect(posts).toHaveLength(1);
+  expect(Object.keys(posts[0]).sort()).toEqual(['artist', 'title', 'videoId']);
+});
+
+test('CMR3-12 곡 한도: POST 403 SONG_LIMIT_EXCEEDED 시 #quickAddAlert에 한도 문구, 성공 문구 0', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  await captureSongPost(page, 403, { code: 'SONG_LIMIT_EXCEEDED', message: 'Limit reached' });
+  const song = page.locator(`[data-row="monthly"] [data-video-id="${MONTHLY_ITEMS[0].videoId}"]`);
+  await song.hover();
+  await song.locator('xpath=..').locator('[data-quick-add]').click();
+  await page.locator('#quickAddSong').click();
+  await expect(page.locator('#quickAddAlert')).toHaveText('곡 한도에 도달했어요. 플랜을 확인해 주세요');
+  await expect(page.locator('#quickAddStatus')).toHaveCount(0);
+});
+
+test('CMR3-13 폴더 담기: Pro는 clone POST 1회 및 성공 문구, 무료 사용자는 요청 0 및 업그레이드 문구', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // 1) Pro 사용자
+  const cloneCalls = [];
+  await openCommunityPro(page);
+  await page.route((url) => url.pathname.includes('/clone'), async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    cloneCalls.push(route.request().url());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ imported: 3, alreadyInLibrary: 0, skippedLimit: 0 }),
+    });
+  });
+
+  const card = page.locator(CMR3_CURATED);
+  await card.hover();
+  await card.locator('xpath=..').locator('[data-quick-add]').click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+  await page.locator('#quickAddClone').click();
+  await expect(page.locator('#quickAddStatus')).toContainText('3곡을 담았어요');
+  expect(cloneCalls).toHaveLength(1);
+
+  // 2) 무료 사용자
+  const freeCloneCalls = [];
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_FREE_ME,
+    routes: communityRoutes(),
+  });
+  await page.route((url) => url.pathname.includes('/clone'), async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    freeCloneCalls.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+
+  await page.goto('/community.html', { waitUntil: 'load' });
+  const freeCard = page.locator(CMR3_CURATED);
+  await freeCard.hover();
+  await freeCard.locator('xpath=..').locator('[data-quick-add]').click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+  await page.locator('#quickAddClone').click();
+  await expect(page.locator('#quickAddAlert')).toHaveText('Pro로 업그레이드하면 쓸 수 있어요');
+  expect(freeCloneCalls).toHaveLength(0);
+});
+
+test('CMR3-14 상세 열기: 빠른 추가 시트에서 #quickAddOpen 클릭 시 빠른 추가 시트 닫히고 #folderSheet 열림', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const card = page.locator(CMR3_CURATED);
+  await card.hover();
+  await card.locator('xpath=..').locator('[data-quick-add]').click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+
+  await page.locator('#quickAddOpen').click();
+  await expect(page.locator('#quickAddSheet')).toHaveCount(0);
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetTitle')).toHaveText(FOLDER_CURATED_1.title);
+});
+
+test('CMR3-15 상세 구조: 히어로 → 컨트롤 바 → 곡 목록, 바 순서, 제목 focus, ESC 닫기 후 카드 focus', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  const card = page.locator('[data-row="showcase"] [data-folder-id]').first();
+  await card.click();
+  const sheet = page.locator('#folderSheet');
+  await expect(sheet.locator('#folderSheetItems li')).toHaveCount(2);
+  await expect(page.locator('#folderSheetTitle')).toBeFocused();
+
+  const ordered = await sheet.evaluate((root) => {
+    const els = ['[class*="detailHero"]', '#folderSheetControls', '#folderSheetItems'].map((s) => root.querySelector(s));
+    if (els.some((x) => !x)) return false;
+    return els.every((el, i) => i === 0 || Boolean(els[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  expect(ordered).toBe(true);
+  const ids = await page.locator('#folderSheetControls > button').evaluateAll((els) => els.map((e) => e.id));
+  expect(ids.slice(0, 4)).toEqual(['folderClone', 'folderSelectMode', 'folderShare', 'folderLike']);
+  await expect(page.locator('#folderSheetControls')).toHaveAttribute('role', 'toolbar');
+  await expect(sheet.locator('[class*="practiceLink"]')).toHaveCount(0);
+  await expect(sheet.locator('a[class*="detailTrackLink"]').first()).toHaveAttribute('href', /practice\.html\?v=abcdefghij1/);
+
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(card).toBeFocused();
+});
+
+test('CMR3-17 행 이동: a.detailTrackLink 클릭 시 practice.html?v=...&a=...&b=... 로 이동', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  const link = page.locator('#folderSheetItems a[class*="detailTrackLink"]').first();
+  await expect(link).toBeVisible();
+  const href = await link.getAttribute('href');
+  expect(href).toMatch(/practice\.html\?v=abcdefghij1/);
+
+  await Promise.all([
+    page.waitForURL(/practice\.html/),
+    link.click(),
+  ]);
+});
+
+test('CMR3-18 부분 선택: 3곡 중 1·3 체크 → #folderAddSelected(2) → 1번 201, 3번 200, 순서 1→3, 성공 행 선택 해제', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const THREE_ITEMS = [
+    { videoId: 'v1', position: 0, title: '곡 1', artist: '아티스트 1' },
+    { videoId: 'v2', position: 1, title: '곡 2', artist: '아티스트 2' },
+    { videoId: 'v3', position: 2, title: '곡 3', artist: '아티스트 3' },
+  ];
+  const posts = [];
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: [
+      [(url) => url.pathname === '/api/v1/songs', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const data = JSON.parse(route.request().postData() || '{}');
+        posts.push(data);
+        const status = data.videoId === 'v1' ? 201 : 200;
+        return route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify({ song: { id: `s-${data.videoId}`, videoId: data.videoId } }),
+        });
+      }],
+      ...communityRoutes({
+        folderDetails: {
+          [FOLDER_CURATED_1.id]: {
+            folder: { ...FOLDER_CURATED_1, itemCount: 3 },
+            items: THREE_ITEMS,
+          },
+        },
+      }),
+    ],
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await page.locator('#folderSelectMode').click();
+  await expect(page.locator('#folderSelectMode')).toHaveAttribute('aria-pressed', 'true');
+
+  const items = page.locator('#folderSheetItems li');
+  await expect(items).toHaveCount(3);
+
+  const cb1 = items.nth(0).locator('input[type="checkbox"]');
+  const cb2 = items.nth(1).locator('input[type="checkbox"]');
+  const cb3 = items.nth(2).locator('input[type="checkbox"]');
+  await cb1.check();
+  await cb3.check();
+
+  const addBtn = page.locator('#folderAddSelected');
+  await expect(addBtn).toHaveText('선택한 곡 추가 (2)');
+
+  await addBtn.click();
+
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[0].videoId).toBe('v1');
+  expect(posts[1].videoId).toBe('v3');
+
+  await expect(items.nth(0).locator('[data-item-status="ok"]')).toHaveText('내 곡 리스트에 있어요');
+  await expect(items.nth(2).locator('[data-item-status="ok"]')).toHaveText('내 곡 리스트에 있어요');
+  await expect(items.nth(1).locator('[data-item-status]')).toHaveCount(0);
+
+  expect(await cb1.isChecked()).toBe(false);
+  expect(await cb3.isChecked()).toBe(false);
+  expect(await cb2.isChecked()).toBe(false);
+});
+
+test('CMR3-19 선택 중 한도: 1·2·3 선택, 2번 403 한도 시 3번 호출 0, 2·3 선택 유지, #folderAddSelectedAlert 한도 문구', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const THREE_ITEMS = [
+    { videoId: 'v1', position: 0, title: '곡 1', artist: '아티스트 1' },
+    { videoId: 'v2', position: 1, title: '곡 2', artist: '아티스트 2' },
+    { videoId: 'v3', position: 2, title: '곡 3', artist: '아티스트 3' },
+  ];
+  const posts = [];
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: [
+      [(url) => url.pathname === '/api/v1/songs', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const data = JSON.parse(route.request().postData() || '{}');
+        posts.push(data);
+        if (data.videoId === 'v1') {
+          return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ song: { id: 's-1', videoId: 'v1' } }) });
+        }
+        return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ code: 'SONG_LIMIT_EXCEEDED', message: 'Limit' }) });
+      }],
+      ...communityRoutes({
+        folderDetails: {
+          [FOLDER_CURATED_1.id]: {
+            folder: { ...FOLDER_CURATED_1, itemCount: 3 },
+            items: THREE_ITEMS,
+          },
+        },
+      }),
+    ],
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await page.locator('#folderSelectMode').click();
+  const items = page.locator('#folderSheetItems li');
+  const cb1 = items.nth(0).locator('input[type="checkbox"]');
+  const cb2 = items.nth(1).locator('input[type="checkbox"]');
+  const cb3 = items.nth(2).locator('input[type="checkbox"]');
+  await cb1.check();
+  await cb2.check();
+  await cb3.check();
+
+  await page.locator('#folderAddSelected').click();
+
+  await expect(page.locator('#folderAddSelectedAlert')).toHaveText('곡 한도에 도달했어요. 플랜을 확인해 주세요');
+  expect(posts.map((p) => p.videoId)).toEqual(['v1', 'v2']);
+
+  expect(await cb1.isChecked()).toBe(false);
+  await expect(items.nth(0).locator('[data-item-status="ok"]')).toBeVisible();
+
+  expect(await cb2.isChecked()).toBe(true);
+  expect(await cb3.isChecked()).toBe(true);
+  await expect(items.nth(1).locator('[data-item-status="err"]')).toBeVisible();
+});
+
+test('CMR3-20 실행 중 잠금·닫힘: 1번 응답 보류 중 #folderClose 클릭 시 닫힌 뒤 남은 POST 0, pageerror 0', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const pageErrors = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+
+  const THREE_ITEMS = [
+    { videoId: 'v1', position: 0, title: '곡 1', artist: '아티스트 1' },
+    { videoId: 'v2', position: 1, title: '곡 2', artist: '아티스트 2' },
+  ];
+  let releaseFirst;
+  const holdFirst = new Promise((resolve) => { releaseFirst = resolve; });
+  const posts = [];
+
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: [
+      [(url) => url.pathname === '/api/v1/songs', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const data = JSON.parse(route.request().postData() || '{}');
+        posts.push(data);
+        if (data.videoId === 'v1') {
+          await holdFirst;
+          return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ song: { id: 's-1', videoId: 'v1' } }) });
+        }
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ song: { id: 's-2', videoId: 'v2' } }) });
+      }],
+      ...communityRoutes({
+        folderDetails: {
+          [FOLDER_CURATED_1.id]: {
+            folder: { ...FOLDER_CURATED_1, itemCount: 2 },
+            items: THREE_ITEMS,
+          },
+        },
+      }),
+    ],
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await page.locator('#folderSelectMode').click();
+  const items = page.locator('#folderSheetItems li');
+  await items.nth(0).locator('input[type="checkbox"]').check();
+  await items.nth(1).locator('input[type="checkbox"]').check();
+
+  await page.locator('#folderAddSelected').click();
+  await expect.poll(() => posts.length).toBe(1);
+
+  await page.locator('#folderClose').click();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+
+  releaseFirst();
+  await page.waitForLoadState('networkidle');
+
+  expect(posts.map((p) => p.videoId)).toEqual(['v1']);
+  expect(pageErrors).toEqual([]);
+});
+
+test('CMR3-21 계정 전환: 순차 추가 중 B 로그인 시 B 화면에 A 시트·상태 0, 남은 POST 0', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const THREE_ITEMS = [
+    { videoId: 'v1', position: 0, title: '곡 1', artist: '아티스트 1' },
+    { videoId: 'v2', position: 1, title: '곡 2', artist: '아티스트 2' },
+  ];
+  let releaseFirst;
+  const holdFirst = new Promise((resolve) => { releaseFirst = resolve; });
+  const posts = [];
+
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: [
+      [(url) => url.pathname === '/api/v1/songs', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const data = JSON.parse(route.request().postData() || '{}');
+        posts.push(data);
+        if (data.videoId === 'v1') {
+          await holdFirst;
+          return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ song: { id: 's-1', videoId: 'v1' } }) });
+        }
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ song: { id: 's-2', videoId: 'v2' } }) });
+      }],
+      ...communityRoutes({
+        folderDetails: {
+          [FOLDER_CURATED_1.id]: {
+            folder: { ...FOLDER_CURATED_1, itemCount: 2 },
+            items: THREE_ITEMS,
+          },
+        },
+      }),
+    ],
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await page.locator('#folderSelectMode').click();
+  const items = page.locator('#folderSheetItems li');
+  await items.nth(0).locator('input[type="checkbox"]').check();
+  await items.nth(1).locator('input[type="checkbox"]').check();
+
+  await page.locator('#folderAddSelected').click();
+  await expect.poll(() => posts.length).toBe(1);
+
+  const USER_B = {
+    id: '00000000-0000-4000-8000-000000000002',
+    email: 'user-b@example.com',
+  };
+  await page.evaluate((u) => {
+    if (typeof window.__supabaseAuthListener === 'function') {
+      window.__supabaseAuthListener('SIGNED_IN', { user: u });
+    }
+  }, USER_B);
+
+  releaseFirst();
+  await page.waitForLoadState('networkidle');
+
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+  expect(posts.map((p) => p.videoId)).toEqual(['v1']);
+});
+
+test('CMR3-22 공유: navigator.share 제거 시 클립보드 복사 링크 URL 및 메시지, 클립보드 실패 시 실패 메시지', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // 1) 클립보드 성공 케이스
+  await page.addInitScript(() => {
+    delete window.navigator.share;
+  });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openCommunityPro(page);
+  await page.locator(CMR3_CURATED).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await page.locator('#folderShare').click();
+  await expect(page.locator('#folderSheetOk')).toHaveText('링크를 복사했어요');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain(`community.html#folder=${encodeURIComponent(FOLDER_CURATED_1.id)}`);
+
+  // 2) 클립보드 실패 케이스
+  await page.close();
+  const page2 = await page.context().newPage();
+  await page2.setViewportSize({ width: 1280, height: 900 });
+  await page2.addInitScript(() => {
+    delete window.navigator.share;
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: {
+        writeText: () => Promise.reject(new Error('Permission denied')),
+      },
+    });
+  });
+  await openCommunityPro(page2);
+  await page2.locator(CMR3_CURATED).click();
+  await expect(page2.locator('#folderSheet')).toBeVisible();
+  await page2.locator('#folderShare').click();
+  await expect(page2.locator('#folderSheetAlert')).toHaveText('링크를 복사하지 못했어요');
+});
+
+test('CMR3-23 딥링크: #folder=<id> 직접 진입 시 시트 자동 열림, 닫으면 #all, 없는 폴더면 #folderSheetErr', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // 1) 정상 폴더 딥링크 진입
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: communityRoutes(),
+  });
+  await page.goto(`/community.html#folder=${FOLDER_CURATED_1.id}`, { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetTitle')).toHaveText(FOLDER_CURATED_1.title);
+
+  await page.locator('#folderClose').click();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#all');
+
+  // 2) 없는 폴더 딥링크 진입
+  await page.goto('/community.html#folder=00000000-0000-4000-8000-999999999999', { waitUntil: 'load' });
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetErr')).toHaveText('더 이상 공개되지 않은 폴더예요');
+});
+
+test('CMR3-24 자기 폴더: owner=me인 경우 바에 #folderShare만 있고 #folderSelectMode·#folderClone 없음', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const myFolder = {
+    ...FOLDER_CURATED_1,
+    id: 'my-folder-1',
+    owner: {
+      id: DEFAULT_ME.id,
+      publicName: COMMUNITY_PRO_ME.publicName,
+    },
+  };
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_PRO_ME,
+    routes: communityRoutes({
+      curationHome: { ...CURATION_HOME_FIXTURE, curated: [myFolder] },
+      folderDetails: { [myFolder.id]: { folder: myFolder, items: MONTHLY_ITEMS } },
+    }),
+  });
+  await page.goto('/community.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await page.locator(`[data-row="curated"] [data-folder-id="${myFolder.id}"]`).click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+
+  await expect(page.locator('#folderShare')).toBeVisible();
+  await expect(page.locator('#folderClone')).toHaveCount(0);
+  await expect(page.locator('#folderSelectMode')).toHaveCount(0);
+  await expect(page.locator('#folderLike')).toHaveCount(0);
+  await expect(page.locator('#folderFollow')).toHaveCount(0);
+});
+
+test('CMR3-25 ESC·포커스: 상세·하단 시트 각각 ESC 누르면 닫히고 연 요소로 focus 복귀, Tab 순환', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+
+  // 1) 빠른 추가 시트 (QuickAddSheet)
+  const card = page.locator(CMR3_CURATED);
+  await card.hover();
+  const plusBtn = card.locator('xpath=..').locator('[data-quick-add]');
+  await plusBtn.click();
+  await expect(page.locator('#quickAddSheet')).toBeVisible();
+  await expect(page.locator('#quickAddTitle')).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#quickAddClone')).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#quickAddSheet')).toHaveCount(0);
+  await expect(plusBtn).toBeFocused();
+
+  // 2) 폴더 상세 시트 (FolderSheet)
+  await card.click();
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetTitle')).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+  await expect(card).toBeFocused();
+});
+
+test('CMR3-25b 포커스 트랩: 제목 focus 상태에서 Shift+Tab 시 focus가 시트 안에 남는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+
+  const card = page.locator(CMR3_CURATED);
+  await card.hover();
+  await card.locator('xpath=..').locator('[data-quick-add]').click();
+  await expect(page.locator('#quickAddTitle')).toBeFocused();
+
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => page.evaluate(() => {
+    const root = document.getElementById('quickAddSheet');
+    return Boolean(root && document.activeElement && root.contains(document.activeElement)
+      && document.activeElement.id !== 'quickAddTitle');
+  })).toBe(true);
+});
+
+test('CMR3-23b 딥링크·이름 모달: 이름 미설정이면 모달만 열리고, 건너뛴 뒤 #folderSheet가 열린다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...STATES.userData,
+    me: NO_NAME_ME,
+    routes: communityRoutes(),
+  });
+  await page.goto(`/community.html#folder=${FOLDER_CURATED_1.id}`, { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await expect(page.locator('#communityNameModal')).toBeVisible();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+
+  await page.locator('#communityNameModalSkip').click();
+  await expect(page.locator('#communityNameModal')).toHaveCount(0);
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetTitle')).toHaveText(FOLDER_CURATED_1.title);
+});

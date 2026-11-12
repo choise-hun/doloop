@@ -76,6 +76,10 @@ function OwnedCommunityPage(): React.ReactElement {
     });
   }, [currentUid, readyMe?.id, readyMe?.publicName]);
 
+  // 모달이 떠 있거나, 프로필 준비 전이거나, 같은 커밋에서 첫 모달이 열릴 조건이면 true(자식 effect가 부모보다 먼저 돈다)
+  const nameGatePending = Boolean(gate) || !readyMe
+    || (!readyMe.publicName && !(currentUid && readSkip(currentUid)));
+
   const openShareGate = (pending: 'navigate' | null, returnFocus: HTMLElement | null) =>
     setGate({ reason: 'share', pending, returnFocus });
   const onShareClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -278,6 +282,7 @@ function OwnedCommunityPage(): React.ReactElement {
                 <CurationRows
                   variant="community"
                   me={authState.me}
+                  deferDeepLink={nameGatePending}
                   postsEmpty={postsStatus === 'empty'}
                   emptyExtra={
                     <>

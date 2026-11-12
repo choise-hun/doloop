@@ -268,3 +268,15 @@ dev mock 화면 확인(E2E 불가, P17): 주니어 4단계에서 `npm run dev:cl
 - 프로덕션 번들 mock·가짜 카드, 길이/총 길이 추정 표시.
 - 홈 `CurationRows` home 분기·`HomePage.*` 수정, `coverIds` export 변경, 기존 번역 키 값 변경·삭제, 새 의존성, JSX 인라인 style.
 - 이름 모달·소개·CTA(CMR-2), 게시물 좋아요·녹음 재생(CMR-4).
+
+## 12. 구현 중 보정 (2026-11-12, 시니어)
+
+| # | 대상 | 보정 | 이유 |
+| --- | --- | --- | --- |
+| C1 | D26 | 정적 import 빌드에서 `ulp-community-mock`이 `dist/assets` 1개 파일에 남음 → **동적 import 대안 적용**. 호출부(CurationRows·EpisodeLogFeed)는 `import.meta.env.DEV && ?mock=1`을 직접 검사하고, 동적 import 뒤 `communityMockOn()`을 다시 확인한다. 재빌드 후 0개 | 명세 D26 대안 그대로 |
+| C2 | D25 | mock 폴더면 `#quickAddOpen`도 disabled | mock 폴더 상세는 검증 대상이 아니고(§5.8) 열면 `folder.err.gone`만 보인다 |
+| C3 | D22 | 시트 공통 포커스 hook `useSheetFocus(rootRef, titleRef, onClose, ready)`를 `QuickAddSheet.tsx`에서 export, `FolderSheet`도 사용(`ready` = 상세 로드 완료) | 두 시트가 같은 규칙. 새 파일 없이 §5 범위 유지 |
+| C4 | D17·D18 | 체크박스 이름은 `aria-label`=곡 제목, `span[data-item-status]` 값은 `ok`/`err` | 테스트가 성공/실패를 구분해 단언할 수 있게 |
+| C5 | §5 규모 | 코드 diff +1075/−181(CSS +305, QuickAddSheet 280, FolderSheet +205)로 850줄 초과 → mock(D23~D26)을 같은 브랜치 별도 커밋 `8f1da01`로 분리, 핵심은 `fc35135` | CSS(상세·하단 시트)와 포커스 hook이 추정보다 컸다 |
+| C6 | §5 CSS | FolderSheet가 더 쓰지 않는 `.sheetHead`·`.sheetCover`·`.sheetHeadInfo`·`.sheetActions`·`.sheetItems`·`.sheetItem`·`.sheetItemLeft`·`.sheetItemThumb`·`.sheetItemBody`·`.practiceLink`(커뮤니티 모듈) 삭제 | 사용처 0(`ChordsPage`의 `.practiceLink`는 다른 모듈) |
+| C7 | 테스트 주의 | Chromium(Windows 데스크톱)은 `navigator.share`가 있을 수 있다. CMR3-22 클립보드 경로는 `addInitScript`로 `navigator.share`를 지운 뒤 검증한다 | D20은 share 우선 |

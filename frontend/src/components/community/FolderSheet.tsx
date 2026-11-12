@@ -11,6 +11,7 @@ import {
 import { getLang, t } from '../../lib/i18n.mts';
 import { thumb } from '../../lib/security';
 import { CoverArt, folderTitle } from './CommunityParts';
+import { songAddErrorKey, songAddInput, useSheetFocus } from './QuickAddSheet';
 import styles from './Community.module.css';
 
 export interface FolderSheetProps {
@@ -48,6 +49,16 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<'spam' | 'inappropriate' | 'copyright' | 'other'>('spam');
   const [reportDetail, setReportDetail] = useState('');
+  // CMR-3 D17·D18: 부분 선택(목록 index 기준), 행별 결과, 순차 추가 중 잠금
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [itemStatus, setItemStatus] = useState<Record<number, { ok: boolean; text: string }>>({});
+  const [adding, setAdding] = useState(false);
+  const [selAlert, setSelAlert] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // D22: 제목 focus·ESC 닫기·Tab 순환·닫힐 때 focus 복귀
+  useSheetFocus(rootRef, titleRef, onClose, Boolean(detail));
 
   function patchFolder(id: string, patch: Partial<PublicFolderDto>) {
     if (!isCurrent()) return;
@@ -61,6 +72,7 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
   useEffect(() => {
     const my = ++sheetSeq.current; setDetail(null); setFollow(null);
     setErr(null); setMsg(null); setOkMsg(''); setReportOpen(false); setReportDetail('');
+    setSelectMode(false); setSelected(new Set()); setItemStatus({}); setSelAlert('');
     if (!folderId) return;
     apiClient.community.folder(folderId).then((d) => {
       if (my !== sheetSeq.current || !isCurrent()) return; setDetail(d);
@@ -154,6 +166,74 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
     }
   }
 
+  function toggleSelectMode() {
+    if (adding) return;
+    setSelectMode((v) => !v);
+    setSelected(new Set());
+    setItemStatus({});
+    setSelAlert('');
+  }
+
+  function toggleSelected(idx: number) {
+    if (adding) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }
+
+  // D18: 목록 순서대로 순차 추가. 곡 한도면 남은 곡은 호출하지 않는다. 닫힘·계정 전환이면 중단
+  async function addSelected(list: PublicFolderItemDto[]) {
+    if (!isCurrent() || busy.current.has('addSelected') || selected.size === 0) return;
+    busy.current.add('addSelected');
+    setAdding(true);
+    setSelAlert('');
+    const order = [...selected].filter((i) => i >= 0 && i < list.length).sort((a, b) => a - b);
+    try {
+      for (const idx of order) {
+        if (!isCurrent()) return;
+        try {
+          await apiClient.songs.create(songAddInput(list[idx]));
+          if (!isCurrent()) return;
+          setItemStatus((prev) => ({ ...prev, [idx]: { ok: true, text: t('folder.inLibrary') } }));
+          setSelected((prev) => { const next = new Set(prev); next.delete(idx); return next; });
+        } catch (e) {
+          if (!isCurrent()) return;
+          const k = songAddErrorKey(e);
+          const text = t(k.key as any, k.vars);
+          setItemStatus((prev) => ({ ...prev, [idx]: { ok: false, text } }));
+          if (k.key === 'folder.err.songLimit') { setSelAlert(text); break; }
+        }
+      }
+    } finally {
+      busy.current.delete('addSelected');
+      if (isCurrent()) setAdding(false);
+    }
+  }
+
+  // D20: 공개 폴더 딥링크 공유 — navigator.share 우선, 없으면 클립보드
+  async function handleShare(fd: PublicFolderDto) {
+    if (!isCurrent()) return;
+    setMsg(null);
+    setOkMsg('');
+    const url = new URL('community.html#folder=' + encodeURIComponent(fd.id), window.location.href).href;
+    const nav = window.navigator as Navigator & { share?: (d: { title?: string; url?: string }) => Promise<void> };
+    if (typeof nav.share === 'function') {
+      try { await nav.share({ title: folderTitle(fd), url }); } catch { /* 취소(AbortError)·실패는 메시지 없음 */ }
+      return;
+    }
+    try {
+      if (!nav.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await nav.clipboard.writeText(url);
+      if (!isCurrent()) return;
+      setOkMsg(t('folder.shareCopied'));
+    } catch {
+      if (!isCurrent()) return;
+      setMsg({ key: 'folder.shareFailed' });
+    }
+  }
+
   if (!folderId) return null;
 
   const f = detail?.folder ?? null;
@@ -162,6 +242,8 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
   const canFollow = Boolean(f?.owner && f.owner.id !== me?.id && follow !== null);
   const canReport = Boolean(f && f.kind === 'user' && !isMine);
   const desc = f ? i18nPick(f.descriptionI18n, getLang(), '') : '';
+  const title = f ? folderTitle(f) : '';
+  const showSelect = selectMode && !isMine;
 
   return (
     <div
@@ -174,7 +256,7 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={styles.sheetCard}>
+      <div ref={rootRef} className={`${styles.sheetCard} ${styles.detailCard}`}>
         {err ? (
           <p id="folderSheetErr" role="alert" className="msg err">
             {t(err.key as any, err.vars)}
@@ -183,13 +265,13 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
 
         {f ? (
           <>
-            <div className={styles.sheetHead}>
-              <div className={styles.sheetCover}>
-                <CoverArt coverVideoIds={f.coverVideoIds} />
+            <div className={styles.detailHero}>
+              <div className={styles.detailCover} data-align-group="detailHero:top@768">
+                <CoverArt coverVideoId={f.coverVideoId} coverVideoIds={f.coverVideoIds} label={title} />
               </div>
-              <div className={styles.sheetHeadInfo}>
-                <h3 id="folderSheetTitle" className={styles.sheetTitle}>
-                  {folderTitle(f)}
+              <div className={styles.detailInfo} data-align-group="detailHero:top@768">
+                <h3 id="folderSheetTitle" ref={titleRef} tabIndex={-1} className={styles.sheetTitle}>
+                  {title}
                 </h3>
                 {f.owner ? (
                   <div className={styles.sheetOwnerRow}>
@@ -212,47 +294,97 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
               </div>
             </div>
 
-            {!isMine ? (
-              <div className={styles.sheetActions}>
+            <div
+              id="folderSheetControls"
+              className={styles.detailControls}
+              role="toolbar"
+              aria-label={t('folder.controlsAria')}
+            >
+              {!isMine ? (
+                <>
+                  <button
+                    type="button"
+                    id="folderClone"
+                    className={styles.detailPrimary}
+                    data-align-group="detailControls:center-y"
+                    onClick={() => void handleClone(f)}
+                  >
+                    {t('folder.clone')}
+                  </button>
+                  <button
+                    type="button"
+                    id="folderSelectMode"
+                    className={styles.switchBtn}
+                    data-align-group="detailControls:center-y"
+                    aria-pressed={selectMode}
+                    disabled={adding}
+                    onClick={toggleSelectMode}
+                  >
+                    {selectMode ? t('folder.selectCancel') : t('folder.selectMode')}
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                id="folderShare"
+                className={styles.switchBtn}
+                data-align-group="detailControls:center-y"
+                onClick={() => void handleShare(f)}
+              >
+                {t('folder.share')}
+              </button>
+              {!isMine ? (
                 <button
                   type="button"
                   id="folderLike"
                   className={styles.switchBtn}
+                  data-align-group="detailControls:center-y"
                   aria-checked={f.likedByMe}
                   role="switch"
                   onClick={() => void toggleLike(f)}
                 >
                   {t('folder.like')} · {f.likeCount}
                 </button>
+              ) : null}
+              {!isMine && canFollow && f.owner ? (
                 <button
                   type="button"
-                  id="folderClone"
-                  className={styles.republishBtn}
-                  onClick={() => void handleClone(f)}
+                  id="folderFollow"
+                  className={styles.switchBtn}
+                  data-align-group="detailControls:center-y"
+                  aria-checked={follow?.on ?? false}
+                  role="switch"
+                  onClick={() => void toggleFollow(f.owner!.id)}
                 >
-                  {t('folder.clone')}
+                  {follow?.on ? t('folder.unfollow') : t('folder.follow')}
                 </button>
-                {canFollow && f.owner ? (
-                  <button
-                    type="button"
-                    id="folderFollow"
-                    className={styles.switchBtn}
-                    aria-checked={follow?.on ?? false}
-                    role="switch"
-                    onClick={() => void toggleFollow(f.owner!.id)}
-                  >
-                    {follow?.on ? t('folder.unfollow') : t('folder.follow')}
-                  </button>
-                ) : null}
-                {canReport ? (
-                  <button
-                    type="button"
-                    id="folderReportBtn"
-                    className={styles.rowToggle}
-                    onClick={() => setReportOpen((v) => !v)}
-                  >
-                    {t('folder.report')}
-                  </button>
+              ) : null}
+              {canReport ? (
+                <button
+                  type="button"
+                  id="folderReportBtn"
+                  className={styles.rowToggle}
+                  data-align-group="detailControls:center-y"
+                  onClick={() => setReportOpen((v) => !v)}
+                >
+                  {t('folder.report')}
+                </button>
+              ) : null}
+            </div>
+
+            {showSelect ? (
+              <div className={styles.detailSelectBar}>
+                <button
+                  type="button"
+                  id="folderAddSelected"
+                  className={styles.detailPrimary}
+                  disabled={selected.size === 0 || adding}
+                  onClick={() => void addSelected(items)}
+                >
+                  {t('folder.addSelected', { n: selected.size })}
+                </button>
+                {selAlert ? (
+                  <p id="folderAddSelectedAlert" role="alert" className="msg err">{selAlert}</p>
                 ) : null}
               </div>
             ) : null}
@@ -301,36 +433,54 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
               </p>
             ) : null}
 
-            <ul className={styles.sheetItems}>
+            <ol id="folderSheetItems" className={styles.detailTracks}>
               {items.map((it, idx) => {
                 const seg = segText(it.a, it.b, it.rate);
                 const note = i18nPick(it.noteI18n, getLang(), '');
+                const st = itemStatus[idx];
+                const name = it.title || it.videoId;
                 return (
-                  <li key={`${it.videoId}-${idx}`} className={styles.sheetItem}>
-                    <div className={styles.sheetItemLeft}>
-                      <img
-                        className={styles.sheetItemThumb}
-                        src={thumb(it.videoId)}
-                        alt=""
-                        loading="lazy"
+                  <li
+                    key={`${it.videoId}-${idx}`}
+                    className={styles.detailTrack}
+                    data-item-video={it.videoId}
+                    data-item-pos={it.position}
+                  >
+                    {showSelect ? (
+                      <input
+                        type="checkbox"
+                        className={styles.detailCheck}
+                        data-select-video={it.videoId}
+                        data-select-pos={it.position}
+                        aria-label={name}
+                        checked={selected.has(idx)}
+                        disabled={adding}
+                        onChange={() => toggleSelected(idx)}
                       />
-                      <div className={styles.sheetItemBody}>
-                        <span className={styles.sheetItemTitle}>{it.title || it.videoId}</span>
-                        <span className={styles.sheetItemSub}>
-                          {it.artist || ''}
-                          {it.artist && seg ? ' · ' : ''}
-                          {seg}
-                        </span>
-                        {note ? <p className={styles.sheetItemNote}>{note}</p> : null}
-                      </div>
-                    </div>
-                    <a className={styles.practiceLink} href={itemPracticeHref(it)}>
-                      {t('folder.practice')}
+                    ) : null}
+                    <a
+                      className={styles.detailTrackLink}
+                      href={itemPracticeHref(it)}
+                      data-align-group={idx === 0 ? 'detailTrack0:center-y' : undefined}
+                    >
+                      <span className={styles.detailTrackNo}>{idx + 1}</span>
+                      <img className={styles.detailTrackThumb} src={thumb(it.videoId)} alt="" loading="lazy" />
+                      <span className={styles.detailTrackBody}>
+                        <span className={styles.sheetItemTitle}>{name}</span>
+                        {it.artist ? <span className={styles.sheetItemSub}>{it.artist}</span> : null}
+                        {note ? <span className={styles.sheetItemNote}>{note}</span> : null}
+                      </span>
+                      {seg ? <span className={styles.detailTrackSeg}>{seg}</span> : null}
                     </a>
+                    {st ? (
+                      <span data-item-status={st.ok ? 'ok' : 'err'} className={st.ok ? 'msg ok' : 'msg err'}>
+                        {st.text}
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
-            </ul>
+            </ol>
           </>
         ) : null}
 

@@ -82,6 +82,53 @@ layoutSuite({
   dark: 'communityNoName',
 });
 
+// CMR-3: 폴더 상세 화면(#folderSheet) 4폭+다크 검사
+layoutSuite({
+  name: 'community-folder-detail',
+  path: '/community.html',
+  states: [{ name: 'communityPro', mock: COMMUNITY_PRO }],
+  ready: async (page) => {
+    const card = page.locator('[data-row="curated"] [data-folder-id]').first();
+    await card.waitFor();
+    await card.click();
+    await page.locator('#folderSheet').waitFor();
+    await page.locator('#folderSheetItems li').first().waitFor();
+  },
+  dark: 'communityPro',
+});
+
+// CMR-3: 빠른 추가 하단 시트(#quickAddSheet) 1280 + 시트, 390 터치 시트
+layoutSuite({
+  name: 'community-quick-add',
+  path: '/community.html',
+  widths: [1280, 390],
+  states: [{ name: 'communityPro', mock: COMMUNITY_PRO }],
+  ready: async (page) => {
+    const card = page.locator('[data-row="curated"] [data-folder-id]').first();
+    await card.waitFor();
+    const w = page.viewportSize().width;
+    if (w <= 480) {
+      const box = await card.boundingBox();
+      await card.dispatchEvent('pointerdown', {
+        pointerType: 'touch', isPrimary: true, pointerId: 1,
+        clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,
+      });
+      await new Promise((r) => setTimeout(r, 550));
+      await card.dispatchEvent('pointerup', {
+        pointerType: 'touch', isPrimary: true, pointerId: 1,
+        clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,
+      });
+    } else {
+      const plus = card.locator('xpath=..').locator('[data-quick-add]');
+      await card.hover();
+      await plus.click({ force: true });
+    }
+    await page.locator('#quickAddSheet').waitFor();
+    await page.locator('#quickAddClone').waitFor();
+  },
+  dark: 'communityPro',
+});
+
 test('CM-UI CUI-01 커뮤니티 제목과 탭 렌더 검증', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const { mockApp } = require('../support/mock-app');
