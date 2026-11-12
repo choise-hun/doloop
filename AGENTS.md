@@ -17,6 +17,7 @@
 
 - Kotlin·DB: docs/rules/backend-kotlin.md
 - React·상태·미디어: docs/rules/frontend-state.md
+- 화면 색·곡률·글자 크기: docs/rules/frontend-design.md
 - 화면·배치·문구: docs/rules/frontend-layout.md 및 개발산출물/프론트_정렬규격.md
 - 테스트·보안·배포: docs/rules/testing-security.md
 - 작업에 해당하는 문서만 읽고 현재 코드와 대조해 패턴을 적용한다.

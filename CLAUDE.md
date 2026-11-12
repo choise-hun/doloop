@@ -12,6 +12,7 @@
 코드를 작성하거나 수정하기 전에 작업 도메인에 해당하는 규칙 파일을 확인하고, 그 안에 정의된 검증된 코드 템플릿(Positive Pattern)을 준수한다:
 - Kotlin/Ktor 백엔드 및 DB: `docs/rules/backend-kotlin.md` (Exposed 트랜잭션, 코루틴 취소 전파, 비동기 HttpClient, 보상 트랜잭션 등)
 - 프론트엔드(React `frontend/src/` 및 UI): `docs/rules/frontend-state.md` (비동기 레이스 방어, 렌더 타임 정규화, 미디어 초기화 등)
+- 프론트엔드 디자인(색·곡률·글자 크기): `docs/rules/frontend-design.md` (토큰 용도, 필/직각 구분, 토큰 밖 색 금지 — 루트 `DESIGN.md`는 git에 없는 개인 참고 프로필이라 근거로 쓰지 않는다)
 - 프론트엔드 반응형 정렬 및 레이아웃: `docs/rules/frontend-layout.md` (배치 약속 data-align-group, G0~G8 기하 검사, 스크린샷 9대 질문 검토)
 - 테스트·보안·인프라: `docs/rules/testing-security.md` (단언 왜곡 금지, SSRF/CSP, 결정적 이벤트 대기 등)
 
