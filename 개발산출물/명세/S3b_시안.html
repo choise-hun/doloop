@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S3b 시안 v3 — 연습 기록 카드 공유</title>
+<style>
+/* 앱 tokens.css 값 사용: 카드·모달·썸네일·멀티라인 입력 0px, 컨트롤 필 9999px, 순백 금지 */
+:root{--bg:#F0EEEA;--surface:#f6f6f1;--surface2:#e1e0d6;--ink:#1d1d1f;--muted:#6b6a63;--line:#cfcec4;--accent:#1d1d1f;--accent-ink:#f6f6f1;--blue:#1f3fc3;--blue-deep:#0b369a;--terra:#c34811;--good:#2f6b3a;--guide:#c9cfee;--guide-ink:#191265;--now:#f3d3bf;--hatch:#c9cfee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--surface:#20201e;--surface2:#2b2a27;--ink:#ecece4;--muted:#9c9a92;--line:#3a3935;--accent:#ecece4;--accent-ink:#171716;--blue:#5c74f0;--blue-deep:#3b52c4;--guide:#2f3770;--guide-ink:#e2e5fb;--hatch:#2f3770;--now:#5a3a28}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Noto Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;padding:20px 16px 60px}
+main{max-width:1060px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+h2{font-size:17px;margin:38px 0 4px}
+.where{color:var(--muted);font-size:13px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;align-items:start}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;align-items:start}
+.cap{font-size:12px;color:var(--muted);margin:6px 2px 0}
+.tag{font-weight:700;font-size:13px;margin:0 0 6px}
+.new{outline:2px dashed var(--blue);outline-offset:3px}
+.badge{display:inline-block;font-size:11px;border-radius:9999px;padding:0 8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.on{color:var(--good);border-color:var(--good)}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9999px;padding:5px 14px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.icon-btn{width:32px;height:32px;display:inline-grid;place-items:center;border:0;background:transparent;color:var(--muted);border-radius:9999px}
+.icon-btn svg{width:18px;height:18px}
+.icon-btn.on{color:var(--good)}
+/* 세션 카드 */
+.sess{background:var(--surface);border:1px solid var(--line);padding:12px 14px}
+.sess-head{display:flex;align-items:center;gap:8px}
+.sess-head b{flex:1}
+.meta{font-size:12px;color:var(--muted)}
+.cov{display:flex;align-items:center;gap:8px;margin:8px 0 2px}
+.bar{flex:1;height:8px;background:var(--surface2);overflow:hidden}
+.bar i{display:block;height:100%;width:62%;background:repeating-linear-gradient(45deg,var(--blue) 0 4px,var(--hatch) 4px 8px)}
+.takes{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+.take{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
+.play{width:24px;height:24px;border-radius:9999px;border:1px solid var(--line);display:inline-grid;place-items:center;font-size:9px;background:var(--surface);color:var(--ink);flex:none}
+/* 모달 */
+.modal{background:var(--surface);border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.14);padding:16px;position:relative}
+.modal.sm{max-width:340px}
+.modal h3{margin:0 0 12px;font-size:15px;padding-right:36px}
+.corner{position:absolute;top:12px;right:12px}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;border:1px solid var(--line);border-radius:9999px;padding:2px 10px 2px 3px;background:var(--surface);color:var(--ink)}
+.chip.sel{border-color:var(--blue);background:var(--guide);color:var(--guide-ink)}
+.chip .play{width:20px;height:20px}
+.chip.txt{padding:2px 10px}
+/* 말풍선(직각 + 꼬리) */
+.bubble{position:relative;background:var(--surface2);padding:10px 12px 8px;margin-top:14px}
+.bubble:before{content:"";position:absolute;top:-8px;left:20px;border:8px solid transparent;border-top:0;border-bottom-color:var(--surface2)}
+.bubble textarea{width:100%;border:0;background:transparent;resize:none;font:inherit;font-size:14px;color:var(--ink);outline:none;min-height:42px;border-radius:0}
+.bubble textarea::placeholder{color:var(--muted)}
+.bubble.read{font-size:13px;margin-top:12px;padding:8px 10px}
+/* i 툴팁 */
+.info{position:relative;display:inline-block}
+.info .i{width:22px;height:22px;border-radius:9999px;border:1.5px solid var(--muted);color:var(--muted);font:italic 600 12px/19px Georgia,serif;text-align:center;cursor:help}
+.info .tip{display:none;position:absolute;right:0;top:28px;width:240px;background:var(--ink);color:var(--surface);font-size:12px;line-height:1.5;padding:9px 11px;z-index:2}
+.info:hover .tip,.info:focus-within .tip{display:block}
+select.sm{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:9999px;padding:4px 10px;background:var(--surface);color:var(--ink)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;margin:8px 0}
+.menu{background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 20px rgba(0,0,0,.12);width:180px;font-size:13px}
+.menu div{padding:8px 12px}
+.menu div+div{border-top:1px solid var(--line)}
+/* ── 피드 카드 공통 ── */
+.feed{display:flex;flex-direction:column;gap:10px}
+.fc{background:var(--surface);border:1px solid var(--line);padding:14px}
+.fc .t{font-weight:700;font-size:14px;line-height:1.3}
+.fc .who{font-size:12px;color:var(--muted)}
+.fc .yt{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .m{font-size:12px;color:var(--muted);margin-top:4px}
+.fc .cmt{font-size:13px;margin:6px 0 0}
+.fbar{height:6px;max-width:140px;background:var(--surface2);margin-top:6px}
+.fbar i{display:block;height:100%;background:var(--blue)}
+/* 영상 썸네일 대용: 사진처럼 제각각인 색·명암으로 '휩쓸림'을 흉내 */
+.yt1{background:linear-gradient(160deg,#e8c24a,#b6352b 60%,#2a1a14)}
+.yt2{background:linear-gradient(200deg,#0e0e10,#3a5b8c 55%,#e9e6dd)}
+.yt3{background:linear-gradient(120deg,#ff5fa2,#30e3ca 70%,#111)}
+/* 현행: 좌측 128x72 */
+.cur{display:flex;gap:14px}
+.cur .th{width:128px;height:72px;flex:none;border:1px solid var(--line)}
+.cur .c{min-width:0;flex:1}
+/* 안1: 지정 표지(단색) 정사각 */
+.p1{display:flex;gap:14px}
+.p1 .cv{width:72px;height:72px;flex:none;display:grid;place-items:end start;padding:6px;font:700 11px/1.2 "Archivo","Noto Sans KR",sans-serif;color:#f6f6f1}
+.p1 .c{min-width:0;flex:1}
+.c-ink{background:#1d1d1f}.c-blue{background:#0b369a}.c-terra{background:#c34811}.c-good{background:#2f6b3a}.c-guide{background:#c9cfee;color:#191265!important}.c-sand{background:#a9a79b}
+/* 안2: 첨부형 미니 썸네일 */
+.att{display:flex;align-items:center;gap:10px;margin-top:10px;border:1px solid var(--line);background:var(--bg);padding:6px}
+.att .mini{width:64px;height:36px;flex:none;position:relative}
+.att .mini .bdg{position:absolute;right:-6px;bottom:-6px;width:20px;height:20px;border-radius:9999px;background:var(--accent);color:var(--accent-ink);font-size:8px;display:grid;place-items:center;border:2px solid var(--surface)}
+.att .x{min-width:0;flex:1}
+/* 안1+2: 좌측 표지 + 첨부 */
+.p12 .top{display:flex;gap:12px}
+.p12 .cv{width:44px;height:44px;flex:none}
+.eval{background:var(--surface);border:1px solid var(--line);padding:12px 16px;font-size:13px}
+.eval table{border-collapse:collapse;width:100%}
+.eval th,.eval td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.eval th{font-size:12px;color:var(--muted);font-weight:600}
+.trace{background:var(--surface);border:1px solid var(--line);padding:12px 16px;font-size:13px}
+.trace ol{margin:6px 0 0;padding-left:20px}
+.trace li{margin:4px 0}
+code{font-size:12px;background:var(--surface2);padding:0 4px}
+.palette{display:flex;gap:6px;margin-top:8px}
+.palette span{width:22px;height:22px;border-radius:9999px;border:2px solid var(--surface)}
+.palette span.sel{outline:2px solid var(--blue)}
+</style>
+</head>
+<body>
+<main>
+  <h1>S3b 시안 v3 — 연습 기록 카드 공유</h1>
+  <p class="sub">방향 합의용 스케치(구현 승인·확정 디자인 아님). v3부터 앱 토큰 색과 규칙(카드·모달·썸네일 0px 직각, 컨트롤 필)을 따릅니다. 점선 = 새로 생기거나 바뀌는 부분. 영상 썸네일은 실제 사진 대신 제각각인 그라데이션으로, “지정 표지”는 단색 블록으로 표시했습니다.</p>
+
+  <!-- ─────────── ④ 먼저: 썸네일 비중 비교 ─────────── -->
+  <h2>④ 썸네일 비중 비교 — 피드 3장씩</h2>
+  <p class="where">v2의 큰 썸네일은 현행보다 과장된 그림이었습니다. 현행 피드 카드(<code>EpisodeLogCard</code>)는 이미 왼쪽에 128×72 썸네일(390폭에서는 96×54)을 씁니다. 아래 네 열을 같은 내용으로 비교합니다.</p>
+  <div class="grid4">
+    <!-- 현행 -->
+    <div>
+      <div class="tag">현행 — 왼쪽 영상 썸네일</div>
+      <div class="feed">
+        <div class="fc cur"><div class="th yt1"></div><div class="c"><div class="t">솔로 구간 0.8x 통과</div><div class="who">기타하는곰</div><div class="yt">Song A · Artist</div><div class="m">11/12 · 32분 · 14회</div></div></div>
+        <div class="fc cur"><div class="th yt2"></div><div class="c"><div class="t">11월 10일</div><div class="who">밤연습</div><div class="yt">Song B · Band</div><div class="m">11/10 · 18분 · 7회</div></div></div>
+        <div class="fc cur"><div class="th yt3"></div><div class="c"><div class="t">코드 전환 연습</div><div class="who">doodle</div><div class="yt">Song C · Idol</div><div class="m">11/09 · 45분 · 22회</div></div></div>
+      </div>
+      <p class="cap">영상마다 색·명암이 달라 시선이 썸네일로 먼저 갑니다. 피드가 “유튜브 목록”처럼 보이는 원인입니다.</p>
+    </div>
+    <!-- 안1 -->
+    <div>
+      <div class="tag">안1 — 지정 표지(단색)만</div>
+      <div class="feed">
+        <div class="fc p1"><div class="cv c-blue">Song A</div><div class="c"><div class="t">솔로 구간 0.8x 통과</div><div class="who">기타하는곰</div><div class="yt">Song A · Artist</div><div class="m">11/12 · 32분 · 14회</div></div></div>
+        <div class="fc p1"><div class="cv c-terra">Song B</div><div class="c"><div class="t">11월 10일</div><div class="who">밤연습</div><div class="yt">Song B · Band</div><div class="m">11/10 · 18분 · 7회</div></div></div>
+        <div class="fc p1"><div class="cv c-ink">Song C</div><div class="c"><div class="t">코드 전환 연습</div><div class="who">doodle</div><div class="yt">Song C · Idol</div><div class="m">11/09 · 45분 · 22회</div></div></div>
+      </div>
+      <p class="cap">톤이 정돈되지만 어떤 영상인지 한눈에 알기 어렵습니다. 녹음 ▶를 둘 자리가 애매합니다.</p>
+    </div>
+    <!-- 안2 -->
+    <div>
+      <div class="tag">안2 — 미니 썸네일 첨부형</div>
+      <div class="feed">
+        <div class="fc"><div class="t">솔로 구간 0.8x 통과</div><div class="who">기타하는곰 · 11/12 · 32분 · 14회</div>
+          <div class="att new"><div class="mini yt1"><span class="bdg" title="녹음 듣기">▶</span></div><div class="x"><div class="yt">Song A · Artist</div><div class="m" style="margin:0">A 1:12–B 1:48 · 0.8x</div></div></div></div>
+        <div class="fc"><div class="t">11월 10일</div><div class="who">밤연습 · 11/10 · 18분 · 7회</div>
+          <div class="att"><div class="mini yt2"></div><div class="x"><div class="yt">Song B · Band</div><div class="m" style="margin:0">전체 · 1.0x</div></div></div></div>
+        <div class="fc"><div class="t">코드 전환 연습</div><div class="who">doodle · 11/09 · 45분 · 22회</div>
+          <div class="att"><div class="mini yt3"><span class="bdg">▶</span></div><div class="x"><div class="yt">Song C · Idol</div><div class="m" style="margin:0">A 0:30–B 1:10 · 0.9x</div></div></div></div>
+      </div>
+      <p class="cap">글(제목·사람·통계)이 주인공, 영상은 “어떤 곡을 연습했는지” 첨부. 녹음은 미니 썸네일 모서리의 작은 ▶ 배지 — 첨부해 주신 알림 이미지의 아바타+작은 배지 비율을 참고했습니다.</p>
+    </div>
+    <!-- 안1+2 -->
+    <div>
+      <div class="tag">안1+2 — 지정 표지 + 미니 썸네일</div>
+      <div class="feed">
+        <div class="fc p12"><div class="top"><div class="cv c-blue"></div><div><div class="t">솔로 구간 0.8x 통과</div><div class="who">기타하는곰 · 11/12 · 32분</div></div></div>
+          <div class="att"><div class="mini yt1"><span class="bdg">▶</span></div><div class="x"><div class="yt">Song A · Artist</div></div></div></div>
+        <div class="fc p12"><div class="top"><div class="cv c-terra"></div><div><div class="t">11월 10일</div><div class="who">밤연습 · 11/10 · 18분</div></div></div>
+          <div class="att"><div class="mini yt2"></div><div class="x"><div class="yt">Song B · Band</div></div></div></div>
+        <div class="fc p12"><div class="top"><div class="cv c-ink"></div><div><div class="t">코드 전환 연습</div><div class="who">doodle · 11/09 · 45분</div></div></div>
+          <div class="att"><div class="mini yt3"><span class="bdg">▶</span></div><div class="x"><div class="yt">Song C · Idol</div></div></div></div>
+      </div>
+      <p class="cap">작은 카드 안에 시각 기준점이 둘(색 블록·영상)이라 서로 경쟁합니다. 사용자별 색이 섞이면 피드가 다시 알록달록해집니다.</p>
+    </div>
+  </div>
+
+  <h2 style="margin-top:24px">참고 — 지정 표지가 더 잘 맞는 곳: 공유 폴더 표지</h2>
+  <p class="where">폴더 카드(<code>CoverArt</code>)는 큰 표지가 정체성이고 지금 첫 곡 영상 썸네일을 씁니다. 썸네일이 없을 때는 이미 “잉크색 블록 + 제목” 빈 표지가 있습니다(CMR-3 RV-5). 지정 색 표지는 이 빈 표지를 확장하는 형태가 자연스럽습니다.</p>
+  <div class="grid4">
+    <div><div class="tag">현행 폴더 표지</div><div class="yt2" style="aspect-ratio:1"></div><div class="fc" style="border-top:0"><div class="t">재즈 입문 30곡</div></div></div>
+    <div><div class="tag">지정 표지(사용자 선택)</div><div class="c-blue" style="aspect-ratio:1;display:grid;place-items:end start;padding:12px;color:#f6f6f1;font:700 18px/1.2 Archivo,'Noto Sans KR',sans-serif">재즈 입문<br>30곡</div><div class="fc" style="border-top:0"><div class="palette"><span class="c-ink"></span><span class="c-blue sel"></span><span class="c-terra"></span><span class="c-good"></span><span class="c-guide"></span><span class="c-sand"></span></div><div class="cap">정해진 6색 중 선택. 이미지 업로드 없음(DB엔 색 키만).</div></div></div>
+  </div>
+
+  <h2>평가 요약</h2>
+  <div class="eval">
+    <table>
+      <tr><th>안</th><th>연습 기록 카드(S3b)</th><th>비용·계약</th><th>판단</th></tr>
+      <tr><td>현행</td><td>썸네일이 시선을 먼저 가져감, 영상 미관에 휩쓸림</td><td>변경 없음</td><td>개선 필요(사용자 판단과 일치)</td></tr>
+      <tr><td><b>안2</b></td><td>연습 내용이 주인공, 영상은 출처 표시, 녹음은 작은 배지로 자연스럽게 부가 요소</td><td>프런트만(DTO·DB 변경 없음)</td><td><b>추천</b></td></tr>
+      <tr><td>안1</td><td>정돈되나 곡 식별력 하락, 녹음 자리 애매</td><td>색 키 컬럼 1개 + 선택 UI</td><td>카드에는 비추천. <b>폴더 표지 후보로 분리</b></td></tr>
+      <tr><td>안1+2</td><td>작은 카드에 기준점 둘, 사용자별 색이 다시 소음</td><td>안1+안2 합</td><td>비추천</td></tr>
+    </table>
+  </div>
+
+  <!-- ─────────── ① ─────────── -->
+  <h2>① 연습 기록 화면 — 세션 카드</h2>
+  <p class="where">게시는 여기서만 시작합니다. 카드 폭 버튼 → 헤더의 공유 아이콘. 공유 중이면 아이콘 색이 바뀌고 누르면 작은 메뉴(③ B안).</p>
+  <div class="grid">
+    <div>
+      <div class="tag">현재 구조(요약)</div>
+      <div class="sess">
+        <div class="sess-head"><b>11월 12일</b><span class="badge">미공유</span></div>
+        <div class="meta">32분 · 반복 14회 · A 1:12–B 1:48 · 0.8x</div>
+        <div class="cov"><div class="bar"><i></i></div><span class="meta">62%</span></div>
+        <div class="meta">▸ 파트 2개 펼치기</div>
+        <div class="takes"><div class="take"><span class="play">▶</span>녹음 1 · 0:48</div><div class="take"><span class="play">▶</span>녹음 2 · 1:05</div></div>
+        <div style="margin-top:8px"><button class="btn pri" style="width:100%">커뮤니티에 공유</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="tag">제안 — 공유 아이콘</div>
+      <div class="sess">
+        <div class="sess-head"><b>11월 12일</b>
+          <button class="icon-btn new" aria-label="커뮤니티에 공유"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg></button></div>
+        <div class="meta">32분 · 반복 14회 · A 1:12–B 1:48 · 0.8x</div>
+        <div class="cov"><div class="bar"><i></i></div><span class="meta">62%</span></div>
+        <div class="meta">▸ 파트 2개 · 녹음 2개</div>
+      </div>
+      <div class="sess" style="margin-top:10px">
+        <div class="sess-head"><b>11월 5일</b>
+          <button class="icon-btn on" aria-label="공유 중"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg></button></div>
+        <div class="meta">20분 · 반복 9회 · 공유 중 · 녹음 첨부</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:6px"><div class="menu new"><div>다시 게시</div><div>녹음만 내리기</div><div style="color:var(--terra)">공유 중지</div></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="tag">참고 — 원래 구상(진행 바 → 녹음 펼침) <span class="badge">S3b 범위 밖</span></div>
+      <div class="sess">
+        <div class="sess-head"><b>11월 12일</b><button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg></button></div>
+        <div class="meta">32분 · 반복 14회</div>
+        <div class="cov new"><div class="bar"><i></i></div><span class="meta">62% ▾</span></div>
+        <div class="takes new"><div class="take"><span class="play">▶</span>녹음 1 · 0:48 <span class="meta">A/B · 구간 완료</span></div><div class="take"><span class="play">▶</span>녹음 2 · 1:05 <span class="meta">A/B · 구간 완료</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── ② ─────────── -->
+  <h2>② 공유 창 — 카드 + 말풍선 코멘트 (안2 적용 가정)</h2>
+  <p class="where">제목은 카드 헤더를 눌러 그 자리에서. 비워 두면 저장값은 빈 값, 화면에는 날짜로 표기. 코멘트는 말풍선(A). 녹음은 첨부 줄의 작은 칩.</p>
+  <div class="grid">
+    <div class="modal">
+      <h3>커뮤니티에 공유</h3>
+      <div class="info corner" tabindex="0"><div class="i">i</div><div class="tip">공개 이름·제목·코멘트·영상 정보·세션 통계가 로그인 사용자에게 공개됩니다. 녹음을 고르면 그 녹음의 사본이 함께 올라갑니다. 개인 메모는 공개되지 않습니다.</div></div>
+      <div class="fc" style="background:var(--bg)">
+        <div class="t new" style="color:var(--muted);cursor:text">11월 12일 <span style="font-size:11px">✎ 제목 쓰기</span></div>
+        <div class="who">기타하는곰 · 32분 · 14회 · 커버리지 62%</div>
+        <div class="att"><div class="mini yt1"></div><div class="x"><div class="yt">Song A · Artist</div><div class="m" style="margin:0">A 1:12–B 1:48 · 0.8x</div></div></div>
+        <div class="new" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span class="chip txt sel">녹음 없음</span><span class="chip"><span class="play">▶</span>0:48</span><span class="chip"><span class="play">▶</span>1:05</span></div>
+      </div>
+      <div class="bubble new"><textarea rows="2" placeholder="오늘 연습 한마디…  (선택)"></textarea></div>
+      <div class="actions"><button class="btn">취소</button><button class="btn pri">게시</button></div>
+    </div>
+    <div>
+      <div class="tag">처음 한 번만 — 공유 안내 동의 (R02)</div>
+      <div class="modal sm">
+        <h3>커뮤니티 공유 안내</h3>
+        <div style="font-size:13px;background:var(--bg);padding:10px 12px"><ul style="margin:0;padding-left:18px">
+          <li>공개 이름과 내가 고른 카드·녹음만 공개됩니다.</li>
+          <li>녹음은 사본이 올라가며, 원본을 지우거나 공유를 중지하면 함께 삭제됩니다.</li>
+          <li>이미 들은 사람의 기기에 남은 것은 회수할 수 없습니다.</li></ul></div>
+        <div class="actions"><button class="btn">나중에</button><button class="btn pri">동의하고 계속</button></div>
+      </div>
+      <p class="cap">공개 이름을 정할 때 함께 보여 주면 공유 창에서는 다시 안 나옵니다. 말풍선 빠른 문구 칩(C안)은 향후 고려.</p>
+    </div>
+  </div>
+
+  <!-- ─────────── ③ ─────────── -->
+  <h2>③ 다시 게시 — 작은 창 (녹음만 내리기는 아이콘 메뉴, B안 확정)</h2>
+  <div class="grid">
+    <div class="modal sm">
+      <h3>다시 게시</h3>
+      <div class="info corner" tabindex="0"><div class="i">i</div><div class="tip">다시 게시하면 세션 통계가 지금 값으로 바뀝니다. 녹음을 교체하면 새 사본이 준비된 뒤 바뀌고, 실패하면 기존 게시물이 그대로 남습니다.</div></div>
+      <div class="row"><span>녹음</span><select class="sm"><option>유지 (0:52)</option><option>1:05로 교체</option><option>녹음 없이</option></select></div>
+      <div class="actions"><button class="btn">취소</button><button class="btn pri">다시 게시</button></div>
+    </div>
+  </div>
+
+  <!-- ─────────── trace ─────────── -->
+  <h2>흔적 — “진행 바 클릭 → 녹음 펼침” 구상</h2>
+  <div class="trace"><ol>
+    <li><b>2026-11-07</b> <code>완료/진행_프론트개선.md</code> 목표 2 “진행바 커버리지 + <b>아코디언 테이크 카드</b>”.</li>
+    <li><b>2026-11-08</b> <code>UI-2_구현명세.md</code> D4가 아코디언 대상을 <b>파트 목록</b>으로 정의 → 녹음은 밖(<code>f739983</code>). ← 갈라진 지점</li>
+    <li><b>2026-11-09</b> <code>CM-UI_구현명세.md</code>:78-80 공용 카드 통일, 녹음 목록 항상 펼침(<code>5f6614f</code>).</li>
+    <li><b>2026-11-11</b> UXR-1 P3 세션 밖 전체 녹음 목록 제거. 진행 바는 클릭 불가 <code>&lt;progress&gt;</code>.</li>
+  </ol></div>
+</main>
+</body>
+</html>
