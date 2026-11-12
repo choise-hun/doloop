@@ -94,3 +94,11 @@ $ python3 linkcheck.py (인수인계·계획·docs/rules·정렬 규격·진입 
 | config 동기화 | 원본은 이 저장소, config는 보관본으로 정했다. `scripts/check-config-sync.sh`(대조)와 `--copy`(복사)를 추가하고 절차를 문서_운영 §5에 적었다. `docs/rules/frontend-layout.md`는 config 쪽이 여러 프로젝트용 범용판이라 대조에서 뺐다. `frontend-design.md`는 `ULevelP/rules/frontend-design.md.template`로 새로 보관한다 |
 
 하지 않은 것: 문서 제목 `ULeveLP`·패키지 이름 `guitar-chord-lab`·저장소 이름 `doloop`의 통일(이름 결정이 필요), 계획 문서의 옛 PR 링크 6개 교체(주의 문구만 추가).
+
+## 5. PR·CI·리뷰
+
+- PR: [#11](https://github.com/choise-hun/doloop/pull/11) `docs/rules-cleanup` → `main`. 커밋 RG-1 `04023c4`, RG-2 `cdb639c`, RG-3 `da1b79b`.
+- CI(head `da1b79b`, run 43218894068): Detect code changes·Test (Node 22)·E2E XSS & CSP (Playwright, spa)·Docker build & smoke test·CI ok 통과. Kotlin test는 백엔드 변경이 없어 건너뜀.
+- 리뷰: Codex 자동 리뷰가 `da1b79b`에서 완료, 지적 0건(`has_any_findings: false`). 사람 리뷰·라인 코멘트 0건(2026-11-12 조회).
+- config: `choise-hun/config` `af02e40`에 보관본 10개 동기화. `bash scripts/check-config-sync.sh` → 차이 0건(`da1b79b` 기준). 이 절을 추가한 문서 커밋은 대조 대상 파일을 바꾸지 않는다.
+- 운영 배포: 해당 없음(문서·테스트·CSS 주석 변경).
