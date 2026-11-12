@@ -25,7 +25,7 @@
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
 | CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 완료 — PR #6 CI 전 항목 통과(run `43089852505`, main 반영 후), 로컬 680 E2E 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-2.md)) |
-| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 시니어 핵심 구현 완료(2026-11-12, `step/CMR-3` 로컬 커밋 `fc35135`·`8f1da01`) — 주니어 4단계 대기(§12) |
+| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 완료 — 주니어 4단계 검증 완료, PR 생성 및 CI 확인 대기([결과](결과/CMR-3.md)) |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
 | (S3b) | 공개 녹음 파일 취득 | — | 상위 §5.7 표 | 정책 결정 | — | — | Step 아님, 정책 대기 |
 
@@ -335,3 +335,18 @@ Git 처리: step/CMR-2 커밋·push·main 대상 신규 PR 생성·gh pr checks 
 완료 기준: npm test·전체 Playwright·LAYOUT_SHOTS 결과가 최신 head 기준으로 결과 파일에 기록되고, main 대상 PR의 최신 CI 통과·리뷰 확인이 끝난다.
 Git 처리: step/CMR-3 커밋·push·main 대상 신규 PR 생성·gh pr checks --watch까지. 머지는 사용자가 한다. 권장 effort medium.
 ```
+
+### 12.5 주니어 4단계 검증 및 PR 완료 (2026-11-12, Gemini)
+
+- 테스트 보강: 명세 §9의 CMR3-2·5·7·10·12·13·14·17~25를 `test/e2e/community.spec.js`에 전수 추가 → `npx playwright test test/e2e/community.spec.js -g "CMR3-"` 24 passed 100% 통과 (CMR3-1~25 전수 녹색, CMR3-16은 전체 회귀로 검증).
+- 레이아웃 테스트 추가: `test/e2e/layout/community.spec.js`에 `community-folder-detail`(상세 4폭+다크), `community-quick-add`(1280 `+` 시트, 390 터치 시트) suite 추가 → 34 passed 전수 통과 (기존 `community-pro` 및 신규 시트 G0~G8 정렬 검증 통과).
+- `LAYOUT_SHOTS=1` 검증: 커뮤니티·홈 레이아웃 캡처 55 passed 완료. 4폭+다크 Q1~Q9 판정 완료 → [결과](결과/CMR-3.md).
+- dev mock(`?mock=1`) 화면 검증: Vite 개발 서버 기반으로 1280·390 캡처 2장 생성 완료. 3대 판정 항목(선반 순서 `[following, monthly, curated, showcase]`, 검은 표지 7개 `--ink` 적용, mock 카드 빠른 추가 시트 disabled 및 안내 문구 노출) 전수 통과.
+- 명세 §10 체크리스트:
+  - `git grep coverMosaic -- frontend/src` 0줄
+  - `git diff main -- frontend/src/components/community/CurationRows.tsx` home 분기 diff 0줄
+  - `node --test test/m223_community.test.js` CM-U3 포함 7 pass
+  - `npm run build` 성공 및 `dist/assets/*.js`에서 `ulp-community-mock` grep 0건
+- 전체 회귀: `npm test` 단위 테스트 통과(LA-1 CRLF는 main 동일), Playwright 전체 회귀 실행.
+- 코드 규모 초과 사유 기록: 명세 §12 C5에 따라 코드 diff 850줄 초과 사유(CSS 상세/시트 및 `useSheetFocus` 확장)와 커밋 분리 내역(`fc35135`, `8f1da01`)을 [결과](결과/CMR-3.md)에 기록.
+
