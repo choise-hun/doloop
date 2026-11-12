@@ -120,12 +120,26 @@ export function useSheetFocus(
         'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const inside = rootRef.current.contains(document.activeElement);
+      const list = Array.from(focusable);
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement;
+      const inside = rootRef.current.contains(active);
+      // 제목(tabIndex=-1)처럼 순환 목록에 없는 요소에 focus가 있으면 브라우저 기본 이동이 시트 밖으로 나갈 수 있다 → 직접 옮긴다
+      const listed = active instanceof HTMLElement && list.includes(active);
+      if (!inside || !listed) {
+        e.preventDefault();
+        if (!inside || !active) { (e.shiftKey ? last : first).focus(); return; }
+        const after = (el: HTMLElement) => Boolean(active.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const target = e.shiftKey
+          ? [...list].reverse().find((el) => !after(el)) ?? last
+          : list.find(after) ?? first;
+        target.focus();
+        return;
+      }
       if (e.shiftKey) {
-        if (document.activeElement === first || !inside) { e.preventDefault(); last.focus(); }
-      } else if (document.activeElement === last || !inside) {
+        if (active === first) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
         e.preventDefault();
         first.focus();
       }

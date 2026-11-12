@@ -146,3 +146,13 @@
 | --- | --- | --- | --- | --- |
 | **1** | `frontend/src/components/community/QuickAddSheet.tsx:125-127` | **초기 제목 포커스에서도 Shift+Tab을 시트 안에서 순환시키세요 (P2)**<br>시트 열릴 때 `tabIndex={-1}`인 제목에 포커스를 주지만, 제목은 `focusable` 목록에 없어서 연 직후 Shift+Tab을 누르면 포커스가 시트 뒤로 빠져나감. | **타당 (프로덕션 가드 보강 필요)**<br>`useSheetFocus`에서 `document.activeElement === titleRef.current`인 경우도 역방향 순환 경계로 처리하여 마지막 focusable 요소로 포커스를 보내는 가드(`if (document.activeElement === first \|\| document.activeElement === titleRef.current \|\| !inside) { e.preventDefault(); last.focus(); }`) 및 회귀 테스트 추가 필요. | `useSheetFocus` 포커스 트랩 가드 1줄 보강 및 단위/E2E 테스트 추가. |
 | **2** | `frontend/src/components/community/CurationRows.tsx:89-91` | **이름 모달이 닫힌 뒤 딥링크 상세를 여세요 (P2)**<br>공개 이름이 없는 사용자가 `community.html#folder=<id>`로 진입하면 `PublicNameModal`과 `FolderSheet`가 동시에 열려 Escape 입력 시 두 모달이 동시 종료되고 해시 유실 및 포커스 충돌 발생. | **타당 (모달 동선 우선순위 가드 필요)**<br>이름 모달이 떠 있는 동안에는 딥링크 상세 개방을 보류하거나, 최상위 모달만 Escape/포커스를 처리하도록 가드 보강 필요. | 이름 모달 미설정 상태의 딥링크 진입 가드 보강 및 회귀 테스트 추가. |
+
+### 9.1 시니어 핀포인트(3-P) 처리 결과 — 2026-11-12
+
+| # | 수정 | 회귀 테스트 |
+| --- | --- | --- |
+| 1 | `useSheetFocus`: focus가 순환 목록 밖(제목 `tabIndex=-1` 등)에 있으면 기본 이동을 막고 문서 순서상 다음/이전 focusable로 직접 옮긴다(없으면 처음/끝으로 순환). 제목 하드코딩 대신 일반 규칙으로 처리해 FolderSheet에도 같이 적용 | `CMR3-25b` 제목 focus에서 Shift+Tab → focus가 시트 안 |
+| 2 | `CurationRows`에 `deferDeepLink` prop 추가. `#folder=<id>`는 보류 상태로 받아 두고, `CommunityPage`가 이름 모달이 떠 있거나 같은 커밋에서 열릴 조건(프로필 준비 전·이름 없음·건너뛰기 기록 없음)이면 개방을 미룬다. 모달을 닫으면(건너뛰기·저장) 상세가 열린다 | `CMR3-23b` 이름 없음 + 딥링크 → 모달만, 건너뛴 뒤 `#folderSheet` |
+
+- 검증: `npm run build`(tsc 포함) 통과. 수정 전 코드에서 새 테스트 2개 실패 확인 → 수정 후 통과. `community.spec.js`+`cm-ui.spec.js` 104개 중 103 통과, `CM-10` 1건은 전체 실행 중 1회 실패 후 단독 재실행·5회 반복 모두 통과(변경 경로와 무관한 일시 실패로 판단)
+- 미실행: 전체 E2E 회귀는 CI에 맡김

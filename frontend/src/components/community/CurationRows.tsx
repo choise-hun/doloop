@@ -33,6 +33,8 @@ export interface CurationRowsProps {
   postsEmpty?: boolean;
   /** community 변형 전용(CMR-2 D11): 전체 빈 상태 문구 아래에 붙이는 안내·CTA */
   emptyExtra?: React.ReactNode;
+  /** community 변형 전용(CMR-3): 이름 모달이 열려 있거나 곧 열릴 때 true — #folder 딥링크 개방을 미룬다 */
+  deferDeepLink?: boolean;
 }
 
 export function CurationRows({
@@ -41,6 +43,7 @@ export function CurationRows({
   postsSlot,
   postsEmpty,
   emptyExtra,
+  deferDeepLink = false,
 }: CurationRowsProps) {
   const [data, setData] = useState<CurationHomeDto | null>(null);
   const [error, setError] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
@@ -80,20 +83,27 @@ export function CurationRows({
     return () => { seq.current++; };
   }, [me?.id, variant, retry, mock]);
 
-  // CMR-3 D21: 마운트·hashchange 때 #folder=<id>면 상세를 연다(community 변형만)
+  // CMR-3 D21: 마운트·hashchange 때 #folder=<id>면 상세를 연다(community 변형만).
+  // 이름 모달(CMR-2)이 열려 있거나 열릴 예정이면(deferDeepLink) 모달이 닫힌 뒤에 연다 — 두 모달 동시 개방 방지
+  const [hashFolderId, setHashFolderId] = useState<string | null>(null);
   useEffect(() => {
+    setHashFolderId(null);
     if (variant !== 'community' || !me?.id) return;
     const sync = () => {
       const id = folderIdFromHash();
-      if (!id) return;
-      openedByHash.current = true;
-      setQuick(null);
-      setActiveFolderId(id);
+      if (id) setHashFolderId(id);
     };
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }, [variant, me?.id]);
+  useEffect(() => {
+    if (!hashFolderId || deferDeepLink) return;
+    openedByHash.current = true;
+    setQuick(null);
+    setActiveFolderId(hashFolderId);
+    setHashFolderId(null);
+  }, [hashFolderId, deferDeepLink]);
 
   function closeCommunityFolder() {
     setActiveFolderId(null);

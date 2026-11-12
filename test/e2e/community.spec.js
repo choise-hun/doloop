@@ -1683,3 +1683,39 @@ test('CMR3-25 ESC·포커스: 상세·하단 시트 각각 ESC 누르면 닫히�
   await expect(page.locator('#folderSheet')).toHaveCount(0);
   await expect(card).toBeFocused();
 });
+
+test('CMR3-25b 포커스 트랩: 제목 focus 상태에서 Shift+Tab 시 focus가 시트 안에 남는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCommunityPro(page);
+
+  const card = page.locator(CMR3_CURATED);
+  await card.hover();
+  await card.locator('xpath=..').locator('[data-quick-add]').click();
+  await expect(page.locator('#quickAddTitle')).toBeFocused();
+
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => page.evaluate(() => {
+    const root = document.getElementById('quickAddSheet');
+    return Boolean(root && document.activeElement && root.contains(document.activeElement)
+      && document.activeElement.id !== 'quickAddTitle');
+  })).toBe(true);
+});
+
+test('CMR3-23b 딥링크·이름 모달: 이름 미설정이면 모달만 열리고, 건너뛴 뒤 #folderSheet가 열린다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...STATES.userData,
+    me: NO_NAME_ME,
+    routes: communityRoutes(),
+  });
+  await page.goto(`/community.html#folder=${FOLDER_CURATED_1.id}`, { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await expect(page.locator('#communityNameModal')).toBeVisible();
+  await expect(page.locator('#folderSheet')).toHaveCount(0);
+
+  await page.locator('#communityNameModalSkip').click();
+  await expect(page.locator('#communityNameModal')).toHaveCount(0);
+  await expect(page.locator('#folderSheet')).toBeVisible();
+  await expect(page.locator('#folderSheetTitle')).toHaveText(FOLDER_CURATED_1.title);
+});
