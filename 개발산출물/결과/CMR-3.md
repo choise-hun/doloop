@@ -1,6 +1,6 @@
 # CMR-3 결과 — 단일 표지·빠른 추가 시트·폴더 상세·부분 선택·createSong a/b·dev mock
 
-> 2026-11-12 / Claude(시니어 핵심 구현) + Gemini(주니어 4단계 테스트·레이아웃·dev mock 검증·문서·PR/CI). 명세 [CMR-3](../명세/CMR-3_구현명세.md). 브랜치 `step/CMR-3`. [PR #8](https://github.com/choise-hun/doloop/pull/8).
+> 2026-11-12 / Claude(시니어 핵심 구현) + Gemini(주니어 4단계 테스트·레이아웃·dev mock 검증·문서·PR/CI). 명세 [CMR-3](../명세/CMR-3_구현명세.md). 브랜치 `step/CMR-3`. [PR #8](https://github.com/choise-hun/doloop/pull/8). 최신 head `58e0996`.
 
 ## 1. 작업 개요
 
@@ -19,10 +19,11 @@
   - **주니어 4단계 마무리:**
     - 남은 E2E 테스트(CMR3-2, 5, 7, 10, 12, 13, 14, 17~25) 작성 및 통과 (총 24개 전수 통과)
     - 레이아웃 테스트 suite(`community-folder-detail`, `community-quick-add`) 추가 및 G0~G8 정렬 검증 (총 34개 전수 통과)
-    - `LAYOUT_SHOTS=1` 스크린샷 캡처 및 4폭+다크 Q1~Q9 판정
+    - `LAYOUT_SHOTS=1` 스크린샷 캡처 및 4폭+다크 Q1~Q9 판정 (55개 전수 통과)
     - dev mock(`?mock=1`) 1280·390 캡처 및 3대 판정(선반 순서, 검은 표지, 시트 disabled) 검증
-    - 전체 빌드(`npm run build`), 단위 테스트(`npm test`), Playwright 전체 회귀 검증
-    - 결과 및 진행 파일 갱신, PR 생성 및 CI 확인
+    - E2E 가드레일 준수: `waitForTimeout`을 결정적 이벤트 대기(`waitForLoadState('networkidle')`, 타이머 프라미스)로 치환하여 `guardrail_checklist.test.js` 및 CI `Test (Node 22)` 통과 (`58e0996`)
+    - Codex 리뷰 코멘트 2건(초기 제목 포커스 Shift+Tab 트랩, 이름 모달 후 딥링크) 분석 및 시니어 핀포인트(3-P) 인계 처리
+    - 결과 파일 갱신, PR #8 생성 및 CI 종료 감시 완료 (CI ok 통과)
 
 ---
 
@@ -133,3 +134,15 @@
 - **실서버 `POST /songs` 한도·멱등:** 프로덕션 환경 DB 및 결제/티어 서버 호출이 필요하므로, 테스트 환경에서는 Playwright `page.route` 모킹을 통해 200, 201, 403 `SONG_LIMIT_EXCEEDED` 응답을 정밀 모킹하여 검증했습니다.
 - **실기기 길게 누르기 및 Web Share API:** 실제 터치스크린 디바이스 하드웨어 및 OS 네이티브 공유 다이얼로그(`navigator.share`)는 자동화 환경에서 직접 조작이 불가능하므로, Playwright의 pointer 터치 이벤트 에뮬레이션과 클립보드 폴백(`navigator.clipboard.writeText`)으로 검증했습니다.
 - **운영 데이터 적용:** §5.8 관리자 수동 절차(운영자 큐레이션 폴더 등록 등)는 배포 후 운영 단계에서 수행됩니다.
+
+---
+
+## 9. PR 리뷰 확인 및 시니어 핀포인트(3-P) 인계 사항
+
+최신 head `58e0996`에 대한 CI 전체 통과(run `43154839965`: `CI ok`, `Docker build`, `E2E XSS & CSP`, `Test (Node 22)` 전수 통과) 후 Codex 자동 코드 리뷰 지적 2건을 확인했습니다.
+가드레일("구현 결함은 고치지 말고 근거와 함께 시니어 핀포인트로 넘긴다")에 따라 주니어 임의 수정을 배제하고 시니어 핀포인트(3-P) 대상 결함으로 인계합니다.
+
+| # | 위치 | 리뷰 지적 요약 | 주니어 분석 및 판정 | 권장 처리 (시니어 3-P) |
+| --- | --- | --- | --- | --- |
+| **1** | `frontend/src/components/community/QuickAddSheet.tsx:125-127` | **초기 제목 포커스에서도 Shift+Tab을 시트 안에서 순환시키세요 (P2)**<br>시트 열릴 때 `tabIndex={-1}`인 제목에 포커스를 주지만, 제목은 `focusable` 목록에 없어서 연 직후 Shift+Tab을 누르면 포커스가 시트 뒤로 빠져나감. | **타당 (프로덕션 가드 보강 필요)**<br>`useSheetFocus`에서 `document.activeElement === titleRef.current`인 경우도 역방향 순환 경계로 처리하여 마지막 focusable 요소로 포커스를 보내는 가드(`if (document.activeElement === first \|\| document.activeElement === titleRef.current \|\| !inside) { e.preventDefault(); last.focus(); }`) 및 회귀 테스트 추가 필요. | `useSheetFocus` 포커스 트랩 가드 1줄 보강 및 단위/E2E 테스트 추가. |
+| **2** | `frontend/src/components/community/CurationRows.tsx:89-91` | **이름 모달이 닫힌 뒤 딥링크 상세를 여세요 (P2)**<br>공개 이름이 없는 사용자가 `community.html#folder=<id>`로 진입하면 `PublicNameModal`과 `FolderSheet`가 동시에 열려 Escape 입력 시 두 모달이 동시 종료되고 해시 유실 및 포커스 충돌 발생. | **타당 (모달 동선 우선순위 가드 필요)**<br>이름 모달이 떠 있는 동안에는 딥링크 상세 개방을 보류하거나, 최상위 모달만 Escape/포커스를 처리하도록 가드 보강 필요. | 이름 모달 미설정 상태의 딥링크 진입 가드 보강 및 회귀 테스트 추가. |
