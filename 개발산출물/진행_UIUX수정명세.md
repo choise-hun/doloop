@@ -25,7 +25,7 @@
 | UXR-3 | 연습 재생·녹음 재배치 + 선택 폴더 곡 목록 | [시니어] 직접 구현 → [주니어] 4단계 | [명세](명세/UXR-3_구현명세.md) → `결과/UXR-3.md` | UXR-1 반영 경계 확인 | 명세 §8 PL-01~12·4폭 Q1~Q9 | 미지정 | 완료 — PR #2 생성, CI 전 항목 통과(run `43019870416`), 리뷰 0건, 사용자 머지 대기([결과](결과/UXR-3.md)) |
 | CMR-1 | 커뮤니티 탐색 구조: LOGS 탭·선반 순서·최근 공개 제거·게시물 선반·LOGS 마소니 | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-1_구현명세.md) → `결과/CMR-1.md` | 없음 | 명세 §8 체크리스트 | 시니어 high / 주니어 medium | 완료 — PR #3 CI 전 항목 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-1.md)) |
 | CMR-2 | 소개·“내 연습 공유하기” CTA·guest·빈 상태 단계 + 이름 모달·공유 가드(RV-10) | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-2_구현명세.md) → `결과/CMR-2.md` | CMR-1 머지(충족 `e28421d`) | 명세 §9 체크리스트·CMR2-1~17 | 시니어 high / 주니어 medium | 완료 — PR #6 CI 전 항목 통과(run `43089852505`, main 반영 후), 로컬 680 E2E 통과, 리뷰 0건, 사용자 머지 대기([결과](결과/CMR-2.md)) |
-| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 명세 완료(2026-11-11) — 구현 승인 대기. 규모 상한 경계(§5) |
+| CMR-3 | 단일 표지(RV-5)·빠른 추가(+/꾹 누르기/하단 시트)·상세 화면·부분 선택·`createSong` a/b(RV-4)·dev `?mock=1` | [시니어] 구현 → [주니어] 4단계 | [명세](명세/CMR-3_구현명세.md) → `결과/CMR-3.md` | CMR-1 머지(충족). CMR-2와 병렬 가능(`CurationRows.tsx`·i18n만 다른 줄로 겹침) | 명세 §10 체크리스트·CMR3-1~26 | 시니어 high / 주니어 medium | 시니어 핵심 구현 완료(2026-11-12, `step/CMR-3` 로컬 커밋 `fc35135`·`8f1da01`) — 주니어 4단계 대기(§12) |
 | CMR-4 | S3a 녹음 재생 UI(stub 주입점) + S2 게시물 좋아요(DB·API·DTO) | [시니어] 서버 줄 | 상위 §5.6·§5.7 → `명세/CMR-4_구현명세.md` | CMR-1 머지 + **S2 서버 계약 사용자 승인** | 같음 | — | 대기(승인 필요) |
 | (S3b) | 공개 녹음 파일 취득 | — | 상위 §5.7 표 | 정책 결정 | — | — | Step 아님, 정책 대기 |
 
@@ -281,3 +281,57 @@ Git 처리: step/CMR-2 커밋·push·main 대상 신규 PR 생성·gh pr checks 
 - 조치: `origin/main` merge(`9df2bda`, PR #4 RECFIX-1·#5 포함, 충돌 0), CMR-3 명세 커밋(`7d87379`, 사용자 지시로 이 PR에 포함), push → run `43089852505` 전 항목 통과(E2E 10m24s). `결과/UIUX-R_명세재검토.md`는 main 버전(RECFIX-1 §5 포함)이 최신이라 그대로 쓴다.
 - 사고·복구: 문서 갱신 커밋 `cefc610`에 작업 트리의 옛 내용(주니어 작업 전 `community.spec.js`·`cm-ui.spec.js`·이 파일, CMR2 테스트 15개 누락)과 사용자 변경 `AGENTS.md`·`CLAUDE.md`가 `commit -a`로 섞여 push됨. 다음 커밋에서 세 파일을 `7d87379` 내용으로, 두 규칙 파일을 `main` 내용으로 되돌렸다(force push 없음). 규칙 파일 변경은 [PR #7](https://github.com/choise-hun/doloop/pull/7)로 분리(CI 통과, 중앙 config `0a2f450` 반영 완료).
 - 주니어 기록 정정: 단계 표가 CI 실패 상태에서 “완료”로 적혀 있었다 → 최신 head CI 통과로 갱신.
+
+## 12. CMR-3 시니어 핵심 구현 (2026-11-12)
+
+- 요청/승인: 사용자 세션 멘트 “CMR-3 핵심 구현 및 주니어 인계(템플릿 §0)”, §10.1 Q5·Q6·Q7 승인. 범위 = 명세 §5 파일, 로컬 커밋까지. push·PR·CI·전체 회귀·4폭 Q1~Q9·결과 파일은 주니어 4단계.
+- 브랜치: `step/CMR-3` (base `main`=`91fd6b0`). 커밋 `fc35135`(핵심 feat)·`8f1da01`(dev mock feat)·이 문서 커밋. push 안 함.
+- 전제 P1~P19 재확인: 내용 일치. `CurationRows.tsx`만 CMR-2 반영으로 줄 위치가 밀림(home 분기 86-131, community 133-182). 보정 7건 → [명세 §12](명세/CMR-3_구현명세.md#12-구현-중-보정-2026-11-12-시니어).
+
+### 12.1 diff 요약 (코드 +1075/−181, 테스트 +155)
+
+| 파일 | 변경 |
+| --- | --- |
+| `components/community/CommunityParts.tsx` | `QuickAddTarget`, `CoverArt({coverVideoId,coverVideoIds,label})` 단일 표지·검은 빈 표지+제목, `QuickAddShell`(`div.cardShell` + `button.quickAddBtn[data-quick-add]`), 카드 본체에 `useLongPress`, `onQuickAdd?` prop(FolderCard·SongCard·FolderRow). 미전달이면 현행 DOM |
+| `components/community/QuickAddSheet.tsx` | 신규. `useLongPress`·`songAddInput`·`songAddErrorKey`·`useSheetFocus`·`QuickAddSheet`(key=[uid,target], 폴더 담기 티어 가드·상세 열기 / 곡 추가·연습 링크, mock disabled) |
+| `components/community/FolderSheet.tsx` | 상세 화면: `.detailHero` → `#folderSheetControls[role=toolbar]`(D16 순서, 자기 폴더는 `#folderShare`만) → 선택 바 → `ol#folderSheetItems` 행(`a.detailTrackLink`, 체크박스, `data-item-status`). 순차 추가·곡 한도 중단·`isCurrent()` 중단, 공유(share→clipboard), 제목 focus·ESC·Tab·focus 복귀. P9 셀렉터 유지 |
+| `components/community/CurationRows.tsx` | community 변형만: `quick` 상태·`QuickAddSheet` 호스팅·`onQuickAdd`, `#folder=<id>` 딥링크(마운트·hashchange, 해시로 연 시트 닫으면 `#all`), DEV mock 동적 import, mock 폴더 상세 차단. **home 분기 diff 0**(hunk가 옛 86-131줄에 없음) |
+| `components/community/EpisodeLogFeed.tsx` | 첫 페이지 DEV mock 분기(동적 import) |
+| `components/community/Community.module.css` | `.cardShell`·`.quickAddBtn`(hover:hover 노출 / hover:none 숨김)·`.coverEmpty`(`--ink`)·`.coverLabel`·`.detail*`·`.quick*`, `.coverMosaic*`·안 쓰는 `.sheet*`·`.practiceLink` 삭제 |
+| `lib/apiClient.ts` | `createSong` 입력 `a?`·`b?`, body `a`·`b` |
+| `lib/communityMock.ts` | 신규(DEV 전용 데이터, 표식 `ulp-community-mock`) |
+| `lib/community.mts` | `coverIds` 주석 1줄 |
+| `lib/i18n/{ko,en,ja}.mts` | 새 키 14개(명세 §6 그대로) |
+| `test/e2e/community.spec.js` | CMR3-1·3·4·6·8·9·11·15 |
+
+### 12.2 표적 Red → Green
+
+- Red(구현 전, 테스트만 추가): `npx playwright test test/e2e/community.spec.js -g "CMR3-"` → **7 failed / 1 passed**. 통과 1건은 CMR3-8(짧은 탭 → 상세)로 현행에서도 참이며, 꾹 누르기 도입 뒤 짧은 탭이 막히지 않는지 지키는 회귀 단언이다.
+- Green(구현 후): 같은 명령 → **8 passed**. mock 분리 전 상태(`fc35135`)에서 `-g "CMR3-|CM-3 |CM-13"` 10 passed, mock 복원 후 `-g "CMR3-|CMR1-|CM-9"`(community·cm-ui) 23 passed.
+- 보조 회귀: `community.spec.js`·`av2-community.spec.js`·`cm-ui.spec.js`·`layout/community.spec.js`·`layout/home.spec.js` → 172 passed / 1 failed. 실패 = `AV2 report success reopen`(30s 타임아웃), 단독 `--repeat-each=3` 3 passed → 불안정 후보로 기록(주니어 전체 회귀에서 재확인).
+- `npm run build` 성공(`tsc --noEmit && vite build`). CMR3-26: `grep -l ulp-community-mock dist/assets/*.js` → **0개**(정적 import 때 1개 → 동적 import로 보정, 명세 §12 C1).
+- `node --test test/m223_community.test.js` 7 pass(CM-U3 무변경). `test/i18n.test.js`: I0-6·LB-1·LB-2 포함 통과, **LA-1만 실패 — `main`(`91fd6b0`)에서도 같은 실패**. 원인: 이 PC의 CRLF 체크아웃에서 LA-1의 `/\/\/.*$/`가 `\r` 앞에서 멈춰 줄 주석을 못 지운다(Linux CI LF에서는 해당 없음). 이번 변경 파일 8개를 `\r` 제거 후 같은 규칙으로 검사 → 0건.
+- `git grep coverMosaic -- frontend/src` 0줄, `git diff --check` 통과.
+- 미실행: `npm test` 전체, 전체 Playwright, `LAYOUT_SHOTS=1`, CMR3-2·5·7·10·12~14·16~25 테스트, layout suite `community-folder-detail`·`community-quick-add`, dev 서버 `?mock=1` 화면 확인.
+
+### 12.3 주니어 4단계 실행 목록
+
+1. 명세 §9의 CMR3-2·5·7·10·12·13·14·17~25를 `test/e2e/community.spec.js`에 추가하고 통과시킨다(CMR3-16 = 기존 CM-3·CM-5·AV2 전부 통과 확인). 터치는 이미 있는 `CMR-3 터치` describe·`touchEvent`·`captureSongPost` 헬퍼를 재사용한다. CMR3-22는 명세 §12 C7대로 `navigator.share`를 지운 경우와 클립보드 거부 경우를 나눈다. 구현 결함이 보이면 고치지 말고 재현·근거를 결과 파일에 적어 시니어 핀포인트로 넘긴다.
+2. `test/e2e/layout/community.spec.js`에 `community-folder-detail`(상세 시트 4폭+다크)·`community-quick-add`(1280 `+` 시트, 390 터치 시트) suite를 추가하고, 기존 `community-pro`가 셸 도입 뒤에도 G0~G8 통과하는지 확인한다.
+3. `npm test` 전체(LA-1은 Windows CRLF 기존 실패 — 결과 파일에 main 동일 실패로 구분해 적는다, Linux CI 기준 판정), 전체 `npx playwright test`. `AV2 report success reopen` 불안정 여부를 재확인한다.
+4. 명세 §10 체크리스트(`coverMosaic` 0줄, home 분기 diff 0, CM-U3, CMR3-26 grep 0 출력 기록).
+5. `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js test/e2e/layout/home.spec.js` 4폭+다크 Q1~Q9, `npm run dev:client` + `/community.html?mock=1` 1280·390 캡처 2장(검은 표지·선반 순서·`+` 시트 disabled) → `개발산출물/결과/CMR-3.md`(규모 초과 사유 = 명세 §12 C5 포함).
+6. 이 파일 단계 표·§12 갱신, 커밋·push, main 대상 PR 생성, `gh pr checks --watch`, 리뷰 확인. 머지는 사용자.
+
+### 12.4 주니어 4단계 멘트
+
+```text
+# Gemini (주니어) — CMR-3 4단계 최종 테스트·문서·PR/CI 마무리
+개발산출물/협업_시니어주니어.md와 개발산출물/프롬프트_템플릿_4단계.md의 4단계를 따른다.
+목표: step/CMR-3 시니어 핵심 구현(단일 표지·빠른 추가 시트·폴더 상세·부분 선택·createSong a/b·dev mock)을 최종 테스트·문서·PR/CI까지 마무리한다.
+기준: 개발산출물/명세/CMR-3_구현명세.md(§9 테스트 표·§10 체크리스트·§12 보정), 진행_UIUX수정명세.md §12.3 실행 목록.
+선행 조건: git status·브랜치 step/CMR-3(fc35135·8f1da01·문서 커밋) 확인, 사용자 미커밋 변경은 커밋에서 제외하고 보존. main 최신과 충돌 없는지 확인.
+범위: CMR3 남은 테스트·layout suite 2개 추가, 전체 회귀, 4폭+다크 Q1~Q9·?mock=1 캡처, 결과/CMR-3.md·진행 파일 갱신. 구현 결함은 고치지 말고 근거와 함께 시니어 핀포인트로 넘긴다.
+완료 기준: npm test·전체 Playwright·LAYOUT_SHOTS 결과가 최신 head 기준으로 결과 파일에 기록되고, main 대상 PR의 최신 CI 통과·리뷰 확인이 끝난다.
+Git 처리: step/CMR-3 커밋·push·main 대상 신규 PR 생성·gh pr checks --watch까지. 머지는 사용자가 한다. 권장 effort medium.
+```
