@@ -1,6 +1,6 @@
 # CMR-3 결과 — 단일 표지·빠른 추가 시트·폴더 상세·부분 선택·createSong a/b·dev mock
 
-> 2026-11-12 / Claude(시니어 핵심 구현) + Gemini(주니어 4단계 테스트·레이아웃·dev mock 검증·문서·PR/CI). 명세 [CMR-3](../명세/CMR-3_구현명세.md). 브랜치 `step/CMR-3`.
+> 2026-11-12 / Claude(시니어 핵심 구현) + Gemini(주니어 4단계 테스트·레이아웃·dev mock 검증·문서·PR/CI). 명세 [CMR-3](../명세/CMR-3_구현명세.md). 브랜치 `step/CMR-3`. [PR #8](https://github.com/choise-hun/doloop/pull/8).
 
 ## 1. 작업 개요
 
