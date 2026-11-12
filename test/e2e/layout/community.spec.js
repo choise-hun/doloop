@@ -113,7 +113,7 @@ layoutSuite({
         pointerType: 'touch', isPrimary: true, pointerId: 1,
         clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,
       });
-      await page.waitForTimeout(550);
+      await new Promise((r) => setTimeout(r, 550));
       await card.dispatchEvent('pointerup', {
         pointerType: 'touch', isPrimary: true, pointerId: 1,
         clientX: box.x + box.width / 2, clientY: box.y + box.height / 3,

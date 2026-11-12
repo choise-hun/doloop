@@ -1494,7 +1494,7 @@ test('CMR3-20 실행 중 잠금·닫힘: 1번 응답 보류 중 #folderClose 클
   await expect(page.locator('#folderSheet')).toHaveCount(0);
 
   releaseFirst();
-  await page.waitForTimeout(300);
+  await page.waitForLoadState('networkidle');
 
   expect(posts.map((p) => p.videoId)).toEqual(['v1']);
   expect(pageErrors).toEqual([]);
@@ -1557,7 +1557,7 @@ test('CMR3-21 계정 전환: 순차 추가 중 B 로그인 시 B 화면에 A 시
   }, USER_B);
 
   releaseFirst();
-  await page.waitForTimeout(300);
+  await page.waitForLoadState('networkidle');
 
   await expect(page.locator('#folderSheet')).toHaveCount(0);
   expect(posts.map((p) => p.videoId)).toEqual(['v1']);
