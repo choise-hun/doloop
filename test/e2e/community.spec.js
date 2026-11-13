@@ -2096,6 +2096,68 @@ for (const [label, impact, expectExtra] of [
   });
 }
 
+// ── S3b-4 PR #17 리뷰: 공유 영향 조회 대기 중 화면이 바뀌면 확인창·삭제를 실행하지 않는다 ──
+async function openWithGatedImpact(page, url, extra = {}) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const counts = { impact: 0, deletes: 0 };
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    ...extra,
+    routes: [
+      ...communityRoutes({
+        onShareImpact: async (route, json) => { counts.impact += 1; await gate; return json(route, { cards: 1, attachments: 0 }); },
+      }),
+      [(u) => /^\/api\/v1\/songs\/[^/]+$/.test(u.pathname), (route) => {
+        if (route.request().method() === 'DELETE') { counts.deletes += 1; return route.fulfill({ json: { ok: true } }); }
+        return route.fallback();
+      }],
+    ],
+  });
+  const messages = [];
+  page.on('dialog', (d) => { messages.push(d.message()); d.accept(); });
+  await page.goto(url, { waitUntil: 'load' });
+  return { release: () => release(), counts, messages };
+}
+
+async function releaseAndSettle(page, ctx) {
+  const answered = page.waitForResponse((r) => r.url().includes('/api/v1/community/me/share-impact'));
+  ctx.release();
+  await answered;
+  // 응답 뒤 핸들러 연속 실행(JSON 해석·확인창)이 끝날 때까지 두 프레임을 넘긴다
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
+test('S3b4-P10t 곡 상세 삭제: 영향 조회 대기 중 목록으로 나가면 확인창·DELETE 없음', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const song = STATES.userData.songs[0];
+  const ctx = await openWithGatedImpact(page, `/log.html?song=${song.id}`, { songDetail: { song, takes: [], sessions: [] } });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await page.locator('#btnDeleteSong').click();
+  await expect.poll(() => ctx.counts.impact).toBe(1);
+  await page.getByRole('button', { name: '← 곡 목록' }).click();
+  await expect(page.locator('#tab-songs')).toBeVisible();
+  await releaseAndSettle(page, ctx);
+  expect(ctx.messages).toEqual([]);
+  expect(ctx.counts.deletes).toBe(0);
+});
+
+test('S3b4-P10t 곡 카드 삭제: 영향 조회 대기 중 기록 탭으로 바꾸면 확인창·DELETE 없음', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const ctx = await openWithGatedImpact(page, '/log.html#songs');
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await page.getByRole('button', { name: '곡 삭제' }).first().click();
+  await expect.poll(() => ctx.counts.impact).toBe(1);
+  await page.locator('#tab-log').click();
+  await expect(page.locator('#tab-log')).toHaveAttribute('aria-selected', 'true');
+  await releaseAndSettle(page, ctx);
+  expect(ctx.messages).toEqual([]);
+  expect(ctx.counts.deletes).toBe(0);
+  // 목록으로 돌아오면 삭제 버튼이 다시 눌린다(busy 해제)
+  await page.locator('#tab-songs').click();
+  await expect(page.getByRole('button', { name: '곡 삭제' }).first()).toBeEnabled();
+});
+
 // ── S3b-4 D7: 녹음 삭제 확인에 공유 영향 문장 ──
 for (const [label, impact, expectExtra] of [
   ['영향 있음 {1,1}', { status: 200, body: { cards: 1, attachments: 1 } }, '공유된 녹음이 커뮤니티 게시물에서도 삭제됩니다(카드는 유지).'],

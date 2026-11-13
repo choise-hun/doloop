@@ -59,15 +59,24 @@ interface SongCardItemProps {
   onOpenDetail: (songId: string) => void;
   onUpdated: (updated: SongDto) => void;
   onRemoved: (songId: string) => void;
+  /** 지금 화면을 캡처하고, 비동기 대기 뒤에도 같은 화면·계정인지 돌려주는 검사기를 준다 (PR #17 리뷰) */
+  captureView: () => () => boolean;
 }
 
-function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved }: SongCardItemProps): React.ReactElement {
+function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }: SongCardItemProps): React.ReactElement {
   const [statusVal, setStatusVal] = useState(song.statusCode || 'practicing');
   const [memoVal, setMemoVal] = useState(song.memo || '');
   const [busyStatus, setBusyStatus] = useState(false);
   const [busyMemo, setBusyMemo] = useState(false);
   const [memoBtnText, setMemoBtnText] = useState(t('log.btnSaveMemo'));
   const [busyDel, setBusyDel] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const safeResumeHref =
     (song.resumeUrl ? safeUrl(song.resumeUrl) : '') || `practice.html?v=${encodeURIComponent(song.videoId || '')}`;
@@ -154,7 +163,11 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved }: SongCardItem
           disabled={busyDel}
           onClick={async () => {
             setBusyDel(true);
+            const isViewValid = captureView();
             const impact = await apiClient.community.shareImpactOrNull({ songId: song.id });
+            // 조회 대기 중 화면 전환·언마운트·계정 변경이면 확인창·삭제를 하지 않는다
+            if (!mountedRef.current) return;
+            if (!isViewValid()) { setBusyDel(false); return; }
             if (!window.confirm(deleteConfirmText('song', impact))) { setBusyDel(false); return; }
             try {
               await apiClient.songs.remove(song.id);
@@ -218,6 +231,20 @@ function OwnedLogPage(): React.ReactElement {
   const logReqSeqRef = useRef(0);
   const songsReqSeqRef = useRef(0);
   const detailReqSeqRef = useRef(0);
+
+  // 뷰 세대: 상세 곡·탭이 바뀌거나 언마운트되면 올라간다. 삭제 확인 전 공유 영향 조회(await) 뒤 재확인용 (PR #17 리뷰)
+  const viewSeqRef = useRef(0);
+  useEffect(
+    () => () => {
+      viewSeqRef.current++;
+    },
+    [detailSongId, activeTab],
+  );
+  const captureView = () => {
+    const mySeq = viewSeqRef.current;
+    const myUid = activeUid;
+    return () => mySeq === viewSeqRef.current && myUid !== null && auth.getUser()?.id === myUid && apiClient.isLoggedIn();
+  };
 
   // SongRecordParts(AbCompare)로 분리된 A/B 재생 비동기 레이스 방어 토큰 참조 (R3-P11: abReqSeqRef = useRef(0); / abPairRef = useRef / const isSlotValid = () => { / if (!isSlotValid()) return;)
 
@@ -578,6 +605,7 @@ function OwnedLogPage(): React.ReactElement {
                   onRemoved={(sId) => {
                     setSongsList((prev) => prev.filter((it) => it.id !== sId));
                   }}
+                  captureView={captureView}
                 />
               ))
             )}
@@ -654,10 +682,15 @@ function OwnedLogPage(): React.ReactElement {
                 id="btnDeleteSong"
                 onClick={async () => {
                   if (!detailSong) return;
-                  const impact = await apiClient.community.shareImpactOrNull({ songId: detailSong.id });
+                  const targetId = detailSong.id;
+                  const isViewValid = captureView();
+                  const impact = await apiClient.community.shareImpactOrNull({ songId: targetId });
+                  // 조회 대기 중 목록·다른 곡으로 옮겼거나 계정이 바뀌었으면 확인창·삭제를 하지 않는다
+                  if (!isViewValid()) return;
                   if (!window.confirm(deleteConfirmText('song', impact))) return;
                   try {
-                    await apiClient.songs.remove(detailSong.id);
+                    await apiClient.songs.remove(targetId);
+                    if (!isViewValid()) return;
                     setDetailSongId(null);
                     setActiveTab('songs');
                     window.history.pushState(null, '', 'log.html#songs');
