@@ -23,9 +23,23 @@ function createDriveModule() {
     return win.ULData || apiClient;
   }
 
+  // D14(S3b-3): 진행 중인 토큰 요청은 하나로 합치고 토큰 클라이언트는 client_id마다 한 번만 만든다.
+  let tokenClient: any = null;
+  let tokenClientId = '';
+  let pendingToken: Promise<string> | null = null;
+  let pendingHandlers: { uid: string | null; resolve: (token: string) => void; reject: (err: Error) => void } | null = null;
+
   function clearToken(): void {
     inMemoryToken = null;
     tokenExpiresAt = 0;
+    // 계정 전환·로그아웃 뒤 늦게 도착한 팝업 결과를 버린다.
+    const handlers = pendingHandlers;
+    pendingHandlers = null;
+    pendingToken = null;
+    // 이전 계정의 팝업 콜백이 다음 계정 요청을 끝내지 못하게 토큰 클라이언트를 새로 만든다.
+    tokenClient = null;
+    tokenClientId = '';
+    handlers?.reject(new Error(t('drive.authFailed')));
   }
 
   function getCurrentUid(): string | null {
@@ -77,30 +91,56 @@ function createDriveModule() {
       throw new Error(t('drive.clientIdNotConfigured'));
     }
 
-    return new Promise<string>((resolve, reject) => {
+    if (pendingToken) return pendingToken;
+
+    if (!tokenClient || tokenClientId !== clientId) {
+      const created = win.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: (resp: any) => {
+          if (tokenClient !== created) return;
+          const handlers = pendingHandlers;
+          pendingHandlers = null;
+          if (!handlers) return;
+          if (resp.error) {
+            handlers.reject(new Error(resp.error_description || resp.error || t('drive.authFailed')));
+            return;
+          }
+          if (handlers.uid !== getCurrentUid()) {
+            handlers.reject(new Error(t('drive.authFailed')));
+            return;
+          }
+          inMemoryToken = resp.access_token;
+          const expiresIn = parseInt(String(resp.expires_in), 10) || 3600;
+          tokenExpiresAt = Date.now() + expiresIn * 1000;
+          handlers.resolve(inMemoryToken as string);
+        },
+        error_callback: (err: any) => {
+          if (tokenClient !== created) return;
+          const handlers = pendingHandlers;
+          pendingHandlers = null;
+          handlers?.reject(new Error((err && (err.message || err.type)) || t('drive.authErrorOccurred')));
+        },
+      });
+      tokenClient = created;
+      tokenClientId = clientId;
+    }
+
+    const client = tokenClient;
+    const request = new Promise<string>((resolve, reject) => {
+      pendingHandlers = { uid: curUid, resolve, reject };
       try {
-        const tokenClient = win.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.file',
-          callback: (resp: any) => {
-            if (resp.error) {
-              reject(new Error(resp.error_description || resp.error || t('drive.authFailed')));
-              return;
-            }
-            inMemoryToken = resp.access_token;
-            const expiresIn = parseInt(String(resp.expires_in), 10) || 3600;
-            tokenExpiresAt = Date.now() + expiresIn * 1000;
-            resolve(inMemoryToken as string);
-          },
-          error_callback: (err: any) => {
-            reject(new Error((err && (err.message || err.type)) || t('drive.authErrorOccurred')));
-          },
-        });
-        tokenClient.requestAccessToken({ prompt: options.prompt || '' });
+        client.requestAccessToken({ prompt: options.prompt || '' });
       } catch (err) {
+        pendingHandlers = null;
         reject(err);
       }
     });
+    const settled = request.finally(() => {
+      if (pendingToken === settled) pendingToken = null;
+    });
+    pendingToken = settled;
+    return settled;
   }
 
   async function deleteFile(fileId: string): Promise<void> {
@@ -294,7 +334,7 @@ function createDriveModule() {
     }
   }
 
-  async function fetchMediaObjectUrl(fileId: string): Promise<string> {
+  async function fetchMediaBlob(fileId: string): Promise<Blob> {
     if (!fileId) throw new Error(t('drive.fileIdReq'));
     const token = await requestToken();
     const res = await fetch(
@@ -308,8 +348,11 @@ function createDriveModule() {
     if (!res.ok) {
       throw new Error(t('drive.loadFileFailed', { status: res.status }));
     }
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
+    return await res.blob();
+  }
+
+  async function fetchMediaObjectUrl(fileId: string): Promise<string> {
+    return URL.createObjectURL(await fetchMediaBlob(fileId));
   }
 
   async function checkNotionSyncConflict(): Promise<void> {
@@ -398,6 +441,7 @@ function createDriveModule() {
     ensureFolder,
     uploadBlob,
     uploadTake,
+    fetchMediaBlob,
     fetchMediaObjectUrl,
     enableDriveStorage,
     disableDriveStorage,

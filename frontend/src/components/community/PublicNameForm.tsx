@@ -1,10 +1,11 @@
 // frontend/src/components/community/PublicNameForm.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { apiClient } from '../../lib/apiClient';
+import { apiClient, type ShareConsentDto } from '../../lib/apiClient';
 import { auth, type MeProfile } from '../../lib/auth';
 import { communityErrorKey, kstDate } from '../../lib/community.mts';
 import { t, type I18nKey } from '../../lib/i18n.mts';
 import styles from './Community.module.css';
+import { ShareConsentStep } from '../songRecord/ShareConsentStep';
 
 export interface PublicNameFormProps {
   me: MeProfile | null;
@@ -49,6 +50,22 @@ export function PublicNameForm({
   useEffect(() => { setDraft({ identity, serverName, value: serverName }); }, [identity, serverName, matching]);
   const busy = pending === identity;
 
+  // S3b-3 U2: 아직 카드 공유 동의가 없으면 이름 폼에 선택 동의(기본 해제)를 함께 보인다.
+  const [consent, setConsent] = useState<{ identity: string; dto: ShareConsentDto } | null>(null);
+  const [consentChecked, setConsentChecked] = useState<{ identity: string; value: boolean }>({ identity, value: false });
+  const agreeChecked = consentChecked.identity === identity && consentChecked.value;
+  useEffect(() => {
+    if (!matching) return;
+    const controller = new AbortController();
+    apiClient.community.shareConsent(controller.signal)
+      .then((dto) => { if (mounted.current && identityNow() === identity) setConsent({ identity, dto }); })
+      .catch(() => { /* 조회 실패면 선택 동의를 숨긴다(공유 창이 다시 묻는다) */ });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, matching]);
+  const currentConsent = consent?.identity === identity ? consent.dto : null;
+  const askConsent = Boolean(currentConsent && !currentConsent.cardShareAllowed);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (disabled || !matching || operation.current || identityNow() !== identity || auth.getMe()?.id !== me?.id) return;
@@ -73,6 +90,17 @@ export function PublicNameForm({
           auth.getMe()?.id !== refreshed.id || auth.getMe()?.publicName !== res.publicName) {
         setErr({ identity, key: 'profile.nameRefreshFailed' });
         return;
+      }
+      // 이름 저장이 성공한 뒤에만, 체크했을 때만 동의를 기록한다.
+      if (askConsent && agreeChecked && currentConsent) {
+        try {
+          const dto = await apiClient.community.agreeShareConsent(currentConsent.noticeVersion, action.controller.signal);
+          if (!valid()) return;
+          setConsent({ identity, dto });
+        } catch {
+          if (!valid()) return;
+          // 동의 기록 실패는 이름 저장을 되돌리지 않는다. 공유 창이 동의 단계를 다시 보인다.
+        }
       }
       onSaved?.(res.publicName);
     } catch (error) {
@@ -99,6 +127,15 @@ export function PublicNameForm({
           onChange={(e) => setDraft({ identity, serverName, value: e.target.value })} />
         <button type="submit" id={submitId} className="pillBtn" disabled={locked}>{t('community.nameSave')}</button>
       </div>
+      {askConsent ? (
+        <ShareConsentStep
+          variant="nameForm"
+          busy={busy}
+          onAgree={() => setConsentChecked({ identity, value: true })}
+          checked={agreeChecked}
+          onCheckedChange={(value) => setConsentChecked({ identity, value })}
+        />
+      ) : null}
       {lockDate ? <p className={styles.fieldHint}>{t('community.nameLocked', { date: lockDate })}</p> : null}
       {err?.identity === identity ? <p role="alert" className={`msg err ${styles.formMsg}`}>{t(err.key, err.vars)}</p> : null}
     </form>

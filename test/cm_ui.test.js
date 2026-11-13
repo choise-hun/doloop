@@ -74,34 +74,28 @@ test('CM-UI 순수 함수 2: validateEpisodeText (제어문자 거절, 줄바꿈
   assert.throws(() => validateEpisodeText(emoji81, 80, false), /길이/);
 });
 
-test('CM-UI 순수 함수 3: computeEpisodeTitle (공개 제목 결정 규칙)', async () => {
-  const { computeEpisodeTitle } = await import('../frontend/src/lib/episode.mts');
+test('CM-UI 순수 함수 3: computeEpisodeTitle (공개 제목 결정 규칙, S3b-3 D13)', async () => {
+  const { computeEpisodeTitle, formatEpisodeDate } = await import('../frontend/src/lib/episode.mts');
 
   // 1. trim된 post.title 우선
   assert.equal(
-    computeEpisodeTitle({ title: '  사용자 지정 제목  ', youtubeTitle: 'YT Title' }),
+    computeEpisodeTitle({ title: '  사용자 지정 제목  ', date: '2026-11-12' }),
     '사용자 지정 제목'
   );
 
-  // 2. title이 빈 문자열이고 youtubeTitle 있을 때
-  assert.equal(
-    computeEpisodeTitle({ title: '', youtubeTitle: 'Rick Astley - Never Gonna Give You Up' }),
-    'Rick Astley - Never Gonna Give You Up 연습 기록'
-  );
-  assert.equal(
-    computeEpisodeTitle({ title: '   ', youtubeTitle: 'Funk Study' }),
-    'Funk Study 연습 기록'
-  );
+  // 2. 빈 제목은 세션 날짜로 표기한다(영상 제목 기반 대체 문구는 쓰지 않는다)
+  assert.equal(computeEpisodeTitle({ title: '', date: '2026-11-12' }), '2026년 11월 12일');
+  assert.equal(computeEpisodeTitle({ title: '   ', date: '2026-01-05' }), '2026년 1월 5일');
 
-  // 3. title도 없고 youtubeTitle도 없을 때
-  assert.equal(
-    computeEpisodeTitle({ title: null, youtubeTitle: null }),
-    '연습 기록'
-  );
-  assert.equal(
-    computeEpisodeTitle({ title: '', youtubeTitle: '' }),
-    '연습 기록'
-  );
+  // 3. 날짜도 없으면 기본 문구
+  assert.equal(computeEpisodeTitle({ title: null, date: null }), '연습 기록');
+
+  // 4. 언어별 날짜 형식과 잘못된 값
+  assert.equal(formatEpisodeDate('2026-11-12', 'ko'), '2026년 11월 12일');
+  assert.equal(formatEpisodeDate('2026-11-12', 'en'), 'Nov 12, 2026');
+  assert.equal(formatEpisodeDate('2026-11-12', 'ja'), '2026年11月12日');
+  assert.equal(formatEpisodeDate('2026-13-01', 'ko'), '2026-13-01');
+  assert.equal(formatEpisodeDate('not-a-date', 'en'), 'not-a-date');
 });
 
 test('CM-UI 순수 함수 4: buildEpisodePracticeUrl (구간 재생 URL 조립)', async () => {
@@ -176,4 +170,131 @@ test('CM-UI real auth error envelope retains BANNED_WORD detail.field', async ()
   for (const field of ['title', 'comment', 'partStats.name']) {
     assert.equal(classifyEpisodeError({ status: 400, code: 'BANNED_WORD', data: { detail: { field } } }).field, field);
   }
+});
+
+test('S3b3-U14 Drive 토큰 합치기: 동시 2회 requestToken 시 토큰 클라이언트 생성 및 요청 1회', async () => {
+  const vm = require('node:vm');
+  const ts = require('typescript');
+  let initCount = 0;
+  let requestCount = 0;
+  let currentUid = 'user-A';
+  let capturedCallback = null;
+
+  const ctx = {
+    exports: {},
+    require: (id) => {
+      if (id === './auth') return { auth: { getUser: () => (currentUid ? { id: currentUid } : null), onChange: () => () => {} } };
+      if (id === './apiClient') return { apiClient: {} };
+      if (id === './i18n.mts') return { t: (k) => k };
+      throw new Error(`unexpected import: ${id}`);
+    },
+    window: {
+      ULEVELP_CONFIG: { googleClientId: 'client-123' },
+      google: {
+        accounts: {
+          oauth2: {
+            initTokenClient: (cfg) => {
+              initCount += 1;
+              capturedCallback = cfg.callback;
+              return {
+                requestAccessToken: () => {
+                  requestCount += 1;
+                  setImmediate(() => capturedCallback({ access_token: 'tok-1', expires_in: '3600' }));
+                },
+              };
+            },
+          },
+        },
+      },
+    },
+    Promise,
+    Date,
+    Error,
+    parseInt,
+    String,
+  };
+  const transpiled = ts.transpileModule(readText('frontend/src/lib/drive.ts'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(transpiled, ctx);
+  const drive = ctx.exports.drive;
+
+  const [t1, t2] = await Promise.all([drive.requestToken(), drive.requestToken()]);
+  assert.equal(t1, 'tok-1');
+  assert.equal(t2, 'tok-1');
+  assert.equal(initCount, 1);
+  assert.equal(requestCount, 1);
+
+  // 캐시 무효화(force: true) 후 대기 중 계정 전환 시 거절된다
+  let pendingResolve = null;
+  capturedCallback = null;
+  ctx.window.google.accounts.oauth2.initTokenClient = (cfg) => {
+    initCount += 1;
+    capturedCallback = cfg.callback;
+    return {
+      requestAccessToken: () => {
+        requestCount += 1;
+        pendingResolve = () => cfg.callback({ access_token: 'tok-stale', expires_in: '3600' });
+      },
+    };
+  };
+  const pForce = drive.requestToken({ force: true, clientId: 'client-456' });
+  currentUid = 'user-B';
+  pendingResolve();
+  await assert.rejects(() => pForce, /drive\.authFailed/);
+});
+
+test('S3b3-U14b Drive 토큰 경합: A 팝업 대기 중 B 전환·요청 시 A의 늦은 콜백이 B 토큰이 되지 않는다', async () => {
+  const vm = require('node:vm');
+  const ts = require('typescript');
+  let currentUid = 'user-A';
+  const callbacks = [];
+
+  const ctx = {
+    exports: {},
+    require: (id) => {
+      if (id === './auth') return { auth: { getUser: () => (currentUid ? { id: currentUid } : null), onChange: () => () => {} } };
+      if (id === './apiClient') return { apiClient: {} };
+      if (id === './i18n.mts') return { t: (k) => k };
+      throw new Error(`unexpected import: ${id}`);
+    },
+    window: {
+      ULEVELP_CONFIG: { googleClientId: 'client-123' },
+      google: {
+        accounts: {
+          oauth2: {
+            initTokenClient: (cfg) => ({ requestAccessToken: () => callbacks.push(cfg.callback) }),
+          },
+        },
+      },
+    },
+    Promise,
+    Date,
+    Error,
+    parseInt,
+    String,
+  };
+  const transpiled = ts.transpileModule(readText('frontend/src/lib/drive.ts'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(transpiled, ctx);
+  const drive = ctx.exports.drive;
+
+  const pA = drive.requestToken();
+  const aRejected = assert.rejects(() => pA, /drive\.authFailed/);
+  currentUid = 'user-B';
+  const pB = drive.requestToken();
+  await aRejected;
+  assert.equal(callbacks.length, 2);
+
+  let bResult = null;
+  pB.then((tok) => { bResult = tok; }, () => { bResult = 'rejected'; });
+  // A 팝업의 늦은 결과
+  callbacks[0]({ access_token: 'tok-A', expires_in: '3600' });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(bResult, null, 'A의 늦은 콜백이 B 요청을 끝내면 안 된다');
+
+  callbacks[1]({ access_token: 'tok-B', expires_in: '3600' });
+  assert.equal(await pB, 'tok-B');
+  assert.equal(await drive.requestToken(), 'tok-B', 'B 캐시에 A 토큰이 남으면 안 된다');
 });

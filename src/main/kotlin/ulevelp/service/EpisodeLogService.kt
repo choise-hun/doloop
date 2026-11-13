@@ -152,6 +152,7 @@ class EpisodeLogService(private val db: Database?, private val communityService:
         requireCommunityWrite(ctx)
         val profile = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.single()
         if (profile[ProfilesTable.publicName].isNullOrBlank()) episodeConflict("PUBLIC_NAME_REQUIRED")
+        with(attachments) { requireCardConsent(userId) }
         BannedWords.require("title", title)
         BannedWords.require("comment", comment)
         return old to snapshot(source)

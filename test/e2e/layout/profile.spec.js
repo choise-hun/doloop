@@ -951,8 +951,12 @@ test('PF3-09 DELETE 성공 뒤 GET 실패: 원문 제거·임시 재게시 금�
       canRepublish: deleted ? eligibility : true }], next: null } });
   });
   await page.goto('/log.html');
+  // S3b-3 D1·D2: 공유 행동은 헤더 공유 아이콘 메뉴 안에 있다
+  const shareMenu = page.locator('[data-share-action=menu]');
+  await shareMenu.click();
   await page.locator('[data-share-action=withdraw]').click();
-  const republish = page.getByRole('button', { name: '다시 게시', exact: true });
+  const republish = page.getByRole('menuitem', { name: '다시 게시', exact: true });
+  await shareMenu.click();
   await expect(republish).toBeDisabled();
   const eligibilityResponse = page.waitForResponse('**/api/v1/community/me/episode-logs');
   releaseEligibility();
@@ -962,6 +966,7 @@ test('PF3-09 DELETE 성공 뒤 GET 실패: 원문 제거·임시 재게시 금�
   await expect(republish).toBeDisabled();
   eligibility = true;
   await page.reload();
+  await shareMenu.click();
   await expect(republish).toBeEnabled();
 });
 

@@ -50,6 +50,8 @@ function OwnedPracticeSessionCard({
   const [partsOpen, setPartsOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [removingRecording, setRemovingRecording] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const alive = useRef(false);
@@ -58,6 +60,43 @@ function OwnedPracticeSessionCard({
   const isCurrent = () => alive.current && ownerUid === auth.getUser()?.id;
 
   const shareBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = `sessionShareMenu-${surface}-${session.sessionId}`;
+
+  const closeMenu = (focusIcon: boolean) => {
+    setMenuOpen(false);
+    if (focusIcon) shareBtnRef.current?.focus();
+  };
+
+  // D2: 메뉴가 열리면 첫 활성 항목으로 포커스, ESC·바깥 클릭으로 닫는다.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const items = () => Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') || []);
+    items()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); return; }
+      if (e.key === 'Tab') { closeMenu(false); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const list = items();
+        if (list.length === 0) return;
+        e.preventDefault();
+        const idx = list.indexOf(document.activeElement as HTMLButtonElement);
+        const next = e.key === 'ArrowDown' ? (idx + 1) % list.length : (idx - 1 + list.length) % list.length;
+        list[next]?.focus();
+      }
+    };
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || shareBtnRef.current?.contains(target)) return;
+      closeMenu(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [menuOpen]);
 
   const titleText = `${session.songTitle || t('log.noTitleSong')}${
     session.songArtist ? ' · ' + session.songArtist : ''
@@ -92,7 +131,7 @@ function OwnedPracticeSessionCard({
 
   // 철회 (공유 중지) 핸들러
   const handleWithdraw = async () => {
-    if (withdrawing || shareDialogOpen) return;
+    if (withdrawing || removingRecording || shareDialogOpen) return;
     if (!window.confirm(t('episode.share.withdrawConfirm'))) return;
     setWithdrawing(true);
     setActionMsg(null);
@@ -111,12 +150,132 @@ function OwnedPracticeSessionCard({
     }
   };
 
+  // D3: 녹음만 내리기 — 카드·통계는 그대로(R04 ③)
+  const handleRemoveRecording = async () => {
+    if (withdrawing || removingRecording || shareDialogOpen) return;
+    if (!window.confirm(t('episode.share.removeRecordingConfirm'))) return;
+    setRemovingRecording(true);
+    setActionMsg(null);
+    try {
+      await apiClient.sessions.removeShareAttachment(session.sessionId);
+      if (!isCurrent()) return;
+      invalidate();
+    } catch (err: any) {
+      if (!isCurrent()) return;
+      setActionMsg(err?.message || t('episode.err.generic'));
+    } finally {
+      if (isCurrent()) setRemovingRecording(false);
+    }
+  };
+
   // 공유 상태 판정 (명세 §4.2)
   const isHidden = sharePost?.status === 'moderation_hidden';
   const isWithdrawn = Boolean(sharePost?.withdrawnAt);
   const isPaused = sharePost?.status === 'tier_paused' && !isWithdrawn;
   const isPublished = sharePost?.status === 'published' && !isWithdrawn && !isHidden;
   const canRepublish = Boolean(sharePost?.canRepublish);
+  const hasAttachment = Boolean(sharePost?.attachment) && !isWithdrawn;
+  const cannotShare = !isPaid || !hasPublicName || session.partStats === null;
+  const shareTip = !isPaid
+    ? t('episode.share.tipFreeNotice')
+    : !hasPublicName
+      ? t('episode.share.tipNameNotice')
+      : undefined;
+  // D2: 숨김이면 다시 게시 비활성, 정지·철회는 canRepublish일 때만
+  const republishDisabled = isHidden || cannotShare || withdrawing || removingRecording ||
+    ((isPaused || isWithdrawn) && !canRepublish);
+  const republishTip = !isPaid
+    ? t('episode.share.tipProRequired')
+    : !hasPublicName
+      ? t('episode.share.tipNameRequired')
+      : (isPaused || isWithdrawn) && !canRepublish
+        ? t('episode.share.tipCannotRepublish')
+        : undefined;
+  const headGroup = `sessionHead-${surface}-${session.sessionId}:center-y`;
+
+  const shareIconSvg = (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+      <path d="M12 3v12" />
+      <path d="m7 8 5-5 5 5" />
+    </svg>
+  );
+
+  let shareIcon: React.ReactNode = null;
+  if (!sharePost && sharesComplete) {
+    shareIcon = (
+      <button
+        ref={shareBtnRef}
+        type="button"
+        data-share-action="open"
+        className={styles.shareIconBtn}
+        disabled={cannotShare}
+        onClick={() => setShareDialogOpen(true)}
+        title={shareTip}
+        aria-label={t('episode.share.title')}
+        data-align-group={headGroup}
+      >
+        {shareIconSvg}
+      </button>
+    );
+  } else if (sharePost) {
+    shareIcon = (
+      <span className={styles.menuWrap}>
+        <button
+          ref={shareBtnRef}
+          type="button"
+          data-share-action="menu"
+          className={`${styles.shareIconBtn} ${isPublished ? styles.shareIconOn : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          aria-label={t('episode.share.menu')}
+          disabled={withdrawing || removingRecording}
+          onClick={() => setMenuOpen((v) => !v)}
+          data-align-group={headGroup}
+        >
+          {shareIconSvg}
+        </button>
+        {menuOpen && (
+          <div ref={menuRef} id={menuId} role="menu" aria-label={t('episode.share.menu')} className={styles.shareMenu}>
+            <button
+              type="button"
+              role="menuitem"
+              data-share-action="edit"
+              className={styles.menuItem}
+              disabled={republishDisabled}
+              title={republishTip}
+              onClick={() => { closeMenu(false); setShareDialogOpen(true); }}
+            >
+              {t('episode.share.republish')}
+            </button>
+            {hasAttachment && (
+              <button
+                type="button"
+                role="menuitem"
+                data-share-action="remove-recording"
+                className={styles.menuItem}
+                onClick={() => { closeMenu(true); void handleRemoveRecording(); }}
+              >
+                {t('episode.share.removeRecording')}
+              </button>
+            )}
+            {!isWithdrawn && (
+              <button
+                type="button"
+                role="menuitem"
+                data-share-action="withdraw"
+                className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                onClick={() => { closeMenu(true); void handleWithdraw(); }}
+              >
+                {withdrawing ? t('episode.submitting') : t('episode.share.withdraw')}
+              </button>
+            )}
+          </div>
+        )}
+      </span>
+    );
+  }
 
   return (
     <div
@@ -125,15 +284,20 @@ function OwnedPracticeSessionCard({
       data-surface={surface}
       aria-label={`${session.date} ${t('episode.defaultTitle')}`}
     >
-      {/* 1. 헤더: 곡 제목 / 연습 링크 */}
-      <div
-        className={styles.sessionHead}
-        data-align-group={`sessionHead-${surface}-${session.sessionId}:top@768`}
-      >
-        <div className={`session-title ${styles.sessionTitle}`}>{titleText}</div>
-        <SafeLink className={`ghost mini ${styles.ghostMini}`} href={playHref}>
-          {t('log.btnPractice')}
-        </SafeLink>
+      {/* 1. 헤더: 곡 제목 / 연습 링크 / 공유 아이콘(D1) */}
+      <div className={styles.sessionHead}>
+        <div
+          className={`session-title ${styles.sessionTitle}`}
+          data-align-group={`sessionHead-${surface}-${session.sessionId}:center-y`}
+        >
+          {titleText}
+        </div>
+        <div className={styles.headActs}>
+          <SafeLink className={`ghost mini ${styles.ghostMini}`} href={playHref}>
+            {t('log.btnPractice')}
+          </SafeLink>
+          {shareIcon}
+        </div>
       </div>
 
       {/* 2. 날짜 · 시간 · 실제 loops */}
@@ -276,85 +440,6 @@ function OwnedPracticeSessionCard({
           )}
 
           {isHidden && isWithdrawn && <span>{t('episode.share.withdrawn')}</span>}
-          {/* 공유 행동 버튼 */}
-          <div className={styles.shareActs}>
-            {isPublished && (
-              <>
-                <button
-                  ref={shareBtnRef}
-                  type="button"
-                  data-share-action="edit"
-                  className={`ghost mini ${styles.shareActBtn}`}
-                  disabled={!isPaid || !hasPublicName || withdrawing || session.partStats === null}
-                  onClick={() => setShareDialogOpen(true)}
-                  title={!isPaid ? t('episode.share.tipProRequired') : undefined}
-                >
-                  {t('episode.share.edit')}
-                </button>
-                <button
-                  type="button"
-                  data-share-action="withdraw"
-                  className={`ghost mini ${styles.withdrawBtn}`}
-                  disabled={withdrawing}
-                  onClick={handleWithdraw}
-                >
-                  {withdrawing ? t('episode.submitting') : t('episode.share.withdraw')}
-                </button>
-              </>
-            )}
-
-            {!isHidden && (isPaused || isWithdrawn) && (
-              <button
-                ref={shareBtnRef}
-                type="button"
-                className={`ghost mini ${styles.shareActBtn}`}
-                disabled={!canRepublish || !isPaid || !hasPublicName || withdrawing || session.partStats === null}
-                onClick={() => setShareDialogOpen(true)}
-                title={
-                  !isPaid
-                    ? t('episode.share.tipProRequired')
-                    : !hasPublicName
-                      ? t('episode.share.tipNameRequired')
-                      : !canRepublish
-                        ? t('episode.share.tipCannotRepublish')
-                        : undefined
-                }
-              >
-                {t('episode.share.republish')}
-              </button>
-            )}
-
-            {isHidden && !isWithdrawn && (
-              <button
-                type="button"
-                className={`ghost mini ${styles.withdrawBtn}`}
-                disabled={withdrawing}
-                onClick={handleWithdraw}
-              >
-                {t('episode.share.withdraw')}
-              </button>
-            )}
-
-            {!sharePost && sharesComplete && (
-              <button
-                ref={shareBtnRef}
-                type="button"
-                data-share-action="open"
-                className={`cta mini ${styles.shareActBtn}`}
-                disabled={!isPaid || !hasPublicName || session.partStats === null}
-                onClick={() => setShareDialogOpen(true)}
-                title={
-                  !isPaid
-                    ? t('episode.share.tipFreeNotice')
-                    : !hasPublicName
-                      ? t('episode.share.tipNameNotice')
-                      : undefined
-                }
-              >
-                {t('episode.share.submit')}
-              </button>
-            )}
-          </div>
         </div>
 
         {actionMsg && <p className={styles.actionMsg}>{actionMsg}</p>}

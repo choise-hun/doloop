@@ -30,7 +30,8 @@ abstract class EpisodeTestSupport {
     }
     @AfterEach fun close() { source.close() }
     protected data class User(val id: UUID, val token: String)
-    protected suspend fun HttpClient.user(paid: Boolean = true, named: Boolean = true, owner: Boolean = false): User {
+    /** consent=true면 현재 안내 버전 카드 공유 동의 행을 넣는다(S3b-3 D12: 카드 공유 동의 강제). */
+    protected suspend fun HttpClient.user(paid: Boolean = true, named: Boolean = true, owner: Boolean = false, consent: Boolean = true): User {
         val id = UUID.randomUUID()
         val u = User(id, TestJwt.token(id, "private-$id@example.com"))
         val response = send(HttpMethod.Get, "/me", u)
@@ -41,6 +42,9 @@ abstract class EpisodeTestSupport {
                 it[displayName] = "PRIVATE_DISPLAY_SENTINEL"
                 if (named) { it[publicName] = "u" + id.toString().take(8); it[publicNameKey] = "u" + id.toString().take(8) }
                 if (owner) it[role] = "owner"
+            }
+            if (consent) CommunityShareConsentsTable.insert {
+                it[userId] = id; it[action] = "agree"; it[noticeVersion] = ulevelp.service.ShareNotice.CURRENT_VERSION
             }
         }
         return u

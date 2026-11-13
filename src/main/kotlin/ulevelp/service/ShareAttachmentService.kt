@@ -49,6 +49,10 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
     internal fun Transaction.requireRecordingConsent(userId: UUID) {
         if (!consentDto(userId).recordingAllowed) conflict("SHARE_CONSENT_REQUIRED", buildJsonObject { put("scope", "recording"); put("requiredVersion", ShareNotice.REQUIRED_VERSION) })
     }
+    /** S3b-3 D12: 카드 공유(녹음 유무 무관) 계정 단위 동의. */
+    internal fun Transaction.requireCardConsent(userId: UUID) {
+        if (!consentDto(userId).cardShareAllowed) conflict("SHARE_CONSENT_REQUIRED", buildJsonObject { put("scope", "card"); put("requiredVersion", ShareNotice.REQUIRED_VERSION) })
+    }
     suspend fun consent(userId: UUID): ShareConsentDto = DatabaseFactory.dbQuery(requireDb()) { consentDto(userId) }
     suspend fun agree(userId: UUID, version: Int): ShareConsentDto = DatabaseFactory.dbQuery(requireDb()) {
         tierContext(userId, lock = true)

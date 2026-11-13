@@ -192,6 +192,19 @@ export function communityErrorKey(err: unknown): {
         ? e.detail
         : {};
 
+  // S3b-3 §4.3: 카드 공유·녹음 첨부 오류
+  if (code === 'SHARE_CONSENT_REQUIRED' || code === 'SHARE_NOTICE_OUTDATED') return { key: 'episode.err.consentRequired' };
+  if (code === 'ATTACHMENT_LIMIT_EXCEEDED') {
+    if (detail.kind === 'duration' || detail.kind === 'size') return { key: 'episode.share.chipLimitHint' };
+    if (detail.kind === 'count') return { key: 'episode.err.attachCount' };
+    if (detail.kind === 'daily') return { key: 'episode.err.attachDaily' };
+    return { key: 'episode.err.attachLimit' };
+  }
+  if (code === 'ATTACHMENT_COPY_IN_PROGRESS') return { key: 'episode.err.copyInProgress' };
+  if (code === 'ATTACHMENT_UPLOAD_INVALID' || code === 'ATTACHMENT_UPLOAD_REQUIRED') return { key: 'episode.err.attachInvalid' };
+  if (code === 'ATTACHMENT_SOURCE_GONE') return { key: 'episode.err.sourceGone' };
+  if (code === 'ATTACHMENT_COPY_EXPIRED') return { key: 'episode.err.copyExpired' };
+  if (code === 'STORAGE_ERROR' || code === 'STORAGE_UNAVAILABLE') return { key: 'episode.err.storage' };
   if (code === 'TIER_UPGRADE_REQUIRED') return { key: 'community.err.upgrade' };
   if (code === 'PUBLIC_NAME_REQUIRED') return { key: 'community.err.nameRequired' };
   if (code === 'PUBLIC_NAME_TAKEN') return { key: 'community.err.nameTaken' };
