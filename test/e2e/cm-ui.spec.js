@@ -1324,6 +1324,69 @@ test('S3b3-U6 Drive 업로드: fetchMediaBlob → uploads(multipart) → share(u
   });
 });
 
+test('S3b3-U6b Drive 업로드 뒤 게시 거절: 재시도는 다시 업로드하지 않고 같은 uploadId로 게시', async ({ page }) => {
+  const driveTake = {
+    ...TAKE_1,
+    id: '00000000-0000-4000-8000-00000000b016',
+    storage: 'drive',
+    storageKey: 'drive-file-retry',
+  };
+  const sequence = [];
+  const shareBodies = [];
+  const gsiStub = `window.google = { accounts: { oauth2: { initTokenClient: (cfg) => ({ requestAccessToken: () => setTimeout(() => cfg.callback({ access_token: 'mock-drive-token', expires_in: '3600' }), 0) }) } } };`;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [{ ...SAMPLE_PRACTICE_SESSION, takes: [driveTake] }] },
+    routes: [
+      [
+        (url) => url.href.startsWith('https://accounts.google.com/gsi/client'),
+        (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: gsiStub }),
+      ],
+      [
+        (url) => url.origin === 'https://www.googleapis.com' && url.pathname.includes('/drive/v3/files/drive-file-retry'),
+        (route) => {
+          sequence.push('drive-download');
+          return route.fulfill({ status: 200, contentType: 'audio/mp4', body: Buffer.from('FAKE_M4A_DATA') });
+        },
+      ],
+      ...communityRoutes({
+        onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+        onShareUpload: (route, json) => {
+          sequence.push('uploads');
+          if (sequence.filter((s) => s === 'uploads').length > 1) {
+            return json(route, { code: 'ATTACHMENT_COPY_IN_PROGRESS', message: 'copy in progress' }, 409);
+          }
+          return json(route, { uploadId: '00000000-0000-4000-8000-00000000u016', expiresAt: '2099-01-01T00:00:00Z' }, 201);
+        },
+        onShareEpisode: (route, json) => {
+          sequence.push('share');
+          const body = route.request().postDataJSON();
+          shareBodies.push(body);
+          if (body.title && body.title.includes('금지어')) {
+            return json(route, { code: 'BANNED_WORD', message: 'banned', detail: { field: 'title' } }, 400);
+          }
+          return json(route, { post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id } }, 201);
+        },
+      }),
+    ],
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await dialog.locator(`[data-take-chip="${driveTake.id}"]`).click();
+  await dialog.locator('#shareOriginalConfirm').check();
+  await fillShareTitle(page, '금지어 제목');
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog.locator('[role="alert"]')).toBeVisible();
+
+  await fillShareTitle(page, '고친 제목');
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+
+  expect(sequence).toEqual(['drive-download', 'uploads', 'share', 'share']);
+  expect(shareBodies[1].attachment.uploadId).toBe('00000000-0000-4000-8000-00000000u016');
+});
+
 test('S3b3-U7 닫기 중 업로드: 업로드 진행 중 창을 닫으면 share 요청 0회, 화면 변화 없음', async ({ page }) => {
   const driveTake = {
     ...TAKE_1,

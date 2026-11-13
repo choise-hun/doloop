@@ -243,3 +243,58 @@ test('S3b3-U14 Drive 토큰 합치기: 동시 2회 requestToken 시 토큰 클�
   pendingResolve();
   await assert.rejects(() => pForce, /drive\.authFailed/);
 });
+
+test('S3b3-U14b Drive 토큰 경합: A 팝업 대기 중 B 전환·요청 시 A의 늦은 콜백이 B 토큰이 되지 않는다', async () => {
+  const vm = require('node:vm');
+  const ts = require('typescript');
+  let currentUid = 'user-A';
+  const callbacks = [];
+
+  const ctx = {
+    exports: {},
+    require: (id) => {
+      if (id === './auth') return { auth: { getUser: () => (currentUid ? { id: currentUid } : null), onChange: () => () => {} } };
+      if (id === './apiClient') return { apiClient: {} };
+      if (id === './i18n.mts') return { t: (k) => k };
+      throw new Error(`unexpected import: ${id}`);
+    },
+    window: {
+      ULEVELP_CONFIG: { googleClientId: 'client-123' },
+      google: {
+        accounts: {
+          oauth2: {
+            initTokenClient: (cfg) => ({ requestAccessToken: () => callbacks.push(cfg.callback) }),
+          },
+        },
+      },
+    },
+    Promise,
+    Date,
+    Error,
+    parseInt,
+    String,
+  };
+  const transpiled = ts.transpileModule(readText('frontend/src/lib/drive.ts'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(transpiled, ctx);
+  const drive = ctx.exports.drive;
+
+  const pA = drive.requestToken();
+  const aRejected = assert.rejects(() => pA, /drive\.authFailed/);
+  currentUid = 'user-B';
+  const pB = drive.requestToken();
+  await aRejected;
+  assert.equal(callbacks.length, 2);
+
+  let bResult = null;
+  pB.then((tok) => { bResult = tok; }, () => { bResult = 'rejected'; });
+  // A 팝업의 늦은 결과
+  callbacks[0]({ access_token: 'tok-A', expires_in: '3600' });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(bResult, null, 'A의 늦은 콜백이 B 요청을 끝내면 안 된다');
+
+  callbacks[1]({ access_token: 'tok-B', expires_in: '3600' });
+  assert.equal(await pB, 'tok-B');
+  assert.equal(await drive.requestToken(), 'tok-B', 'B 캐시에 A 토큰이 남으면 안 된다');
+});

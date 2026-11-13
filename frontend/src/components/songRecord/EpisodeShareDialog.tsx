@@ -89,6 +89,8 @@ export function EpisodeShareDialog({
   const previewSeq = useRef(0);
   const urlCache = useRef(new Map<string, string>());
   const objectUrls = useRef<string[]>([]);
+  // 업로드는 성공했지만 게시가 거절된 Drive 사본: 같은 녹음 재시도는 다시 올리지 않고 이 uploadId로 확정한다.
+  const pendingUpload = useRef<{ takeId: string; uploadId: string; expiresAt: number } | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -365,20 +367,29 @@ export function EpisodeShareDialog({
     try {
       // D10: Drive 녹음은 브라우저가 읽어 서버 사본 업로드 → uploadId로 확정한다.
       if (attachment?.mode === 'replace' && selectedTake && selectedTake.storage === 'drive') {
-        setUploading(true);
-        let raw: Blob;
-        try {
-          raw = await drive.fetchMediaBlob(selectedTake.storageKey);
-        } catch (err: any) {
-          if (live(o)) setErrorMsg((err && err.message) || t('drive.authFailed'));
-          return;
+        const kept = pendingUpload.current;
+        // 만료 1분 전까지만 재사용한다(만료 시각을 못 읽으면 서버 판정 ATTACHMENT_UPLOAD_INVALID에 맡긴다).
+        const reusable = kept && kept.takeId === selectedTake.id && !(kept.expiresAt - 60000 <= Date.now());
+        if (kept && reusable) {
+          attachment = { ...attachment, uploadId: kept.uploadId };
+        } else {
+          pendingUpload.current = null;
+          setUploading(true);
+          let raw: Blob;
+          try {
+            raw = await drive.fetchMediaBlob(selectedTake.storageKey);
+          } catch (err: any) {
+            if (live(o)) setErrorMsg((err && err.message) || t('drive.authFailed'));
+            return;
+          }
+          if (!live(o)) return;
+          const file = raw.type === selectedTake.mime ? raw : new Blob([raw], { type: selectedTake.mime });
+          const up = await apiClient.sessions.uploadShareAttachment(session.sessionId, selectedTake.id, file, o.signal);
+          if (!live(o)) return;
+          pendingUpload.current = { takeId: selectedTake.id, uploadId: up.uploadId, expiresAt: Date.parse(up.expiresAt) };
+          attachment = { ...attachment, uploadId: up.uploadId };
+          setUploading(false);
         }
-        if (!live(o)) return;
-        const file = raw.type === selectedTake.mime ? raw : new Blob([raw], { type: selectedTake.mime });
-        const up = await apiClient.sessions.uploadShareAttachment(session.sessionId, selectedTake.id, file, o.signal);
-        if (!live(o)) return;
-        attachment = { ...attachment, uploadId: up.uploadId };
-        setUploading(false);
       }
 
       const res = await apiClient.sessions.share(
@@ -388,6 +399,7 @@ export function EpisodeShareDialog({
       );
       if (!live(o)) return;
       if (res?.post) {
+        pendingUpload.current = null;
         onSuccess(res.post);
         busy.current = false;
         close();
@@ -396,6 +408,7 @@ export function EpisodeShareDialog({
       }
     } catch (err: any) {
       if (!live(o) || err?.name === 'AbortError') return;
+      if (err?.code === 'ATTACHMENT_UPLOAD_INVALID') pendingUpload.current = null;
       applyShareError(err);
     } finally {
       if (live(o)) {

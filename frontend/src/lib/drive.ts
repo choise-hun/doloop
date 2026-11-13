@@ -36,6 +36,9 @@ function createDriveModule() {
     const handlers = pendingHandlers;
     pendingHandlers = null;
     pendingToken = null;
+    // 이전 계정의 팝업 콜백이 다음 계정 요청을 끝내지 못하게 토큰 클라이언트를 새로 만든다.
+    tokenClient = null;
+    tokenClientId = '';
     handlers?.reject(new Error(t('drive.authFailed')));
   }
 
@@ -91,10 +94,11 @@ function createDriveModule() {
     if (pendingToken) return pendingToken;
 
     if (!tokenClient || tokenClientId !== clientId) {
-      tokenClient = win.google.accounts.oauth2.initTokenClient({
+      const created = win.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: 'https://www.googleapis.com/auth/drive.file',
         callback: (resp: any) => {
+          if (tokenClient !== created) return;
           const handlers = pendingHandlers;
           pendingHandlers = null;
           if (!handlers) return;
@@ -112,11 +116,13 @@ function createDriveModule() {
           handlers.resolve(inMemoryToken as string);
         },
         error_callback: (err: any) => {
+          if (tokenClient !== created) return;
           const handlers = pendingHandlers;
           pendingHandlers = null;
           handlers?.reject(new Error((err && (err.message || err.type)) || t('drive.authErrorOccurred')));
         },
       });
+      tokenClient = created;
       tokenClientId = clientId;
     }
 
