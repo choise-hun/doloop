@@ -101,40 +101,42 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
     private data class CopyPlan(val id: UUID, val key: String, val take: ResultRow, val reclaimIds: List<Long>)
     internal suspend fun <T : Any> replace(userId: UUID, sessionId: UUID, input: ShareAttachmentInput,
         validate: Transaction.() -> Unit, publish: Transaction.() -> T): T {
-        val (kept, plan) = DatabaseFactory.dbQuery(requireDb()) {
-            validate()
-            requireRecordingConsent(userId)
-            val takeId = requireNotNull(input.takeId)
-            val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
-                .singleOrNull() ?: throw NotFoundException()
-            if (input.uploadId != null && take[TakesTable.storage] != "drive") throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
-            if (ready(sessionId)?.get(A.sourceTakeId) == takeId) return@dbQuery publish() to null
-            if (take[TakesTable.storage] == "drive") conflict("ATTACHMENT_UPLOAD_REQUIRED")
-            if (input.uploadId != null) throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
-            if (take[TakesTable.durationSec] > 300) limit("duration", 300)
-            if (take[TakesTable.sizeBytes] > MAX_BYTES) limit("size", MAX_BYTES)
-            requireStorage()
-            val pending = A.selectAll().where { (A.userId eq userId) and (A.status inList listOf("copying", "uploaded")) }
-                .forUpdate(ForUpdateOption.ForUpdate).toList()
-            // 실패로 회수까지 롤백되지 않게, 유효한 진행 행은 회수 전에 검사한다.
-            if (pending.any { !it[A.createdAt].isBefore(now().minusMinutes(30)) }) conflict("ATTACHMENT_COPY_IN_PROGRESS")
-            val expired = pending.map { it[A.id] }
-            val reclaimIds = removeShareAttachments { A.id inList expired }
-            val id = UUID.randomUUID()
-            val ext = TakeService.MIME_EXT[take[TakesTable.mime]] ?: throw InvalidInputException("mime 형식이 올바르지 않습니다.")
-            val key = "shared/$id.$ext"
-            A.insert {
-                it[A.id] = id; it[A.sessionId] = sessionId; it[A.userId] = userId; it[kind] = "audio_copy"
-                it[sourceTakeId] = takeId; it[storageKey] = key; it[mime] = take[TakesTable.mime]
-                it[sizeBytes] = take[TakesTable.sizeBytes]; it[durationSec] = take[TakesTable.durationSec]
-                it[status] = "copying"; it[originalConfirmedAt] = now()
-            }
-            StorageTrashTable.insert { it[storageKey] = key; it[nextAttemptAt] = GUARD_HOLD }
-            null to CopyPlan(id, key, take, reclaimIds)
-        }
-        if (kept != null) return kept
-        val p = requireNotNull(plan)
+        val attId = UUID.randomUUID()
+        var committedPlan: CopyPlan? = null
         try {
+            val (kept, plan) = DatabaseFactory.dbQuery(requireDb()) {
+                validate()
+                requireRecordingConsent(userId)
+                val takeId = requireNotNull(input.takeId)
+                val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
+                    .singleOrNull() ?: throw NotFoundException()
+                if (input.uploadId != null && take[TakesTable.storage] != "drive") throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
+                if (ready(sessionId)?.get(A.sourceTakeId) == takeId) return@dbQuery publish() to null
+                if (take[TakesTable.storage] == "drive") conflict("ATTACHMENT_UPLOAD_REQUIRED")
+                if (input.uploadId != null) throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
+                if (take[TakesTable.durationSec] > 300) limit("duration", 300)
+                if (take[TakesTable.sizeBytes] > MAX_BYTES) limit("size", MAX_BYTES)
+                requireStorage()
+                val pending = A.selectAll().where { (A.userId eq userId) and (A.status inList listOf("copying", "uploaded")) }
+                    .forUpdate(ForUpdateOption.ForUpdate).toList()
+                // 실패로 회수까지 롤백되지 않게, 유효한 진행 행은 회수 전에 검사한다.
+                if (pending.any { !it[A.createdAt].isBefore(now().minusMinutes(30)) }) conflict("ATTACHMENT_COPY_IN_PROGRESS")
+                val expired = pending.map { it[A.id] }
+                val reclaimIds = removeShareAttachments { A.id inList expired }
+                val ext = TakeService.MIME_EXT[take[TakesTable.mime]] ?: throw InvalidInputException("mime 형식이 올바르지 않습니다.")
+                val key = "shared/$attId.$ext"
+                A.insert {
+                    it[A.id] = attId; it[A.sessionId] = sessionId; it[A.userId] = userId; it[kind] = "audio_copy"
+                    it[sourceTakeId] = takeId; it[storageKey] = key; it[mime] = take[TakesTable.mime]
+                    it[sizeBytes] = take[TakesTable.sizeBytes]; it[durationSec] = take[TakesTable.durationSec]
+                    it[status] = "copying"; it[originalConfirmedAt] = now()
+                }
+                StorageTrashTable.insert { it[storageKey] = key; it[nextAttemptAt] = GUARD_HOLD }
+                null to CopyPlan(attId, key, take, reclaimIds)
+            }
+            if (kept != null) return kept
+            val p = requireNotNull(plan)
+            committedPlan = p
             trash.purge(p.reclaimIds)
             val bytes = storageIo { requireStorage().download(p.take[TakesTable.storageKey]) }
             if (bytes.size !in 1..MAX_BYTES) limit("size", MAX_BYTES)
@@ -157,13 +159,14 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
             withContext(NonCancellable) {
                 try {
                     val ids = DatabaseFactory.dbQuery(requireDb()) {
-                        val att = A.selectAll().where { A.id eq p.id }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
-                        // 커밋 직후 취소되었으면 공개된 사본은 보상 삭제하지 않는다.
-                        if (att?.get(A.status) == "ready") emptyList()
+                        val att = A.selectAll().where { A.id eq attId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
+                        val key = committedPlan?.key ?: att?.get(A.storageKey)
+                        // 이미 공개(ready)되었거나 tx1이 커밋되지 않았으면 보상 삭제하지 않는다.
+                        if (att?.get(A.status) == "ready" || key == null) emptyList()
                         else {
-                            A.deleteWhere { A.id eq p.id }
+                            A.deleteWhere { A.id eq attId }
                             // 회수 purge가 먼저 끝나도 늦은 upload를 다시 대기열에 넣는다.
-                            releaseGuard(p.key)
+                            releaseGuard(key)
                         }
                     }
                     trash.purge(ids)
