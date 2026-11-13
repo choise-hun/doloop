@@ -1917,3 +1917,181 @@ test('CMR4-E4c 계정 A→B 전환 뒤 A의 좋아요 응답이 B의 상태를 �
   await expect(btn).toHaveAttribute('aria-checked', 'true');
   await expect(btn).toBeEnabled();
 });
+
+// ── S3b-4: 피드 카드 녹음 재생(단일 플레이어) ──
+const EP_ATT = EPISODE_POST_1.attachments[0];
+const EP_POST_2 = {
+  ...EPISODE_POST_1,
+  postId: '00000000-0000-4000-8000-000000000904',
+  sessionId: '00000000-0000-4000-8000-000000000804',
+  title: '두 번째 녹음 카드',
+  attachments: [{ attachmentId: '00000000-0000-4000-8000-00000000a904', kind: 'audio_copy', mime: 'audio/webm', durationSec: 75 }],
+};
+
+/** 실제 디코딩 없이 재생 호출을 기록한다. 요소 수·src를 페이지에서 읽는다. */
+async function stubAudio(page) {
+  await page.addInitScript(() => {
+    window.__audioLog = [];
+    window.__audioEls = new Set();
+    const P = HTMLMediaElement.prototype;
+    P.play = function () {
+      window.__audioEls.add(this);
+      window.__audioLog.push('play:' + this.getAttribute('src'));
+      return Promise.resolve();
+    };
+    P.pause = function () { window.__audioLog.push('pause'); };
+    P.load = function () { window.__audioLog.push('load'); };
+  });
+}
+const audioState = (page) => page.evaluate(() => {
+  const els = [...window.__audioEls];
+  return { count: els.length, src: els[0] ? els[0].getAttribute('src') : null, att: els[0] ? els[0].dataset.attachmentId || null : null };
+});
+async function openFeed(page, routeOpts = {}, posts = [EPISODE_POST_1, EP_POST_2]) {
+  await stubAudio(page);
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({ onEpisodeLogs: (route, json) => json(route, { posts, next: null }), ...routeOpts }),
+  });
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await page.locator(`[data-post-id="${posts[0].postId}"]`).waitFor();
+}
+
+test('S3b4-P1t 재생: ▶ 클릭 → 주소 1회 요청, loading→playing, aria-pressed=true, 다시 누르면 정지', async ({ page }) => {
+  let calls = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await openFeed(page, {
+    onAttachmentUrl: async (route, json, postId, attId) => {
+      calls += 1;
+      expect(postId).toBe(EPISODE_POST_1.postId);
+      expect(attId).toBe(EP_ATT.attachmentId);
+      await gate;
+      return json(route, { url: `/mock-audio/${attId}-${calls}.weba`, expiresIn: 300 });
+    },
+  });
+  const btn = likeCard(page).locator(`[data-episode-play="${EP_ATT.attachmentId}"]`);
+  await expect(btn).toHaveAttribute('aria-label', '녹음 재생 (0:42)');
+  await btn.click();
+  await expect(btn).toHaveAttribute('data-play-state', 'loading');
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  release();
+  await expect(btn).toHaveAttribute('data-play-state', 'playing');
+  expect(calls).toBe(1);
+  expect(await audioState(page)).toEqual({ count: 1, src: `/mock-audio/${EP_ATT.attachmentId}-1.weba`, att: EP_ATT.attachmentId });
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  expect((await audioState(page)).src).toBeNull();
+  // 다시 재생하면 주소를 새로 받는다(캐시 금지)
+  await btn.click();
+  await expect(btn).toHaveAttribute('data-play-state', 'playing');
+  expect(calls).toBe(2);
+});
+
+test('S3b4-P2t 단일 재생: A 재생 중 B ▶ → A 정리, B만 재생, audio 요소 1개', async ({ page }) => {
+  await openFeed(page);
+  const a = likeCard(page).locator('[data-episode-play]');
+  const b = page.locator(`[data-post-id="${EP_POST_2.postId}"] [data-episode-play]`);
+  await a.click();
+  await expect(a).toHaveAttribute('data-play-state', 'playing');
+  await b.click();
+  await expect(b).toHaveAttribute('data-play-state', 'playing');
+  await expect(a).toHaveAttribute('aria-pressed', 'false');
+  const st = await audioState(page);
+  expect(st.count).toBe(1);
+  expect(st.att).toBe(EP_POST_2.attachments[0].attachmentId);
+});
+
+test('S3b4-P5t 계정 전환: 재생 중 로그아웃 → 정지·src 없음', async ({ page }) => {
+  await openFeed(page);
+  const a = likeCard(page).locator('[data-episode-play]');
+  await a.click();
+  await expect(a).toHaveAttribute('data-play-state', 'playing');
+  await page.evaluate(() => window.__supabaseAuthListener('SIGNED_OUT', null));
+  await expect.poll(async () => (await audioState(page)).src).toBeNull();
+  expect(await page.evaluate(() => window.__audioLog.slice(-2))).toEqual(['pause', 'load']);
+});
+
+test('S3b4-P6t 404: 재생 주소 404 → 사라진 글 문구와 카드 제거(첫 페이지 재조회)', async ({ page }) => {
+  let feedCalls = 0;
+  await openFeed(page, {
+    onEpisodeLogs: (route, json) => {
+      feedCalls += 1;
+      return json(route, { posts: feedCalls === 1 ? [EPISODE_POST_1, EP_POST_2] : [EP_POST_2], next: null });
+    },
+    onAttachmentUrl: (route, json) => json(route, { code: 'NOT_FOUND', message: 'not found' }, 404),
+  });
+  await likeCard(page).locator('[data-episode-play]').click();
+  await expect(likeCard(page)).toHaveCount(0);
+  await expect(page.locator(`[data-post-id="${EP_POST_2.postId}"]`)).toBeVisible();
+  expect(feedCalls).toBe(2);
+  expect(await page.evaluate(() => window.__audioLog.filter((x) => x.startsWith('play:')))).toEqual([]);
+});
+
+test('S3b4-P7t 오류 재시도: 재생 오류 이벤트 → ⟲ 상태·카드 안 오류 문구, 다시 누르면 새 주소 요청', async ({ page }) => {
+  let calls = 0;
+  await openFeed(page, {
+    onAttachmentUrl: (route, json, postId, attId) => { calls += 1; return json(route, { url: `/mock-audio/${attId}-${calls}.weba`, expiresIn: 300 }); },
+  });
+  const a = likeCard(page).locator('[data-episode-play]');
+  await a.click();
+  await expect(a).toHaveAttribute('data-play-state', 'playing');
+  await page.evaluate(() => [...window.__audioEls][0].dispatchEvent(new Event('error')));
+  await expect(a).toHaveAttribute('data-play-state', 'error');
+  await expect(likeCard(page).locator('[data-episode-play-error]')).toHaveText('녹음을 재생하지 못했어요. 다시 눌러 주세요');
+  await a.click();
+  await expect(a).toHaveAttribute('data-play-state', 'playing');
+  expect(calls).toBe(2);
+  expect((await audioState(page)).src).toBe(`/mock-audio/${EP_ATT.attachmentId}-2.weba`);
+  await expect(likeCard(page).locator('[data-episode-play-error]')).toHaveCount(0);
+});
+
+test('S3b4-P8t·P13t 첨부 없음·개인 필드: 버튼 0·미니 썸네일만, 큰 썸네일 열 없음, sourceTakeId·크기 미표시', async ({ page }) => {
+  const noAtt = { ...EP_POST_2, attachments: [] };
+  await openFeed(page, {}, [noAtt, { ...EPISODE_POST_1, sourceTakeId: 'take-secret-1', sizeBytes: 123456 }]);
+  const card = page.locator(`[data-post-id="${noAtt.postId}"]`);
+  await expect(card.locator('[data-episode-play]')).toHaveCount(0);
+  await expect(card.locator('img, :text("NO VIDEO")').first()).toBeVisible();
+  await expect(page.locator('[class*="thumbWrap"]')).toHaveCount(0);
+  const html = await page.locator('#episodeFeed').innerHTML();
+  expect(html).not.toContain('take-secret-1');
+  expect(html).not.toContain('123456');
+});
+
+// ── S3b-4 D7: 곡 삭제 확인에 공유 영향 문장 ──
+for (const [label, impact, expectExtra] of [
+  ['영향 있음 {2,1}', { status: 200, body: { cards: 2, attachments: 1 } }, '공유 카드 2개·공유 녹음 1개도 커뮤니티에서 삭제됩니다.'],
+  ['영향 0', { status: 200, body: { cards: 0, attachments: 0 } }, null],
+  ['조회 실패 500', { status: 500, body: { code: 'INTERNAL', message: 'x' } }, null],
+]) {
+  test(`S3b4-P10t 곡 삭제 영향: ${label}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const impactQueries = [];
+    let deletes = 0;
+    await mockApp(page, {
+      ...COMMUNITY_LIKE_STATE,
+      routes: [
+        ...communityRoutes({
+          onShareImpact: (route, json, q) => { impactQueries.push(q.toString()); return json(route, impact.body, impact.status); },
+        }),
+        [(url) => /^\/api\/v1\/songs\/[^/]+$/.test(url.pathname), (route) => {
+          if (route.request().method() === 'DELETE') { deletes += 1; return route.fulfill({ json: { ok: true } }); }
+          return route.fallback();
+        }],
+      ],
+    });
+    const messages = [];
+    page.on('dialog', (d) => { messages.push(d.message()); d.accept(); });
+    await page.goto('/log.html#songs', { waitUntil: 'load' });
+    test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+    const song = STATES.userData.songs[0];
+    await page.getByRole('button', { name: '곡 삭제' }).first().click();
+    await expect.poll(() => deletes).toBe(1);
+    expect(impactQueries).toEqual([`songId=${song.id}`]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].startsWith('이 곡과 모든 연습 기록·녹음 파일을 함께 삭제할까요?')).toBe(true);
+    if (expectExtra) expect(messages[0]).toContain(expectExtra);
+    else expect(messages[0]).toBe('이 곡과 모든 연습 기록·녹음 파일을 함께 삭제할까요?');
+  });
+}

@@ -1058,6 +1058,70 @@ async function agreeShareConsent(noticeVersion: number, signal?: AbortSignal): P
   }));
 }
 
+/** S3b-4 D3: 카드 첨부 재생 주소(5분 서명). 매번 새로 받고 캐시하지 않는다. */
+async function communityAttachmentUrl(
+  postId: string,
+  attachmentId: string,
+  signal?: AbortSignal
+): Promise<{ url: string; expiresIn: number }> {
+  requireLogin();
+  const path = '/api/v1/community/episode-logs/' + encodeURIComponent(postId) +
+    '/attachments/' + encodeURIComponent(attachmentId) + '/url';
+  const r = await getAuthRef().apiFetch(path, { signal });
+  if (!r || typeof r.url !== 'string' || !r.url) throw new Error(t('episode.recordingError'));
+  return { url: r.url, expiresIn: typeof r.expiresIn === 'number' ? r.expiresIn : 0 };
+}
+
+export interface ShareImpactDto { cards: number; attachments: number }
+
+/** S3b-2 D11: 삭제 전 공유 영향 개수. songId·takeId 중 하나만. */
+async function communityShareImpact(
+  query: { songId: string } | { takeId: string },
+  signal?: AbortSignal
+): Promise<ShareImpactDto> {
+  requireLogin();
+  const qs = 'songId' in query
+    ? 'songId=' + encodeURIComponent(query.songId)
+    : 'takeId=' + encodeURIComponent(query.takeId);
+  const r = await getAuthRef().apiFetch('/api/v1/community/me/share-impact?' + qs, { signal });
+  if (!r || typeof r.cards !== 'number' || typeof r.attachments !== 'number') throw new Error(t('episode.err.generic'));
+  return { cards: r.cards, attachments: r.attachments };
+}
+
+/** S3b-4 D7: 영향 조회를 최대 timeoutMs 기다린다. 실패·시간 초과면 null(삭제 확인은 기본 문구로 진행). */
+async function shareImpactOrNull(
+  query: { songId: string } | { takeId: string },
+  timeoutMs = 3000
+): Promise<ShareImpactDto | null> {
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      communityShareImpact(query, ctrl.signal),
+      new Promise<null>((resolve) => { timer = setTimeout(() => { ctrl.abort(); resolve(null); }, timeoutMs); }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/** S3b-1 §4.2: 녹음 첨부 동의 철회. removeExisting=true면 기존 첨부도 모두 삭제. */
+async function withdrawRecordingConsent(
+  removeExisting: boolean,
+  signal?: AbortSignal
+): Promise<{ consent: ShareConsentDto; removedAttachments: number }> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/community/me/share-consent/withdraw-recording', {
+    method: 'POST',
+    body: JSON.stringify({ removeExisting: removeExisting === true }),
+    signal,
+  });
+  if (!r || typeof r.removedAttachments !== 'number') throw new Error(t('episode.err.generic'));
+  return { consent: readShareConsent(r.consent), removedAttachments: r.removedAttachments };
+}
+
 async function withdrawShareEpisode(sessionId: string, signal?: AbortSignal): Promise<WithdrawEpisodeResponse> {
   requireLogin();
   const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share';
@@ -1879,6 +1943,10 @@ export const apiClient = {
     setEpisodeLike: communitySetEpisodeLike,
     shareConsent: getShareConsent,
     agreeShareConsent,
+    attachmentUrl: communityAttachmentUrl,
+    shareImpact: communityShareImpact,
+    shareImpactOrNull,
+    withdrawRecordingConsent,
   },
   sessions: {
     list: listSessions,
