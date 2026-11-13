@@ -336,6 +336,7 @@ class ProfileService(private val db: Database?) {
 
         val database = requireDb()
         DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
             val supabaseStorageKeys = TakesTable
                 .select(TakesTable.storageKey)
                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
@@ -347,6 +348,9 @@ class ProfileService(private val db: Database?) {
                 }
             }
 
+            with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.userId eq userId }
+            }
             IntegrationsTable.deleteWhere { IntegrationsTable.userId eq userId }
             UsersTable.deleteWhere { UsersTable.id eq userId }
         }

@@ -285,6 +285,9 @@ fun Transaction.pauseEpisodeCards(userId: UUID, now: OffsetDateTime = OffsetDate
             if (row[c.status] != "moderation_hidden") it[status] = "tier_paused"
         }
     }
+    with(ShareAttachmentService(db, null, StorageTrashService(db, null))) {
+        removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.userId eq userId }
+    }
 }
 
 /** cron 지연 중 무료 구간을 지난 override를 새 유료 값으로 덮기 전에 호출한다. */

@@ -1,7 +1,7 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **PR #14 시니어 잔여 취소 결함 수정 + 주니어 4단계 전체 회귀(Gradle 351건·tsc 통과) 완료 → 논리 단위 커밋·push 및 최신 head CI/리뷰 확인.**
+> 상태: **S3b-1 PR #14 main 머지 확인. S3b-2 1차 구현·표적 26건·전체 Gradle 377건 통과 → 커밋·push·main PR 및 최신 CI/리뷰 확인 진행.**
 
 ## 1. 목표와 근거
 
@@ -25,8 +25,8 @@
 | 순서 | Step | 담당(판정) | 입력 → 결과 | 완료 기준 | 권장 effort | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
-| 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) 머지 대기.** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
-| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | S3b-1 머지 뒤 |
+| 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
+| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **1차 구현·표적 26건·전체 Gradle 377건 통과, PR/최신 CI 확인 진행** |
 | 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | S3b-2 머지 뒤 |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
 
@@ -63,6 +63,7 @@
 
 - 임시 명세 §2·R07의 “재시도 없음”은 반만 맞다. 배포 스크립트가 1분 cron `ulevelp-notion-push`를 등록하고([deploy-cloudrun.sh:133-159](../scripts/deploy-cloudrun.sh#L133-L159)), 그 배치가 `storage_trash`를 `attempts < 5`·50건씩 지운다([NotionPushWorker.kt:263-273](../src/main/kotlin/ulevelp/notion/NotionPushWorker.kt#L263-L273)). 운영에서 이 Job이 지금 도는지는 미확인. S3b-1은 이 배치가 복사 중인 파일을 지우지 않도록 `next_attempt_at` 조건을 추가하고, S3b-2가 전용 cron을 만든다.
   - 2026-11-13 재확인 시도(Windows): 로컬에 ULeveLP `GCP_PROJECT_ID` 값이 없고 gcloud 활성 프로젝트가 다른 프로젝트라 `gcloud scheduler jobs describe ulevelp-notion-push`를 실행하지 않았다 → **여전히 미확인.** S3b-2 착수 전 사용자가 운영 콘솔에서 확인하거나 프로젝트 ID를 알려 준다.
+  - 2026-11-13 S3b-2 재개: 사용자가 운영 프로젝트 ID `ulevelp`(번호 `175439281655`)를 제공했다. `gcloud scheduler jobs describe ulevelp-notion-push --project=ulevelp --location=asia-northeast3 --format='json(name,state,schedule,httpTarget.uri)'` 성공: `state=ENABLED`, `schedule=* * * * *`, URI=`https://ulevelp-d5ympfsmfq-du.a.run.app/internal/cron/notion-push`. 등록·활성 상태를 확인했으며 실제 실행 성공/최근 실행 이력은 이 조회로 검증하지 않았다. 설정 변경·배포는 하지 않았다.
 - 좋아요 계약(UIUX-R §5.6)의 “본인 게시물 좋아요 허용”은 폴더 좋아요(본인 폴더 400, [CommunityService.kt:720-722](../src/main/kotlin/ulevelp/service/CommunityService.kt#L720-L722))와 다르다. 결정대로 게시물만 허용한다.
 
 ## 7. 다음 행동
@@ -154,3 +155,13 @@ Git 처리: `step/S3b-2` 브랜치 커밋·push 및 main 대상 PR 생성·CI �
   - 전체 Gradle 회귀 `./gradlew.bat test '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.compiler.execution.strategy=in-process'` → **351건, 실패 0·오류 0·skip 0** (`BUILD SUCCESSFUL in 1m 55s`, `ShareAttachmentApiTest` 20건 + `ShareAttachmentCancellationTest` 4건 + `DatabaseMigrationAndIntegrityTest` 8건 포함).
   - `npx --prefix frontend tsc --noEmit` 통과, `git diff --check` 통과, `scripts/check-config-sync.sh` 변경 대상 6개 모두 `같음` 확인.
   - 논리 단위별 커밋(`fix(community)`, `docs(rules)`) 후 `step/S3b-1` push로 PR #14 갱신, 중앙 `config` 보관본 6개 별도 커밋·push 및 PR #14 최신 head CI·리뷰 확인 진행.
+
+## 12. S3b-2 선행 확인 — 2026-11-13 / Windows / Codex
+
+- 사용자 지시: 시니어가 2단계의 1차 구현·명세 테스트·전체 Gradle 회귀·결과 기록·커밋·push·main PR·최신 head CI 확인까지 수행한다. 머지·배포·명세 밖 계약 변경은 제외한다.
+- 시작 `step/S3b-1`, `HEAD=57c308d`, 작업 트리 깨끗함. GitHub 연결 도구 오류 후 `gh pr view 14 --repo choise-hun/doloop --json state,mergedAt,mergeCommit,baseRefName,url`로 `MERGED`, base `main`, merge commit `46574e0f0d2d04321aa828c91b600a5806b905a8`, `mergedAt=2026-11-13T08:35:11Z`를 확인했다.
+- `git switch main` → `git pull --ff-only` → 위 merge commit의 HEAD 조상 여부 확인 → `git switch -c step/S3b-2` 완료. 브랜치 기준은 `46574e0`, 기존 사용자 변경 없음.
+- 최초에는 §6 확인 답변을 기다렸다. 이후 사용자가 운영 프로젝트 ID를 제공해 조회 성공(§6), **선행 조건 충족 후 구현·표적 검증 진행 중**이다.
+- 재개: 사용자 확인 결과/프로젝트 ID를 받은 뒤 §6에 실제 확인 근거를 기록하고, 현재 브랜치·미커밋 변경을 보존하면서 S3b-2 명세 §3 파일 및 테스트를 구현한다. 명세 §5 전 행·전체 Gradle 회귀·스크립트 구문 검증 후 결과 파일 작성, 커밋·push·main PR 및 최신 head CI/리뷰 확인, 시니어 3단계 인계까지 계속한다.
+
+- 구현·1차 검증: [결과/S3b-2](결과/S3b-2.md). 명세 표 전 행을 26개 표적 테스트로 검증했고 전체 377건 통과(실패/오류/skip 0), Git Bash 구문 검사·diff 검사 통과. L1/M1 실제 격리 변이 2건 모두 실패 확인 후 원본 가드의 전체 Green을 확인했다. Git 게시 및 최신 CI 확인은 아래 후속 기록으로 확정한다.
