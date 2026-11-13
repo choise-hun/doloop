@@ -103,6 +103,7 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
         validate: Transaction.() -> Unit, publish: Transaction.() -> T): T {
         val attId = UUID.randomUUID()
         var committedPlan: CopyPlan? = null
+        var preparedKey: String? = null
         try {
             val (kept, plan) = DatabaseFactory.dbQuery(requireDb()) {
                 validate()
@@ -125,6 +126,8 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
                 val reclaimIds = removeShareAttachments { A.id inList expired }
                 val ext = TakeService.MIME_EXT[take[TakesTable.mime]] ?: throw InvalidInputException("mime 형식이 올바르지 않습니다.")
                 val key = "shared/$attId.$ext"
+                // tx1 커밋 뒤 결과 전달이 취소되고 첨부가 CASCADE 삭제되어도 키는 보존한다.
+                preparedKey = key
                 A.insert {
                     it[A.id] = attId; it[A.sessionId] = sessionId; it[A.userId] = userId; it[kind] = "audio_copy"
                     it[sourceTakeId] = takeId; it[storageKey] = key; it[mime] = take[TakesTable.mime]
@@ -160,7 +163,11 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
                 try {
                     val ids = DatabaseFactory.dbQuery(requireDb()) {
                         val att = A.selectAll().where { A.id eq attId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
-                        val key = committedPlan?.key ?: att?.get(A.storageKey)
+                        val key = committedPlan?.key ?: att?.get(A.storageKey) ?: preparedKey?.takeIf { candidate ->
+                            // 결과를 받지 못했을 때는 실제 guard가 있어야 커밋된 준비로 판단한다.
+                            // tx1 롤백이면 파일/정리 행을 새로 만들지 않는다.
+                            StorageTrashTable.select(StorageTrashTable.id).where { StorageTrashTable.storageKey eq candidate }.limit(1).any()
+                        }
                         // 이미 공개(ready)되었거나 tx1이 커밋되지 않았으면 보상 삭제하지 않는다.
                         if (att?.get(A.status) == "ready" || key == null) emptyList()
                         else {
