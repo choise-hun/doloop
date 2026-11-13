@@ -250,3 +250,18 @@ export function fromSongSession(
     takes: filteredTakes,
   };
 }
+
+/** S3b-4 D7: 삭제 확인 문구. 영향이 없거나 조회 실패(null)면 기본 문구만 쓴다. */
+export function deleteConfirmText(
+  kind: 'take' | 'song',
+  impact: { cards: number; attachments: number } | null
+): string {
+  if (kind === 'take') {
+    const base = t('record.confirmDeleteTake');
+    return impact && impact.attachments > 0 ? `${base}\n\n${t('record.deleteTakeShared')}` : base;
+  }
+  const base = t('log.confirmDeleteSong');
+  return impact && (impact.cards > 0 || impact.attachments > 0)
+    ? `${base}\n\n${t('log.deleteSongShared', { cards: impact.cards, attachments: impact.attachments })}`
+    : base;
+}

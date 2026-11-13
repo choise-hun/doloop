@@ -21,7 +21,7 @@ import {
 import { safeUrl } from '../lib/security';
 import { t, type I18nKey } from '../lib/i18n.mts';
 import { PracticeSessionCard } from '../components/songRecord/PracticeSessionCard';
-import { fromSessionWithSong } from '../lib/episode.mts';
+import { fromSessionWithSong, deleteConfirmText } from '../lib/episode.mts';
 // i18n-keep: 'community.tab' 'log.sessionMeta' 'log.sessionSegment' 호환 키 보존
 import styles from './LogPage.module.css';
 
@@ -153,8 +153,9 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved }: SongCardItem
           className={`ghost mini ${styles.ghostMini}`}
           disabled={busyDel}
           onClick={async () => {
-            if (!window.confirm(t('log.confirmDeleteSong'))) return;
             setBusyDel(true);
+            const impact = await apiClient.community.shareImpactOrNull({ songId: song.id });
+            if (!window.confirm(deleteConfirmText('song', impact))) { setBusyDel(false); return; }
             try {
               await apiClient.songs.remove(song.id);
               onRemoved(song.id);
@@ -653,7 +654,8 @@ function OwnedLogPage(): React.ReactElement {
                 id="btnDeleteSong"
                 onClick={async () => {
                   if (!detailSong) return;
-                  if (!window.confirm(t('log.confirmDeleteSong'))) return;
+                  const impact = await apiClient.community.shareImpactOrNull({ songId: detailSong.id });
+                  if (!window.confirm(deleteConfirmText('song', impact))) return;
                   try {
                     await apiClient.songs.remove(detailSong.id);
                     setDetailSongId(null);
