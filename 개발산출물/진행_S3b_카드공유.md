@@ -75,6 +75,12 @@
 ## 8. 겪은 문제
 
 - 없음(문서 작성만). 앱 테스트·빌드·실제 저장소/Drive는 실행하지 않았다.
+- **PR #12 Codex 리뷰(head `a7d6fd5`) 3건 — 모두 타당, 명세에 반영.** API 경로·응답 필드 변경 없음. DB 컬럼도 그대로이고, 값의 쓰임과 CHECK만 바뀌었다.
+  | 지적 | 판정 근거 | 반영 |
+  | --- | --- | --- |
+  | P1 사본 키 CHECK가 `webm`만 허용 | `TakeService.MIME_EXT`는 `audio/webm → weba`([TakeService.kt:652-658](../src/main/kotlin/ulevelp/service/TakeService.kt#L652-L658)), 녹음 화면은 WebM 후보 사용([PracticePage.tsx:20-25](../frontend/src/pages/PracticePage.tsx#L20-L25)) | S3b-1 §4.1 CHECK `(m4a\|weba\|ogg\|mp3\|wav\|aac)`, 테스트 A19 보강·A20 추가 |
+  | P2 보류 행 시각 해제가 확정과 경합 | `purge`는 키 조회와 외부 삭제가 다른 트랜잭션([StorageTrashService.kt:28-45](../src/main/kotlin/ulevelp/service/StorageTrashService.kt#L28-L45)) | S3b-1 D8 보류 행 = `GUARD_HOLD`(시각으로 안 풀림), D10 잠금, D18 회수 절차(첨부 행 `FOR UPDATE`로 확정과 직렬화), §5 보상이 회수 뒤 늦은 upload도 정리, 테스트 A17·A18 보강·A21 추가. S3b-2 D6·D8 ①을 D18에 맞추고 C2 보강·C6 추가 |
+  | P2 선택 버튼 안에 미리 듣기 버튼 중첩 | 명세 S3b-3 D7 문구가 칩 “안”에 button | D7 = `span[data-take-chip-group]` 안 형제 버튼 2개, 미리 듣기는 선택 불변. 테스트 U15 추가 |
 
 ## 9. 다음 세션 시작 지시
 
