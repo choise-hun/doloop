@@ -95,7 +95,7 @@ class ShareAttachmentApiTest : EpisodeTestSupport() {
         transaction(db) { StorageTrashTable.deleteAll() }
         val storage = FakeStorageClient()
         configureApiTestApp(config, storageClient = storage)
-        val a = client.user()
+        val a = client.user(consent = false)
         val session = session(a)
         val key = "${a.id}/a3.m4a"
         storage.objects[key] = byteArrayOf(1, 2, 3, 4)
@@ -110,7 +110,8 @@ class ShareAttachmentApiTest : EpisodeTestSupport() {
 
         val noConsent = client.post(a, session, replacement(take)).checked(HttpStatusCode.Conflict)
         assertEquals("SHARE_CONSENT_REQUIRED", noConsent["code"]!!.jsonPrimitive.content)
-        assertEquals("recording", noConsent["detail"]!!.jsonObject["scope"]!!.jsonPrimitive.content)
+        // S3b-3 D12: 동의가 전혀 없으면 카드 동의가 먼저 걸린다(동의 1회가 카드·녹음을 함께 허용)
+        assertEquals("card", noConsent["detail"]!!.jsonObject["scope"]!!.jsonPrimitive.content)
         assertEquals(1, noConsent["detail"]!!.jsonObject["requiredVersion"]!!.jsonPrimitive.int)
         assertEquals(0L, cardCount())
 
@@ -135,7 +136,9 @@ class ShareAttachmentApiTest : EpisodeTestSupport() {
         assertEquals(false, wConsent["recordingAllowed"]!!.jsonPrimitive.boolean)
         assertTrue(wConsent["recordingWithdrawnAt"]!!.jsonPrimitive.content.endsWith("Z"))
 
-        client.post(a, session, replacement(take)).error(HttpStatusCode.Conflict, "SHARE_CONSENT_REQUIRED")
+        val recordingOnly = client.post(a, session, replacement(take)).checked(HttpStatusCode.Conflict)
+        assertEquals("SHARE_CONSENT_REQUIRED", recordingOnly["code"]!!.jsonPrimitive.content)
+        assertEquals("recording", recordingOnly["detail"]!!.jsonObject["scope"]!!.jsonPrimitive.content)
 
         val reconsented = client.send(HttpMethod.Post, "/community/me/share-consent", a, """{"noticeVersion":1}""").checked(HttpStatusCode.OK)
         assertEquals(true, reconsented["recordingAllowed"]!!.jsonPrimitive.boolean)
@@ -639,5 +642,24 @@ class ShareAttachmentApiTest : EpisodeTestSupport() {
             assertEquals(0L, transaction(db) { StorageTrashTable.selectAll().count() })
             assertEquals(1L, transaction(db) { SharedCardAttachmentsTable.selectAll().count() })
         }
+    }
+
+    // S1 (S3b-3 D12): 카드 공유 동의 없는 사용자는 녹음 없이 공유해도 409 card, 동의 뒤 201
+    @Test fun shareWithoutCardConsentIsRejected() = testApplication {
+        transaction(db) { StorageTrashTable.deleteAll() }
+        configureApiTestApp(config, storageClient = FakeStorageClient())
+        val a = client.user(consent = false)
+        val session = session(a)
+        val denied = client.post(a, session).checked(HttpStatusCode.Conflict)
+        assertEquals("SHARE_CONSENT_REQUIRED", denied["code"]!!.jsonPrimitive.content)
+        assertEquals("card", denied["detail"]!!.jsonObject["scope"]!!.jsonPrimitive.content)
+        assertEquals(1, denied["detail"]!!.jsonObject["requiredVersion"]!!.jsonPrimitive.int)
+        assertEquals(0L, cardCount())
+        // 공개 이름 검사가 먼저다(D12 순서)
+        val unnamed = client.user(named = false, consent = false)
+        client.post(unnamed, session(unnamed, 2)).error(HttpStatusCode.Conflict, "PUBLIC_NAME_REQUIRED")
+        client.send(HttpMethod.Post, "/community/me/share-consent", a, """{"noticeVersion":1}""").checked(HttpStatusCode.OK)
+        client.post(a, session).checked(HttpStatusCode.Created)
+        assertEquals(1L, cardCount())
     }
 }
