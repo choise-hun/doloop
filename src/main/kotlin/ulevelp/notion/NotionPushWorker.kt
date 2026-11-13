@@ -265,7 +265,7 @@ class NotionPushWorker(
             val trashIds = DatabaseFactory.dbQuery(db) {
                 StorageTrashTable
                     .select(StorageTrashTable.id)
-                    .where { StorageTrashTable.attempts less 5 }
+                    .where { (StorageTrashTable.attempts less 5) and (StorageTrashTable.nextAttemptAt lessEq java.time.OffsetDateTime.now(clock)) }
                     .limit(50)
                     .map { it[StorageTrashTable.id] }
             }

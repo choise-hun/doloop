@@ -1,7 +1,7 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **상세 명세 승인(2026-11-13, §5 Q1~Q6 전부 추천안), 명세 PR #12 머지 완료.** CMR-4 주니어 2단계·시니어 3단계 완료. 다음은 주니어 4단계 최종 회귀·문서·PR #13/CI 정리(§7·§9). 시니어 테스트·문서 변경은 `step/CMR-4`의 미커밋 상태, 게시 head `cfab9a5` 유지.
+> 상태: **PR #13 실제 main 머지 확인(`ee68ad9`), S3b-1 시니어 핵심 구현·표적 2개 Red→Green 완료.** `step/S3b-1`에 커밋·push해 주니어 4단계로 인계한다. 전체 회귀·신규 PR·CI·결과 파일은 미완료(§9·§10).
 
 ## 1. 목표와 근거
 
@@ -24,8 +24,8 @@
 
 | 순서 | Step | 담당(판정) | 입력 → 결과 | 완료 기준 | 권장 effort | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) 머지 대기**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
-| 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → `결과/S3b-1.md` | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | 승인, CMR-4 머지 뒤 |
+| 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
+| 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → `결과/S3b-1.md` | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **시니어 핵심 구현·표적 2개 통과 → `step/S3b-1` 커밋·push 인계. 주니어 4단계 대기**(§10) |
 | 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | S3b-1 머지 뒤 |
 | 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | S3b-2 머지 뒤 |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
@@ -68,9 +68,9 @@
 ## 7. 다음 행동
 
 1. ~~§5 검토~~ 완료. ~~명세 PR #12 머지~~ 완료.
-2. ~~CMR-4 주니어 2단계·시니어 3단계·주니어 4단계~~ 완료(PR #13, [결과 §7·§8](결과/CMR-4.md)). `개발산출물/report.md` 삭제는 범위 밖 변경이므로 보존·커밋 제외. **사용자 PR #13 머지 대기.**
+2. ~~CMR-4 주니어 2단계·시니어 3단계·주니어 4단계~~ 완료(PR #13, [결과 §7·§8](결과/CMR-4.md)). `개발산출물/report.md` 삭제는 범위 밖 변경이므로 보존·커밋 제외. **PR #13은 2026-11-13 main 머지 확인(`ee68ad9`).**
 3. ~~계획 §1 10-2와 UIUX-R 서술 정리~~ PR #13에 포함(D9). UIUX-R §5.7 본문 세부는 S3b-4에서 마저 정리.
-4. CMR-4(PR #13) 머지 뒤 S3b-1 시니어 직접 구현(템플릿 §0).
+4. S3b-1 시니어 핵심 구현·표적 검증 완료(§10). 다음은 주니어 4단계: 게시 브랜치 수신 → A3~A21 보강·전체 회귀 → 결과 문서 → main PR·최신 CI/리뷰 확인(§9). S3b-2는 S3b-1 PR 머지 뒤에만 착수한다.
 
 ## 8. 겪은 문제
 
@@ -87,10 +87,45 @@
 ## 9. 다음 세션 시작 지시
 
 ```text
-# 시니어 — S3b-1 직접 구현 착수
+# Gemini(주니어) — S3b-1 최종 검증·문서·PR 마무리
 
-선행 조건: PR #13(step/CMR-4) 실제 머지 여부 확인 후 main으로 안전 전환 및 git pull --ff-only 동기화.
-목표: 개발산출물/명세/S3b-1_구현명세.md에 따라 S3b-1 서버 핵심(동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리)을 직접 구현하고 표적 테스트 확인 후 작업 브랜치(step/S3b-1)를 push한다.
-입력: 개발산출물/진행_S3b_카드공유.md, 개발산출물/명세/S3b-1_구현명세.md, docs/문서_운영.md §6.
-주의: 시니어 직접 구현 Step은 핵심 구현·표적 테스트 1~2개·커밋·브랜치 push까지 수행하고, 전체 회귀·PR 생성·CI 대기는 4단계 주니어에게 인계한다.
+개발산출물/프롬프트_템플릿_4단계.md §4 및 협업_시니어주니어.md를 따른다.
+목표: 시니어 핵심 구현을 승인 명세와 대조하고 전체 회귀·결과 문서·main PR·최신 CI/리뷰 처리를 마친다.
+입력: 개발산출물/명세/S3b-1_구현명세.md, 개발산출물/진행_S3b_카드공유.md §10, origin/step/S3b-1.
+선행 조건: git 상태·현재 브랜치·동시 변경을 확인·보존하고 git fetch origin 후 step/S3b-1을 안전하게 수신·git pull --ff-only 한다. 기존 열린 PR이 있으면 재사용한다. PR #13은 이미 main 머지 확인됐으며 새 작업 브랜치를 만들거나 시니어 핵심 구현을 반복하지 않는다.
+범위: 승인 명세 A3~A21 테스트 보강, A1·A2를 포함한 전체 서버 회귀, 필요한 프런트 타입/기존 계약 회귀, 시니어 diff 검토·범위 내 결함 수정, 결과/S3b-1.md 작성, 진행 상태 갱신.
+Git 처리: step/S3b-1에서 관련 파일만 커밋·push, main 대상 신규 PR 생성(없을 때), 최신 head CI 종료·리뷰 확인 및 타당한 지적 검증·처리. 머지·배포·Scheduler 등록은 하지 않는다.
+완료 기준: 전체 검증 명령·실제 결과·미실행 범위가 결과 파일과 일치하고, 최신 게시 head CI 통과 및 리뷰 판단 근거가 기록된다. 다음 Step은 S3b-1 PR 실제 머지 확인과 main 안전 동기화 후 시작한다.
 ```
+
+## 10. S3b-1 시니어 직접 구현 — 2026-11-13 / Windows / Codex
+
+### 승인·선행·보존
+
+- 사용자 이번 세션 지시로 승인된 명세의 서버 핵심 구현·표적 테스트 1~2개·`step/S3b-1` 커밋·push를 수행한다. 신규 PR·전체 회귀·CI 대기·결과 파일은 주니어 4단계 범위다.
+- GitHub PR #13 metadata: `merged=true`, base `main`, merge commit `ee68ad90091a2f7cb95a7114f773af69e5bcc2c5`, `merged_at=2026-11-13T05:56:17Z`.
+- 시작 `step/CMR-4`, `git status --short` 빈 출력. `git switch main` → `git pull --ff-only` → merge commit 조상 확인 → `git switch -c step/S3b-1` 완료. 사용자/동시 미커밋 변경 없음. 이전 §7의 report.md 삭제는 이번 작업 트리에 없었으며 이 파일을 변경하지 않았다.
+
+### 변경·자체 검토 근거
+
+- V12: 동의 이력·첨부 테이블 2개, ready/진행 중 부분 UNIQUE, 키·MIME·크기·길이·ready 시각 CHECK, 정리 보류 시각. 테이블 정의·`ALL_TABLES`·마이그레이션 기대 버전 12/29개를 맞췄다.
+- `ShareAttachmentService.kt:40` 동의 상태 계산·멱등 동의·철회 이력. 카드 동의는 마지막 agree, 녹음 동의는 마지막 행 agree로 판단한다. 프로필 잠금으로 동의 변경과 복사 시작/확정을 직렬화한다.
+- `EpisodeLogService.kt:146` 기존 공유 사전 검사(P10)를 추출, 단일 트랜잭션 공유와 복사 tx1/tx2에서 재사용. 기존 publishedAt 규칙 유지. 누락/null/keep은 유지, none은 첨부 제거 후 재스냅샷. 녹음 없는 공유의 동의 강제는 S3b-3까지 보류한다.
+- `ShareAttachmentService.kt:102` Supabase 복사: tx1(소유·동의·상한·진행 중 검사/30분 회수·copying+GUARD_HOLD) → 외부 download/실제 크기 확인/upload → tx2(재검사·원본 존재·copying 행 잠금·교체·ready·guard 삭제). 저장소 I/O는 DB 트랜잭션 밖이다. 같은 take는 복사 없이 유지한다. Drive는 S3b-2 업로드 경로 구현 전까지 `ATTACHMENT_UPLOAD_REQUIRED`다.
+- `ShareAttachmentService.kt:76` 공통 `removeShareAttachments`: 대상 행 `FOR UPDATE`, ready 키 즉시 대기열 적재 / 진행 행 guard 해제 후 ID 목록 삭제. 철회·첨부 제거·none·교체·동의 철회·오래된 진행 행 회수에서 공통 호출한다.
+- `ShareAttachmentService.kt:156` 보상은 NonCancellable 안에서 행 잠금 및 ready 확인 후 정리한다. ready면 건드리지 않으며, 회수 purge 후 늦게 끝난 upload도 대기열을 재생성해 삭제한다. 정리 오류는 로그/원래 예외의 suppressed에 남긴다. 기존 정리 배치에 `nextAttemptAt <= now(clock)` 조건만 추가했다.
+- `EpisodeLogService.kt:216` eligible 카드·그 세션의 ready 첨부만 조회한 뒤 DB 밖에서 300초 서명 URL을 만든다. 개인 재생 주소 계약은 변경하지 않았다. 공개 DTO는 첨부 필드 4개, 본인 DTO에만 sourceTakeId를 둔다.
+- `Main.kt:202` 저장소/정리/첨부 서비스 생성 순서 및 주입, `EpisodeRoutes.kt:14` 공유 입력과 동의·제거·재생 URL 경로를 기존 인증 경계 안에 연결했다. 기존 4인자 share 호출은 keep으로 위임해 보존했다.
+- 명세 파일 목록 밖 최소 조정: `EpisodeLogApiTest.kt:88` 공개 응답 정확 키 목록에 승인 필드 `attachments`를 추가했다(기존 비노출 단언 유지). 이 테스트 자체는 이번 표적 실행 대상이 아니며 주니어 전체 회귀에서 확인한다.
+
+### 실제 실행 결과와 한계
+
+- 명령: `./gradlew.bat test --tests ulevelp.community.ShareAttachmentApiTest '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.compiler.execution.strategy=in-process'`.
+- Red: 구현 전 main 기반에서 A1·A2 2개 모두 동의 API의 404 `NOT_FOUND`로 실패(`expected: 200 OK`, `actual: 404 Not Found`). 이후 A1에 A/B 권한 경계 단언을 보강했다.
+- Green: `tests=2, failures=0, errors=0, skipped=0`, `BUILD SUCCESSFUL in 56s`. 격리 Docker PostgreSQL 16.15에서 Flyway V12 적용 확인. 컴파일 중 detail 인자/import 오류를 수정한 뒤 최종 통과했다.
+- A1 `firstAttachmentCopiesBytesAndExposesOnlyPublicMetadata`: 201, 사본 실제 바이트 동일, 공개 첨부 정확 4개 키, 본인 sourceTakeId, guard 행 0, 카드 1, 무료 B의 expiresIn=300. B→A 세션 게시와 A→B 녹음 첨부는 각각 404이며 그 시점 첨부 행/사본 생성 없음.
+- A2 `uploadFailureCompensatesWithoutPublishingCard`: 업로드 실패 502 STORAGE_ERROR, 카드·첨부·정리 행 0, shared 키 삭제 호출 1, 원본 보존.
+- 로컬 증거: `build/test-results/test/TEST-ulevelp.community.ShareAttachmentApiTest.xml`, `build/reports/tests/test/index.html`, `%TEMP%/s3b1-green.log`(ignored/로컬 파일, Git으로 전달되지 않는다). 원격에서는 위 명령으로 재현한다.
+- `git diff --check` 통과. 신규·수정 텍스트는 UTF-8 BOM 없음/LF로 저장했다.
+- **미실행:** A3~A21 전용 테스트·경합/취소 실험·전체 서버 회귀·마이그레이션 무결성 테스트 클래스·프런트 회귀·실제 Supabase/Drive·운영 cron·신규 PR/CI. 표적 통과를 전체 계약 검증 완료로 승격하지 않는다. 결과/S3b-1.md는 생성하지 않았다.
+- 다음 행동은 §9. S3b-2 수명주기/Drive/cron/개수·일일 상한, S3b-3 화면 및 카드 동의 강제, S3b-4 청취 UI는 이번 구현 범위에 포함하지 않았다.

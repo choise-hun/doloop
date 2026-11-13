@@ -63,7 +63,9 @@ class DatabaseMigrationAndIntegrityTest {
             "song_presets",
             "shared_practice_cards",
             "shared_practice_card_reports",
-            "shared_practice_card_likes"
+            "shared_practice_card_likes",
+            "community_share_consents",
+            "shared_card_attachments"
         )
 
         @JvmStatic
@@ -100,10 +102,10 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V11__episode_likes migrations apply cleanly and create all 27 tables`() {
-        assertEquals("11", targetSchemaVersion, "Flyway target schema version should be 11")
-        assertTrue(migrationsExecutedCount >= 11, "V1__init.sql ~ V11__episode_likes.sql migrations must have executed")
-        assertEquals(27, ALL_TABLES.size, "Exposed ALL_TABLES should contain 27 tables")
+    fun `Flyway V1__init to V12__share_attachments migrations apply cleanly and create all 29 tables`() {
+        assertEquals("12", targetSchemaVersion, "Flyway target schema version should be 12")
+        assertTrue(migrationsExecutedCount >= 12, "V1__init.sql ~ V12__share_attachments.sql migrations must have executed")
+        assertEquals(29, ALL_TABLES.size, "Exposed ALL_TABLES should contain 29 tables")
 
         val actualTables = mutableListOf<String>()
         dataSource.connection.use { conn ->
@@ -126,7 +128,7 @@ class DatabaseMigrationAndIntegrityTest {
         }
 
         println("[Flyway] Created tables (${actualTables.size}): ${actualTables.joinToString(", ")}")
-        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 27 domain tables must exist in PostgreSQL")
+        assertEquals(EXPECTED_TABLES.sorted(), actualTables, "All 29 domain tables must exist in PostgreSQL")
 
         // Verify Exposed table definitions query cleanly against migrated schema
         transaction(db) {

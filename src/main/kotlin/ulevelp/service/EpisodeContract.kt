@@ -17,7 +17,7 @@ data class PublicPartStatDto(val name: String, val a: Double, val b: Double, val
 @Serializable
 data class PublicSessionSnapshot(val videoId: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>)
 @Serializable
-data class PublicEpisodeLogDto(val postId: String, val sessionId: String, val owner: PublicOwnerDto, val videoId: String, val youtubeTitle: String?, val youtubeArtist: String?, val title: String, val comment: String, val publishedAt: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>, val likeCount: Int, val likedByMe: Boolean)
+data class PublicEpisodeLogDto(val postId: String, val sessionId: String, val owner: PublicOwnerDto, val videoId: String, val youtubeTitle: String?, val youtubeArtist: String?, val title: String, val comment: String, val publishedAt: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>, val likeCount: Int, val likedByMe: Boolean, val attachments: List<PublicCardAttachmentDto>)
 @Serializable
 data class EpisodeLikeResponse(val liked: Boolean, val likeCount: Int)
 @Serializable
@@ -25,7 +25,7 @@ data class EpisodeLogListResponse(val posts: List<PublicEpisodeLogDto>, val next
 @Serializable
 data class EpisodeReportCountsDto(val open: Int, val resolved: Int, val dismissed: Int)
 @Serializable
-data class MyEpisodeLogDto(val postId: String, val sessionId: String, val title: String, val comment: String, val publishedAt: String, val status: String, val hiddenAt: String?, val hiddenReason: String?, val tierPausedAt: String?, val withdrawnAt: String?, val createdAt: String, val updatedAt: String, val canRepublish: Boolean, val reportCounts: EpisodeReportCountsDto, val card: PublicEpisodeLogDto?)
+data class MyEpisodeLogDto(val postId: String, val sessionId: String, val title: String, val comment: String, val publishedAt: String, val status: String, val hiddenAt: String?, val hiddenReason: String?, val tierPausedAt: String?, val withdrawnAt: String?, val createdAt: String, val updatedAt: String, val canRepublish: Boolean, val reportCounts: EpisodeReportCountsDto, val card: PublicEpisodeLogDto?, val attachment: MyCardAttachmentDto?)
 @Serializable
 data class MyEpisodeLogListResponse(val posts: List<MyEpisodeLogDto>, val next: String?)
 @Serializable
@@ -107,3 +107,36 @@ internal fun episodeBefore(at: Column<OffsetDateTime>, id: Column<UUID>, cursor:
     }
 internal fun episodeNext(row: ResultRow, kind: String, scope: String, at: Column<OffsetDateTime>, id: Column<UUID>): String =
     EpisodeCursor(1, kind, scope, episodeTs(row[at])!!, row[id].toString()).encode()
+
+@Serializable data class ShareConsentDto(val noticeVersion: Int, val requiredVersion: Int, val cardShareAllowed: Boolean,
+    val recordingAllowed: Boolean, val consentedVersion: Int?, val consentedAt: String?, val recordingWithdrawnAt: String?)
+@Serializable data class WithdrawRecordingConsentResponse(val consent: ShareConsentDto, val removedAttachments: Int)
+@Serializable data class PublicCardAttachmentDto(val attachmentId: String, val kind: String, val mime: String, val durationSec: Int)
+@Serializable data class MyCardAttachmentDto(val attachmentId: String, val sourceTakeId: String, val mime: String, val durationSec: Int, val readyAt: String)
+@Serializable data class RemoveAttachmentResponse(val ok: Boolean = true, val removed: Int)
+@Serializable data class AttachmentUrlResponse(val url: String, val expiresIn: Int)
+
+internal data class ShareAttachmentInput(val mode: String, val takeId: UUID? = null, val uploadId: UUID? = null) {
+    companion object {
+        fun parse(value: JsonElement?): ShareAttachmentInput {
+            if (value == null || value is JsonNull) return ShareAttachmentInput("keep")
+            val o = value as? JsonObject ?: throw InvalidInputException("attachment 형식이 올바르지 않습니다.")
+            val mode = (o["mode"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            when (mode) {
+                "keep", "none" -> { o.episodeKeys("mode"); return ShareAttachmentInput(mode) }
+                "replace" -> {
+                    o.episodeKeys("mode", "takeId", "originalConfirmed", "uploadId")
+                    if (o["originalConfirmed"] != JsonPrimitive(true)) throw InvalidInputException("originalConfirmed가 필요합니다.")
+                    fun uuid(key: String): UUID {
+                        val raw = (o[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                            ?: throw InvalidInputException("$key 형식이 올바르지 않습니다.")
+                        return try { UUID.fromString(raw).also { if (it.toString() != raw.lowercase()) throw IllegalArgumentException() } }
+                        catch (_: IllegalArgumentException) { throw InvalidInputException("$key 형식이 올바르지 않습니다.") }
+                    }
+                    return ShareAttachmentInput(mode, uuid("takeId"), if (o.containsKey("uploadId")) uuid("uploadId") else null)
+                }
+                else -> throw InvalidInputException("attachment.mode 형식이 올바르지 않습니다.")
+            }
+        }
+    }
+}

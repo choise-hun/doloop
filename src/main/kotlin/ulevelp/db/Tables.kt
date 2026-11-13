@@ -293,6 +293,7 @@ object SyncOutboxTable : Table("sync_outbox") {
  * 12. storage_trash (지울 스토리지 파일 대기열)
  */
 object StorageTrashTable : Table("storage_trash") {
+    val nextAttemptAt = timestampWithTimeZone("next_attempt_at").defaultExpression(CurrentTimestampWithTimeZone)
     val id = long("id").autoIncrement()
     val storageKey = text("storage_key")
     val attempts = integer("attempts").default(0)
@@ -405,6 +406,7 @@ object AdminAuditTable : Table("admin_audit") {
 
 val ALL_TABLES: List<Table> = listOf(
     SharedPracticeCardsTable, SharedPracticeCardReportsTable, SharedPracticeCardLikesTable,
+    CommunityShareConsentsTable, SharedCardAttachmentsTable,
     UsersTable,
     ProfilesTable,
     SongsTable,
@@ -543,5 +545,31 @@ object SharedPracticeCardReportsTable : Table("shared_practice_card_reports") {
     val status = text("status").default("open")
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val resolvedAt = timestampWithTimeZone("resolved_at").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object CommunityShareConsentsTable : Table("community_share_consents") {
+    val id = long("id").autoIncrement()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val action = text("action")
+    val noticeVersion = integer("notice_version")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SharedCardAttachmentsTable : Table("shared_card_attachments") {
+    val id = uuid("id")
+    val sessionId = uuid("session_id").references(SessionsTable.id, onDelete = ReferenceOption.CASCADE)
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val kind = text("kind")
+    val sourceTakeId = uuid("source_take_id").references(TakesTable.id, onDelete = ReferenceOption.CASCADE)
+    val storageKey = text("storage_key")
+    val mime = text("mime")
+    val sizeBytes = long("size_bytes")
+    val durationSec = integer("duration_sec")
+    val status = text("status")
+    val originalConfirmedAt = timestampWithTimeZone("original_confirmed_at")
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val readyAt = timestampWithTimeZone("ready_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
