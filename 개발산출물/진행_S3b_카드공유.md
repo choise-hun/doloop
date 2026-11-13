@@ -224,3 +224,4 @@ Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성�
   - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/share-dialog.spec.js`: **16건 통과**(12.9s), 15장(동의·작성·메뉴 × 4개 폭 + 다크) Q1~Q9 모두 `○`
   - `./gradlew test`: **381건 전부 통과**(실패 0·오류 0·skip 0, `BUILD SUCCESSFUL in 59s`)
   - `git grep -n "shareConsentCheckbox" frontend/src test/e2e`: **0건**
+- PR #16([#16](https://github.com/choise-hun/doloop/pull/16), head `2fc7549`) CI 6개 체크 전부 통과. Codex 리뷰 P1(`frontend/src/lib/drive.ts:100`), P2(`frontend/src/components/songRecord/EpisodeShareDialog.tsx:380`) 2건 확인 → 제품 코드 수정은 시니어 3-P로 인계.
