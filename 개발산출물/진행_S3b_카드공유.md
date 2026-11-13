@@ -24,7 +24,7 @@
 
 | 순서 | Step | 담당(판정) | 입력 → 결과 | 완료 기준 | 권장 effort | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | 주니어 2단계 완료(2026-11-13): PR [#13](https://github.com/choise-hun/doloop/pull/13) `step/CMR-4`, [결과](결과/CMR-4.md). **다음 = 시니어 3단계 독립 검증**(결정 요청 §5: L7 400↔404, 행동 줄 줄바꿈 문구) → 주니어 4단계 |
+| 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | 주니어 2단계 완료(2026-11-13): PR [#13](https://github.com/choise-hun/doloop/pull/13) `step/CMR-4`, [결과](결과/CMR-4.md). **다음 = 시니어 3단계 독립 검증**(확인 요청 §5: 행동 줄 줄바꿈 문구, 좋아요 라우트만 400 `INVALID_INPUT`) → 주니어 4단계 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → `결과/S3b-1.md` | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | 승인, CMR-4 머지 뒤 |
 | 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | S3b-1 머지 뒤 |
 | 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | S3b-2 머지 뒤 |
@@ -74,7 +74,7 @@
 
 ## 8. 겪은 문제
 
-- **CMR-4 구현 중(2026-11-13):** ① 명세 L7 400 vs 공용 `parsePathUuid` 404 불일치(404 유지, 시니어 결정 대기) ② Windows Kotlin 데몬 OOM — `-Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.daemon.jvmargs=-Xmx3g` 필요 ③ `npm test` 3건(CH-2c-1-1·CH-2c-3-2·LA-1)은 main에서도 실패(기존) ④ 목록 밖 수정 2건(communityMock.ts, EpisodeLogApiTest 키 목록). 자세히 [결과 §2·§5](결과/CMR-4.md).
+- **CMR-4 구현 중(2026-11-13):** ① 명세 L7 400 vs 공용 `parsePathUuid` 404 불일치 → Codex P1 반영으로 좋아요 라우트만 `parseLikePostId`로 400(공용 함수 불변) ② Windows Kotlin 데몬 OOM — `-Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.daemon.jvmargs=-Xmx3g` 필요 ③ `npm test` 3건(CH-2c-1-1·CH-2c-3-2·LA-1)은 main에서도 실패(기존) ④ 목록 밖 수정 2건(communityMock.ts, EpisodeLogApiTest 키 목록). 자세히 [결과 §2·§5](결과/CMR-4.md).
 - 없음(문서 작성만). 앱 테스트·빌드·실제 저장소/Drive는 실행하지 않았다.
 - **PR #12 Codex 리뷰(head `a7d6fd5`) 3건 — 모두 타당, 명세에 반영.** API 경로·응답 필드 변경 없음. DB 컬럼도 그대로이고, 값의 쓰임과 CHECK만 바뀌었다.
   | 지적 | 판정 근거 | 반영 |

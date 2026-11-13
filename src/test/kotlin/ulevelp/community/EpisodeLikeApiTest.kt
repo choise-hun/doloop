@@ -105,8 +105,8 @@ class EpisodeLikeApiTest : EpisodeTestSupport() {
         val p = client.publish(a, session(a))
         assertEquals(HttpStatusCode.Unauthorized, client.send(HttpMethod.Put, "/community/episode-logs/$p/like", null).status)
         assertEquals(HttpStatusCode.Unauthorized, client.send(HttpMethod.Delete, "/community/episode-logs/$p/like", null).status)
-        // 명세 L7은 400 INVALID_INPUT이나, 공용 parsePathUuid가 모든 경로에서 잘못된 UUID를 404로 처리한다(신고·폴더 좋아요 동일). 시니어 결정 대기(결과/CMR-4.md).
-        client.send(HttpMethod.Put, "/community/episode-logs/abc/like", b).error(HttpStatusCode.NotFound, "NOT_FOUND")
+        client.send(HttpMethod.Put, "/community/episode-logs/abc/like", b).error(HttpStatusCode.BadRequest, "INVALID_INPUT")
+        client.send(HttpMethod.Delete, "/community/episode-logs/abc/like", b).error(HttpStatusCode.BadRequest, "INVALID_INPUT")
         assertEquals(0L, likeRows())
     }
 

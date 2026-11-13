@@ -39,7 +39,7 @@
 | L3 본인 허용 | `ownerMayLikeOwnPost` | |
 | L4 비대상 404 | `ineligibleTargetsAre404` | 없는 id·철회·관리자 숨김·티어 정지, 행 0 |
 | L5 철회 정리 / L6 정지 보존 | `withdrawClearsLikesButTierPauseKeepsThem` | |
-| L7 비로그인·형식 | `unauthenticatedAndMalformedId` | **형식 오류는 404 단언(§5-1)** |
+| L7 비로그인·형식 | `unauthenticatedAndMalformedId` | 형식 오류 PUT·DELETE 400 `INVALID_INPUT`(§5-1, Codex 리뷰 반영) |
 | L8 동시성 | `concurrentLikesCountEachUserOnce` | B·C 각 5회 동시, 집계 2 |
 | L9 필드 | `everyResponsePathCarriesLikeFields` | 공유 응답(생성·재공유)·내 게시물·피드 |
 | L10 마이그레이션 | `DatabaseMigrationAndIntegrityTest` | 버전 11·27개 |
@@ -67,7 +67,7 @@
 
 ## 5. 시니어 결정·확인 요청
 
-1. **L7 형식 오류 응답:** 명세 §4.2·L7은 잘못된 UUID에 `400 INVALID_INPUT`. 그러나 공용 `parsePathUuid`(`JsonInput.kt:202`)는 모든 경로에서 `404 NOT_FOUND`이고 신고·폴더 좋아요도 같다. 공용 계약 변경은 범위 밖이라 **404 유지·테스트는 404 단언**(코드 주석에 사유 기록). 400으로 가려면 이 두 라우트만 별도 파서를 쓰거나 공용 함수를 바꿔야 한다 — 결정 필요.
+1. **L7 형식 오류 응답 — 해결(Codex P1 반영):** 명세 §4.2·L7은 잘못된 UUID에 `400 INVALID_INPUT`인데 공용 `parsePathUuid`(`JsonInput.kt:202`)는 모든 경로에서 404다. 처음에는 404로 두고 보고하려 했으나 Codex 리뷰(P1)가 승인 계약 위반으로 지적해, 공용 함수는 그대로 두고 **좋아요 두 라우트에서만** `parseLikePostId`(404 → `InvalidInputException`)로 400을 돌려 명세에 맞췄다. 신고·폴더 좋아요의 404는 변경 없음(시니어 확인: 다른 경로와 응답이 달라지는 점).
 2. **행동 줄 줄바꿈:** §4 △. 명세 §5의 "한 줄"이 2열 카드 폭에서는 성립하지 않는다. 명세 문구를 고칠지(권장), 카드 폭·버튼 크기를 바꿀지 결정.
 3. **목록 밖 수정 2건(필수 컴파일·기존 계약 반영):** `frontend/src/lib/communityMock.ts`(dev mock 타입에 두 필드 추가 — 없으면 `tsc` 실패), `src/test/kotlin/ulevelp/community/EpisodeLogApiTest.kt`(공개 DTO "정확 키 목록" 단언에 `likeCount`·`likedByMe` 두 키만 추가 — 단언을 느슨하게 한 것이 아니라 D7 계약 변경 반영).
 4. `EpisodeLogFeed`의 `posts` 갱신은 응답값으로만 교체한다. 같은 카드가 두 곳(피드·내 게시물 등)에 있을 때의 동기화는 하지 않았다(범위 밖).
@@ -78,4 +78,6 @@
 - PR [#13](https://github.com/choise-hun/doloop/pull/13) (head `step/CMR-4` → base `main`). CI·리뷰 확인 결과는 아래에 추가한다.
 
 ### CI·리뷰
-- (기록 대기)
+- head `758e1f6` CI: Detect·Test(Node 22)·Kotlin(JDK 21)·Docker·E2E XSS & CSP·CI ok 전부 pass(run 43359226684).
+- Codex 리뷰(commit `20ba323`) P1 1건: 좋아요 경로 잘못된 UUID 400 → **타당**(승인 명세 §4.2·L7). 수정: `parseLikePostId`, 테스트 400 단언(PUT·DELETE). 로컬 `./gradlew clean test --tests EpisodeLikeApiTest` 8건 통과. 수정 커밋 CI는 아래.
+- (수정 커밋 CI 결과 기록 대기)
