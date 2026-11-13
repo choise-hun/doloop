@@ -393,6 +393,10 @@ class SongService(
                 OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "delete")
             }
 
+            // CASCADE also deletes cards; lock them before attachments, as the retention cron does.
+            ulevelp.db.SharedPracticeCardsTable.selectAll().where { ulevelp.db.SharedPracticeCardsTable.sessionId inList sessionIds }
+                .orderBy(ulevelp.db.SharedPracticeCardsTable.id)
+                .forUpdate(org.jetbrains.exposed.sql.vendors.ForUpdateOption.ForUpdate).toList()
             trashIds.addAll(with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
                 removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.sessionId inList sessionIds }
             })

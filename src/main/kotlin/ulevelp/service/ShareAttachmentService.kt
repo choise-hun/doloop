@@ -204,11 +204,15 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
             val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
                 .singleOrNull() ?: throw NotFoundException()
             if (take[TakesTable.storage] != "drive") conflict("ATTACHMENT_UPLOAD_INVALID")
-            if (ready(sessionId)?.get(A.sourceTakeId) == takeId) return@dbQuery publish() to emptyList<Long>()
             val upload = A.selectAll().where {
                 (A.id eq requireNotNull(input.uploadId)) and (A.userId eq userId) and (A.sessionId eq sessionId) and
                     (A.sourceTakeId eq takeId) and (A.status eq "uploaded")
             }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
+            if (ready(sessionId)?.get(A.sourceTakeId) == takeId) {
+                // Keep the ready copy without logging another confirmation, but reclaim this request's unused upload.
+                val ids = if (upload == null) emptyList() else removeShareAttachments { A.id eq upload[A.id] }
+                return@dbQuery publish() to ids
+            }
             if (upload == null || upload[A.userId] != userId || upload[A.sessionId] != sessionId || upload[A.sourceTakeId] != takeId ||
                 upload[A.status] != "uploaded" || !upload[A.createdAt].isAfter(now().minusMinutes(30))) conflict("ATTACHMENT_UPLOAD_INVALID")
             checkLimits(userId, sessionId)

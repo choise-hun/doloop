@@ -331,4 +331,71 @@ class ShareAttachmentLifecycleTest : EpisodeTestSupport() {
         assertEquals(1, last["processed"]!!.jsonPrimitive.int); assertEquals(51, storage.deleted.size)
     }
 
+    private suspend fun ApplicationTestBuilder.deletionLocksCardBeforeAttachment(account: Boolean) {
+        val storage = FakeStorageClient(); configureApiTestApp(config, storageClient = storage)
+        val u = client.user(); client.agree(u); val session = session(u)
+        val (_, copy) = client.attach(u, session, storage)
+        val card = transaction(db) { SharedPracticeCardsTable.selectAll().where { SharedPracticeCardsTable.sessionId eq session }.single()[SharedPracticeCardsTable.id] }
+        val song = transaction(db) { SessionsTable.selectAll().where { SessionsTable.id eq session }.single()[SessionsTable.songId] }
+        val locked = CompletableDeferred<Int>(); val release = CountDownLatch(1)
+        coroutineScope {
+            val hiddenCleanup = async(Dispatchers.IO) {
+                transaction(db) {
+                    SharedPracticeCardsTable.selectAll().where { SharedPracticeCardsTable.id eq card }.forUpdate(ForUpdateOption.ForUpdate).single()
+                    val pid = exec("SELECT pg_backend_pid()") { it.next(); it.getInt(1) }!!
+                    locked.complete(pid)
+                    assertTrue(release.await(15, TimeUnit.SECONDS))
+                }
+            }
+            val blocker = locked.await()
+            val deletion = async {
+                if (account) client.send(HttpMethod.Delete, "/me", u, """{"confirmText":"삭제합니다"}""")
+                else client.send(HttpMethod.Delete, "/songs/$song", u)
+            }
+            try {
+                val blocked = withContext(Dispatchers.IO) {
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                    var observed = false
+                    while (!observed && System.nanoTime() < deadline) {
+                        observed = transaction(db) {
+                            exec("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $blocker = ANY(pg_blocking_pids(pid)))") { it.next(); it.getBoolean(1) }!!
+                        }
+                        if (!observed) Thread.yield()
+                    }
+                    observed
+                }
+                assertTrue(blocked, "deletion must reach a real database lock wait")
+                val available = transaction(db) {
+                    A.selectAll().where { A.sessionId eq session }.forUpdate(ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.SKIP_LOCKED))
+                        .map { it[A.storageKey] }
+                }
+                assertEquals(listOf(copy), available, "deletion must wait for the card before locking its attachment")
+            } finally { release.countDown() }
+            hiddenCleanup.await()
+            val response = deletion.await()
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+        }
+        assertEquals(0, attachmentCount())
+        if (account) { retry(storage); assertTrue(copy in storage.deleted) }
+        else assertTrue(copy in storage.deleted)
+    }
+    @Test fun songDeletionUsesCardThenAttachmentLockOrder() = testApplication { deletionLocksCardBeforeAttachment(false) }
+    @Test fun accountDeletionUsesCardThenAttachmentLockOrder() = testApplication { deletionLocksCardBeforeAttachment(true) }
+
+    @Test fun sameDriveRecordingDiscardsUnusedUploadAndAllowsNextUpload() = testApplication {
+        val storage = FakeStorageClient(); configureApiTestApp(config, storageClient = storage)
+        val u = client.user(); client.agree(u); val s = session(u); val t = take(u, s, true)
+        val original = client.upload(u, s, t).checked(HttpStatusCode.Created)["uploadId"]!!.jsonPrimitive.content
+        client.post(u, s, replace(t, original)).checked(HttpStatusCode.Created)
+        val unused = client.upload(u, s, t).checked(HttpStatusCode.Created)["uploadId"]!!.jsonPrimitive.content
+        client.post(u, s, replace(t, unused)).checked(HttpStatusCode.OK)
+        assertEquals(1, attachmentCount(), "same recording must discard its unused prepared upload")
+        assertEquals(1, logCount()); assertTrue(storage.objects.containsKey("shared/$original.m4a"))
+        assertTrue("shared/$unused.m4a" in storage.deleted)
+        assertEquals(0L, transaction(db) { StorageTrashTable.selectAll().count() })
+        val nextTake = take(u, s, true)
+        client.upload(u, s, nextTake).checked(HttpStatusCode.Created)
+        assertEquals(nextTake, transaction(db) { A.selectAll().where { A.status eq "uploaded" }.single()[A.sourceTakeId] })
+    }
+
 }
