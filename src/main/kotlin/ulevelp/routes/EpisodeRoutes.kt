@@ -41,6 +41,18 @@ internal fun Route.registerCommunityEpisodeRoutes(service: EpisodeLogService) {
         call.response.headers.append(HttpHeaders.CacheControl, "no-store")
         call.respond(service.mine(user.id, call.request.queryParameters["cursor"]))
     }
+    put("/episode-logs/{postId}/like") {
+        val user = call.requireAuthUser()
+        val id = parsePathUuid(call.parameters["postId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.setLike(user.id, id, liked = true))
+    }
+    delete("/episode-logs/{postId}/like") {
+        val user = call.requireAuthUser()
+        val id = parsePathUuid(call.parameters["postId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.setLike(user.id, id, liked = false))
+    }
     post("/episode-logs/{postId}/reports") {
         val user = call.requireAuthUser()
         val id = parsePathUuid(call.parameters["postId"])

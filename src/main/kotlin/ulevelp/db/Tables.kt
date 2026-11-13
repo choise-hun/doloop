@@ -404,7 +404,7 @@ object AdminAuditTable : Table("admin_audit") {
 }
 
 val ALL_TABLES: List<Table> = listOf(
-    SharedPracticeCardsTable, SharedPracticeCardReportsTable,
+    SharedPracticeCardsTable, SharedPracticeCardReportsTable, SharedPracticeCardLikesTable,
     UsersTable,
     ProfilesTable,
     SongsTable,
@@ -525,6 +525,13 @@ object SharedPracticeCardsTable : Table("shared_practice_cards") {
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     override val primaryKey = PrimaryKey(id)
+}
+
+object SharedPracticeCardLikesTable : Table("shared_practice_card_likes") {
+    val cardId = uuid("card_id").references(SharedPracticeCardsTable.id, onDelete = ReferenceOption.CASCADE)
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    override val primaryKey = PrimaryKey(cardId, userId)
 }
 
 object SharedPracticeCardReportsTable : Table("shared_practice_card_reports") {
