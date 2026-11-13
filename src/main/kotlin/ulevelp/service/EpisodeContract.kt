@@ -35,7 +35,7 @@ data class WithdrawEpisodeResponse(val ok: Boolean = true)
 @Serializable
 data class ReportEpisodeResponse(val reportId: String)
 @Serializable
-data class AdminEpisodeReportDto(val reportId: String, val postId: String, val ownerId: String, val ownerPublicName: String?, val reporterId: String, val reason: String, val detail: String, val status: String, val createdAt: String, val resolvedAt: String?, val postStatus: String, val withdrawnAt: String?, val hiddenAt: String?)
+data class AdminEpisodeReportDto(val reportId: String, val postId: String, val ownerId: String, val ownerPublicName: String?, val reporterId: String, val reason: String, val detail: String, val status: String, val createdAt: String, val resolvedAt: String?, val postStatus: String, val withdrawnAt: String?, val hiddenAt: String?, val hasAttachment: Boolean)
 @Serializable
 data class AdminEpisodeReportListResponse(val reports: List<AdminEpisodeReportDto>, val next: String?)
 @Serializable

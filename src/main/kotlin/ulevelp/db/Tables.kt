@@ -406,7 +406,7 @@ object AdminAuditTable : Table("admin_audit") {
 
 val ALL_TABLES: List<Table> = listOf(
     SharedPracticeCardsTable, SharedPracticeCardReportsTable, SharedPracticeCardLikesTable,
-    CommunityShareConsentsTable, SharedCardAttachmentsTable,
+    CommunityShareConsentsTable, SharedCardAttachmentsTable, SharedAttachmentCopyLogTable,
     UsersTable,
     ProfilesTable,
     SongsTable,
@@ -571,5 +571,12 @@ object SharedCardAttachmentsTable : Table("shared_card_attachments") {
     val originalConfirmedAt = timestampWithTimeZone("original_confirmed_at")
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val readyAt = timestampWithTimeZone("ready_at").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SharedAttachmentCopyLogTable : Table("shared_attachment_copy_log") {
+    val id = long("id").autoIncrement()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     override val primaryKey = PrimaryKey(id)
 }

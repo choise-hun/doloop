@@ -71,8 +71,20 @@ fun Route.registerInternalCronRoutes(
     cronOidcVerifier: CronOidcVerifier?,
     notionPushWorker: NotionPushWorker,
     tierService: TierService,
-    creditService: CreditService
+    creditService: CreditService,
+    shareAttachments: ulevelp.service.ShareAttachmentService,
+    storageTrash: ulevelp.service.StorageTrashService
 ) {
+    post("/internal/cron/storage-trash") {
+        val verifier = cronOidcVerifier ?: throw UnauthorizedException("유효한 크론 OIDC 토큰이 아닙니다.")
+        verifier.verifyBearerHeader(call.request.header(HttpHeaders.Authorization))
+        val now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
+        shareAttachments.reclaim(now)
+        val result = storageTrash.runSharedRetryBatch(now)
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(HttpStatusCode.OK, result)
+    }
+
     // 매시 정각(Cloud Scheduler ulevelp-monthly-credits): 충전 시각이 지난 계정의 월 지급분 소멸 → 유료면 30일 주기 충전(M1-3d)
     post("/internal/cron/monthly-credits") {
         if (cronOidcVerifier == null) {

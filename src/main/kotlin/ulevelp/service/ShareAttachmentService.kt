@@ -101,6 +101,7 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
     private data class CopyPlan(val id: UUID, val key: String, val take: ResultRow, val reclaimIds: List<Long>)
     internal suspend fun <T : Any> replace(userId: UUID, sessionId: UUID, input: ShareAttachmentInput,
         validate: Transaction.() -> Unit, publish: Transaction.() -> T): T {
+        if (input.uploadId != null) return confirmDrive(userId, sessionId, input, validate, publish)
         val attId = UUID.randomUUID()
         var committedPlan: CopyPlan? = null
         var preparedKey: String? = null
@@ -111,13 +112,12 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
                 val takeId = requireNotNull(input.takeId)
                 val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
                     .singleOrNull() ?: throw NotFoundException()
-                if (input.uploadId != null && take[TakesTable.storage] != "drive") throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
                 if (ready(sessionId)?.get(A.sourceTakeId) == takeId) return@dbQuery publish() to null
                 if (take[TakesTable.storage] == "drive") conflict("ATTACHMENT_UPLOAD_REQUIRED")
-                if (input.uploadId != null) throw InvalidInputException("uploadId는 Drive 녹음에만 사용할 수 있습니다.")
                 if (take[TakesTable.durationSec] > 300) limit("duration", 300)
                 if (take[TakesTable.sizeBytes] > MAX_BYTES) limit("size", MAX_BYTES)
                 requireStorage()
+                checkLimits(userId, sessionId)
                 val pending = A.selectAll().where { (A.userId eq userId) and (A.status inList listOf("copying", "uploaded")) }
                     .forUpdate(ForUpdateOption.ForUpdate).toList()
                 // 실패로 회수까지 롤백되지 않게, 유효한 진행 행은 회수 전에 검사한다.
@@ -151,9 +151,11 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
                     .singleOrNull() ?: conflict("ATTACHMENT_SOURCE_GONE")
                 A.selectAll().where { (A.id eq p.id) and (A.status eq "copying") }.forUpdate(ForUpdateOption.ForUpdate)
                     .singleOrNull() ?: conflict("ATTACHMENT_COPY_EXPIRED")
+                checkLimits(userId, sessionId)
                 val ids = removeShareAttachments { (A.sessionId eq sessionId) and (A.status eq "ready") and (A.id neq p.id) }
                 A.update({ A.id eq p.id }) { it[status] = "ready"; it[readyAt] = now(); it[sizeBytes] = bytes.size.toLong() }
                 StorageTrashTable.deleteWhere { storageKey eq p.key }
+                SharedAttachmentCopyLogTable.insert { it[SharedAttachmentCopyLogTable.userId] = userId }
                 publish() to ids
             }
             trash.purge(trashIds)
@@ -187,6 +189,151 @@ class ShareAttachmentService(private val db: Database?, private val storage: Sto
             throw t
         }
     }
+    private fun Transaction.checkLimits(userId: UUID, sessionId: UUID) {
+        if (A.selectAll().where { (A.userId eq userId) and (A.status eq "ready") and (A.sessionId neq sessionId) }.count() >= 20) limit("count", 20)
+        val history = SharedAttachmentCopyLogTable
+        if (history.selectAll().where { (history.userId eq userId) and (history.createdAt greaterEq now().minusHours(24)) }.count() >= 20) limit("daily", 20)
+    }
+
+    private suspend fun <T : Any> confirmDrive(userId: UUID, sessionId: UUID, input: ShareAttachmentInput,
+        validate: Transaction.() -> Unit, publish: Transaction.() -> T): T {
+        val (result, ids) = DatabaseFactory.dbQuery(requireDb()) {
+            validate()
+            requireRecordingConsent(userId)
+            val takeId = requireNotNull(input.takeId)
+            val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
+                .singleOrNull() ?: throw NotFoundException()
+            if (take[TakesTable.storage] != "drive") conflict("ATTACHMENT_UPLOAD_INVALID")
+            val upload = A.selectAll().where {
+                (A.id eq requireNotNull(input.uploadId)) and (A.userId eq userId) and (A.sessionId eq sessionId) and
+                    (A.sourceTakeId eq takeId) and (A.status eq "uploaded")
+            }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
+            if (ready(sessionId)?.get(A.sourceTakeId) == takeId) {
+                // Keep the ready copy without logging another confirmation, but reclaim this request's unused upload.
+                val ids = if (upload == null) emptyList() else removeShareAttachments { A.id eq upload[A.id] }
+                return@dbQuery publish() to ids
+            }
+            if (upload == null || upload[A.userId] != userId || upload[A.sessionId] != sessionId || upload[A.sourceTakeId] != takeId ||
+                upload[A.status] != "uploaded" || !upload[A.createdAt].isAfter(now().minusMinutes(30))) conflict("ATTACHMENT_UPLOAD_INVALID")
+            checkLimits(userId, sessionId)
+            val ids = removeShareAttachments { (A.sessionId eq sessionId) and (A.status eq "ready") }
+            A.update({ A.id eq upload[A.id] }) { it[status] = "ready"; it[readyAt] = now() }
+            StorageTrashTable.deleteWhere { storageKey eq upload[A.storageKey] }
+            SharedAttachmentCopyLogTable.insert { it[SharedAttachmentCopyLogTable.userId] = userId }
+            publish() to ids
+        }
+        trash.purge(ids)
+        return result
+    }
+
+    /** 파일 reader는 tx1 커밋 뒤에만 실행한다. 원본 소유권과 저장 위치를 바이트보다 먼저 검사한다. */
+    internal suspend fun uploadDrive(userId: UUID, sessionId: UUID, takeId: UUID, read: suspend () -> ByteArray): JsonObject {
+        val id = UUID.randomUUID()
+        var preparedKey: String? = null
+        var committed: CopyPlan? = null
+        try {
+            val plan = DatabaseFactory.dbQuery(requireDb()) {
+                validateUpload(userId, sessionId)
+                requireRecordingConsent(userId)
+                val take = TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
+                    .singleOrNull() ?: throw NotFoundException()
+                if (take[TakesTable.storage] != "drive") conflict("ATTACHMENT_UPLOAD_INVALID")
+                if (take[TakesTable.durationSec] > 300) limit("duration", 300)
+                if (take[TakesTable.sizeBytes] > MAX_BYTES) limit("size", MAX_BYTES)
+                requireStorage()
+                checkLimits(userId, sessionId)
+                val pending = A.selectAll().where { (A.userId eq userId) and (A.status inList listOf("copying", "uploaded")) }
+                    .forUpdate(ForUpdateOption.ForUpdate).toList()
+                if (pending.any { !it[A.createdAt].isBefore(now().minusMinutes(30)) }) conflict("ATTACHMENT_COPY_IN_PROGRESS")
+                val expired = pending.map { it[A.id] }
+                val ids = removeShareAttachments { A.id inList expired }
+                val ext = TakeService.MIME_EXT[take[TakesTable.mime]] ?: throw InvalidInputException("mime 형식이 올바르지 않습니다.")
+                val key = "shared/$id.$ext"
+                preparedKey = key
+                A.insert {
+                    it[A.id] = id; it[A.userId] = userId; it[A.sessionId] = sessionId; it[sourceTakeId] = takeId
+                    it[kind] = "audio_copy"; it[storageKey] = key; it[mime] = take[TakesTable.mime]
+                    it[sizeBytes] = take[TakesTable.sizeBytes]; it[durationSec] = take[TakesTable.durationSec]
+                    it[status] = "copying"; it[originalConfirmedAt] = now()
+                }
+                StorageTrashTable.insert { it[storageKey] = key; it[nextAttemptAt] = GUARD_HOLD }
+                CopyPlan(id, key, take, ids)
+            }
+            committed = plan
+            trash.purge(plan.reclaimIds)
+            val bytes = read()
+            if (bytes.size > MAX_BYTES) limit("size", MAX_BYTES)
+            if (bytes.isEmpty() || bytes.size.toLong() != plan.take[TakesTable.sizeBytes] || !AudioSignature.matches(plan.take[TakesTable.mime], bytes)) conflict("ATTACHMENT_UPLOAD_INVALID")
+            storageIo { requireStorage().upload(plan.key, bytes, plan.take[TakesTable.mime]) }
+            return DatabaseFactory.dbQuery(requireDb()) {
+                validateUpload(userId, sessionId)
+                requireRecordingConsent(userId)
+                TakesTable.selectAll().where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) }
+                    .singleOrNull() ?: conflict("ATTACHMENT_SOURCE_GONE")
+                val row = A.selectAll().where { (A.id eq id) and (A.status eq "copying") }.forUpdate(ForUpdateOption.ForUpdate)
+                    .singleOrNull() ?: conflict("ATTACHMENT_COPY_EXPIRED")
+                A.update({ A.id eq id }) { it[status] = "uploaded" }
+                buildJsonObject { put("uploadId", id.toString()); put("expiresAt", episodeTs(row[A.createdAt].plusMinutes(30))) }
+            }
+        } catch (t: Throwable) {
+            withContext(NonCancellable) {
+                try {
+                    val ids = DatabaseFactory.dbQuery(requireDb()) {
+                        val row = A.selectAll().where { A.id eq id }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
+                        val key = committed?.key ?: row?.get(A.storageKey) ?: preparedKey?.takeIf { candidate ->
+                            StorageTrashTable.selectAll().where { StorageTrashTable.storageKey eq candidate }.any()
+                        }
+                        if (key == null || row?.get(A.status) == "ready") emptyList()
+                        else { A.deleteWhere { A.id eq id }; releaseGuard(key) }
+                    }
+                    trash.purge(ids)
+                } catch (cleanup: CancellationException) { throw cleanup }
+                  catch (cleanup: Exception) { log.error("Drive 첨부 보상 정리 실패", cleanup); t.addSuppressed(cleanup) }
+            }
+            throw t
+        }
+    }
+
+    private fun Transaction.validateUpload(userId: UUID, sessionId: UUID) {
+        val ctx = tierContext(userId, lock = true)
+        val songId = SessionsTable.selectAll().where { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq userId) }
+            .singleOrNull()?.get(SessionsTable.songId) ?: throw NotFoundException()
+        SongsTable.selectAll().where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }.forUpdate(ForUpdateOption.ForUpdate)
+            .singleOrNull() ?: throw NotFoundException()
+        SessionsTable.selectAll().where { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq userId) }.forUpdate(ForUpdateOption.ForUpdate)
+            .singleOrNull() ?: throw NotFoundException()
+        val c = SharedPracticeCardsTable
+        if (c.selectAll().where { c.sessionId eq sessionId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()?.get(c.status) == "moderation_hidden") conflict("POST_MODERATION_HIDDEN")
+        requireCommunityWrite(ctx)
+        if (ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.single()[ProfilesTable.publicName].isNullOrBlank()) conflict("PUBLIC_NAME_REQUIRED")
+    }
+
+    internal suspend fun impact(userId: UUID, songId: UUID?, takeId: UUID?): JsonObject = DatabaseFactory.dbQuery(requireDb()) {
+        val sessions = if (songId != null) {
+            if (!SongsTable.selectAll().where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }.any()) emptyList()
+            else SessionsTable.selectAll().where { (SessionsTable.songId eq songId) and (SessionsTable.userId eq userId) }.map { it[SessionsTable.id] }
+        } else emptyList()
+        val c = SharedPracticeCardsTable
+        val cards = if (songId == null || sessions.isEmpty()) 0L else c.selectAll().where { (c.userId eq userId) and (c.sessionId inList sessions) and c.withdrawnAt.isNull() }.count()
+        val attachments = if (songId != null) {
+            if (sessions.isEmpty()) 0L else A.selectAll().where { (A.userId eq userId) and (A.sessionId inList sessions) }.count()
+        } else A.selectAll().where { (A.userId eq userId) and (A.sourceTakeId eq requireNotNull(takeId)) }.count()
+        buildJsonObject { put("cards", cards); put("attachments", attachments) }
+    }
+
+    internal suspend fun reclaim(now: OffsetDateTime) {
+        DatabaseFactory.dbQuery(requireDb()) {
+            val expired = A.selectAll().where { (A.status inList listOf("copying", "uploaded")) and (A.createdAt lessEq now.minusMinutes(30)) }
+                .forUpdate(ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.SKIP_LOCKED)).toList()
+            val ids = expired.filter { it[A.status] in listOf("copying", "uploaded") && !it[A.createdAt].isAfter(now.minusMinutes(30)) }.map { it[A.id] }
+            removeShareAttachments { A.id inList ids }
+            val c = SharedPracticeCardsTable
+            val hidden = c.selectAll().where { (c.status eq "moderation_hidden") and (c.hiddenAt less now.minusDays(30)) }
+                .orderBy(c.id).forUpdate(ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.SKIP_LOCKED)).map { it[c.sessionId] }
+            removeShareAttachments { A.sessionId inList hidden }
+        }
+    }
+
     internal suspend fun purge(ids: List<Long>) = trash.purge(ids)
     private suspend fun <T> storageIo(block: suspend () -> T): T = try { block() }
         catch (e: CancellationException) { throw e }

@@ -44,6 +44,7 @@ import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerCreditRoutes
 import ulevelp.routes.registerExportImportRoutes
 import ulevelp.routes.registerIntegrationRoutes
+import ulevelp.routes.registerShareLifecycleRoutes
 import ulevelp.routes.registerInternalCronRoutes
 import ulevelp.routes.registerMeRoutes
 import ulevelp.routes.registerNoteRoutes
@@ -340,6 +341,7 @@ fun Application.module(
         registerChordRoutes()
 
         route("/api/v1") {
+            registerShareLifecycleRoutes(jwtVerifier, profileService, shareAttachmentService)
             registerMeRoutes(jwtVerifier, profileService)
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService, communityService)
@@ -380,7 +382,7 @@ fun Application.module(
             }
         }
 
-        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker, tierService, creditService)
+        registerInternalCronRoutes(cronOidcVerifier, notionPushWorker, tierService, creditService, shareAttachmentService, storageTrashService)
 
         route("{path...}") {
             handle {

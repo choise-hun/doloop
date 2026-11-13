@@ -298,6 +298,9 @@ class TakeService(
                         trashIds.add(trashId)
                         OutboxRepository.enqueueIfSyncEnabled(userId, "take", oldTakeId, "delete")
                     }
+                    trashIds.addAll(with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                        removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.sourceTakeId inList oldIds }
+                    })
                     TakesTable.deleteWhere {
                         (TakesTable.userId eq userId) and
                         (TakesTable.storage eq "supabase") and
@@ -421,6 +424,7 @@ class TakeService(
         val database = requireDb()
 
         return DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
             val row = TakesTable
                 .select(TakesTable.storage, TakesTable.storageKey)
                 .where { (TakesTable.id eq takeId) and (TakesTable.userId eq userId) }
@@ -437,6 +441,9 @@ class TakeService(
                 trashIds.add(trashId)
             }
 
+            trashIds.addAll(with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.sourceTakeId eq takeId }
+            })
             OutboxRepository.enqueueIfSyncEnabled(userId, "take", takeId, "delete")
             TakesTable.deleteWhere { (id eq takeId) and (TakesTable.userId eq userId) }
 

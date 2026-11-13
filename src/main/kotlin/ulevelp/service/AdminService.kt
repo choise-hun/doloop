@@ -222,6 +222,10 @@ class AdminService(private val db: Database?) {
         AdminEpisodeModerationDto(postId.toString(), row[c.status], episodeTs(row[c.hiddenAt]), row[c.hiddenReason], episodeTs(row[c.tierPausedAt]), episodeTs(row[c.withdrawnAt]), episodeTs(row[c.updatedAt])!!)
     }
 
+    private val reportHasAttachment = exists(ulevelp.db.SharedCardAttachmentsTable.selectAll().where {
+        (ulevelp.db.SharedCardAttachmentsTable.sessionId eq SharedPracticeCardsTable.sessionId) and (ulevelp.db.SharedCardAttachmentsTable.status eq "ready")
+    }).alias("has_attachment")
+
     private fun episodeReportsQuery(): Query {
         val r = SharedPracticeCardReportsTable
         val c = SharedPracticeCardsTable
@@ -229,14 +233,14 @@ class AdminService(private val db: Database?) {
         // One READ COMMITTED snapshot for the report and its cascade-deletable parents.
         return r.join(c, JoinType.INNER, r.cardId, c.id)
             .join(p, JoinType.INNER, c.userId, p.id)
-            .select(r.columns + listOf(c.userId, c.status, c.withdrawnAt, c.hiddenAt, p.publicName))
+            .select(r.columns + listOf(c.userId, c.status, c.withdrawnAt, c.hiddenAt, p.publicName, reportHasAttachment))
     }
 
     private fun episodeReportDto(row: ResultRow): AdminEpisodeReportDto {
         val r = SharedPracticeCardReportsTable
         val c = SharedPracticeCardsTable
         return AdminEpisodeReportDto(row[r.id].toString(), row[r.cardId].toString(), row[c.userId].toString(), row[ProfilesTable.publicName], row[r.reporterId].toString(), row[r.reason], row[r.detail], row[r.status],
-            episodeTs(row[r.createdAt])!!, episodeTs(row[r.resolvedAt]), row[c.status], episodeTs(row[c.withdrawnAt]), episodeTs(row[c.hiddenAt]))
+            episodeTs(row[r.createdAt])!!, episodeTs(row[r.resolvedAt]), row[c.status], episodeTs(row[c.withdrawnAt]), episodeTs(row[c.hiddenAt]), row[reportHasAttachment])
     }
 
     suspend fun listEpisodeReports(actorId: UUID, status: String, limit: Int, rawCursor: String?): AdminEpisodeReportListResponse {

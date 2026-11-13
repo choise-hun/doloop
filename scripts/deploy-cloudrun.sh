@@ -188,6 +188,24 @@ gcloud scheduler jobs "${CREDIT_JOB_VERB}" http "${CREDIT_JOB_NAME}" \
   --oidc-service-account-email="${CRON_SA_EMAIL}" \
   --oidc-token-audience="${FINAL_CRON_AUDIENCE}"
 
+# Shared attachment cleanup (registration only when a human runs this deployment script).
+STORAGE_TRASH_JOB_NAME="ulevelp-storage-trash"
+STORAGE_TRASH_CRON_URI="${SERVICE_URL}/internal/cron/storage-trash"
+if gcloud scheduler jobs describe "${STORAGE_TRASH_JOB_NAME}" --location="${GCP_REGION}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  STORAGE_TRASH_JOB_VERB="update"
+else
+  STORAGE_TRASH_JOB_VERB="create"
+fi
+gcloud scheduler jobs "${STORAGE_TRASH_JOB_VERB}" http "${STORAGE_TRASH_JOB_NAME}" \
+  --project="${GCP_PROJECT_ID}" \
+  --location="${GCP_REGION}" \
+  --schedule="* * * * *" \
+  --time-zone="Asia/Seoul" \
+  --uri="${STORAGE_TRASH_CRON_URI}" \
+  --http-method=POST \
+  --oidc-service-account-email="${CRON_SA_EMAIL}" \
+  --oidc-token-audience="${FINAL_CRON_AUDIENCE}"
+
 echo "=============================================================================="
 echo "배포 완료!"
 echo "  서비스 URL: ${SERVICE_URL}"

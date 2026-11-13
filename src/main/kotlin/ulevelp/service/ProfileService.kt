@@ -336,6 +336,7 @@ class ProfileService(private val db: Database?) {
 
         val database = requireDb()
         DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
             val supabaseStorageKeys = TakesTable
                 .select(TakesTable.storageKey)
                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
@@ -347,6 +348,13 @@ class ProfileService(private val db: Database?) {
                 }
             }
 
+            // CASCADE also deletes cards; lock them before attachments, as the retention cron does.
+            ulevelp.db.SharedPracticeCardsTable.selectAll().where { ulevelp.db.SharedPracticeCardsTable.userId eq userId }
+                .orderBy(ulevelp.db.SharedPracticeCardsTable.id)
+                .forUpdate(org.jetbrains.exposed.sql.vendors.ForUpdateOption.ForUpdate).toList()
+            with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.userId eq userId }
+            }
             IntegrationsTable.deleteWhere { IntegrationsTable.userId eq userId }
             UsersTable.deleteWhere { UsersTable.id eq userId }
         }

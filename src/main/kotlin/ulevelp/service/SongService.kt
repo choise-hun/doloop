@@ -362,6 +362,7 @@ class SongService(
     suspend fun delete(userId: UUID, songId: UUID): List<Long> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
             val exists = SongsTable.selectAll()
                 .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
                 .count() > 0L
@@ -392,6 +393,13 @@ class SongService(
                 OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "delete")
             }
 
+            // CASCADE also deletes cards; lock them before attachments, as the retention cron does.
+            ulevelp.db.SharedPracticeCardsTable.selectAll().where { ulevelp.db.SharedPracticeCardsTable.sessionId inList sessionIds }
+                .orderBy(ulevelp.db.SharedPracticeCardsTable.id)
+                .forUpdate(org.jetbrains.exposed.sql.vendors.ForUpdateOption.ForUpdate).toList()
+            trashIds.addAll(with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                removeShareAttachments { ulevelp.db.SharedCardAttachmentsTable.sessionId inList sessionIds }
+            })
             SongsTable.deleteWhere { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
             SharedFolderSync.resyncCategories(this, userId, null) // 자동 연동(M1-4a): 지운 곡을 공개본에서도 뺀다
 
