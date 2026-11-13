@@ -171,3 +171,75 @@ test('CM-UI real auth error envelope retains BANNED_WORD detail.field', async ()
     assert.equal(classifyEpisodeError({ status: 400, code: 'BANNED_WORD', data: { detail: { field } } }).field, field);
   }
 });
+
+test('S3b3-U14 Drive 토큰 합치기: 동시 2회 requestToken 시 토큰 클라이언트 생성 및 요청 1회', async () => {
+  const vm = require('node:vm');
+  const ts = require('typescript');
+  let initCount = 0;
+  let requestCount = 0;
+  let currentUid = 'user-A';
+  let capturedCallback = null;
+
+  const ctx = {
+    exports: {},
+    require: (id) => {
+      if (id === './auth') return { auth: { getUser: () => (currentUid ? { id: currentUid } : null), onChange: () => () => {} } };
+      if (id === './apiClient') return { apiClient: {} };
+      if (id === './i18n.mts') return { t: (k) => k };
+      throw new Error(`unexpected import: ${id}`);
+    },
+    window: {
+      ULEVELP_CONFIG: { googleClientId: 'client-123' },
+      google: {
+        accounts: {
+          oauth2: {
+            initTokenClient: (cfg) => {
+              initCount += 1;
+              capturedCallback = cfg.callback;
+              return {
+                requestAccessToken: () => {
+                  requestCount += 1;
+                  setImmediate(() => capturedCallback({ access_token: 'tok-1', expires_in: '3600' }));
+                },
+              };
+            },
+          },
+        },
+      },
+    },
+    Promise,
+    Date,
+    Error,
+    parseInt,
+    String,
+  };
+  const transpiled = ts.transpileModule(readText('frontend/src/lib/drive.ts'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(transpiled, ctx);
+  const drive = ctx.exports.drive;
+
+  const [t1, t2] = await Promise.all([drive.requestToken(), drive.requestToken()]);
+  assert.equal(t1, 'tok-1');
+  assert.equal(t2, 'tok-1');
+  assert.equal(initCount, 1);
+  assert.equal(requestCount, 1);
+
+  // 캐시 무효화(force: true) 후 대기 중 계정 전환 시 거절된다
+  let pendingResolve = null;
+  capturedCallback = null;
+  ctx.window.google.accounts.oauth2.initTokenClient = (cfg) => {
+    initCount += 1;
+    capturedCallback = cfg.callback;
+    return {
+      requestAccessToken: () => {
+        requestCount += 1;
+        pendingResolve = () => cfg.callback({ access_token: 'tok-stale', expires_in: '3600' });
+      },
+    };
+  };
+  const pForce = drive.requestToken({ force: true, clientId: 'client-456' });
+  currentUid = 'user-B';
+  pendingResolve();
+  await assert.rejects(() => pForce, /drive\.authFailed/);
+});

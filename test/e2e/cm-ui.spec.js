@@ -3,13 +3,15 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const { mockApp, STATES } = require('./support/mock-app');
+const { mockApp, STATES, DEFAULT_ME } = require('./support/mock-app');
 const {
   COMMUNITY_FREE_ME,
   COMMUNITY_PRO_ME,
   EPISODE_POST_1,
   EPISODE_POST_FOLLOWING,
   MY_EPISODE_LOG_1,
+  SHARE_CONSENT_ALLOWED,
+  SHARE_CONSENT_NONE,
   communityRoutes,
 } = require('./support/community-fixtures');
 
@@ -1118,4 +1120,514 @@ test('S3b3-U15 다시 게시: 현재 첨부 칩의 미리 듣기 ▶/■는 선�
   await expect(dialog).toHaveCount(0);
   expect(postBody.attachment).toEqual({ mode: 'keep' });
   expect(domWarnings).toEqual([]);
+});
+
+// ── S3b-3 주니어 4단계 남은 테스트 행: U1·U2·U5~U13 ──
+
+test('S3b3-U1 첫 동의: 동의 전에는 동의 단계 표시, POST 1회 뒤 작성 화면으로 전환', async ({ page }) => {
+  let consentState = { ...SHARE_CONSENT_NONE };
+  let agreePostCount = 0;
+  let shareCount = 0;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+      onShareConsent: (route, json) => json(route, consentState),
+      onAgreeConsent: (route, json) => {
+        agreePostCount += 1;
+        consentState = { ...SHARE_CONSENT_ALLOWED };
+        return json(route, consentState);
+      },
+      onShareEpisode: (route, json) => {
+        shareCount += 1;
+        return json(route, { post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id } }, 201);
+      },
+    }),
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await expect(dialog.locator('#shareConsentAgree')).toBeVisible();
+  await expect(dialog.locator('#shareCommentInput')).toHaveCount(0);
+  expect(shareCount).toBe(0);
+
+  await dialog.locator('#shareConsentAgree').click();
+  await expect(dialog.locator('#shareCommentInput')).toBeVisible();
+  expect(agreePostCount).toBe(1);
+
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  expect(shareCount).toBe(1);
+});
+
+test('S3b3-U2 이름 폼 동의: 체크 시 PUT public-name 뒤 POST share-consent, 미체크 시 POST 생략', async ({ page }) => {
+  // Case A: 체크하고 저장 -> PUT 후 POST
+  const callsA = [];
+  let savedNameA = null;
+  await mockApp(page, {
+    ...STATES.userData,
+    me: { ...COMMUNITY_PRO_ME, publicName: savedNameA, publicNameNextChangeAt: null },
+    routes: [
+      ...communityRoutes({
+        consent: SHARE_CONSENT_NONE,
+        onAgreeConsent: (route, json) => {
+          callsA.push('POST_CONSENT');
+          return json(route, SHARE_CONSENT_ALLOWED);
+        },
+        onSetPublicName: (route, json) => {
+          callsA.push('PUT_NAME');
+          const { publicName } = route.request().postDataJSON();
+          savedNameA = publicName;
+          return json(route, { publicName, publicNameNextChangeAt: null });
+        },
+      }),
+      [(url) => url.pathname === '/api/v1/me', (route) => {
+        if (route.request().method() === 'GET') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ...DEFAULT_ME, ...COMMUNITY_PRO_ME, publicName: savedNameA, publicNameNextChangeAt: null }),
+          });
+        }
+        return route.continue();
+      }],
+    ],
+  });
+  await page.goto('/profile.html');
+  const consentBox = page.locator('#publicNameShareConsent');
+  await expect(consentBox).toBeVisible();
+  await expect(consentBox).not.toBeChecked();
+  await consentBox.check();
+  await page.locator('#profilePublicNameInput').fill('테스트기타');
+  const agreeResp = page.waitForResponse((r) => r.url().includes('/share-consent') && r.request().method() === 'POST');
+  await page.locator('#profilePublicNameSave').click();
+  await (await agreeResp).finished();
+  expect(callsA).toEqual(['PUT_NAME', 'POST_CONSENT']);
+
+  // Case B: 체크하지 않고 저장 -> PUT만 호출, POST 0회
+  const callsB = [];
+  let savedNameB = null;
+  await mockApp(page, {
+    ...STATES.userData,
+    me: { ...COMMUNITY_PRO_ME, publicName: savedNameB, publicNameNextChangeAt: null },
+    routes: [
+      ...communityRoutes({
+        consent: SHARE_CONSENT_NONE,
+        onAgreeConsent: (route, json) => {
+          callsB.push('POST_CONSENT');
+          return json(route, SHARE_CONSENT_ALLOWED);
+        },
+        onSetPublicName: (route, json) => {
+          callsB.push('PUT_NAME');
+          const { publicName } = route.request().postDataJSON();
+          savedNameB = publicName;
+          return json(route, { publicName, publicNameNextChangeAt: null });
+        },
+      }),
+      [(url) => url.pathname === '/api/v1/me', (route) => {
+        if (route.request().method() === 'GET') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ...DEFAULT_ME, ...COMMUNITY_PRO_ME, publicName: savedNameB, publicNameNextChangeAt: null }),
+          });
+        }
+        return route.continue();
+      }],
+    ],
+  });
+  await page.goto('/profile.html');
+  await expect(page.locator('#publicNameShareConsent')).not.toBeChecked();
+  await page.locator('#profilePublicNameInput').fill('미동의기타');
+  const putResp = page.waitForResponse((r) => r.url().includes('/public-name') && r.request().method() === 'PUT');
+  const meRefresh = page.waitForResponse((r) => r.url().endsWith('/api/v1/me') && r.request().method() === 'GET');
+  await page.locator('#profilePublicNameSave').click();
+  await (await putResp).finished();
+  await (await meRefresh).finished();
+  await expect(page.locator('#profilePublicNameInput')).toHaveValue('미동의기타');
+  expect(callsB).toEqual(['PUT_NAME']);
+});
+
+test('S3b3-U5 상한 칩: durationSec 301 초과 녹음은 disabled 및 사유 문구 표시', async ({ page }) => {
+  const overTake = { ...TAKE_1, id: '00000000-0000-4000-8000-00000000b005', durationSec: 301 };
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [{ ...SAMPLE_PRACTICE_SESSION, takes: [overTake] }] },
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+    }),
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  const chip = dialog.locator(`[data-take-chip="${overTake.id}"]`);
+  await expect(chip).toBeDisabled();
+  await expect(dialog.locator('#shareChipLimitHint')).toBeVisible();
+});
+
+test('S3b3-U6 Drive 업로드: fetchMediaBlob → uploads(multipart) → share(uploadId) 순서', async ({ page }) => {
+  const driveTake = {
+    ...TAKE_1,
+    id: '00000000-0000-4000-8000-00000000b006',
+    storage: 'drive',
+    storageKey: 'drive-file-xyz',
+  };
+  const sequence = [];
+  let shareBody = null;
+  let uploadContentType = '';
+  const gsiStub = `window.google = { accounts: { oauth2: { initTokenClient: (cfg) => ({ requestAccessToken: () => setTimeout(() => cfg.callback({ access_token: 'mock-drive-token', expires_in: '3600' }), 0) }) } } };`;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [{ ...SAMPLE_PRACTICE_SESSION, takes: [driveTake] }] },
+    routes: [
+      [
+        (url) => url.href.startsWith('https://accounts.google.com/gsi/client'),
+        (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: gsiStub }),
+      ],
+      [
+        (url) => url.origin === 'https://www.googleapis.com' && url.pathname.includes('/drive/v3/files/drive-file-xyz'),
+        (route) => {
+          sequence.push('drive-download');
+          return route.fulfill({ status: 200, contentType: 'audio/mp4', body: Buffer.from('FAKE_M4A_DATA') });
+        },
+      ],
+      ...communityRoutes({
+        onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+        onShareUpload: (route, json) => {
+          sequence.push('uploads');
+          uploadContentType = route.request().headers()['content-type'] || '';
+          return json(route, { uploadId: '00000000-0000-4000-8000-00000000u006', expiresAt: '2026-11-13T00:30:00Z' }, 201);
+        },
+        onShareEpisode: (route, json) => {
+          sequence.push('share');
+          shareBody = route.request().postDataJSON();
+          return json(route, { post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id } }, 201);
+        },
+      }),
+    ],
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await dialog.locator(`[data-take-chip="${driveTake.id}"]`).click();
+  await dialog.locator('#shareOriginalConfirm').check();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+
+  expect(sequence).toEqual(['drive-download', 'uploads', 'share']);
+  expect(uploadContentType).toContain('multipart/form-data');
+  expect(shareBody.attachment).toEqual({
+    mode: 'replace',
+    takeId: driveTake.id,
+    originalConfirmed: true,
+    uploadId: '00000000-0000-4000-8000-00000000u006',
+  });
+});
+
+test('S3b3-U7 닫기 중 업로드: 업로드 진행 중 창을 닫으면 share 요청 0회, 화면 변화 없음', async ({ page }) => {
+  const driveTake = {
+    ...TAKE_1,
+    id: '00000000-0000-4000-8000-00000000b007',
+    storage: 'drive',
+    storageKey: 'drive-file-delay',
+  };
+  let releaseUpload = null;
+  let shareCount = 0;
+  const gsiStub = `window.google = { accounts: { oauth2: { initTokenClient: (cfg) => ({ requestAccessToken: () => setTimeout(() => cfg.callback({ access_token: 'mock-drive-token', expires_in: '3600' }), 0) }) } } };`;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [{ ...SAMPLE_PRACTICE_SESSION, takes: [driveTake] }] },
+    routes: [
+      [
+        (url) => url.href.startsWith('https://accounts.google.com/gsi/client'),
+        (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: gsiStub }),
+      ],
+      [
+        (url) => url.origin === 'https://www.googleapis.com' && url.pathname.includes('/drive/v3/files/drive-file-delay'),
+        (route) => route.fulfill({ status: 200, contentType: 'audio/mp4', body: Buffer.from('FAKE_M4A_DATA') }),
+      ],
+      ...communityRoutes({
+        onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+        onShareUpload: (route, json) => new Promise((resolve) => {
+          releaseUpload = () => resolve(json(route, { uploadId: 'u-late', expiresAt: '2026-11-13T00:30:00Z' }, 201).catch(() => {}));
+        }),
+        onShareEpisode: (route, json) => {
+          shareCount += 1;
+          return json(route, { post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id } }, 201);
+        },
+      }),
+    ],
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await dialog.locator(`[data-take-chip="${driveTake.id}"]`).click();
+  await dialog.locator('#shareOriginalConfirm').check();
+
+  const uploadReq = page.waitForRequest((r) => r.url().includes('/share/uploads'));
+  const uploadDone = new Promise((res) => {
+    page.on('requestfailed', (r) => { if (r.url().includes('/share/uploads')) res(); });
+    page.on('requestfinished', (r) => { if (r.url().includes('/share/uploads')) res(); });
+  });
+  await dialog.locator('button[type="submit"]').click();
+  await uploadReq;
+
+  // 업로드 중 창 닫기
+  await dialog.locator('button[aria-label="취소"]').first().click();
+  await expect(dialog).toHaveCount(0);
+  if (releaseUpload) releaseUpload();
+  await uploadDone;
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+
+  expect(shareCount).toBe(0);
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(`[data-session-id="${SAMPLE_PRACTICE_SESSION.id}"] [data-share-action="open"]`)).toBeVisible();
+});
+
+test('S3b3-U8 계정 전환: 게시 요청 지연 중 B 로그인 시 A의 늦은 응답 미반영', async ({ page }) => {
+  const bId = '00000000-0000-4000-8000-000000000002';
+  const bSessionId = '00000000-0000-4000-8000-000000000899';
+  let currentAccount = 'A';
+  let releaseShareA = null;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    routes: [
+      ...communityRoutes({
+        onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+        onShareEpisode: (route, json) => new Promise((resolve) => {
+          releaseShareA = () => resolve(json(route, {
+            post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id, title: 'A-LATE-SHARE' },
+          }, 201).catch(() => {}));
+        }),
+      }),
+      [(url) => url.pathname === '/api/v1/me', (route) => {
+        const meObj = currentAccount === 'B'
+          ? { ...DEFAULT_ME, ...COMMUNITY_PRO_ME, id: bId, publicName: '계정B' }
+          : { ...DEFAULT_ME, ...COMMUNITY_PRO_ME };
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(meObj) });
+      }],
+      [(url) => url.pathname === '/api/v1/sessions' || url.pathname === '/api/v1/sessions/', (route) => {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            calendar: [{ date: '2026-11-03', totalSeconds: 1800, level: 2 }],
+            sessions: [{ ...SAMPLE_PRACTICE_SESSION, id: currentAccount === 'B' ? bSessionId : SAMPLE_PRACTICE_SESSION.id }],
+          }),
+        });
+      }],
+    ],
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await dialog.locator('#shareCommentInput').fill('A-COMMENT');
+
+  const shareReq = page.waitForRequest((r) => r.url().includes('/share') && r.method() === 'POST');
+  const shareDone = new Promise((res) => {
+    page.on('requestfailed', (r) => { if (r.url().includes('/share') && r.method() === 'POST') res(); });
+    page.on('requestfinished', (r) => { if (r.url().includes('/share') && r.method() === 'POST') res(); });
+  });
+  await dialog.locator('button[type="submit"]').click();
+  await shareReq;
+
+  currentAccount = 'B';
+  await page.evaluate((id) => {
+    const session = { access_token: 'b-token', user: { id } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session }, error: null });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, bId);
+  await page.locator(`[data-session-id="${bSessionId}"]`).waitFor();
+  if (releaseShareA) releaseShareA();
+  await shareDone;
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+
+  await expect(page.locator('#episodeShareDialog')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('A-LATE-SHARE');
+  await expect(page.locator(`[data-session-id="${bSessionId}"] [data-share-action="open"]`)).toBeVisible();
+});
+
+test('S3b3-U9 다시 게시: 유지 시 keep, 칩 해제 시 none + ⓘ 안내', async ({ page }) => {
+  const bodies = [];
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [SESSION_WITH_TAKES] },
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, {
+        posts: [{
+          ...MY_EPISODE_LOG_1,
+          sessionId: SAMPLE_PRACTICE_SESSION.id,
+          attachment: { attachmentId: '00000000-0000-4000-8000-00000000c001', sourceTakeId: TAKE_1.id, mime: 'audio/mp4', durationSec: 48, readyAt: '2026-11-08T12:00:00Z' },
+        }],
+        next: null,
+      }),
+      onShareEpisode: (route, json) => {
+        bodies.push(route.request().postDataJSON());
+        return json(route, { post: { ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id } }, 200);
+      },
+    }),
+  });
+  await page.goto('/log.html');
+
+  // 1) 그대로 게시 -> keep
+  await openShareMenu(page);
+  await page.locator('[data-share-action="edit"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await expect(dialog.locator(`[data-take-chip="${TAKE_1.id}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+
+  // 2) 선택된 칩 해제 -> none + ⓘ 안내
+  await openShareMenu(page);
+  await page.locator('[data-share-action="edit"]').click();
+  await dialog.locator(`[data-take-chip="${TAKE_1.id}"]`).click();
+  await expect(dialog.locator(`[data-take-chip="${TAKE_1.id}"]`)).toHaveAttribute('aria-pressed', 'false');
+  await expect(dialog.locator('[data-share-none-info]')).toBeVisible();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+
+  expect(bodies.map((b) => b.attachment)).toEqual([{ mode: 'keep' }, { mode: 'none' }]);
+});
+
+test('S3b3-U10 녹음만 내리기: confirm 후 DELETE .../share/attachment 호출 및 메뉴에서 항목 제거', async ({ page }) => {
+  let hasAttachment = true;
+  let deleteCalls = 0;
+  page.on('dialog', (d) => d.accept());
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: { ...COMMUNITY_PRO_WITH_SESSIONS.sessions, sessions: [SESSION_WITH_TAKES] },
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, {
+        posts: [{
+          ...MY_EPISODE_LOG_1,
+          sessionId: SAMPLE_PRACTICE_SESSION.id,
+          ...(hasAttachment ? {
+            attachment: { attachmentId: '00000000-0000-4000-8000-00000000c001', sourceTakeId: TAKE_1.id, mime: 'audio/mp4', durationSec: 48, readyAt: '2026-11-08T12:00:00Z' },
+          } : {}),
+        }],
+        next: null,
+      }),
+      onRemoveAttachment: (route, json) => {
+        deleteCalls += 1;
+        hasAttachment = false;
+        return json(route, { ok: true, removed: 1 });
+      },
+    }),
+  });
+  await page.goto('/log.html');
+  await openShareMenu(page);
+  const removeBtn = page.locator('[data-share-action="remove-recording"]');
+  await expect(removeBtn).toBeVisible();
+  const delResp = page.waitForResponse((r) => r.url().includes('/share/attachment') && r.request().method() === 'DELETE');
+  await removeBtn.click();
+  await (await delResp).finished();
+  expect(deleteCalls).toBe(1);
+
+  await openShareMenu(page);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await expect(page.locator('[data-share-action="remove-recording"]')).toHaveCount(0);
+  await expect(page.locator('[data-share-action="withdraw"]')).toBeVisible();
+});
+
+test('S3b3-U11 메뉴 접근성: 키보드 열기, 화살표 이동, ESC 닫기 및 포커스 복귀', async ({ page }) => {
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, {
+        posts: [{ ...MY_EPISODE_LOG_1, sessionId: SAMPLE_PRACTICE_SESSION.id }],
+        next: null,
+      }),
+    }),
+  });
+  await page.goto('/log.html');
+  const trigger = page.locator('[data-share-action="menu"]');
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.locator('[role="menu"]');
+  await expect(menu).toBeVisible();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('[data-share-action="withdraw"]')).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger).toBeFocused();
+});
+
+test('S3b3-U12 오류 표시: §4.3 서버 코드별 문구 매핑 및 입력 유지', async ({ page }) => {
+  const responses = [
+    { status: 409, body: { ok: false, status: 409, code: 'ATTACHMENT_LIMIT_EXCEEDED', detail: { kind: 'count' }, message: 'limit' } },
+    { status: 409, body: { ok: false, status: 409, code: 'ATTACHMENT_COPY_IN_PROGRESS', message: 'busy' } },
+    { status: 502, body: { ok: false, status: 502, code: 'STORAGE_ERROR', message: 'storage' } },
+    { status: 409, body: { ok: false, status: 409, code: 'SHARE_CONSENT_REQUIRED', detail: { scope: 'card', requiredVersion: 1 }, message: 'consent' } },
+  ];
+  let idx = 0;
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+      onShareEpisode: (route) => {
+        const next = responses[idx++];
+        return route.fulfill({
+          status: next.status,
+          contentType: 'application/json',
+          body: JSON.stringify(next.body),
+        });
+      },
+    }),
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await dialog.locator('#shareCommentInput').fill('입력 유지 확인');
+
+  const submit = dialog.locator('button[type="submit"]');
+  await submit.click();
+  await expect(dialog.locator('#episodeShareError')).toContainText('동시에 공유할 수 있는 녹음 수(20개)를 넘었어요');
+  await expect(dialog.locator('#shareCommentInput')).toHaveValue('입력 유지 확인');
+
+  await submit.click();
+  await expect(dialog.locator('#episodeShareError')).toContainText('이미 녹음을 올리는 중이에요. 잠시 후 다시 시도해 주세요');
+  await expect(dialog.locator('#shareCommentInput')).toHaveValue('입력 유지 확인');
+
+  await submit.click();
+  await expect(dialog.locator('#episodeShareError')).toContainText('녹음 저장소에 연결하지 못했어요');
+  await expect(dialog.locator('#shareCommentInput')).toHaveValue('입력 유지 확인');
+
+  await submit.click();
+  await expect(dialog.locator('#shareConsentAgree')).toBeVisible();
+  await expect(dialog.locator('#episodeShareError')).toContainText('공유 안내 동의가 필요해요');
+});
+
+test('S3b3-U13 빈 제목 날짜: 미리보기·피드에서 세션 날짜 표기', async ({ page }) => {
+  await mockApp(page, {
+    ...COMMUNITY_PRO_WITH_SESSIONS,
+    sessions: {
+      calendar: [{ date: '2026-11-12', totalSeconds: 1800, level: 2 }],
+      sessions: [{ ...SAMPLE_PRACTICE_SESSION, date: '2026-11-12' }],
+    },
+    routes: communityRoutes({
+      onMyEpisodeLogs: (route, json) => json(route, { posts: [], next: null }),
+      onEpisodeLogs: (route, json) => json(route, {
+        posts: [{ ...EPISODE_POST_1, title: '', date: '2026-11-12' }],
+        next: null,
+      }),
+    }),
+  });
+  await page.goto('/log.html');
+  await page.locator('[data-share-action="open"]').click();
+  const dialog = page.locator('#episodeShareDialog');
+  await expect(dialog.locator('#shareTitleHead')).toContainText('2026년 11월 12일');
+  await dialog.locator('#shareTitleHead').click();
+  await expect(dialog.locator('#shareTitleInput')).toHaveAttribute('placeholder', '2026년 11월 12일');
+
+  await page.goto('/community.html');
+  const feedCard = page.locator(`[data-post-id="${EPISODE_POST_1.postId}"]`);
+  await expect(feedCard).toContainText('2026년 11월 12일');
+  await expect(feedCard).not.toContainText('연습 기록');
 });
