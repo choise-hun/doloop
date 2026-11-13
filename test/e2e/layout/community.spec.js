@@ -47,6 +47,43 @@ layoutSuite({
   dark: 'communityPro',
 });
 
+// S3b-4: 카드 녹음 재생 중·오류 상태 4폭+다크 검사
+const COMMUNITY_CARD_AUDIO_ERROR = {
+  ...STATES.userData,
+  me: COMMUNITY_PRO_ME,
+  routes: communityRoutes({
+    onAttachmentUrl: (route, json) => json(route, { code: 'INTERNAL', message: 'error' }, 500),
+  }),
+};
+
+layoutSuite({
+  name: 'community-card-audio',
+  path: '/community.html#logs',
+  states: [
+    { name: 'playing', mock: COMMUNITY_PRO },
+    { name: 'error', mock: COMMUNITY_CARD_AUDIO_ERROR },
+  ],
+  ready: async (page, stateName) => {
+    await page.locator('#episodeScopeAll').waitFor();
+    const card = page.locator(`[data-post-id="${EPISODE_POST_1.postId}"]`);
+    await card.waitFor();
+    await page.evaluate(() => {
+      HTMLMediaElement.prototype.play = () => Promise.resolve();
+      HTMLMediaElement.prototype.pause = () => {};
+      HTMLMediaElement.prototype.load = () => {};
+    });
+    const btn = card.locator('[data-episode-play]');
+    await btn.click();
+    if (stateName === 'playing') {
+      await expect(btn).toHaveAttribute('data-play-state', 'playing');
+    } else if (stateName === 'error') {
+      await expect(btn).toHaveAttribute('data-play-state', 'error');
+      await expect(card.locator('[data-episode-play-error]')).toBeVisible();
+    }
+  },
+  dark: 'playing',
+});
+
 // CMR-1: 전체 빈 상태(#communityAllEmpty) 4폭 검사
 const COMMUNITY_EMPTY = {
   ...STATES.userData,

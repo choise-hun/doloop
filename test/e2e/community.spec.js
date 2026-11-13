@@ -2095,3 +2095,55 @@ for (const [label, impact, expectExtra] of [
     else expect(messages[0]).toBe('이 곡과 모든 연습 기록·녹음 파일을 함께 삭제할까요?');
   });
 }
+
+// ── S3b-4 D7: 녹음 삭제 확인에 공유 영향 문장 ──
+for (const [label, impact, expectExtra] of [
+  ['영향 있음 {1,1}', { status: 200, body: { cards: 1, attachments: 1 } }, '공유된 녹음이 커뮤니티 게시물에서도 삭제됩니다(카드는 유지).'],
+  ['영향 0', { status: 200, body: { cards: 0, attachments: 0 } }, null],
+  ['조회 실패 500', { status: 500, body: { code: 'INTERNAL', message: 'x' } }, null],
+]) {
+  test(`S3b4-P10t 녹음 삭제 영향: ${label}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const song = STATES.userData.songs[0];
+    const takeId = '00000000-0000-4000-8000-000000000951';
+    const sessionId = '00000000-0000-4000-8000-000000000851';
+    const impactQueries = [];
+    let deletes = 0;
+    await mockApp(page, {
+      ...COMMUNITY_LIKE_STATE,
+      songDetail: {
+        song,
+        takes: [{
+          id: takeId, sessionId, recordedAt: '2026-11-08T10:00:00Z',
+          a: 12, b: 48, rate: 1, durationSec: 25,
+          mime: 'audio/webm', sizeBytes: 9000, storage: 'supabase', storageKey: `u1/${takeId}.weba`, memo: '',
+        }],
+        sessions: [{
+          id: sessionId, date: '2026-11-08', seconds: 300, minutes: 5, loops: 10,
+          a: 12, b: 48, segment: '0:12–0:48', rate: 1, memo: '',
+        }],
+      },
+      routes: [
+        ...communityRoutes({
+          onShareImpact: (route, json, q) => { impactQueries.push(q.toString()); return json(route, impact.body, impact.status); },
+        }),
+        [(url) => url.pathname === `/api/v1/takes/${takeId}`, (route) => {
+          if (route.request().method() === 'DELETE') { deletes += 1; return route.fulfill({ json: { ok: true } }); }
+          return route.fallback();
+        }],
+      ],
+    });
+    const messages = [];
+    page.on('dialog', (d) => { messages.push(d.message()); d.accept(); });
+    await page.goto(`/practice.html?v=${song.videoId}`, { waitUntil: 'load' });
+    test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+    const takeRow = page.locator(`#songRecord .ab-select[data-take-id="${takeId}"]`).locator('xpath=ancestor::div[contains(@class,"take-row")]');
+    await takeRow.locator('.btnDelete').click();
+    await expect.poll(() => deletes).toBe(1);
+    expect(impactQueries).toEqual([`takeId=${takeId}`]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].startsWith('이 녹음을 삭제할까요?')).toBe(true);
+    if (expectExtra) expect(messages[0]).toContain(expectExtra);
+    else expect(messages[0]).toBe('이 녹음을 삭제할까요?');
+  });
+}
