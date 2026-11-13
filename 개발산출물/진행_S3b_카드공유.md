@@ -27,7 +27,7 @@
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
 | 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **PR [#15](https://github.com/choise-hun/doloop/pull/15) main 머지 완료(`f9cc06d`)** Gradle 380, P2 2건 해결 |
-| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → [결과/S3b-3](결과/S3b-3.md) | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **4단계 최종 검증 완료(2026-11-13, §14) → main PR 생성·CI 확인 진행** |
+| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → [결과/S3b-3](결과/S3b-3.md) | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **PR #16 Codex P1·P2 3-P 수정 반영 완료(`4b0abf6`, 전체 회귀 + CI 6개 통과, [결과 §5](결과/S3b-3.md)) → 사용자 머지 대기** |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
 
 - 운영 배포: **S3b-4 머지 뒤 한 번에**(중간 main은 녹음 첨부 UI가 없어 첨부 생성 경로가 열리지 않는다). CMR-4는 단독 배포 가능.
@@ -225,3 +225,4 @@ Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성�
   - `./gradlew test`: **381건 전부 통과**(실패 0·오류 0·skip 0, `BUILD SUCCESSFUL in 59s`)
   - `git grep -n "shareConsentCheckbox" frontend/src test/e2e`: **0건**
 - PR #16([#16](https://github.com/choise-hun/doloop/pull/16), head `2fc7549`) CI 6개 체크 전부 통과. Codex 리뷰 P1(`frontend/src/lib/drive.ts:100`), P2(`frontend/src/components/songRecord/EpisodeShareDialog.tsx:380`) 2건 확인 → 제품 코드 수정은 시니어 3-P로 인계.
+- 시니어 3-P 수정 반영(주니어 4단계, 커밋 `4b0abf6`): `npm run build` 통과, `npm test` **422건 / 58 suite 전부 통과**, `npx playwright test` **753건 전부 통과**(12.2m). PR #16(`4b0abf6`) CI 6개 체크 전부 통과, Codex P1·P2 스레드 답글 완료, 새 리뷰 지적 없음.
