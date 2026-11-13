@@ -1,6 +1,7 @@
 package ulevelp.routes
 
 import io.ktor.http.*
+import kotlinx.serialization.json.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -14,12 +15,18 @@ internal fun Route.registerSessionEpisodeRoutes(service: EpisodeLogService) {
         val user = call.requireAuthUser()
         val id = parsePathUuid(call.parameters["sessionId"])
         val body = call.receiveJsonObject()
-        body.episodeKeys("title", "comment")
+        body.episodeKeys("title", "comment", "attachment")
         val title = body.episodeString("title", 80)
         val comment = body.episodeString("comment", 500, multiline = true)
-        val (created, response) = service.share(user.id, id, title, comment)
+        val (created, response) = service.share(user.id, id, title, comment, ShareAttachmentInput.parse(body["attachment"]))
         call.response.headers.append(HttpHeaders.CacheControl, "no-store")
         call.respond(if (created) HttpStatusCode.Created else HttpStatusCode.OK, response)
+    }
+    delete("/{sessionId}/share/attachment") {
+        val user = call.requireAuthUser()
+        val id = parsePathUuid(call.parameters["sessionId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.removeAttachment(user.id, id))
     }
     delete("/{sessionId}/share") {
         val user = call.requireAuthUser()
@@ -34,6 +41,36 @@ private fun parseLikePostId(raw: String?): java.util.UUID =
     try { parsePathUuid(raw) } catch (_: NotFoundException) { throw InvalidInputException("postId 형식이 올바르지 않습니다.") }
 
 internal fun Route.registerCommunityEpisodeRoutes(service: EpisodeLogService) {
+    get("/me/share-consent") {
+        val user = call.requireAuthUser()
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.shareConsent(user.id))
+    }
+    post("/me/share-consent") {
+        val user = call.requireAuthUser()
+        val body = call.receiveJsonObject()
+        body.episodeKeys("noticeVersion")
+        val version = (body["noticeVersion"] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+            ?: throw InvalidInputException("noticeVersion 형식이 올바르지 않습니다.")
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.agreeShareConsent(user.id, version))
+    }
+    post("/me/share-consent/withdraw-recording") {
+        val user = call.requireAuthUser()
+        val body = call.receiveJsonObject()
+        body.episodeKeys("removeExisting")
+        val remove = (body["removeExisting"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+            ?: throw InvalidInputException("removeExisting 형식이 올바르지 않습니다.")
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.withdrawRecordingConsent(user.id, remove))
+    }
+    get("/episode-logs/{postId}/attachments/{attachmentId}/url") {
+        call.requireAuthUser()
+        val postId = parsePathUuid(call.parameters["postId"])
+        val attachmentId = parsePathUuid(call.parameters["attachmentId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.attachmentUrl(postId, attachmentId))
+    }
     get("/episode-logs") {
         val user = call.requireAuthUser()
         val query = call.request.queryParameters

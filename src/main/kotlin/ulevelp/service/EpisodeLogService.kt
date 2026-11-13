@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import ulevelp.api.*
 import ulevelp.db.*
+import ulevelp.db.SharedCardAttachmentsTable as A
 import ulevelp.db.SharedPracticeCardsTable as C
 import ulevelp.db.SharedPracticeCardReportsTable as R
 import ulevelp.db.SharedPracticeCardLikesTable as L
@@ -15,7 +16,8 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /** 개인 DTO를 거치지 않고 명시적으로 동의한 스냅샷만 공개한다. */
-class EpisodeLogService(private val db: Database?, private val communityService: CommunityService) {
+class EpisodeLogService(private val db: Database?, private val communityService: CommunityService,
+    private val attachments: ShareAttachmentService = ShareAttachmentService(db, null, StorageTrashService(db, null))) {
     private fun requireDb() = db ?: throw ApiException(HttpStatusCode.ServiceUnavailable, "DB_UNAVAILABLE", "데이터베이스가 연결되어 있지 않습니다.")
     private val joined get() = C.join(SessionsTable, JoinType.INNER, C.sessionId, SessionsTable.id)
         .join(SongsTable, JoinType.INNER, SessionsTable.songId, SongsTable.id)
@@ -110,7 +112,7 @@ class EpisodeLogService(private val db: Database?, private val communityService:
         return PublicEpisodeLogDto(row[C.id].toString(), row[C.sessionId].toString(),
             PublicOwnerDto(row[C.userId].toString(), row[ProfilesTable.publicName], row[ProfilesTable.isCreator], row[ProfilesTable.creatorBadge]),
             s.videoId, meta?.get(VideoTitlesTable.title), meta?.get(VideoTitlesTable.author), row[C.title], row[C.comment], episodeTs(row[C.publishedAt])!!,
-            s.date, s.seconds, s.loops, s.a, s.b, s.rate, s.coveragePct, s.partStats, like.first, like.second)
+            s.date, s.seconds, s.loops, s.a, s.b, s.rate, s.coveragePct, s.partStats, like.first, like.second, with(attachments) { publicAttachments(row[C.sessionId]) })
     }
 
     private fun Transaction.mineDto(row: ResultRow, likes: Map<UUID, Pair<Int, Boolean>>): MyEpisodeLogDto {
@@ -122,10 +124,26 @@ class EpisodeLogService(private val db: Database?, private val communityService:
             episodeTs(row[C.withdrawnAt]), episodeTs(row[C.createdAt])!!, episodeTs(row[C.updatedAt])!!,
             !hidden && paid && !row[ProfilesTable.publicName].isNullOrBlank() && (row[C.withdrawnAt] != null || row[C.tierPausedAt] != null),
             EpisodeReportCountsDto(counts["open"] ?: 0, counts["resolved"] ?: 0, counts["dismissed"] ?: 0),
-            if (row[C.withdrawnAt] != null) null else publicDto(row, likes))
+            if (row[C.withdrawnAt] != null) null else publicDto(row, likes), with(attachments) { myAttachment(row[C.sessionId]) })
     }
 
-    suspend fun share(userId: UUID, sessionId: UUID, title: String, comment: String): Pair<Boolean, ShareEpisodeResponse> = DatabaseFactory.dbQuery(requireDb()) {
+    suspend fun share(userId: UUID, sessionId: UUID, title: String, comment: String): Pair<Boolean, ShareEpisodeResponse> =
+        share(userId, sessionId, title, comment, ShareAttachmentInput("keep"))
+
+    internal suspend fun share(userId: UUID, sessionId: UUID, title: String, comment: String, input: ShareAttachmentInput): Pair<Boolean, ShareEpisodeResponse> {
+        if (input.mode == "replace") return attachments.replace(userId, sessionId, input,
+            validate = { prepareShare(userId, sessionId, title, comment) },
+            publish = { val (old, snapshot) = prepareShare(userId, sessionId, title, comment); writeShare(userId, sessionId, title, comment, old, snapshot) })
+        val (result, ids) = DatabaseFactory.dbQuery(requireDb()) {
+            val (old, snapshot) = prepareShare(userId, sessionId, title, comment)
+            val ids = if (input.mode == "none") with(attachments) { removeShareAttachments { A.sessionId eq sessionId } } else emptyList()
+            writeShare(userId, sessionId, title, comment, old, snapshot) to ids
+        }
+        attachments.purge(ids)
+        return result
+    }
+
+    private fun Transaction.prepareShare(userId: UUID, sessionId: UUID, title: String, comment: String): Pair<ResultRow?, PublicSessionSnapshot> {
         // Ownership is checked before exposing tier or moderation information.
         val ctx = tierContext(userId, lock = true)
         val source = lockSource(userId, sessionId)
@@ -136,7 +154,10 @@ class EpisodeLogService(private val db: Database?, private val communityService:
         if (profile[ProfilesTable.publicName].isNullOrBlank()) episodeConflict("PUBLIC_NAME_REQUIRED")
         BannedWords.require("title", title)
         BannedWords.require("comment", comment)
-        val s = snapshot(source)
+        return old to snapshot(source)
+    }
+
+    private fun Transaction.writeShare(userId: UUID, sessionId: UUID, title: String, comment: String, old: ResultRow?, s: PublicSessionSnapshot): Pair<Boolean, ShareEpisodeResponse> {
         val now = OffsetDateTime.now(ZoneOffset.UTC)
         val id = old?.get(C.id) ?: UUID.randomUUID()
         if (old == null) C.insert {
@@ -148,19 +169,57 @@ class EpisodeLogService(private val db: Database?, private val communityService:
             it[status] = "published"; it[withdrawnAt] = null; it[tierPausedAt] = null
             if (old[C.withdrawnAt] != null || old[C.tierPausedAt] != null) it[publishedAt] = now
         }
-        (old == null) to ShareEpisodeResponse(mineDto(joined.selectAll().where { C.id eq id }.single(), likeStates(userId, listOf(id))))
+        return (old == null) to ShareEpisodeResponse(mineDto(joined.selectAll().where { C.id eq id }.single(), likeStates(userId, listOf(id))))
     }
 
-    suspend fun withdraw(userId: UUID, sessionId: UUID): WithdrawEpisodeResponse = DatabaseFactory.dbQuery(requireDb()) {
-        tierContext(userId, lock = true)
+    private fun Transaction.lockCard(userId: UUID, sessionId: UUID): ResultRow? {
         lockSource(userId, sessionId)
-        val old = C.selectAll().where { C.sessionId eq sessionId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
-        if (old != null && old[C.withdrawnAt] == null) C.update({ C.id eq old[C.id] }) {
-            it[withdrawnAt] = OffsetDateTime.now(ZoneOffset.UTC); it[title] = ""; it[comment] = ""; it[publicSession] = JsonObject(emptyMap())
-            // 공유 중지 시 좋아요를 같은 트랜잭션에서 지운다(다시 게시하면 0부터).
-            L.deleteWhere { cardId eq old[C.id] }
+        return C.selectAll().where { C.sessionId eq sessionId }.forUpdate(ForUpdateOption.ForUpdate).singleOrNull()
+    }
+
+    suspend fun withdraw(userId: UUID, sessionId: UUID): WithdrawEpisodeResponse {
+        val ids = DatabaseFactory.dbQuery(requireDb()) {
+            tierContext(userId, lock = true)
+            val old = lockCard(userId, sessionId)
+            if (old != null && old[C.withdrawnAt] == null) {
+                C.update({ C.id eq old[C.id] }) {
+                    it[withdrawnAt] = OffsetDateTime.now(ZoneOffset.UTC); it[title] = ""; it[comment] = ""; it[publicSession] = JsonObject(emptyMap())
+                }
+                L.deleteWhere { cardId eq old[C.id] }
+            }
+            with(attachments) { removeShareAttachments { A.sessionId eq sessionId } }
         }
-        WithdrawEpisodeResponse()
+        attachments.purge(ids)
+        return WithdrawEpisodeResponse()
+    }
+
+    suspend fun removeAttachment(userId: UUID, sessionId: UUID): RemoveAttachmentResponse {
+        val (count, ids) = DatabaseFactory.dbQuery(requireDb()) {
+            tierContext(userId, lock = true)
+            lockCard(userId, sessionId)
+            val count = A.selectAll().where { A.sessionId eq sessionId }.count().toInt()
+            count to with(attachments) { removeShareAttachments { A.sessionId eq sessionId } }
+        }
+        attachments.purge(ids)
+        return RemoveAttachmentResponse(removed = count)
+    }
+
+    suspend fun shareConsent(userId: UUID) = attachments.consent(userId)
+    suspend fun agreeShareConsent(userId: UUID, version: Int) = attachments.agree(userId, version)
+    suspend fun withdrawRecordingConsent(userId: UUID, removeExisting: Boolean) = attachments.withdrawConsent(userId, removeExisting) {
+        if (removeExisting) {
+            val sessions = A.select(A.sessionId).where { A.userId eq userId }.map { it[A.sessionId] }.distinct().sortedBy { it.toString() }
+            sessions.forEach { lockCard(userId, it) }
+        }
+    }
+
+    suspend fun attachmentUrl(postId: UUID, attachmentId: UUID): AttachmentUrlResponse {
+        val key = DatabaseFactory.dbQuery(requireDb()) {
+            val card = joined.selectAll().where { C.id eq postId }.singleOrNull()?.takeIf(::eligible) ?: throw NotFoundException()
+            A.selectAll().where { (A.id eq attachmentId) and (A.sessionId eq card[C.sessionId]) and (A.status eq "ready") }
+                .singleOrNull()?.get(A.storageKey) ?: throw NotFoundException()
+        }
+        return attachments.signedUrl(key)
     }
 
     suspend fun mine(userId: UUID, rawCursor: String?): MyEpisodeLogListResponse {

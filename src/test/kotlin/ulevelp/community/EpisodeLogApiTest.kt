@@ -85,7 +85,7 @@ class EpisodeLogApiTest : EpisodeTestSupport() {
         val s = session(a, parts = parts)
         client.publish(a,s)
         val row = client.feed(b).single().jsonObject
-        assertEquals(setOf("postId","sessionId","owner","videoId","youtubeTitle","youtubeArtist","title","comment","publishedAt","date","seconds","loops","a","b","rate","coveragePct","partStats","likeCount","likedByMe"), row.keys)
+        assertEquals(setOf("postId","sessionId","owner","videoId","youtubeTitle","youtubeArtist","title","comment","publishedAt","date","seconds","loops","a","b","rate","coveragePct","partStats","likeCount","likedByMe","attachments"), row.keys)
         assertEquals(setOf("id","publicName","isCreator","creatorBadge"), row["owner"]!!.jsonObject.keys)
         assertEquals(setOf("name","a","b","rate","completed","seconds","loops"), row["partStats"]!!.jsonArray.single().jsonObject.keys)
         assertFalse(row.toString().contains("PRIVATE_")); assertFalse(row.toString().contains("@example.com"))

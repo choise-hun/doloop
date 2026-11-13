@@ -5,18 +5,22 @@ import ulevelp.storage.StorageClient
 import ulevelp.storage.StorageException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 class FakeStorageClient : StorageClient {
     val objects = ConcurrentHashMap<String, ByteArray>()
     val deleted = CopyOnWriteArrayList<String>()
+    val downloadCount = AtomicInteger(0)
     @Volatile var failUpload = false
     @Volatile var failSign = false
     @Volatile var failDelete = false
     @Volatile var failDownload = false
     @Volatile var uploadDelayMs = 0L
+    @Volatile var onUploadStart: (suspend (String) -> Unit)? = null
     @Volatile var onUploadSuccess: ((String) -> Unit)? = null
 
     override suspend fun upload(key: String, bytes: ByteArray, contentType: String) {
+        onUploadStart?.invoke(key)
         if (uploadDelayMs > 0) {
             delay(uploadDelayMs)
         }
@@ -43,6 +47,7 @@ class FakeStorageClient : StorageClient {
     }
 
     override suspend fun download(key: String): ByteArray {
+        downloadCount.incrementAndGet()
         if (failDownload) {
             throw StorageException("Fake download failure")
         }
