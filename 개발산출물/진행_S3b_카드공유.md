@@ -1,7 +1,7 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **S3b-1 PR #14 main 머지 확인. S3b-2 1차 구현·표적 26건·최종 전체 Gradle 380건 통과 → 커밋·push·main PR 및 최신 CI/리뷰 확인 진행.**
+> 상태: **S3b-1 PR #14 main 머지 확인. S3b-2 1차 구현·표적 26건·최종 전체 Gradle 380건 통과 → PR #15 보강 코드 CI 통과·P2 2건 해결, 시니어 3단계 독립 검증 대기.**
 
 ## 1. 목표와 근거
 
@@ -26,7 +26,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
-| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **1차 구현·표적 26건·최종 전체 Gradle 380건 통과, PR/최신 CI 확인 진행** |
+| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **1차 구현·최종 전체 Gradle 380건·[PR #15](https://github.com/choise-hun/doloop/pull/15) 보강 head CI 통과·P2 2건 해결 → 시니어 3단계 독립 검증 대기** |
 | 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | S3b-2 머지 뒤 |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
 
@@ -71,7 +71,7 @@
 1. ~~§5 검토~~ 완료. ~~명세 PR #12 머지~~ 완료.
 2. ~~CMR-4 주니어 2단계·시니어 3단계·주니어 4단계~~ 완료(PR #13, [결과 §7·§8](결과/CMR-4.md)). `개발산출물/report.md` 삭제는 범위 밖 변경이므로 보존·커밋 제외. **PR #13은 2026-11-13 main 머지 확인(`ee68ad9`).**
 3. ~~계획 §1 10-2와 UIUX-R 서술 정리~~ PR #13에 포함(D9). UIUX-R §5.7 본문 세부는 S3b-4에서 마저 정리.
-4. S3b-1 PR [#14](https://github.com/choise-hun/doloop/pull/14)의 시니어 재검토에서 취소+원본 삭제 경계 결함을 재현·수정했다(§11). **다음은 §9의 주니어 4단계 마무리이며, 로컬 수정 게시·최신 CI 확인 전 머지 완료로 판단하지 않는다.** S3b-2는 수정된 PR #14의 실제 머지 확인 뒤 착수한다.
+4. S3b-2 1차 구현·로컬 회귀·PR #15 보강 head CI 확인을 마쳤다(§12, 결과 §6·§7). **다음은 §9의 시니어 3단계 독립 검증**이다. PR #15 머지·배포·S3b-3 착수는 하지 않았다.
 
 ## 8. 겪은 문제
 
@@ -157,11 +157,11 @@ Git 처리: 이번 3단계는 로컬 수정·표적 검증·기록까지. 반복
 - 사용자 지시: 시니어가 2단계의 1차 구현·명세 테스트·전체 Gradle 회귀·결과 기록·커밋·push·main PR·최신 head CI 확인까지 수행한다. 머지·배포·명세 밖 계약 변경은 제외한다.
 - 시작 `step/S3b-1`, `HEAD=57c308d`, 작업 트리 깨끗함. GitHub 연결 도구 오류 후 `gh pr view 14 --repo choise-hun/doloop --json state,mergedAt,mergeCommit,baseRefName,url`로 `MERGED`, base `main`, merge commit `46574e0f0d2d04321aa828c91b600a5806b905a8`, `mergedAt=2026-11-13T08:35:11Z`를 확인했다.
 - `git switch main` → `git pull --ff-only` → 위 merge commit의 HEAD 조상 여부 확인 → `git switch -c step/S3b-2` 완료. 브랜치 기준은 `46574e0`, 기존 사용자 변경 없음.
-- 최초에는 §6 확인 답변을 기다렸다. 이후 사용자가 운영 프로젝트 ID를 제공해 조회 성공(§6), **선행 조건 충족 후 구현·표적 검증 진행 중**이다.
-- 재개: 사용자 확인 결과/프로젝트 ID를 받은 뒤 §6에 실제 확인 근거를 기록하고, 현재 브랜치·미커밋 변경을 보존하면서 S3b-2 명세 §3 파일 및 테스트를 구현한다. 명세 §5 전 행·전체 Gradle 회귀·스크립트 구문 검증 후 결과 파일 작성, 커밋·push·main PR 및 최신 head CI/리뷰 확인, 시니어 3단계 인계까지 계속한다.
+- 최초에는 §6 확인 답변을 기다렸다. 이후 사용자가 운영 프로젝트 ID를 제공해 조회 성공(§6), 선행 조건을 충족한 뒤 아래 구현·검증·Git 게시까지 수행했다.
+- 다음 재개는 §9의 시니어 3단계 독립 검증이다. 현재 브랜치·사용자 변경을 보존하고 PR 최신 head와 로컬 HEAD 및 CI를 확인한 뒤 진행한다. 완료한 1차 구현·전체 회귀를 이유 없이 반복하지 않는다.
 
 - 구현·1차 검증: [결과/S3b-2](결과/S3b-2.md). 명세 표 전 행을 26개 표적 테스트로 검증했고 전체 377건 통과(실패/오류/skip 0), Git Bash 구문 검사·diff 검사 통과. L1/M1 실제 격리 변이 2건 모두 실패 확인 후 원본 가드의 전체 Green을 확인했다. Git 게시 및 최신 CI 확인은 아래 후속 기록으로 확정한다.
 
-- Git 게시: 구현 커밋 `517314257582c548bbe02c15db83ee1e89628f23`, `step/S3b-2` push 및 [PR #15](https://github.com/choise-hun/doloop/pull/15)(base main) 생성. 첫 push는 활성 계정 Hunseokc 권한 403으로 실패해 `gh auth switch --user choise-hun` 후 성공했다. CI/review 결과는 완료 후 기록한다.
+- Git 게시: 구현 커밋 `517314257582c548bbe02c15db83ee1e89628f23`, `step/S3b-2` push 및 [PR #15](https://github.com/choise-hun/doloop/pull/15)(base main) 생성. 첫 push는 활성 계정 Hunseokc 권한 403으로 실패해 `gh auth switch --user choise-hun` 후 성공했다. 후속 수정과 CI/review 결과는 아래와 결과 §6·§7에 기록했다.
 
-- PR #15 P2 2건을 현재 코드와 대조해 모두 타당 판정·수정했다. 곡/계정 CASCADE의 카드→첨부 잠금 순서 Red 2건, 같은 Drive 원본의 새 미사용 업로드 정리 Red 1건을 확인했다. 수정 후 최종 전체 380건(신규/관련 29건 포함) 실패/오류/skip 0, BUILD SUCCESSFUL in 1m 47s. 상세 재현·증거는 결과 §7. 보강 커밋 push 후 최신 head CI/리뷰를 확인한다.
+- PR #15 P2 2건을 현재 코드와 대조해 모두 타당 판정·수정했다. 곡/계정 CASCADE의 카드→첨부 잠금 순서 Red 2건, 같은 Drive 원본의 새 미사용 업로드 정리 Red 1건을 확인했다. 수정 후 최종 전체 380건(신규/관련 29건 포함) 실패/오류/skip 0, BUILD SUCCESSFUL in 1m 47s. 상세 재현·증거는 결과 §7. 보강 커밋 `322c584b7adb5e7733d9e0046f58c55de898ce8b` push 후 [CI 43398953828](https://github.com/choise-hun/doloop/actions/runs/43398953828) completed/success(Node·Kotlin·Playwright·Docker·CI ok 전부 성공)를 확인했다. 종료 후 리뷰 재확인: 라인 지적 2건 모두 resolved, 추가 지적 없음. 이후 진행/결과 문서만 게시하며 최신 문서 체크와 코드 CI를 구별한다. 머지·배포·신규 Scheduler 등록은 하지 않았다.
