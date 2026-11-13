@@ -1746,7 +1746,11 @@ test('CMR4-E1 좋아요 반영: 요청 중 disabled, 응답 뒤 좋아요 · 7·
   const btn = likeCard(page).locator('[data-episode-like]');
   await expect(btn).toHaveText('좋아요 · 3');
   await expect(btn).toHaveAttribute('aria-checked', 'false');
-  await btn.click();
+  // 같은 JS 작업 안의 연속 이벤트: React disabled 반영 전 진입도 ref가 막아야 한다.
+  await btn.evaluate((el) => {
+    el.click();
+    el.click();
+  });
   await expect(btn).toBeDisabled();
   await expect(btn).toHaveText('좋아요 · 3'); // 낙관적 갱신 없음
   release();
@@ -1795,7 +1799,7 @@ test('CMR4-E3 404: 사라진 글이면 안내 후 카드 제거·첫 페이지 �
   expect(feedCalls).toBeGreaterThanOrEqual(2);
 });
 
-test('CMR4-E4 늦은 응답: 응답 지연 중 탭을 떠났다 돌아오면 늦은 응답이 새 화면 값을 바꾸지 않음', async ({ page }) => {
+test('CMR4-E4a 늦은 응답: 응답 지연 중 탭을 떠났다 돌아오면 늦은 응답이 새 화면 값을 바꾸지 않음', async ({ page }) => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   let started;
@@ -1825,9 +1829,91 @@ test('CMR4-E4 늦은 응답: 응답 지연 중 탭을 떠났다 돌아오면 늦
   await expect(btn).toHaveText('좋아요 · 3');
   const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
   release();
-  await lateResponse;
+  await (await lateResponse).finished();
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(btn).toHaveText('좋아요 · 3');
   await expect(btn).toHaveAttribute('aria-checked', 'false');
   expect(errors).toEqual([]);
+});
+
+test('CMR4-E4b 늦은 응답: 피드는 유지하고 폭 변경으로 카드를 재마운트해도 이전 요청은 폐기', async ({ page }) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started;
+  const startedP = new Promise((resolve) => { started = resolve; });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      // 두 번째 카드는 3열의 두 번째 열에서 1열의 첫 번째 열로 이동한다.
+      onEpisodeLogs: (route, json) => json(route, { posts: [
+        { ...EPISODE_POST_1, postId: '00000000-0000-4000-8000-000000009999' },
+        EPISODE_POST_1,
+      ], next: null }),
+      onEpisodeLike: async (route, json) => {
+        started();
+        await gate;
+        return json(route, { liked: true, likeCount: 7 });
+      },
+    }),
+  });
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await btn.click();
+  await startedP;
+  const oldButton = await btn.elementHandle();
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect.poll(() => oldButton.evaluate((el) => el.isConnected)).toBe(false);
+  await expect(btn).toBeEnabled();
+  const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
+  release();
+  await (await lateResponse).finished();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(btn).toHaveText('좋아요 · 3');
+  await expect(btn).toHaveAttribute('aria-checked', 'false');
+});
+
+test('CMR4-E4c 계정 A→B 전환 뒤 A의 좋아요 응답이 B의 상태를 바꾸지 않음', async ({ page }) => {
+  const { DEFAULT_ME } = require('./support/mock-app');
+  const bId = '00000000-0000-4000-8000-000000009998';
+  let accountB = false;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started;
+  const startedP = new Promise((resolve) => { started = resolve; });
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLogs: (route, json) => json(route, { posts: [
+        { ...EPISODE_POST_1, likeCount: accountB ? 11 : 3, likedByMe: accountB },
+      ], next: null }),
+      onEpisodeLike: async (route, json) => {
+        started();
+        await gate;
+        return json(route, { liked: false, likeCount: 7 });
+      },
+    }),
+  });
+  await page.route('**/api/v1/me', (route) => route.fulfill({ json: {
+    ...DEFAULT_ME, ...COMMUNITY_PRO_ME, id: accountB ? bId : DEFAULT_ME.id,
+  } }));
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await btn.click();
+  await startedP;
+  accountB = true;
+  await page.evaluate((id) => {
+    const session = { access_token: 'b-token', user: { id } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session }, error: null });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, bId);
+  await expect(btn).toHaveText('좋아요 · 11');
+  await expect(btn).toHaveAttribute('aria-checked', 'true');
+  const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
+  release();
+  await (await lateResponse).finished();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(btn).toHaveText('좋아요 · 11');
+  await expect(btn).toHaveAttribute('aria-checked', 'true');
+  await expect(btn).toBeEnabled();
 });

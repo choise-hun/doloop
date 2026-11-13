@@ -1,7 +1,7 @@
 # CMR-4 결과 — 게시물(연습 기록 카드) 좋아요 (S2) 1차 구현·검증
 
 > 2026-11-13 / Windows / 주니어 역할(Claude Sonnet 임시 투입) 4단계 중 2단계. 명세 [CMR-4](../명세/CMR-4_구현명세.md). 브랜치 `step/CMR-4`(base `main`=`5fcbacf`), PR [#13](https://github.com/choise-hun/doloop/pull/13). 코드 head `20ba323`(문서 커밋은 그 뒤 — 아래 §6 최종 head).
-> 다음 담당: 시니어 3단계 독립 검증(§5 결정 요청 2건 포함).
+> 현재: 시니어 3단계 독립 검증 완료(§7, 2026-11-13). 다음 담당: 주니어 4단계 최종 회귀·문서·기존 PR/CI 정리. 시니어 변경은 미커밋이며 PR head는 `cfab9a5` 유지.
 
 ## 1. 한 일
 
@@ -81,3 +81,73 @@
 - head `758e1f6` CI: Detect·Test(Node 22)·Kotlin(JDK 21)·Docker·E2E XSS & CSP·CI ok 전부 pass(run 43359226684).
 - Codex 리뷰(commit `20ba323`) P1 1건: 좋아요 경로 잘못된 UUID 400 → **타당**(승인 명세 §4.2·L7). 수정: `parseLikePostId`, 테스트 400 단언(PUT·DELETE). 로컬 `./gradlew clean test --tests EpisodeLikeApiTest` 8건 통과. 수정 커밋 `26962d2` CI: Detect·Test(Node 22)·Kotlin(JDK 21)·Docker·E2E XSS & CSP·CI ok 전부 pass(run 43360717764).
 - 이후 Codex가 `26962d2`를 다시 리뷰했는지는 확인하지 못했다(2026-11-13 기준 코멘트는 `20ba323` 대상 P1 1건뿐, 위에서 처리). 이 기록 커밋은 문서 전용이다.
+
+## 7. 시니어 3단계 독립 검증 (2026-11-13 / Windows / Codex)
+
+### 7.1 대상·판정
+
+- `gh` 활성 계정 `choise-hun`, 브랜치 `step/CMR-4`, 로컬·PR #13 head `cfab9a5348690476e808f699f1093a07d9492ba7`, base `main`, OPEN. 시작 시 작업 트리 깨끗함. 이미 대상 브랜치라 전환 불필요.
+- 템플릿 §3 적용. §3-P는 특정 리뷰 결함만 남은 경우인데 이번 요청은 신규 독립 검증·변이 검사·명세 판단을 포함하므로 축소판 조건에 해당하지 않는다.
+- PR의 프로덕션·테스트 diff와 관련 호출부를 직접 대조했다. 현재 프로덕션 결함은 발견하지 않았고, **E1/E4의 검증 구멍 2건을 보강**했다. 일반 전체 회귀는 4단계에 맡긴다.
+
+| 확인 요청 | 시니어 판단·근거 |
+| --- | --- |
+| 좋아요만 형식 오류 400 | **수용·유지.** 승인 명세 §4.2·L7이 400 `INVALID_INPUT`이다. `EpisodeRoutes.kt:33,50,56`의 전용 파서가 공용 `JsonInput.kt:202`의 404를 좋아요 두 경로에 한해 변환한다. 기존 신고·폴더 계약을 일괄 변경하지 않는다. PUT·DELETE 400/401 및 DB 무변경을 L7에서 실제 확인 |
+| 명세 §5 “한 줄” | **정정.** 모든 폭에서 카드 폭에 따른 flex-wrap을 허용하고 좋아요 첫 항목·겹침/넘침 없음을 명시. 오류 문구도 카드 폭에 따른 줄바꿈 허용. 버튼 크기·카드 폭·제품 코드는 변경하지 않음. 4개 폭+다크 캡처에서 행동 줄 2줄을 직접 확인 |
+| 목록 밖 두 파일 | **수용, 명세 §3 목록에 추가.** `communityMock.ts:83-84`는 D7 필수 타입 필드 추가, `EpisodeLogApiTest.kt:88`은 정확 키 집합에 두 키 추가. 기존 키 삭제나 느슨한 포함 단언으로 바꾸지 않았음 |
+| 피드 간 동기화 | 현재 승인 D8은 요청한 카드에 서버 확정 응답을 반영하는 계약이다. 다른 피드·내 게시물까지 전역 동기화하는 기능은 추가하지 않음 |
+
+서버 정적 근거: `EpisodeLogService.kt:98` 일괄 GROUP BY, `:151,172,210` 공유/내 목록/피드 DTO 반영, `:161` 철회 트랜잭션 내 삭제, `:222-228` 카드 잠금→eligible 재조회→본인 좋아요 행만 수정→집계. 공개 DTO에 비공개 데이터 추가 없음. 프런트 근거: `EpisodeLogCard.tsx:32-73` ref/uid/seq/언마운트 가드, `EpisodeLogFeed.tsx:162,229,243,250` 서버 응답 반영 및 렌더 3경로 연결.
+
+### 7.2 변이 검사와 테스트 보강
+
+각 변이는 `EpisodeLogCard.tsx` 원본을 임시 경로에 바이트 단위 보관하고 **각각 원본에서 시작**했다. 매 변이마다 `npm run build` 후 아래 명령을 실행했다. 최종 원본 바이트 복원 및 `git diff -- frontend/src/components/community/EpisodeLogCard.tsx` 출력 없음 확인. 프로덕션 변경은 남지 않는다.
+
+| 변이 | 실행 | 실제 결과 |
+| --- | --- | --- |
+| `if (likeBusyRef.current) return` 제거 | `npx playwright test test/e2e/community.spec.js -g 'CMR4-E1'` | 기존 E1 통과 → 같은 JS 작업에서 `el.click()` 2회로 보강 후 **실패**, 요청 수 기대 1 / 실제 2 (`community.spec.js:1760`) |
+| try/catch `if (!isCurrent()) return` 제거 + finally 조건 제거 | `npx playwright test test/e2e/community.spec.js -g 'CMR4-E4'`(기존 E4), 이후 `-g 'CMR4-E4b'` | 기존 탭 이탈 E4 통과 → E4b 추가 후 **실패**, 기대 `좋아요 · 3` / 실제 `좋아요 · 7` (`:1872`) |
+| 요청 직후 `onLikeChange?.(post.postId, target, likeCount + 1)` 삽입 | `npx playwright test test/e2e/community.spec.js -g 'CMR4-E1'` | **실패**, 요청 중 기대 3 / 실제 4 (`:1755`) |
+
+- E4a: 기존 탭 이탈/복귀 시나리오 유지. 응답 본문 처리까지 `response.finished()`로 기다리도록 보강.
+- E4b: 같은 피드를 유지하면서 두 번째 카드를 1280→390 폭 변경으로 다른 masonry 열로 이동시킨다. 이전 DOM의 `isConnected=false`와 새 버튼 활성화를 확인하고 늦은 응답을 풀어, 살아 있는 피드의 posts가 오염되는지 관찰한다. 초기 실험에서 첫 번째 카드는 같은 열에 남아 재마운트되지 않았으므로 두 번째 카드 fixture로 바로잡았다(프로덕션 결함 아님).
+- E4c: 인증 listener로 A→B 전환, B의 별도 값 `11/true`가 표시된 뒤 A의 지연 응답 `7/false`를 풀고 B 값·버튼 활성 유지 확인. uid/seq 개별 조건만 제거하는 변이, 지연 오류 응답은 별도로 실행하지 않았다.
+
+### 7.3 실제 최종 검증·제한
+
+| 명령·대상 | 결과 |
+| --- | --- |
+| `./gradlew.bat '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.daemon.jvmargs=-Xmx3g' cleanTest test --tests ulevelp.community.EpisodeLikeApiTest` | 격리 Testcontainers PostgreSQL에서 **8 tests, failures/errors/skipped 모두 0**, BUILD SUCCESSFUL. 최초 `test`만 실행한 것은 UP-TO-DATE라 실행 증거로 세지 않고 `cleanTest`로 실제 재실행 |
+| 원본 복원 후 `npm run build` | TypeScript·Vite 통과(기존 CJS/script/chunk 경고) |
+| `npx playwright test test/e2e/community.spec.js -g 'CMR4-E'` | **6 passed**(E1·E2·E3·E4a/b/c), skip 없음 |
+| `$env:LAYOUT_SHOTS='1'; npx playwright test test/e2e/layout/community.spec.js -g 'community-pro\|community-logs'` | **10 passed**, 종료 후 환경변수 제거 |
+| `test-results/layout-shots/community-logs-communityPro-{390,768,1150,1280,1280-dark}.png` | 5장 직접 검토. 좋아요 첫 항목·행동 줄 줄바꿈·카드 내부 겹침/넘침 없음. 기존 Q1~Q9 판단 유지. 오류 상태 캡처는 이번에도 미실행 |
+| `git diff --check` | 통과(최종 문서 갱신 후 재확인) |
+
+전체 Gradle·마이그레이션 단독·`npm test`·community/cm-ui 전체 회귀는 이번 3단계에서 미실행. §2의 주니어 결과를 이번 실행 결과로 승격하지 않는다. 기존 npm 실패 3건의 main 재현도 이번에는 재실행하지 않았다. 레이아웃 spec 선작성 Red 순서 누락은 과거 절차 위반으로 유지하며 소급 충족을 주장하지 않는다.
+
+### 7.4 Git·CI·리뷰·4단계 입력
+
+- 최신 게시 head `cfab9a5`: [run 43361814639](https://github.com/choise-hun/doloop/actions/runs/43361814639) SUCCESS. Detect/CI ok만 실행, Node/Kotlin/E2E/Docker는 SKIPPED. 코드 테스트 통과로 표현하지 않는다.
+- 직전 코드 head `26962d2`: [run 43360717764](https://github.com/choise-hun/doloop/actions/runs/43360717764)에서 6 job 모두 SUCCESS를 API로 재확인. 로컬 미커밋 테스트 보강까지 검증한 CI는 아직 없다.
+- 현재 리뷰 1건은 `20ba323` 대상 [P1](https://github.com/choise-hun/doloop/pull/13#discussion_r4559334200). 타당하며 현재 전용 파서+L7로 이미 해소. `26962d2` 이후 새 리뷰는 조회 시 없음. 댓글·리뷰 게시·스레드 resolve는 수행하지 않음.
+- 시니어 변경: `test/e2e/community.spec.js`, CMR-4 명세, 이 결과 파일, S3b 진행 파일만. 모두 unstaged/미커밋. commit/push/merge/deploy 없음.
+- 실행 도중 범위 밖 `개발산출물/report.md` 삭제가 관찰됐다(시작 상태에는 없었음). 원인을 단정하지 않고 복구·수정하지 않는다. **사용자/동시 작업 변경으로 보존하고 4단계 커밋에서 제외**한다.
+- 다음은 템플릿 §4. 최종 전체 회귀·명세 체크리스트와 오류 상태 캡처 확인, 기존 npm 3실패의 최종 영향 판단, 결과/진행 문서 갱신, CMR-4 파일만 커밋·push·기존 PR #13 갱신, 최신 head CI와 리뷰 확인. S3b-1 이후 착수·머지·배포 금지. 구체 인계문은 진행 §9.
+
+## 8. 주니어 4단계 최종 검증·마무리 (2026-11-13 / Windows / Gemini)
+
+- 시니어 3단계 diff(`test/e2e/community.spec.js`, 명세, 결과, 진행) 및 판단(좋아요만 400 유지, §5 카드 폭별 줄바꿈 허용, 목록 밖 2건 수용) 대조 완료. E1 연속 클릭·E4a/b/c 단언 변경 없음.
+- 범위 밖 `개발산출물/report.md` 삭제는 보존하고 이번 커밋에서 제외한다.
+
+| 명령·대상 | 실제 결과 |
+| --- | --- |
+| `./gradlew.bat '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.daemon.jvmargs=-Xmx3g' cleanTest test --tests "ulevelp.community.EpisodeLikeApiTest"` | 통과 (`BUILD SUCCESSFUL in 16s`) |
+| `./gradlew.bat '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.daemon.jvmargs=-Xmx3g' cleanTest test --tests "ulevelp.db.DatabaseMigrationAndIntegrityTest"` | 단독 통과 (7건, Flyway v11·테이블 27개, `BUILD SUCCESSFUL in 6s`) |
+| `./gradlew.bat '-Dorg.gradle.jvmargs=-Xmx3g' '-Pkotlin.daemon.jvmargs=-Xmx3g' cleanTest test` | **326건 통과** (skipped 0·failures 0·errors 0, `BUILD SUCCESSFUL in 1m 11s`) |
+| `npx tsc --noEmit; npm run build` | 통과 (`3.49s`) |
+| `npm test` | 420건 중 417 통과·3 실패 (`ch2c1_chord_forms.test.js`, `ch2c3_form_review.test.js`, `i18n.test.js` LA-1 — 모두 §2에서 main 재현 확인된 기존 실패이며 신규 실패 0. `design_rules.test.js` 통과) |
+| `npx playwright test test/e2e/community.spec.js test/e2e/layout/community.spec.js test/e2e/cm-ui.spec.js` | **144건 통과** (`CMR4-E1`~`E4c` 포함, `2.3m`) |
+| `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js -g "community-logs"` | 5건 통과 (`8.9s`) |
+| 오류 상태(`likeErr`) 390px·1280px 캡처 확인 | 500 응답 시 `좋아요 · 3` 유지, 카드 폭 내 오류 문구 줄바꿈·겹침/넘침 없음 확인 |
+| `git grep -n "likeCount" src/main/kotlin/ulevelp/service/EpisodeContract.kt` | `PublicEpisodeLogDto`(:20)·`EpisodeLikeResponse`(:22) 2건 확인(명세 §7 체크리스트 정정) |
