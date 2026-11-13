@@ -158,6 +158,11 @@ export function EpisodeLogFeed({
     void fetchFirstPage(scope);
   };
 
+  // 좋아요 응답(서버 확정값)만 해당 카드에 반영한다. 낙관적 갱신은 하지 않는다.
+  const handleLikeChange = (postId: string, liked: boolean, likeCount: number) => {
+    setPosts((prev) => prev.map((p) => (p.postId === postId ? { ...p, likedByMe: liked, likeCount } : p)));
+  };
+
   return (
     <div className={styles.feedContainer} id="episodeFeed">
       {showScopeChips && layout !== 'row' && (
@@ -221,7 +226,7 @@ export function EpisodeLogFeed({
         <div className={styles.postsRow}>
           {posts.map((post) => (
             <div key={post.postId} className={styles.postsRowItem} data-align-group="postsRow:top">
-              <EpisodeLogCard post={post} onPostGone={handlePostGone} />
+              <EpisodeLogCard post={post} onPostGone={handlePostGone} onLikeChange={handleLikeChange} />
             </div>
           ))}
         </div>
@@ -235,14 +240,14 @@ export function EpisodeLogFeed({
                 {columns.map((col, c) => (
                   <div key={c} className={styles.masonryCol} data-align-group="logsColumns:top@768">
                     {col.map((post) => (
-                      <EpisodeLogCard key={post.postId} post={post} onPostGone={handlePostGone} />
+                      <EpisodeLogCard key={post.postId} post={post} onPostGone={handlePostGone} onLikeChange={handleLikeChange} />
                     ))}
                   </div>
                 ))}
               </div>
             )
             : posts.map((post) => (
-                <EpisodeLogCard key={post.postId} post={post} onPostGone={handlePostGone} />
+                <EpisodeLogCard key={post.postId} post={post} onPostGone={handlePostGone} onLikeChange={handleLikeChange} />
               ))}
 
           {nextCursor && (

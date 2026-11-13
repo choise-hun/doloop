@@ -53,6 +53,8 @@
 | `src/test/kotlin/ulevelp/community/EpisodeLikeApiTest.kt` | 신규 | §6 서버 테스트 |
 | `src/test/kotlin/ulevelp/db/DatabaseMigrationAndIntegrityTest.kt` | 수정 | 버전 `"11"`, 테이블 27, `EXPECTED_TABLES`에 새 테이블(테스트 이름 문자열 포함) |
 | `frontend/src/lib/apiClient.ts` | 수정 | 타입 필드, `communitySetEpisodeLike`, `community.setEpisodeLike` export |
+| `frontend/src/lib/communityMock.ts` | 수정 | D7 필수 필드를 dev mock에 추가(3단계 수용) |
+| `src/test/kotlin/ulevelp/community/EpisodeLogApiTest.kt` | 수정 | 공개 DTO 정확 키 목록에 D7 두 필드 추가(3단계 수용, 나머지 단언 유지) |
 | `frontend/src/components/community/EpisodeLogCard.tsx` | 수정 | 좋아요 버튼·오류 문구, prop `onLikeChange` |
 | `frontend/src/components/community/EpisodeLogCard.module.css` | 수정 | `.likeBtn`, `.likeErr`(토큰만) |
 | `frontend/src/components/community/EpisodeLogFeed.tsx` | 수정 | `handleLikeChange`, 렌더 3곳에 prop 전달 |
@@ -119,8 +121,8 @@ onLikeChange?: (postId: string, liked: boolean, likeCount: number) => void;
 
 | 상태 | 390 | 768 | 1150·1280 |
 | --- | --- | --- | --- |
-| 기본 | 행동 줄이 줄바꿈될 수 있음(`flex-wrap`, P13 CSS `:244-249`). 좋아요가 첫 항목 | 같음 | 한 줄 |
-| 오류 | 행동 줄 아래 한 줄 문구 | 같음 | 같음 |
+| 기본 | 카드 폭에 따라 행동 줄 줄바꿈 허용(`flex-wrap`, P13 CSS `:244-249`). 좋아요가 첫 항목, 겹침·넘침 없음 | 같음 | 같음(다열 카드도 줄바꿈 허용) |
+| 오류 | 행동 줄 아래 오류 문구. 카드 폭에 따른 문구 줄바꿈 허용, 겹침·넘침 없음 | 같음 | 같음 |
 
 맞춤 그룹: 행동 줄 버튼 3~4개에 `data-align-group="episodeActions-{postId}:center-y"`(좋아요·재생·저장·신고). 터치 대상은 G7 기준(기존 `ghost mini`와 같은 높이 이상). `layout/community.spec.js`에서 기존 카드 대기 뒤 좋아요 버튼 표시를 확인하고 4개 폭 스크린샷 Q1~Q9를 결과 파일에 기록한다.
 
@@ -145,13 +147,13 @@ onLikeChange?: (postId: string, liked: boolean, likeCount: number) => void;
 
 ## 7. 체크리스트
 
-- [ ] `./gradlew test --tests "ulevelp.community.EpisodeLikeApiTest"` → BUILD SUCCESSFUL
-- [ ] `./gradlew test --tests "ulevelp.db.DatabaseMigrationAndIntegrityTest"` → 통과
-- [ ] `./gradlew test` 전체 → 통과(기존 Episode* 테스트 회귀 없음)
-- [ ] `npm test` → 통과(`test/design_rules.test.js` 포함)
-- [ ] `npx playwright test test/e2e/community.spec.js test/e2e/layout/community.spec.js` → 통과
-- [ ] `LAYOUT_SHOTS=1` 4개 폭 스크린샷 Q1~Q9 표 → `결과/CMR-4.md`
-- [ ] `git grep -n "likeCount" src/main/kotlin/ulevelp/service/EpisodeContract.kt` → `PublicEpisodeLogDto`에 1건
+- [x] `./gradlew test --tests "ulevelp.community.EpisodeLikeApiTest"` → BUILD SUCCESSFUL
+- [x] `./gradlew test --tests "ulevelp.db.DatabaseMigrationAndIntegrityTest"` → 통과
+- [x] `./gradlew test` 전체 → 통과(기존 Episode* 테스트 회귀 없음)
+- [x] `npm test` → 통과(`test/design_rules.test.js` 포함, 기존 3실패 외 신규 실패 0)
+- [x] `npx playwright test test/e2e/community.spec.js test/e2e/layout/community.spec.js` → 통과
+- [x] `LAYOUT_SHOTS=1` 4개 폭 스크린샷 Q1~Q9 표 → `결과/CMR-4.md`
+- [x] `git grep -n "likeCount" src/main/kotlin/ulevelp/service/EpisodeContract.kt` → `PublicEpisodeLogDto`·`EpisodeLikeResponse` 2건
 
 ## 8. 금지
 

@@ -29,6 +29,10 @@ internal fun Route.registerSessionEpisodeRoutes(service: EpisodeLogService) {
     }
 }
 
+/** 좋아요 경로는 명세(CMR-4 §4.2)대로 형식 오류를 400으로 돌려준다. 공용 parsePathUuid(404)는 바꾸지 않는다. */
+private fun parseLikePostId(raw: String?): java.util.UUID =
+    try { parsePathUuid(raw) } catch (_: NotFoundException) { throw InvalidInputException("postId 형식이 올바르지 않습니다.") }
+
 internal fun Route.registerCommunityEpisodeRoutes(service: EpisodeLogService) {
     get("/episode-logs") {
         val user = call.requireAuthUser()
@@ -40,6 +44,18 @@ internal fun Route.registerCommunityEpisodeRoutes(service: EpisodeLogService) {
         val user = call.requireAuthUser()
         call.response.headers.append(HttpHeaders.CacheControl, "no-store")
         call.respond(service.mine(user.id, call.request.queryParameters["cursor"]))
+    }
+    put("/episode-logs/{postId}/like") {
+        val user = call.requireAuthUser()
+        val id = parseLikePostId(call.parameters["postId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.setLike(user.id, id, liked = true))
+    }
+    delete("/episode-logs/{postId}/like") {
+        val user = call.requireAuthUser()
+        val id = parseLikePostId(call.parameters["postId"])
+        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+        call.respond(service.setLike(user.id, id, liked = false))
     }
     post("/episode-logs/{postId}/reports") {
         val user = call.requireAuthUser()

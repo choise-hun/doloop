@@ -17,7 +17,9 @@ data class PublicPartStatDto(val name: String, val a: Double, val b: Double, val
 @Serializable
 data class PublicSessionSnapshot(val videoId: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>)
 @Serializable
-data class PublicEpisodeLogDto(val postId: String, val sessionId: String, val owner: PublicOwnerDto, val videoId: String, val youtubeTitle: String?, val youtubeArtist: String?, val title: String, val comment: String, val publishedAt: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>)
+data class PublicEpisodeLogDto(val postId: String, val sessionId: String, val owner: PublicOwnerDto, val videoId: String, val youtubeTitle: String?, val youtubeArtist: String?, val title: String, val comment: String, val publishedAt: String, val date: String, val seconds: Int, val loops: Int, val a: Double?, val b: Double?, val rate: Double?, val coveragePct: Int, val partStats: List<PublicPartStatDto>, val likeCount: Int, val likedByMe: Boolean)
+@Serializable
+data class EpisodeLikeResponse(val liked: Boolean, val likeCount: Int)
 @Serializable
 data class EpisodeLogListResponse(val posts: List<PublicEpisodeLogDto>, val next: String?)
 @Serializable

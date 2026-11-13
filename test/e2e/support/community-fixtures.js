@@ -502,6 +502,15 @@ function communityRoutes(opts = {}) {
       },
     ],
     [
+      (url) => /^\/api\/v1\/community\/episode-logs\/[^/]+\/like$/.test(url.pathname),
+      async (route) => {
+        const method = route.request().method();
+        const postId = new URL(route.request().url()).pathname.split('/').slice(-2)[0];
+        if (opts.onEpisodeLike) return opts.onEpisodeLike(route, fulfillJson, method, postId);
+        return fulfillJson(route, { liked: method === 'PUT', likeCount: method === 'PUT' ? 4 : 3 });
+      },
+    ],
+    [
       (url) => /^\/api\/v1\/community\/episode-logs\/[^/]+\/reports$/.test(url.pathname),
       async (route) => {
         if (opts.onReportEpisode) return opts.onReportEpisode(route, fulfillJson);
@@ -555,6 +564,8 @@ const EPISODE_POST_1 = {
     { name: 'Intro Riff', a: 12.5, b: 20.0, rate: 1.0, completed: true, seconds: 1200, loops: 70 },
     { name: 'Verse 1', a: 20.0, b: 34.0, rate: 0.9, completed: false, seconds: 600, loops: 30 },
   ],
+  likeCount: 3,
+  likedByMe: false,
 };
 
 const EPISODE_POST_FOLLOWING = {
@@ -577,6 +588,8 @@ const EPISODE_POST_FOLLOWING = {
   partStats: [
     { name: 'Main Lick', a: 5.0, b: 25.0, rate: 0.8, completed: true, seconds: 600, loops: 20 },
   ],
+  likeCount: 0,
+  likedByMe: false,
 };
 
 const MY_EPISODE_LOG_1 = {
@@ -615,6 +628,8 @@ const MY_EPISODE_LOG_1 = {
       { name: 'Groove A', a: 0, b: 30, rate: 1.0, completed: true, seconds: 500, loops: 30 },
       { name: 'Groove B', a: 30, b: 60, rate: 1.0, completed: true, seconds: 400, loops: 20 },
     ],
+    likeCount: 0,
+    likedByMe: false,
   },
 };
 

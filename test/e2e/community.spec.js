@@ -12,6 +12,7 @@ const {
   CURATION_HOME_FIXTURE,
   FOLDER_CURATED_1,
   FOLDER_CURATED_2,
+  EPISODE_POST_1,
   PLAYLIST_PREVIEW_FIXTURE,
   communityRoutes,
   skipNameModal,
@@ -1718,4 +1719,201 @@ test('CMR3-23b 딥링크·이름 모달: 이름 미설정이면 모달만 열리
   await expect(page.locator('#communityNameModal')).toHaveCount(0);
   await expect(page.locator('#folderSheet')).toBeVisible();
   await expect(page.locator('#folderSheetTitle')).toHaveText(FOLDER_CURATED_1.title);
+});
+
+// ── CMR-4: 게시물 좋아요(낙관적 갱신 없음) ──
+const COMMUNITY_LIKE_STATE = { ...STATES.userData, me: COMMUNITY_PRO_ME };
+const likeCard = (page) => page.locator(`[data-post-id="${EPISODE_POST_1.postId}"]`);
+
+test('CMR4-E1 좋아요 반영: 요청 중 disabled, 응답 뒤 좋아요 · 7·aria-checked=true, 낙관적 +1(4)은 보이지 않음', async ({ page }) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let calls = 0;
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLike: async (route, json, method) => {
+        calls += 1;
+        expect(method).toBe('PUT');
+        await gate;
+        return json(route, { liked: true, likeCount: 7 });
+      },
+    }),
+  });
+  await page.goto('/community.html#log', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await expect(btn).toHaveText('좋아요 · 3');
+  await expect(btn).toHaveAttribute('aria-checked', 'false');
+  // 같은 JS 작업 안의 연속 이벤트: React disabled 반영 전 진입도 ref가 막아야 한다.
+  await btn.evaluate((el) => {
+    el.click();
+    el.click();
+  });
+  await expect(btn).toBeDisabled();
+  await expect(btn).toHaveText('좋아요 · 3'); // 낙관적 갱신 없음
+  release();
+  await expect(btn).toHaveText('좋아요 · 7');
+  await expect(btn).toHaveAttribute('aria-checked', 'true');
+  await expect(btn).toBeEnabled();
+  expect(calls).toBe(1);
+});
+
+test('CMR4-E2 실패 유지: 500이면 좋아요 · 3 유지하고 카드 안 오류 문구 표시', async ({ page }) => {
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLike: (route, json) => json(route, { ok: false, code: 'INTERNAL', message: 'boom' }, 500),
+    }),
+  });
+  await page.goto('/community.html#log', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  const card = likeCard(page);
+  const btn = card.locator('[data-episode-like]');
+  await btn.click();
+  await expect(card.locator('[data-episode-like-error]')).toHaveText('좋아요를 반영하지 못했어요. 다시 시도해 주세요');
+  await expect(btn).toHaveText('좋아요 · 3');
+  await expect(btn).toHaveAttribute('aria-checked', 'false');
+  await expect(btn).toBeEnabled();
+});
+
+test('CMR4-E3 404: 사라진 글이면 안내 후 카드 제거·첫 페이지 재조회', async ({ page }) => {
+  let feedCalls = 0;
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLogs: (route, json) => {
+        feedCalls += 1;
+        return json(route, { posts: feedCalls === 1 ? [EPISODE_POST_1] : [], next: null });
+      },
+      onEpisodeLike: (route, json) => json(route, { ok: false, code: 'NOT_FOUND', message: 'gone' }, 404),
+    }),
+  });
+  await page.goto('/community.html#log', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await likeCard(page).locator('[data-episode-like]').click();
+  await expect(likeCard(page)).toHaveCount(0);
+  expect(feedCalls).toBeGreaterThanOrEqual(2);
+});
+
+test('CMR4-E4a 늦은 응답: 응답 지연 중 탭을 떠났다 돌아오면 늦은 응답이 새 화면 값을 바꾸지 않음', async ({ page }) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started;
+  const startedP = new Promise((resolve) => { started = resolve; });
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLike: async (route, json) => {
+        started();
+        await gate;
+        return json(route, { liked: true, likeCount: 7 });
+      },
+    }),
+  });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('/community.html#log', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await likeCard(page).locator('[data-episode-like]').click();
+  await startedP;
+  await page.evaluate(() => { window.location.hash = '#summary'; });
+  await expect(page.locator('#summaryPane')).toBeVisible();
+  await expect(likeCard(page)).toHaveCount(0);
+  await page.evaluate(() => { window.location.hash = '#log'; });
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await expect(btn).toHaveText('좋아요 · 3');
+  const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
+  release();
+  await (await lateResponse).finished();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(btn).toHaveText('좋아요 · 3');
+  await expect(btn).toHaveAttribute('aria-checked', 'false');
+  expect(errors).toEqual([]);
+});
+
+test('CMR4-E4b 늦은 응답: 피드는 유지하고 폭 변경으로 카드를 재마운트해도 이전 요청은 폐기', async ({ page }) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started;
+  const startedP = new Promise((resolve) => { started = resolve; });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      // 두 번째 카드는 3열의 두 번째 열에서 1열의 첫 번째 열로 이동한다.
+      onEpisodeLogs: (route, json) => json(route, { posts: [
+        { ...EPISODE_POST_1, postId: '00000000-0000-4000-8000-000000009999' },
+        EPISODE_POST_1,
+      ], next: null }),
+      onEpisodeLike: async (route, json) => {
+        started();
+        await gate;
+        return json(route, { liked: true, likeCount: 7 });
+      },
+    }),
+  });
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await btn.click();
+  await startedP;
+  const oldButton = await btn.elementHandle();
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect.poll(() => oldButton.evaluate((el) => el.isConnected)).toBe(false);
+  await expect(btn).toBeEnabled();
+  const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
+  release();
+  await (await lateResponse).finished();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(btn).toHaveText('좋아요 · 3');
+  await expect(btn).toHaveAttribute('aria-checked', 'false');
+});
+
+test('CMR4-E4c 계정 A→B 전환 뒤 A의 좋아요 응답이 B의 상태를 바꾸지 않음', async ({ page }) => {
+  const { DEFAULT_ME } = require('./support/mock-app');
+  const bId = '00000000-0000-4000-8000-000000009998';
+  let accountB = false;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started;
+  const startedP = new Promise((resolve) => { started = resolve; });
+  await mockApp(page, {
+    ...COMMUNITY_LIKE_STATE,
+    routes: communityRoutes({
+      onEpisodeLogs: (route, json) => json(route, { posts: [
+        { ...EPISODE_POST_1, likeCount: accountB ? 11 : 3, likedByMe: accountB },
+      ], next: null }),
+      onEpisodeLike: async (route, json) => {
+        started();
+        await gate;
+        return json(route, { liked: false, likeCount: 7 });
+      },
+    }),
+  });
+  await page.route('**/api/v1/me', (route) => route.fulfill({ json: {
+    ...DEFAULT_ME, ...COMMUNITY_PRO_ME, id: accountB ? bId : DEFAULT_ME.id,
+  } }));
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  const btn = likeCard(page).locator('[data-episode-like]');
+  await btn.click();
+  await startedP;
+  accountB = true;
+  await page.evaluate((id) => {
+    const session = { access_token: 'b-token', user: { id } };
+    window.ULAuth.getClient().auth.getSession = async () => ({ data: { session }, error: null });
+    window.__supabaseAuthListener('SIGNED_IN', session);
+  }, bId);
+  await expect(btn).toHaveText('좋아요 · 11');
+  await expect(btn).toHaveAttribute('aria-checked', 'true');
+  const lateResponse = page.waitForResponse((r) => r.url().endsWith('/like'));
+  release();
+  await (await lateResponse).finished();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(btn).toHaveText('좋아요 · 11');
+  await expect(btn).toHaveAttribute('aria-checked', 'true');
+  await expect(btn).toBeEnabled();
 });
