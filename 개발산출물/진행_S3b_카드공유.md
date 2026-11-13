@@ -1,7 +1,7 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **S3b-1 PR #14 main 머지 확인. S3b-2 1차 구현·표적 26건·최종 전체 Gradle 380건 통과 → PR #15 보강 코드 CI 통과·P2 2건 해결, 시니어 3단계 독립 검증 대기.**
+> 상태: **S3b-2 PR #15 main 머지(`f9cc06d`). S3b-3 시니어 직접 구현 완료 → `step/S3b-3` push(`d49a2db` 기준, PR 없음), 주니어 4단계 대기(§9·§13).**
 
 ## 1. 목표와 근거
 
@@ -26,8 +26,8 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
-| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **1차 구현·최종 전체 Gradle 380건·[PR #15](https://github.com/choise-hun/doloop/pull/15) 보강 head CI 통과·P2 2건 해결 → 시니어 3단계 독립 검증 대기** |
-| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | S3b-2 머지 뒤 |
+| 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **PR [#15](https://github.com/choise-hun/doloop/pull/15) main 머지 완료(`f9cc06d`)** Gradle 380, P2 2건 해결 |
+| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **시니어 직접 구현 완료(2026-11-13, §13) → `step/S3b-3` push, 주니어 4단계(전체 회귀·남은 테스트 행·스크린샷 Q1~Q9·결과 파일·PR·CI) 대기** |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
 
 - 운영 배포: **S3b-4 머지 뒤 한 번에**(중간 main은 녹음 첨부 UI가 없어 첨부 생성 경로가 열리지 않는다). CMR-4는 단독 배포 가능.
@@ -71,7 +71,8 @@
 1. ~~§5 검토~~ 완료. ~~명세 PR #12 머지~~ 완료.
 2. ~~CMR-4 주니어 2단계·시니어 3단계·주니어 4단계~~ 완료(PR #13, [결과 §7·§8](결과/CMR-4.md)). `개발산출물/report.md` 삭제는 범위 밖 변경이므로 보존·커밋 제외. **PR #13은 2026-11-13 main 머지 확인(`ee68ad9`).**
 3. ~~계획 §1 10-2와 UIUX-R 서술 정리~~ PR #13에 포함(D9). UIUX-R §5.7 본문 세부는 S3b-4에서 마저 정리.
-4. S3b-2 1차 구현·로컬 회귀·PR #15 보강 head CI 확인을 마쳤다(§12, 결과 §6·§7). **다음은 §9의 시니어 3단계 독립 검증**이다. PR #15 머지·배포·S3b-3 착수는 하지 않았다.
+4. ~~S3b-2~~ PR #15 머지 완료(`f9cc06d`).
+5. S3b-3 시니어 직접 구현·표적 검증·커밋·`step/S3b-3` push 완료(§13). **다음은 §9의 주니어 4단계**다. S3b-4 착수·운영 배포·Scheduler 등록은 하지 않는다.
 
 ## 8. 겪은 문제
 
@@ -88,15 +89,14 @@
 ## 9. 다음 세션 시작 지시
 
 ```text
-# 시니어 — S3b-2 PR #15 3단계 독립 검증
-
-개발산출물/협업_시니어주니어.md와 프롬프트_템플릿_4단계.md §3을 따른다.
-목표: PR #15의 삭제 경로 전파·Drive 업로드/확정·만료 회수 직렬화를 승인 명세와 독립 대조한다.
-입력: 명세/S3b-2_구현명세.md, 결과/S3b-2.md, 진행_S3b_카드공유.md §12, PR https://github.com/choise-hun/doloop/pull/15.
-선행: step/S3b-2의 사용자 변경을 보존하고 PR 최신 head와 로컬 HEAD 일치를 확인한다. 실제 최신 CI와 리뷰를 다시 확인한다.
-범위: 승인 명세 파일과 테스트. 1차 구현/전체 회귀를 완료했다고 가정해 반복하지 말고, 검토에서 발견한 결함의 재현·수정·필요한 복잡한 표적 검증을 수행한다.
-완료 기준: 문제 없음 또는 결함별 근거·수정·검증 증거·미실행 범위 기록 후 주니어 4단계 인계.
-Git 처리: 이번 3단계는 로컬 수정·표적 검증·기록까지. 반복 전체 회귀·커밋·push·기존 PR/CI 정리는 주니어 4단계 담당. PR 머지·배포·S3b-3 착수는 하지 않는다.
+# Gemini (주니어) — S3b-3 4단계 최종 회귀·남은 테스트·스크린샷·PR/CI
+개발산출물/협업_시니어주니어.md와 개발산출물/프롬프트_템플릿_4단계.md §4(4단계)를 따른다. 입력: 명세/S3b-3_구현명세.md §5~§7, 이 파일 §13, 브랜치 step/S3b-3(head는 git log로 확인).
+목표: 시니어 직접 구현(서버 D12 + 공유 창·동의·칩·메뉴·Drive 업로드)을 명세 §6 테스트 표와 §7 체크리스트로 마무리하고 결과/S3b-3.md를 쓴다.
+기준: 명세 §6의 남은 행(U1·U2·U5~U14) 테스트 추가, §5 배치 약속, frontend-state §1·§4, testing-security(단언 왜곡 금지·결정적 대기). 시니어가 끝낸 S1·U3·U4·U15·LAY는 다시 만들지 않는다.
+선행 조건: git switch step/S3b-3 && git pull --ff-only, gh 활성 계정 choise-hun 확인, 루트 npm run build 뒤 Playwright 실행(dist 사용).
+범위: test/e2e/cm-ui.spec.js·layout/share-dialog.spec.js·support/community-fixtures.js 테스트 추가와 결과/진행/인수인계 문서. 제품 코드 결함을 찾으면 고치지 말고 재현 명령과 함께 시니어 3-P로 넘긴다.
+완료 기준: npm test(기존 실패 외 신규 0)·npx playwright test 전체·./gradlew test 전체 통과, LAYOUT_SHOTS=1 4개 폭×(동의·작성·메뉴) Q1~Q9 표, §7 grep 0건·design_rules 통과를 결과/S3b-3.md에 기록.
+Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성·gh pr checks --watch·리뷰 확인까지. 머지·배포·S3b-4 착수는 하지 않는다.
 ```
 
 ## 10. S3b-1 시니어 직접 구현 — 2026-11-13 / Windows / Codex
@@ -165,3 +165,48 @@ Git 처리: 이번 3단계는 로컬 수정·표적 검증·기록까지. 반복
 - Git 게시: 구현 커밋 `517314257582c548bbe02c15db83ee1e89628f23`, `step/S3b-2` push 및 [PR #15](https://github.com/choise-hun/doloop/pull/15)(base main) 생성. 첫 push는 활성 계정 Hunseokc 권한 403으로 실패해 `gh auth switch --user choise-hun` 후 성공했다. 후속 수정과 CI/review 결과는 아래와 결과 §6·§7에 기록했다.
 
 - PR #15 P2 2건을 현재 코드와 대조해 모두 타당 판정·수정했다. 곡/계정 CASCADE의 카드→첨부 잠금 순서 Red 2건, 같은 Drive 원본의 새 미사용 업로드 정리 Red 1건을 확인했다. 수정 후 최종 전체 380건(신규/관련 29건 포함) 실패/오류/skip 0, BUILD SUCCESSFUL in 1m 47s. 상세 재현·증거는 결과 §7. 보강 커밋 `322c584b7adb5e7733d9e0046f58c55de898ce8b` push 후 [CI 43398953828](https://github.com/choise-hun/doloop/actions/runs/43398953828) completed/success(Node·Kotlin·Playwright·Docker·CI ok 전부 성공)를 확인했다. 종료 후 리뷰 재확인: 라인 지적 2건 모두 resolved, 추가 지적 없음. 이후 진행/결과 문서만 게시하며 최신 문서 체크와 코드 CI를 구별한다. 머지·배포·신규 Scheduler 등록은 하지 않았다.
+
+## 13. S3b-3 시니어 직접 구현 — 2026-11-13 / Mac / Claude(시니어)
+
+- 선행: PR #15 머지(`f9cc06d`) 확인, `main` `git pull --ff-only`(최신) → `step/S3b-3` 생성. 작업 트리 깨끗, gh 활성 choise-hun.
+- 명세 §1 대조: 행 번호는 `d5c2566` 기준과 거의 같았다(`EpisodeShareDialog` 15-36·182-287, `PracticeSessionCard` 45·94-112·250-375, `drive.ts` 80-100·297-313). 서버 계약은 S3b-2 머지본과 일치(`GET/POST share-consent`, `POST share/uploads` multipart `takeId`+`file`, `DELETE share/attachment`, 오류 코드 §4.5). 운영 Scheduler·배포는 범위 밖으로 두고 손대지 않았다.
+- 커밋: `a18e5dd` 서버 D12, `d49a2db` 화면·테스트. 다음 주니어 4단계가 PR을 만든다(시니어 직접 구현 예외).
+
+### 구현 요약 (명세 D 번호)
+
+| 영역 | 파일 | 내용 |
+| --- | --- | --- |
+| D12 서버 | `EpisodeLogService.kt`, `ShareAttachmentService.kt` | `prepareShare`에서 공개 이름 검사 직후 `requireCardConsent` → 409 `SHARE_CONSENT_REQUIRED {scope:"card",requiredVersion}` |
+| D12 테스트 | `EpisodeTestSupport.kt`, `ShareAttachmentApiTest.kt` | `user(consent=true)` 기본(동의 행 삽입). S1 `shareWithoutCardConsentIsRejected` 추가 |
+| D1~D3 | `PracticeSessionCard.tsx/.module.css` | 헤더 공유 아이콘 하나(`open`/`menu`), 메뉴 `edit`·`remove-recording`·`withdraw`(role=menuitem, ESC·바깥 클릭·화살표, 포커스 복귀), 녹음만 내리기 confirm → DELETE → invalidate |
+| D4~D11, D15 | `EpisodeShareDialog.tsx/.module.css` | 동의 조회→동의 단계/작성 단계, 미리보기 카드(제목 헤더→`#shareTitleInput`, 메타, 미니 썸네일 줄), 말풍선 `#shareCommentInput`, 칩 묶음(선택+형제 미리 듣기), 상한 칩 비활성+`#shareChipLimitHint`, `#shareOriginalConfirm`, keep/none/replace 본문, Drive `fetchMediaBlob`→uploads→`uploadId`, ⓘ `#shareScopeInfo`, 세대+AbortController |
+| D6 공용 | `ShareConsentStep.tsx`(신규), `PublicNameForm.tsx` | 창 첫 화면 `#shareConsentAgree`, 이름 폼 선택 체크박스 `#publicNameShareConsent`(이름 저장 성공 뒤 체크 시에만 POST) |
+| D10·타입 | `apiClient.ts` | 동의·업로드·첨부 제거 함수, `ShareAttachmentInput`, 첨부 DTO. 동의 응답은 형식 검증(모르는 `{}`를 동의로 추측하지 않음) |
+| D13 | `episode.mts` | `formatEpisodeDate`(ko/en/ja), 빈 제목 = 세션 날짜 |
+| D14 | `drive.ts` | 진행 중 토큰 요청 합치기, 토큰 클라이언트 1회 생성, 계정 전환 시 대기 요청 거절, `fetchMediaBlob` |
+| §4.2·§4.3 | `community.mts`, `i18n/{ko,en,ja}.mts` | S3b 오류 코드 → `episode.err.*`, 문구 키 추가 |
+
+### 명세와 다른 점·판단 (주니어 결과 파일에 옮겨 적는다)
+
+1. **A3 단언 변경(서버):** 동의가 전혀 없는 사용자의 녹음 첨부 게시가 이제 `scope:"card"`로 거절된다(D12의 필연적 결과 — 카드 동의가 먼저 없고, 동의 1회가 카드·녹음을 함께 허용). A3는 `user(consent=false)`로 바꾸고 `card`를 단언하며, 녹음 동의 철회 뒤 `scope:"recording"` 단언을 추가해 녹음 분기 검증을 유지했다. 명세 D12의 “단언 변경 없음”은 나머지 기존 테스트에 대해 지켰다.
+2. `ShareConsentStep`에 nameForm 전용 선택 props `checked`·`onCheckedChange`를 더했다(§4.1 시그니처는 그대로, 체크박스 상태 전달용).
+3. 세션 카드 맞춤 그룹 이름은 표면 구분을 유지해 `sessionHead-{surface}-{id}:center-y`(제목·공유 아이콘). 공유 상태 배지 줄(숨김 사유 등)은 남기고 행동 버튼만 아이콘 메뉴로 옮겼다.
+4. D15에 따라 업로드·게시 중에도 닫기를 허용한다. 게시 요청이 이미 나갔으면 닫을 때 `invalidate`로 서버 상태를 다시 읽는다.
+5. 미사용이 된 문구 키 삭제: `episode.share.consent`(명세), `episode.titleWithVideo`·`episode.share.unavailablePreview`·`episode.previewTitleLabel`(I0-6 미사용 키 검사). 공유 창 버튼은 공통 `.pillBtn`/`.ghostBtn`(frontend-design §3). 오류 상자는 `--bad` color-mix로 바꿔 `design_rules` 허용 개수 5→2, `frontend-design.md` 표 갱신.
+6. 기존 테스트 변경 근거: CUI-07(체크박스 제거·제목은 헤더 클릭 입력), CUI-09·SR-04·SR-06·SR-07·`profile.spec.js` PF3(행동이 아이콘 메뉴 안), SR-02(빈 제목 placeholder = 날짜), SR-09(체크박스 대신 입력 유지 단언), SR-16(D15 abort로 응답 대기 대신 `requestfinished`/`requestfailed` 결정적 대기). `cm_ui.test.js` 제목 규칙 테스트는 D13 규칙으로 교체.
+7. **순서 편차:** 표적 e2e(U4·U15)와 layout spec은 구현 뒤에 작성했다. 대신 변이 검사로 Red를 확인했다(아래).
+
+### 실제 실행 결과 (Mac, 로컬)
+
+| 명령 | 결과 |
+| --- | --- |
+| `./gradlew test --tests 'ulevelp.community.ShareAttachmentApiTest.shareWithoutCardConsentIsRejected'` (D12 전) | **Red**: 409 대신 201 게시 |
+| `./gradlew test --tests 'ulevelp.community.*'` (D12 후) | **94건, 실패/오류/skip 0** |
+| `npx tsc --noEmit` (루트) | 오류 0 |
+| `node --test test/cm_ui.test.js test/i18n.test.js test/design_rules.test.js test/r0_core.test.js` | 31건 통과 |
+| 변이 2개(원곡 확인 조건 제거, 미리 듣기가 선택 토글) 적용 후 `-g "S3b3-"` | **2건 모두 실패**(게시 버튼 enabled, aria-pressed false) → 원본 복원 |
+| `npm run build` 후 `npx playwright test test/e2e/cm-ui.spec.js test/e2e/layout/share-dialog.spec.js test/e2e/layout/log.spec.js test/e2e/layout/profile.spec.js test/e2e/layout/community.spec.js` | **170건 통과**(1.9m) |
+| `LAYOUT_SHOTS=1 … share-dialog.spec.js` | 16건 통과, layout-warn 0건. 15장(3상태×4폭+다크) 캡처를 시니어가 훑어봄(정식 Q1~Q9 표는 주니어) |
+| `git grep -n shareConsentCheckbox frontend/src test/e2e` | 0건 |
+
+- 미실행: 전체 `npm test`, 전체 Playwright, 전체 Gradle, 실제 Drive·Supabase 업로드, CI. 테스트 표 U1·U2·U5~U14 미작성(주니어). 운영 배포·Scheduler 등록 없음.
