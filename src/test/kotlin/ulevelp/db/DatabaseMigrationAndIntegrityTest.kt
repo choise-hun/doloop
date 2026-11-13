@@ -607,4 +607,91 @@ class DatabaseMigrationAndIntegrityTest {
             assertEquals(0L, ProgressionsTable.selectAll().count())
         }
     }
+
+    @Test
+    fun `V12 share attachment CHECK and partial UNIQUE constraints enforce key format and status invariants`() {
+        val userId = UUID.randomUUID()
+        val songId = UUID.randomUUID()
+        val sessionId = UUID.randomUUID()
+        val takeId = UUID.randomUUID()
+        val now = OffsetDateTime.now(ZoneOffset.UTC)
+
+        transaction(db) {
+            UsersTable.insert { it[id] = userId; it[email] = "v12@example.com" }
+            SongsTable.insert { it[id] = songId; it[SongsTable.userId] = userId; it[title] = "S"; it[videoId] = "dQw4w9WgXcQ" }
+            SessionsTable.insert { it[id] = sessionId; it[SessionsTable.userId] = userId; it[SessionsTable.songId] = songId; it[date] = LocalDate.now(); it[seconds] = 60 }
+            TakesTable.insert {
+                it[id] = takeId; it[TakesTable.userId] = userId; it[TakesTable.sessionId] = sessionId; it[TakesTable.songId] = songId
+                it[recordedAt] = now; it[durationSec] = 30; it[mime] = "audio/webm"; it[sizeBytes] = 100L
+                it[storage] = "supabase"; it[storageKey] = "$userId/take.weba"
+            }
+        }
+
+        // 1. shared/{uuid}.weba 허용, .webm 거부 (23514)
+        val readyId = UUID.randomUUID()
+        transaction(db) {
+            SharedCardAttachmentsTable.insert {
+                it[id] = readyId; it[SharedCardAttachmentsTable.sessionId] = sessionId; it[SharedCardAttachmentsTable.userId] = userId
+                it[kind] = "audio_copy"; it[sourceTakeId] = takeId; it[storageKey] = "shared/$readyId.weba"
+                it[mime] = "audio/webm"; it[sizeBytes] = 100L; it[durationSec] = 30
+                it[status] = "ready"; it[originalConfirmedAt] = now; it[readyAt] = now
+            }
+        }
+
+        fun insertBadAttachment(block: org.jetbrains.exposed.sql.statements.InsertStatement<Number>.() -> Unit): String =
+            assertFailsWith<ExposedSQLException> {
+                val id = UUID.randomUUID()
+                transaction(db) {
+                    SharedCardAttachmentsTable.insert {
+                        it[SharedCardAttachmentsTable.id] = id
+                        it[SharedCardAttachmentsTable.sessionId] = sessionId
+                        it[SharedCardAttachmentsTable.userId] = userId
+                        it[kind] = "audio_copy"
+                        it[sourceTakeId] = takeId
+                        it[storageKey] = "shared/$id.weba"
+                        it[mime] = "audio/webm"
+                        it[sizeBytes] = 100L
+                        it[durationSec] = 30
+                        it[status] = "copying"
+                        it[originalConfirmedAt] = now
+                        it.block()
+                    }
+                }
+            }.sqlState
+
+        val badKeyId = UUID.randomUUID()
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.id] = badKeyId; this[SharedCardAttachmentsTable.storageKey] = "shared/$badKeyId.webm" })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.sizeBytes] = 0L })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.sizeBytes] = 10_485_761L })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.durationSec] = -1 })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.durationSec] = 301 })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.status] = "ready"; this[SharedCardAttachmentsTable.readyAt] = null })
+        assertEquals("23514", insertBadAttachment { this[SharedCardAttachmentsTable.status] = "copying"; this[SharedCardAttachmentsTable.readyAt] = now })
+
+        // 2. 부분 UNIQUE 위반: 같은 session에 두 번째 ready (23505)
+        assertEquals("23505", insertBadAttachment { this[SharedCardAttachmentsTable.status] = "ready"; this[SharedCardAttachmentsTable.readyAt] = now })
+
+        // 3. 부분 UNIQUE 위반: 같은 user에 두 번째 copying (23505)
+        val copyingId = UUID.randomUUID()
+        transaction(db) {
+            SharedCardAttachmentsTable.insert {
+                it[id] = copyingId; it[SharedCardAttachmentsTable.sessionId] = sessionId; it[SharedCardAttachmentsTable.userId] = userId
+                it[kind] = "audio_copy"; it[sourceTakeId] = takeId; it[storageKey] = "shared/$copyingId.weba"
+                it[mime] = "audio/webm"; it[sizeBytes] = 100L; it[durationSec] = 30
+                it[status] = "copying"; it[originalConfirmedAt] = now
+            }
+        }
+        assertEquals("23505", insertBadAttachment { this[SharedCardAttachmentsTable.status] = "copying" })
+
+        // 4. community_share_consents action CHECK (23514)
+        assertEquals("23514", assertFailsWith<ExposedSQLException> {
+            transaction(db) {
+                CommunityShareConsentsTable.insert {
+                    it[CommunityShareConsentsTable.userId] = userId
+                    it[action] = "invalid"
+                    it[noticeVersion] = 1
+                }
+            }
+        }.sqlState)
+    }
 }
