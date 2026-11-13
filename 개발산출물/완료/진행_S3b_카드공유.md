@@ -288,3 +288,11 @@ Git 처리: 논리 단위 커밋·step/S3b-4 push·main 대상 신규 PR 생성�
 - D10 마무리: 이 파일 `완료/` 이동 + 완료 줄 추가, `계획/상용_서비스_계획.md` §1 10-2 갱신, `개발산출물/인수인계_메모.md` §2 목록 일치(2건).
 - PR [#17](https://github.com/choise-hun/doloop/pull/17)(base `main`, `0c1eb92`) CI 5개 성공 + Kotlin skipped 확인. Codex 리뷰 P2 1건(`LogPage.tsx:658` 및 `:155-166` `shareImpactOrNull` 지연 중 곡 전환/언마운트/계정 변경 가드 누락, 코멘트 `4569506462`) 확인 → 제품 코드 결함이므로 **시니어 3-P 핀포인트 수정**으로 인계. 머지·운영 배포·Scheduler 등록은 하지 않음.
 
+
+## 17. S3b-4 PR #17 시니어 3-P 핀포인트 수정 — 2026-11-14 / Mac / Claude(시니어)
+
+- 대상: Codex P2 `4569506462` — `LogPage.tsx` 곡 상세 삭제·목록 카드 삭제의 `shareImpactOrNull` await 뒤 화면·언마운트·계정 재확인 누락. 타당 판정.
+- 수정: `frontend/src/pages/LogPage.tsx` 뷰 세대 `viewSeqRef` + `captureView()`, 카드 `mountedRef`. 상세는 remove 뒤에도 재확인 후에만 목록 이동. 상세는 [결과/S3b-4](../결과/S3b-4.md) §6.
+- 회귀: `test/e2e/community.spec.js` S3b4-P10t 대기 중 화면 전환 2건 추가(Red 확인 → Green). 표적 검증 `npm run build` 통과, P10t 8 passed, community·practice-record·xss 103 passed.
+- 다음: 주니어 4단계 — 전체 회귀(`npm test`·`npx playwright test`·`./gradlew test`), 논리 단위 커밋·`step/S3b-4` push·PR #17 CI 대기·Codex 스레드 답글·결과 §6 CI 기록. 머지·운영 배포는 하지 않음.
+- 주니어 4단계 3-P 수정 반영(2026-11-14 / Mac / Gemini, 커밋 `c170bac`): `npm run build` 통과, `npm test` **432건 / 58 suite 전부 통과**, `npx playwright test` **782건 전부 통과**(11.4m), `./gradlew test --rerun-tasks` **381건 전부 통과**(53s). `step/S3b-4` push 및 PR #17 CI·Codex 스레드 `4569506462` 답글 진행.
