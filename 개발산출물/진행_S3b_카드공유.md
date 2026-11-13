@@ -1,7 +1,7 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **S3b-2 PR #15 main 머지(`f9cc06d`). S3b-3 시니어 직접 구현 완료 → `step/S3b-3` push(`d49a2db` 기준, PR 없음), 주니어 4단계 대기(§9·§13).**
+> 상태: **S3b-2 PR #15 main 머지(`f9cc06d`). S3b-3 시니어 직접 구현 + 주니어 4단계 최종 검증·테스트 보강 완료 → PR 생성·CI 확인 진행.**
 
 ## 1. 목표와 근거
 
@@ -27,7 +27,7 @@
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
 | 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **PR [#15](https://github.com/choise-hun/doloop/pull/15) main 머지 완료(`f9cc06d`)** Gradle 380, P2 2건 해결 |
-| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → `결과/S3b-3.md` | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **시니어 직접 구현 완료(2026-11-13, §13) → `step/S3b-3` push, 주니어 4단계(전체 회귀·남은 테스트 행·스크린샷 Q1~Q9·결과 파일·PR·CI) 대기** |
+| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → [결과/S3b-3](결과/S3b-3.md) | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **4단계 최종 검증 완료(2026-11-13, §14) → main PR 생성·CI 확인 진행** |
 | 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
 
 - 운영 배포: **S3b-4 머지 뒤 한 번에**(중간 main은 녹음 첨부 UI가 없어 첨부 생성 경로가 열리지 않는다). CMR-4는 단독 배포 가능.
@@ -210,3 +210,17 @@ Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성�
 | `git grep -n shareConsentCheckbox frontend/src test/e2e` | 0건 |
 
 - 미실행: 전체 `npm test`, 전체 Playwright, 전체 Gradle, 실제 Drive·Supabase 업로드, CI. 테스트 표 U1·U2·U5~U14 미작성(주니어). 운영 배포·Scheduler 등록 없음.
+
+## 14. S3b-3 주니어 4단계 최종 검증 — 2026-11-13 / Mac / Gemini(주니어)
+
+- 선행: `step/S3b-3` (`249a510`) 확인, `gh auth status` 활성 `choise-hun` 확인.
+- 남은 테스트 행 추가:
+  - `test/cm_ui.test.js`: `S3b3-U14` Drive 토큰 합치기(동시 2회 `requestToken` → 클라이언트·요청 각 1회, 계정 전환 시 거절).
+  - `test/e2e/cm-ui.spec.js`: `S3b3-U1`, `S3b3-U2`, `S3b3-U5`~`S3b3-U13` 추가.
+- 최종 회귀 검증([결과/S3b-3](결과/S3b-3.md)):
+  - `npm run build` 통과(`dist/` 생성)
+  - `npm test`: **421건 / 58 suite 전부 통과**(실패 0·skip 0, `design_rules.test.js`·`S3b3-U14` 포함)
+  - `npx playwright test`: **752건 전부 통과**(10.8m, `S3b3-` 13건 + `share-dialog.spec.js` 16건 포함)
+  - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/share-dialog.spec.js`: **16건 통과**(12.9s), 15장(동의·작성·메뉴 × 4개 폭 + 다크) Q1~Q9 모두 `○`
+  - `./gradlew test`: **381건 전부 통과**(실패 0·오류 0·skip 0, `BUILD SUCCESSFUL in 59s`)
+  - `git grep -n "shareConsentCheckbox" frontend/src test/e2e`: **0건**
