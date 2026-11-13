@@ -1428,6 +1428,8 @@ export const KO = {
   'episode.partsFold': '▲ 파트 접기',
   'episode.partsUnfold': '▼ 파트 {count}개 보기',
   'episode.reportedDone': '신고 접수됨',
+  'episode.like': '좋아요',
+  'episode.likeFailed': '좋아요를 반영하지 못했어요. 다시 시도해 주세요',
   'episode.previewTitleLabel': '미리보기 제목',
   'episode.commentPlaceholder': '연습 소감이나 구간 팁을 공유해 보세요.',
   'episode.saving': '저장 중…',

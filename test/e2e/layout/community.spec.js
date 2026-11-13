@@ -29,6 +29,8 @@ layoutSuite({
   ready: async (page) => {
     await page.locator('#episodeFeed').waitFor();
     await page.locator(`[data-post-id="${EPISODE_POST_1.postId}"]`).waitFor();
+    // CMR-4: 행동 줄 맨 앞 좋아요 버튼이 4개 폭에서 보인다(data-align-group episodeActions-*)
+    await page.locator(`[data-post-id="${EPISODE_POST_1.postId}"] [data-episode-like]`).waitFor({ state: 'visible' });
   },
   dark: 'communityPro',
 });

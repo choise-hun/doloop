@@ -80,4 +80,6 @@ export const MOCK_POSTS: PublicEpisodeLogDto[] = [1, 2, 3, 4, 5].map((n) => ({
   rate: 0.75,
   coveragePct: 20 * n,
   partStats: [],
+  likeCount: 0,
+  likedByMe: false,
 }));

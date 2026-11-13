@@ -1,10 +1,11 @@
 // frontend/src/components/community/EpisodeLogCard.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import styles from './EpisodeLogCard.module.css';
 import type { PublicEpisodeLogDto } from '../../lib/apiClient';
 import { thumb, videoIdFrom } from '../../lib/security';
-import { useAuth } from '../../lib/auth';
-import { computeEpisodeTitle, buildEpisodePracticeUrl } from '../../lib/episode.mts';
+import { auth, useAuth } from '../../lib/auth';
+import { apiClient } from '../../lib/apiClient';
+import { computeEpisodeTitle, buildEpisodePracticeUrl, classifyEpisodeError } from '../../lib/episode.mts';
 import { segText, fmtSec } from '../../lib/community.mts';
 import { EpisodeReportDialog } from './EpisodeReportDialog';
 import { t } from '../../lib/i18n.mts';
@@ -12,9 +13,10 @@ import { t } from '../../lib/i18n.mts';
 export interface EpisodeLogCardProps {
   post: PublicEpisodeLogDto;
   onPostGone?: (postId: string) => void;
+  onLikeChange?: (postId: string, liked: boolean, likeCount: number) => void;
 }
 
-export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React.ReactElement {
+export function EpisodeLogCard({ post, onPostGone, onLikeChange }: EpisodeLogCardProps): React.ReactElement {
   const authState = useAuth();
   const currentUid = authState.user?.id || null;
   const isMine = Boolean(currentUid && post.owner?.id === currentUid);
@@ -23,6 +25,54 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
   const [reportOpen, setReportOpen] = useState(false);
   const [reported, setReported] = useState(false);
   const reportBtnRef = useRef<HTMLButtonElement>(null);
+
+  // 좋아요: 낙관적 갱신 없이 응답 값으로만 반영한다. 언마운트·계정 전환·요청 번호 변경 시 늦은 응답은 버린다.
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeError, setLikeError] = useState<string | null>(null);
+  const likeBusyRef = useRef(false);
+  const likeSeqRef = useRef(0);
+  const aliveRef = useRef(false);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; likeSeqRef.current++; };
+  }, []);
+  useEffect(() => {
+    // 계정이 바뀌면 진행 중 요청을 무효화하고 상태를 비운다.
+    likeSeqRef.current++;
+    likeBusyRef.current = false;
+    setLikeBusy(false);
+    setLikeError(null);
+  }, [currentUid]);
+
+  const likedByMe = post.likedByMe === true;
+  const likeCount = typeof post.likeCount === 'number' ? post.likeCount : 0;
+
+  const handleLike = async () => {
+    if (likeBusyRef.current) return;
+    const mySeq = ++likeSeqRef.current;
+    const myUid = auth.getUser()?.id || null;
+    const target = !likedByMe;
+    likeBusyRef.current = true;
+    setLikeBusy(true);
+    setLikeError(null);
+    const isCurrent = () => aliveRef.current && mySeq === likeSeqRef.current && myUid === (auth.getUser()?.id || null);
+    try {
+      const res = await apiClient.community.setEpisodeLike(post.postId, target);
+      if (!isCurrent()) return;
+      if (typeof res?.liked !== 'boolean' || typeof res?.likeCount !== 'number') throw new Error('invalid like response');
+      onLikeChange?.(post.postId, res.liked, res.likeCount);
+    } catch (err: any) {
+      if (!isCurrent()) return;
+      if (classifyEpisodeError(err).type === 'not_found') {
+        setLikeError(t('episode.err.gone'));
+        onPostGone?.(post.postId);
+      } else {
+        setLikeError(t('episode.likeFailed'));
+      }
+    } finally {
+      if (isCurrent()) { likeBusyRef.current = false; setLikeBusy(false); }
+    }
+  };
 
   const displayTitle = computeEpisodeTitle(post);
   const playHref = buildEpisodePracticeUrl(post.videoId, post.a, post.b, post.rate);
@@ -146,10 +196,22 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
           <div className={styles.footerRow}>
             <span className={styles.publishDate}>{publishDateStr}</span>
             <div className={styles.actions} aria-label={t('episode.aria.actions')}>
-              <a aria-disabled={!validVideo} href={validVideo ? playHref : undefined} className={`ghost mini ${styles.actionBtn}`}>
+              <button
+                type="button"
+                className={`ghost mini ${styles.actionBtn} ${styles.likeBtn}`}
+                data-episode-like
+                data-align-group={`episodeActions-${post.postId}:center-y`}
+                role="switch"
+                aria-checked={likedByMe}
+                disabled={likeBusy}
+                onClick={handleLike}
+              >
+                {t('episode.like')} · {likeCount}
+              </button>
+              <a aria-disabled={!validVideo} href={validVideo ? playHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
                 {t('episode.play')}
               </a>
-              <a aria-disabled={!validVideo} href={validVideo ? saveHref : undefined} className={`ghost mini ${styles.actionBtn}`}>
+              <a aria-disabled={!validVideo} href={validVideo ? saveHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
                 {t('episode.saveViaPlayer')}
               </a>
               {!isMine && (
@@ -157,6 +219,7 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
                   ref={reportBtnRef}
                   type="button"
                   className={`ghost mini ${styles.reportBtn}`}
+                  data-align-group={`episodeActions-${post.postId}:center-y`}
                   disabled={reported}
                   onClick={() => setReportOpen(true)}
                 >
@@ -165,6 +228,9 @@ export function EpisodeLogCard({ post, onPostGone }: EpisodeLogCardProps): React
               )}
             </div>
           </div>
+          {likeError && (
+            <p className={styles.likeErr} role="alert" data-episode-like-error>{likeError}</p>
+          )}
         </div>
       </div>
 

@@ -562,6 +562,8 @@ export interface PublicEpisodeLogDto {
   rate: number | null;
   coveragePct: number;
   partStats: PublicPartStatDto[];
+  likeCount: number;
+  likedByMe: boolean;
 }
 
 export interface EpisodeLogListResponse {
@@ -1576,6 +1578,13 @@ async function communitySetLike(id: string, on: boolean): Promise<{ liked: boole
   });
 }
 
+async function communitySetEpisodeLike(postId: string, on: boolean): Promise<{ liked: boolean; likeCount: number }> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/community/episode-logs/' + encodeURIComponent(postId) + '/like', {
+    method: on ? 'PUT' : 'DELETE',
+  });
+}
+
 async function communityClone(
   id: string
 ): Promise<{ categoryId: string; imported: number; alreadyInLibrary: number; skippedLimit: number }> {
@@ -1773,6 +1782,7 @@ export const apiClient = {
     episodeLogs: communityEpisodeLogs,
     myEpisodeLogs: communityMyEpisodeLogs,
     reportEpisode: communityReportEpisode,
+    setEpisodeLike: communitySetEpisodeLike,
   },
   sessions: {
     list: listSessions,

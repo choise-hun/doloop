@@ -1410,6 +1410,8 @@ export const JA: Record<I18nKey, string> = {
   'episode.partsFold': '▲ パートを閉じる',
   'episode.partsUnfold': '▼ パート{count}件を表示',
   'episode.reportedDone': '報告済み',
+  'episode.like': 'いいね',
+  'episode.likeFailed': 'いいねを反映できませんでした。もう一度お試しください',
   'episode.previewTitleLabel': 'プレビュータイトル',
   'episode.commentPlaceholder': '練習の感想やコツを共有してみましょう。',
   'episode.saving': '保存中…',

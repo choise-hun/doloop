@@ -1410,6 +1410,8 @@ export const EN: Record<I18nKey, string> = {
   'episode.partsFold': '▲ Fold Parts',
   'episode.partsUnfold': '▼ View {count} Parts',
   'episode.reportedDone': 'Reported',
+  'episode.like': 'Like',
+  'episode.likeFailed': 'Couldn’t update your like. Please try again',
   'episode.previewTitleLabel': 'Preview Title',
   'episode.commentPlaceholder': 'Share your practice thoughts or tips.',
   'episode.saving': 'Saving…',
