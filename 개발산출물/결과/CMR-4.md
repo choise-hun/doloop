@@ -79,5 +79,5 @@
 
 ### CI·리뷰
 - head `758e1f6` CI: Detect·Test(Node 22)·Kotlin(JDK 21)·Docker·E2E XSS & CSP·CI ok 전부 pass(run 43359226684).
-- Codex 리뷰(commit `20ba323`) P1 1건: 좋아요 경로 잘못된 UUID 400 → **타당**(승인 명세 §4.2·L7). 수정: `parseLikePostId`, 테스트 400 단언(PUT·DELETE). 로컬 `./gradlew clean test --tests EpisodeLikeApiTest` 8건 통과. 수정 커밋 CI는 아래.
-- (수정 커밋 CI 결과 기록 대기)
+- Codex 리뷰(commit `20ba323`) P1 1건: 좋아요 경로 잘못된 UUID 400 → **타당**(승인 명세 §4.2·L7). 수정: `parseLikePostId`, 테스트 400 단언(PUT·DELETE). 로컬 `./gradlew clean test --tests EpisodeLikeApiTest` 8건 통과. 수정 커밋 `26962d2` CI: Detect·Test(Node 22)·Kotlin(JDK 21)·Docker·E2E XSS & CSP·CI ok 전부 pass(run 43360717764).
+- 이후 Codex가 `26962d2`를 다시 리뷰했는지는 확인하지 못했다(2026-11-13 기준 코멘트는 `20ba323` 대상 P1 1건뿐, 위에서 처리). 이 기록 커밋은 문서 전용이다.
