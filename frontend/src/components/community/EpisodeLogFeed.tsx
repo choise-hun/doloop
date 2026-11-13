@@ -4,6 +4,7 @@ import styles from './EpisodeLogFeed.module.css';
 import { apiClient, type PublicEpisodeLogDto } from '../../lib/apiClient';
 import { auth, useAuth } from '../../lib/auth';
 import { EpisodeLogCard } from './EpisodeLogCard';
+import { cardAudio } from '../../lib/cardAudio';
 import { t } from '../../lib/i18n.mts';
 
 export interface EpisodeLogFeedProps {
@@ -135,6 +136,9 @@ export function EpisodeLogFeed({
     fetchFirstPage(scope);
     return () => { reqSeqRef.current++; };
   }, [scope, fetchFirstPage]);
+
+  // S3b-4 D4: 피드 범위 전환·페이지 이탈(언마운트) 때 카드 녹음 재생을 멈춘다
+  useEffect(() => () => cardAudio.stop(), [scope]);
 
   const status: 'loading' | 'error' | 'empty' | 'ready' = loading
     ? 'loading'

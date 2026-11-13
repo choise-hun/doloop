@@ -3,7 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth, auth } from '../lib/auth';
 import { t, type I18nKey } from '../lib/i18n.mts';
-import { apiClient, type CommunityUserDto } from '../lib/apiClient';
+import { apiClient, type CommunityUserDto, type ShareConsentDto } from '../lib/apiClient';
+import { formatEpisodeDate } from '../lib/episode.mts';
 import { PublicNameForm } from '../components/community/PublicNameForm';
 import { MySharesPanel } from '../components/community/MySharesPanel';
 import { MyEpisodeSharesPanel } from '../components/community/MyEpisodeSharesPanel';
@@ -280,6 +281,7 @@ export function ProfilePage(): React.ReactElement {
             disabled={namesDisabled} acquireSave={acquireSave}
             onSaved={name => { if (name === publicName) setRetry(n => n + 1); }} />
         </section>
+        <ShareConsentSection key={`consent:${identity}`} />
         <section id="profileSummary" className={styles.accountCard}
           data-align-group="profileCol:left; profileEdges:right" aria-labelledby="profileSummaryTitle">
           <h2 id="profileSummaryTitle">{t('profile.summaryTitle')}</h2>
@@ -307,5 +309,144 @@ export function ProfilePage(): React.ReactElement {
       </> : null}
 
     </AppShell>
+  );
+}
+
+/** ISO 시각 → 사용자 지역 날짜 문구 */
+function consentDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return formatEpisodeDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+}
+
+/**
+ * S3b-4 D8: 커뮤니티 공유 동의 상태와 녹음 첨부 동의 철회·재동의.
+ * 부모가 계정·세션 세대(identity)로 key를 주므로 계정이 바뀌면 상태가 새로 시작된다.
+ */
+function ShareConsentSection(): React.ReactElement {
+  const [consent, setConsent] = useState<ShareConsentDto | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
+  const aliveRef = useRef(true);
+  const busyRef = useRef(false);
+  const removeAllRef = useRef<HTMLButtonElement>(null);
+  const withdrawRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setLoadFailed(false);
+    apiClient.community.shareConsent(ctrl.signal)
+      .then((c) => { if (!ctrl.signal.aborted) setConsent(c); })
+      .catch(() => { if (!ctrl.signal.aborted) setLoadFailed(true); });
+    return () => ctrl.abort();
+  }, [reload]);
+
+  // 확인 창을 열면 첫 버튼, 취소로 닫으면(다시 그려진) 철회 버튼에 포커스
+  const returnFocusRef = useRef(false);
+  useEffect(() => {
+    if (asking) removeAllRef.current?.focus();
+    else if (returnFocusRef.current) { returnFocusRef.current = false; withdrawRef.current?.focus(); }
+  }, [asking]);
+
+  const run = async (work: () => Promise<{ consent: ShareConsentDto; removed: number }>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await work();
+      if (!aliveRef.current) return;
+      setConsent(res.consent);
+      setAsking(false);
+      setMsg({
+        kind: 'ok',
+        text: t('profile.shareConsent.done', {
+          removed: res.removed > 0 ? t('profile.shareConsent.removedCount', { count: res.removed }) : '',
+        }),
+      });
+    } catch {
+      if (!aliveRef.current) return;
+      setMsg({ kind: 'err', text: t('profile.shareConsent.saveFailed') });
+    } finally {
+      busyRef.current = false;
+      if (aliveRef.current) setBusy(false);
+    }
+  };
+
+  const withdraw = (removeExisting: boolean) => run(async () => {
+    const r = await apiClient.community.withdrawRecordingConsent(removeExisting);
+    return { consent: r.consent, removed: r.removedAttachments };
+  });
+  const reagree = () => run(async () => {
+    if (!consent) throw new Error('no consent');
+    return { consent: await apiClient.community.agreeShareConsent(consent.noticeVersion), removed: 0 };
+  });
+  const cancelAsk = () => {
+    returnFocusRef.current = true;
+    setAsking(false);
+  };
+
+  const recordingOff = Boolean(consent && consent.cardShareAllowed && !consent.recordingAllowed && consent.recordingWithdrawnAt);
+  const status = !consent ? null
+    : consent.recordingAllowed ? t('profile.shareConsent.on', { date: consentDate(consent.consentedAt) })
+      : recordingOff ? t('profile.shareConsent.recordingOff', { date: consentDate(consent.recordingWithdrawnAt) })
+        : t('profile.shareConsent.none');
+
+  return (
+    <section id="profileShareConsent" className={styles.accountCard}
+      data-align-group="profileCol:left; profileEdges:right" aria-labelledby="profileShareConsentTitle">
+      <h2 id="profileShareConsentTitle">{t('profile.shareConsent.title')}</h2>
+      {loadFailed ? <>
+        <p id="shareConsentStatus" role="status" aria-live="polite">{t('profile.shareConsent.loadFailed')}</p>
+        <button type="button" id="shareConsentRetry" className="ghostBtn" onClick={() => setReload((n) => n + 1)}>
+          {t('record.retry')}
+        </button>
+      </> : <p id="shareConsentStatus" role="status" aria-live="polite">{status}</p>}
+      {consent?.recordingAllowed && !asking ? (
+        <button ref={withdrawRef} type="button" id="shareConsentWithdraw" className="ghostBtn" disabled={busy}
+          onClick={() => setAsking(true)}>
+          {t('profile.shareConsent.withdraw')}
+        </button>
+      ) : null}
+      {consent?.recordingAllowed && asking ? (
+        <div id="shareConsentWithdrawAsk" className={styles.stack} role="group"
+          aria-labelledby="shareConsentWithdrawAskText"
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); cancelAsk(); } }}>
+          <p id="shareConsentWithdrawAskText">{t('profile.shareConsent.withdrawAsk')}</p>
+          <div className={styles.consentActions}>
+            <button ref={removeAllRef} type="button" id="withdrawRemoveAll" className="ghostBtn" disabled={busy}
+              onClick={() => void withdraw(true)}>
+              {t('profile.shareConsent.removeAll')}
+            </button>
+            <button type="button" id="withdrawKeep" className="ghostBtn" disabled={busy}
+              onClick={() => void withdraw(false)}>
+              {t('profile.shareConsent.keep')}
+            </button>
+            <button type="button" id="withdrawCancel" className="ghostBtn" disabled={busy}
+              onClick={cancelAsk}>
+              {t('profile.shareConsent.cancel')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {recordingOff ? (
+        <button type="button" id="shareConsentReagree" className="ghostBtn" disabled={busy} onClick={() => void reagree()}>
+          {t('profile.shareConsent.reagree')}
+        </button>
+      ) : null}
+      <p id="shareConsentMsg" className={`msg${msg ? ' ' + msg.kind : ''}`} role="status" aria-live="polite">
+        {msg?.text}
+      </p>
+    </section>
   );
 }

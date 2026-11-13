@@ -1,5 +1,5 @@
 // frontend/src/components/community/EpisodeLogCard.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import styles from './EpisodeLogCard.module.css';
 import type { PublicEpisodeLogDto } from '../../lib/apiClient';
 import { thumb, videoIdFrom } from '../../lib/security';
@@ -9,6 +9,7 @@ import { computeEpisodeTitle, buildEpisodePracticeUrl, classifyEpisodeError } fr
 import { segText, fmtSec } from '../../lib/community.mts';
 import { EpisodeReportDialog } from './EpisodeReportDialog';
 import { t } from '../../lib/i18n.mts';
+import { cardAudio } from '../../lib/cardAudio';
 
 export interface EpisodeLogCardProps {
   post: PublicEpisodeLogDto;
@@ -85,6 +86,23 @@ export function EpisodeLogCard({ post, onPostGone, onLikeChange }: EpisodeLogCar
   const coverage = typeof post.coveragePct === 'number' ? post.coveragePct : 0;
   const parts = Array.isArray(post.partStats) ? post.partStats : [];
 
+  // D2·D3: 첫 첨부만 재생한다. 상태는 단일 플레이어 구독으로만 읽는다(주소는 카드에 두지 않는다).
+  const attachment = Array.isArray(post.attachments) && post.attachments.length > 0 ? post.attachments[0] : null;
+  const audioSnap = useSyncExternalStore(cardAudio.subscribe, cardAudio.getSnapshot, cardAudio.getSnapshot);
+  const mineTrack = Boolean(attachment && audioSnap.postId === post.postId && audioSnap.attachmentId === attachment.attachmentId);
+  const playState = mineTrack ? audioSnap.status : 'idle';
+  const playPressed = playState === 'loading' || playState === 'playing';
+  const playError = mineTrack && audioSnap.status === 'error'
+    ? t(audioSnap.error === 'gone' ? 'episode.err.gone' : 'episode.recordingError')
+    : null;
+  useEffect(() => () => cardAudio.stopPost(post.postId), [post.postId]);
+
+  const handlePlay = async () => {
+    if (!attachment) return;
+    const result = await cardAudio.toggle(post.postId, attachment.attachmentId);
+    if (result === 'gone' && aliveRef.current) onPostGone?.(post.postId);
+  };
+
   const timeFormatted = fmtSec(post.seconds);
   const publishDateStr = post.publishedAt ? post.publishedAt.split('T')[0] : post.date;
 
@@ -94,144 +112,166 @@ export function EpisodeLogCard({ post, onPostGone, onLikeChange }: EpisodeLogCar
       data-post-id={post.postId}
       aria-labelledby={`epTitle-${post.postId}`}
     >
-      <div className={styles.body}>
-        {/* 썸네일 */}
-        <div
-          className={styles.thumbWrap}
-          data-align-group={`episodeHead-${post.postId}:top@768`}
-        >
-          {thumbUrl ? (
-            <img
-              src={thumbUrl}
-              alt=""
-              className={styles.thumbImg}
-              loading="lazy"
-              onError={() => setThumbFailed(true)}
-            />
-          ) : (
-            <div className={styles.thumbPlaceholder}>NO VIDEO</div>
-          )}
+      <div className={styles.content}>
+        <div className={styles.headRow}>
+          <h3
+            id={`epTitle-${post.postId}`}
+            className={styles.title}
+            data-align-group={`episodeHead-${post.postId}:top`}
+          >
+            {displayTitle}
+          </h3>
+          <div
+            className={styles.authorBadgeRow}
+            aria-label={t('episode.aria.meta')}
+            data-align-group={`episodeHead-${post.postId}:top`}
+          >
+            <span className={styles.authorName}>{post.owner?.publicName || t('episode.authorDefault')}</span>
+            {post.owner?.creatorBadge && (
+              <span className={styles.creatorBadge}>{post.owner.creatorBadge}</span>
+            )}
+            {isMine && <span className={styles.mineBadge}>{t('episode.mineBadge')}</span>}
+          </div>
         </div>
 
-        {/* 본문 메타 */}
-        <div className={styles.content}>
+        {/* D1 안2: 미니 썸네일 첨부 줄. D2: 녹음이 있으면 썸네일 전체가 재생 버튼 */}
+        <div className={styles.attachRow}>
           <div
-            className={styles.headRow}
-            data-align-group={`episodeHead-${post.postId}:top@768`}
+            className={styles.miniThumb}
+            data-align-group={post.youtubeTitle ? `episodeAttach-${post.postId}:center-y` : undefined}
           >
-            <h3 id={`epTitle-${post.postId}`} className={styles.title}>
-              {displayTitle}
-            </h3>
-            <div className={styles.authorBadgeRow} aria-label={t('episode.aria.meta')}>
-              <span className={styles.authorName}>{post.owner?.publicName || t('episode.authorDefault')}</span>
-              {post.owner?.creatorBadge && (
-                <span className={styles.creatorBadge}>{post.owner.creatorBadge}</span>
-              )}
-              {isMine && <span className={styles.mineBadge}>{t('episode.mineBadge')}</span>}
-            </div>
+            {thumbUrl ? (
+              <img
+                src={thumbUrl}
+                alt=""
+                className={styles.thumbImg}
+                loading="lazy"
+                onError={() => setThumbFailed(true)}
+              />
+            ) : (
+              <div className={styles.thumbPlaceholder}>NO VIDEO</div>
+            )}
+            {attachment && (
+              <button
+                type="button"
+                className={styles.playBtn}
+                data-episode-play={attachment.attachmentId}
+                data-play-state={playState}
+                aria-label={t('episode.playRecording', { duration: fmtSec(attachment.durationSec) })}
+                aria-pressed={playPressed}
+                title={playPressed ? t('episode.stopRecording') : undefined}
+                onClick={handlePlay}
+              >
+                <span className={styles.playBadge} aria-hidden="true">
+                  {playState === 'playing' ? '■' : playState === 'loading' ? '…' : playState === 'error' ? '⟲' : '▶'}
+                </span>
+              </button>
+            )}
           </div>
-
           {post.youtubeTitle && (
-            <div className={styles.ytInfo}>
+            <div className={styles.ytInfo} data-align-group={`episodeAttach-${post.postId}:center-y`}>
               <span className={styles.ytTitle}>{post.youtubeTitle}</span>
               {post.youtubeArtist && <span className={styles.ytArtist}> · {post.youtubeArtist}</span>}
             </div>
           )}
+        </div>
+        {playError && (
+          <p className={styles.likeErr} role="alert" data-episode-play-error>{playError}</p>
+        )}
 
-          {post.comment && <p className={styles.comment}>{post.comment}</p>}
+        {post.comment && <p className={styles.comment}>{post.comment}</p>}
 
-          <div className={styles.metaRow}>
-            <span>{post.date}</span>
-            <span>·</span>
-            <span>{timeFormatted}</span>
-            <span>·</span>
-            <span>{t('episode.loopsCount', { count: post.loops })}</span>
-            {segInfo && (
-              <>
-                <span>·</span>
-                <span>{segInfo}</span>
-              </>
-            )}
-          </div>
-
-          <div className={styles.coverageRow}>
-            <div className={styles.coverageBarWrap}>
-              <progress
-                className={`${styles.coverageBar} ${coverage >= 100 ? styles.coverageComplete : ''}`}
-                value={coverage}
-                max={100}
-                aria-label={t('episode.aria.coverage', { pct: coverage })}
-              />
-            </div>
-            <span className={styles.coveragePct}>{coverage}%</span>
-          </div>
-
-          {parts.length > 0 && (
-            <div className={styles.partsSection} aria-label={t('episode.aria.details')}>
-              <button
-                type="button"
-                className={`ghost mini ${styles.partsToggleBtn}`}
-                aria-expanded={partsOpen}
-                aria-controls={`epParts-${post.postId}`}
-                onClick={() => setPartsOpen((prev) => !prev)}
-              >
-                {partsOpen ? t('episode.partsFold') : t('episode.partsUnfold', { count: parts.length })}
-              </button>
-              {partsOpen && (
-                <div id={`epParts-${post.postId}`} className={styles.partsList}>
-                  {parts.map((p, idx) => (
-                    <div key={idx} className={styles.partItem}>
-                      <span className={styles.partName}>{p.name || t('episode.partEmpty')}</span>
-                      <span className={styles.partStats}>
-                        {segText(p.a, p.b, p.rate)} · {fmtSec(p.seconds)} · {t('episode.loopsUnit', { loops: p.loops })}
-                        {p.completed ? ' ✓' : ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className={styles.footerRow}>
-            <span className={styles.publishDate}>{publishDateStr}</span>
-            <div className={styles.actions} aria-label={t('episode.aria.actions')}>
-              <button
-                type="button"
-                className={`ghost mini ${styles.actionBtn} ${styles.likeBtn}`}
-                data-episode-like
-                data-align-group={`episodeActions-${post.postId}:center-y`}
-                role="switch"
-                aria-checked={likedByMe}
-                disabled={likeBusy}
-                onClick={handleLike}
-              >
-                {t('episode.like')} · {likeCount}
-              </button>
-              <a aria-disabled={!validVideo} href={validVideo ? playHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
-                {t('episode.play')}
-              </a>
-              <a aria-disabled={!validVideo} href={validVideo ? saveHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
-                {t('episode.saveViaPlayer')}
-              </a>
-              {!isMine && (
-                <button
-                  ref={reportBtnRef}
-                  type="button"
-                  className={`ghost mini ${styles.reportBtn}`}
-                  data-align-group={`episodeActions-${post.postId}:center-y`}
-                  disabled={reported}
-                  onClick={() => setReportOpen(true)}
-                >
-                  {reported ? t('episode.reportedDone') : t('episode.report')}
-                </button>
-              )}
-            </div>
-          </div>
-          {likeError && (
-            <p className={styles.likeErr} role="alert" data-episode-like-error>{likeError}</p>
+        <div className={styles.metaRow}>
+          <span>{post.date}</span>
+          <span>·</span>
+          <span>{timeFormatted}</span>
+          <span>·</span>
+          <span>{t('episode.loopsCount', { count: post.loops })}</span>
+          {segInfo && (
+            <>
+              <span>·</span>
+              <span>{segInfo}</span>
+            </>
           )}
         </div>
+
+        <div className={styles.coverageRow}>
+          <div className={styles.coverageBarWrap}>
+            <progress
+              className={`${styles.coverageBar} ${coverage >= 100 ? styles.coverageComplete : ''}`}
+              value={coverage}
+              max={100}
+              aria-label={t('episode.aria.coverage', { pct: coverage })}
+            />
+          </div>
+          <span className={styles.coveragePct}>{coverage}%</span>
+        </div>
+
+        {parts.length > 0 && (
+          <div className={styles.partsSection} aria-label={t('episode.aria.details')}>
+            <button
+              type="button"
+              className={`ghost mini ${styles.partsToggleBtn}`}
+              aria-expanded={partsOpen}
+              aria-controls={`epParts-${post.postId}`}
+              onClick={() => setPartsOpen((prev) => !prev)}
+            >
+              {partsOpen ? t('episode.partsFold') : t('episode.partsUnfold', { count: parts.length })}
+            </button>
+            {partsOpen && (
+              <div id={`epParts-${post.postId}`} className={styles.partsList}>
+                {parts.map((p, idx) => (
+                  <div key={idx} className={styles.partItem}>
+                    <span className={styles.partName}>{p.name || t('episode.partEmpty')}</span>
+                    <span className={styles.partStats}>
+                      {segText(p.a, p.b, p.rate)} · {fmtSec(p.seconds)} · {t('episode.loopsUnit', { loops: p.loops })}
+                      {p.completed ? ' ✓' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={styles.footerRow}>
+          <span className={styles.publishDate}>{publishDateStr}</span>
+          <div className={styles.actions} aria-label={t('episode.aria.actions')}>
+            <button
+              type="button"
+              className={`ghost mini ${styles.actionBtn} ${styles.likeBtn}`}
+              data-episode-like
+              data-align-group={`episodeActions-${post.postId}:center-y`}
+              role="switch"
+              aria-checked={likedByMe}
+              disabled={likeBusy}
+              onClick={handleLike}
+            >
+              {t('episode.like')} · {likeCount}
+            </button>
+            <a aria-disabled={!validVideo} href={validVideo ? playHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
+              {t('episode.play')}
+            </a>
+            <a aria-disabled={!validVideo} href={validVideo ? saveHref : undefined} className={`ghost mini ${styles.actionBtn}`} data-align-group={`episodeActions-${post.postId}:center-y`}>
+              {t('episode.saveViaPlayer')}
+            </a>
+            {!isMine && (
+              <button
+                ref={reportBtnRef}
+                type="button"
+                className={`ghost mini ${styles.reportBtn}`}
+                data-align-group={`episodeActions-${post.postId}:center-y`}
+                disabled={reported}
+                onClick={() => setReportOpen(true)}
+              >
+                {reported ? t('episode.reportedDone') : t('episode.report')}
+              </button>
+            )}
+          </div>
+        </div>
+        {likeError && (
+          <p className={styles.likeErr} role="alert" data-episode-like-error>{likeError}</p>
+        )}
       </div>
 
       {reportOpen && (

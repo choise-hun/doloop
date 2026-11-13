@@ -1,7 +1,8 @@
 # 진행 — S2 게시물 좋아요(CMR-4) + S3b 녹음 첨부 연습 기록 카드 공유
 
+> **완료 2026-11-14** — 마지막 PR [#17](https://github.com/choise-hun/doloop/pull/17)
 > 시작: 2026-11-13 / Windows / Claude(시니어). `main`=`d5c2566`(PR #11 머지 확인, `git pull --ff-only` 완료, 미커밋 변경 없음, 열린 PR 0건).
-> 상태: **S3b-2 PR #15 main 머지(`f9cc06d`). S3b-3 시니어 직접 구현 + 주니어 4단계 최종 검증·테스트 보강 완료 → PR 생성·CI 확인 진행.**
+> 상태: **S3b-4 주니어 4단계 최종 검증·D10 마무리 완료 → PR [#17](https://github.com/choise-hun/doloop/pull/17) main 머지 대기.** ([§16](#16-s3b-4-주니어-4단계-최종-검증--2026-11-14--mac--gemini주니어))
 
 ## 1. 목표와 근거
 
@@ -27,8 +28,8 @@
 | 1 | **CMR-4** 게시물 좋아요(S2) | [주니어] 4단계 | [CMR-4 명세](명세/CMR-4_구현명세.md) → `결과/CMR-4.md` | 서버 API 테스트·프런트 e2e·layout spec 통과, PR CI 통과 | 중 | **4단계 최종 검증 완료 → PR [#13](https://github.com/choise-hun/doloop/pull/13) main 머지 완료(`ee68ad9`)**. [결과 §8](결과/CMR-4.md): Gradle 326·Playwright 144·오류 상태 캡처 통과, npm 기존 3실패 외 신규 실패 0 |
 | 2 | **S3b-1** 서버 핵심: 동의·첨부·Supabase 복사·재생 주소·첨부 제거·철회 정리 | [시니어] 구현 → [주니어] 4단계 | [S3b-1 명세](명세/S3b-1_구현명세.md) → [결과/S3b-1](결과/S3b-1.md) | 표적 테스트 Red→Green(시니어), 전체 회귀·PR CI(주니어) | 높음 | **4단계 최종 검증 완료 → PR [#14](https://github.com/choise-hun/doloop/pull/14) main 머지 완료(`46574e0`)** Gradle 351·tsc 통과, Codex P2 + 시니어 취소 결함 보강 반영 |
 | 3 | **S3b-2** 서버 수명주기: 삭제 경로 전파·티어 정지·숨김 30일·Drive 사본 업로드·재시도 cron·상한 | [주니어] 4단계 | [S3b-2 명세](명세/S3b-2_구현명세.md) → `결과/S3b-2.md` | 경로별 정리 테스트·cron 테스트 통과, PR CI 통과 | 높음 | **PR [#15](https://github.com/choise-hun/doloop/pull/15) main 머지 완료(`f9cc06d`)** Gradle 380, P2 2건 해결 |
-| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → [결과/S3b-3](결과/S3b-3.md) | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **PR #16 Codex P1·P2 3-P 수정 반영 완료(`4b0abf6`, 전체 회귀 + CI 6개 통과, [결과 §5](결과/S3b-3.md)) → 사용자 머지 대기** |
-| 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → `결과/S3b-4.md` | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | S3b-3 머지 뒤 |
+| 4 | **S3b-3** 게시 화면: 최초 동의·공유 창(녹음 칩·원곡 확인)·공유 아이콘 메뉴·Drive 브라우저 업로드 | [시니어] 구현 → [주니어] 4단계 | [S3b-3 명세](명세/S3b-3_구현명세.md) → [결과/S3b-3](결과/S3b-3.md) | e2e·layout spec·4개 폭 스크린샷 검토, PR CI 통과 | 높음 | **PR [#16](https://github.com/choise-hun/doloop/pull/16) main 머지 완료(`f7f4439`)**. [결과 §5](결과/S3b-3.md) |
+| 5 | **S3b-4** 청취·안내: 피드 카드 미니 썸네일+재생, 단일 플레이어, 문구 3곳·삭제 확인·동의 철회, 앱 명세 개정, 마무리 | [시니어] 구현 → [주니어] 4단계 | [S3b-4 명세](명세/S3b-4_구현명세.md) → [결과/S3b-4](결과/S3b-4.md) | e2e·layout spec·4개 폭 스크린샷, 진행 파일 `완료/` 이동 PR | 높음 | **4단계 최종 검증 완료 → PR [#17](https://github.com/choise-hun/doloop/pull/17) 생성·머지 대기** ([§16](#16-s3b-4-주니어-4단계-최종-검증--2026-11-14--mac--gemini주니어)) |
 
 - 운영 배포: **S3b-4 머지 뒤 한 번에**(중간 main은 녹음 첨부 UI가 없어 첨부 생성 경로가 열리지 않는다). CMR-4는 단독 배포 가능.
 - 각 Step 브랜치: `step/CMR-4`, `step/S3b-1` … base `main`. 앞 Step 머지 뒤 main을 `git pull --ff-only`로 맞추고 만든다.
@@ -72,7 +73,8 @@
 2. ~~CMR-4 주니어 2단계·시니어 3단계·주니어 4단계~~ 완료(PR #13, [결과 §7·§8](결과/CMR-4.md)). `개발산출물/report.md` 삭제는 범위 밖 변경이므로 보존·커밋 제외. **PR #13은 2026-11-13 main 머지 확인(`ee68ad9`).**
 3. ~~계획 §1 10-2와 UIUX-R 서술 정리~~ PR #13에 포함(D9). UIUX-R §5.7 본문 세부는 S3b-4에서 마저 정리.
 4. ~~S3b-2~~ PR #15 머지 완료(`f9cc06d`).
-5. S3b-3 시니어 직접 구현·표적 검증·커밋·`step/S3b-3` push 완료(§13). **다음은 §9의 주니어 4단계**다. S3b-4 착수·운영 배포·Scheduler 등록은 하지 않는다.
+5. ~~S3b-3~~ PR #16 머지 완료(`f7f4439`).
+6. S3b-4 시니어 직접 구현·표적 검증·커밋·`step/S3b-4` push 완료(§15). **다음은 §9의 주니어 4단계**다(이 Step이 S3b 마지막 PR — D10 `완료/` 이동 포함). 운영 배포·Scheduler 등록은 머지 뒤 사람 작업.
 
 ## 8. 겪은 문제
 
@@ -89,14 +91,14 @@
 ## 9. 다음 세션 시작 지시
 
 ```text
-# Gemini (주니어) — S3b-3 4단계 최종 회귀·남은 테스트·스크린샷·PR/CI
-개발산출물/협업_시니어주니어.md와 개발산출물/프롬프트_템플릿_4단계.md §4(4단계)를 따른다. 입력: 명세/S3b-3_구현명세.md §5~§7, 이 파일 §13, 브랜치 step/S3b-3(head는 git log로 확인).
-목표: 시니어 직접 구현(서버 D12 + 공유 창·동의·칩·메뉴·Drive 업로드)을 명세 §6 테스트 표와 §7 체크리스트로 마무리하고 결과/S3b-3.md를 쓴다.
-기준: 명세 §6의 남은 행(U1·U2·U5~U14) 테스트 추가, §5 배치 약속, frontend-state §1·§4, testing-security(단언 왜곡 금지·결정적 대기). 시니어가 끝낸 S1·U3·U4·U15·LAY는 다시 만들지 않는다.
-선행 조건: git switch step/S3b-3 && git pull --ff-only, gh 활성 계정 choise-hun 확인, 루트 npm run build 뒤 Playwright 실행(dist 사용).
-범위: test/e2e/cm-ui.spec.js·layout/share-dialog.spec.js·support/community-fixtures.js 테스트 추가와 결과/진행/인수인계 문서. 제품 코드 결함을 찾으면 고치지 말고 재현 명령과 함께 시니어 3-P로 넘긴다.
-완료 기준: npm test(기존 실패 외 신규 0)·npx playwright test 전체·./gradlew test 전체 통과, LAYOUT_SHOTS=1 4개 폭×(동의·작성·메뉴) Q1~Q9 표, §7 grep 0건·design_rules 통과를 결과/S3b-3.md에 기록.
-Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성·gh pr checks --watch·리뷰 확인까지. 머지·배포·S3b-4 착수는 하지 않는다.
+# Gemini (주니어) — S3b-4 4단계 최종 회귀·남은 테스트·스크린샷·D10 마무리·PR/CI
+개발산출물/협업_시니어주니어.md와 개발산출물/프롬프트_템플릿_4단계.md §4(4단계)를 따른다. 입력: 명세/S3b-4_구현명세.md §5~§7·D10, 이 파일 §15, 브랜치 step/S3b-4(head는 git log로 확인).
+목표: 시니어 직접 구현(미니 썸네일 첨부 줄·단일 플레이어·삭제 확인 영향·동의 철회·문구·앱 명세 개정)을 §6·§7로 마무리하고 결과/S3b-4.md를 쓴 뒤 S3b 진행 파일을 완료/로 옮긴다.
+기준: §15 “남은 테스트”만 추가(P10t 녹음 삭제 쪽·P12t·layout 재생 중/오류 상태), 시니어가 끝낸 P1t~P8t·P10t(곡)·P11t·P13t는 다시 만들지 않는다. testing-security(단언 왜곡 금지·결정적 대기), frontend-layout Q1~Q9.
+선행 조건: git switch step/S3b-4 && git pull --ff-only, gh 활성 계정 choise-hun 확인, 루트 npm run build 뒤 Playwright 실행(dist 사용).
+범위: test/e2e·test/*.test.js 테스트 추가, 결과/진행/인수인계/계획 문서(D10). 제품 코드 결함을 찾으면 고치지 말고 재현 명령과 함께 시니어 3-P로 넘긴다.
+완료 기준: npm test·npx playwright test 전체·./gradlew test 전체 통과, LAYOUT_SHOTS=1 4개 폭×(카드 첨부 없음·있음·재생 중·오류, 프로필 동의) Q1~Q9 표, §7 grep 0건, 운영 배포 전 사람 작업 목록을 결과/S3b-4.md에 기록, D10(git mv 진행 파일 → 완료/ + 완료 줄, 계획 §1 10-2, 인수인계 §2 진행 파일 줄) 반영.
+Git 처리: 논리 단위 커밋·step/S3b-4 push·main 대상 신규 PR 생성·gh pr checks --watch·리뷰 확인까지. 머지·운영 배포·Scheduler 등록은 하지 않는다.
 ```
 
 ## 10. S3b-1 시니어 직접 구현 — 2026-11-13 / Windows / Codex
@@ -226,3 +228,71 @@ Git 처리: 논리 단위 커밋·step/S3b-3 push·main 대상 신규 PR 생성�
   - `git grep -n "shareConsentCheckbox" frontend/src test/e2e`: **0건**
 - PR #16([#16](https://github.com/choise-hun/doloop/pull/16), head `2fc7549`) CI 6개 체크 전부 통과. Codex 리뷰 P1(`frontend/src/lib/drive.ts:100`), P2(`frontend/src/components/songRecord/EpisodeShareDialog.tsx:380`) 2건 확인 → 제품 코드 수정은 시니어 3-P로 인계.
 - 시니어 3-P 수정 반영(주니어 4단계, 커밋 `4b0abf6`): `npm run build` 통과, `npm test` **422건 / 58 suite 전부 통과**, `npx playwright test` **753건 전부 통과**(12.2m). PR #16(`4b0abf6`) CI 6개 체크 전부 통과, Codex P1·P2 스레드 답글 완료, 새 리뷰 지적 없음.
+
+## 15. S3b-4 시니어 직접 구현 — 2026-11-14 / Mac / Claude(시니어)
+
+- 선행: PR #16 머지(`f7f4439`, 2026-11-13T21:57Z) 확인, `main` `git pull --ff-only` → `step/S3b-4` 생성. 작업 트리 깨끗, gh 활성 choise-hun. 서버 변경 없음(명세대로).
+- 명세 §1 대조: 행 번호는 S3b-3 머지로 조금 밀렸지만 사실은 같다(`EpisodeLogCard` 썸네일 열·`ytInfo`, `SongRecordParts` 녹음 삭제 confirm, `LogPage` 곡 삭제 2곳, `ProfilePage` `#profileNames`). 서버 경로 `GET …/attachments/{id}/url`·`GET /community/me/share-impact`·`POST …/share-consent/withdraw-recording` 존재 확인.
+
+### 구현 요약 (명세 D 번호)
+
+| 영역 | 파일 | 내용 |
+| --- | --- | --- |
+| D3·D4 | `frontend/src/lib/cardAudio.ts`(신규) | `createCardAudio(deps)` + 기본 인스턴스 `cardAudio`. 요소 1개 지연 생성, 세대 번호 + `AbortController`, `toggle`·`stop`·`stopPost`·`reset`·`subscribe`·`getSnapshot`. 정리 = pause → `removeAttribute('src')` → `load()` → `dataset.attachmentId` 제거. `auth.onChange`로 uid 변경 시 `reset()`(auth.ts 무수정) |
+| D1·D2·D5 | `EpisodeLogCard.tsx/.module.css` | 큰 썸네일 열(`thumbWrap`)·`.body` 제거, 본문 전폭. `div.attachRow` = `.miniThumb` 80×45 + `ytInfo`. 첨부 있으면 썸네일을 덮는 `button[data-episode-play]`(`aria-pressed`, `data-play-state`, ▶/…/■/⟲ 배지 `--ink` 위 `--bg`). 404 → `episode.err.gone` + `onPostGone`, 그 밖 → `p[data-episode-play-error]` |
+| D4 | `EpisodeLogFeed.tsx` | 범위 전환·언마운트 때 `cardAudio.stop()` |
+| API | `apiClient.ts` | `community.attachmentUrl`·`shareImpact`·`shareImpactOrNull`(3초, 실패·초과 = null)·`withdrawRecordingConsent` |
+| D7 | `episode.mts` `deleteConfirmText`, `SongRecordParts.tsx`, `LogPage.tsx` | 녹음·곡 삭제 confirm 직전 영향 조회, 영향 > 0일 때만 문장 추가. 조회 중 중복 클릭 잠금 |
+| D8 | `ProfilePage.tsx/.module.css` | `#profileShareConsent`(계정·세션 세대 key) 상태 줄, `#shareConsentWithdraw` → `#withdrawRemoveAll`·`#withdrawKeep`·`#withdrawCancel`(열면 첫 버튼 포커스, 취소·ESC 시 철회 버튼 복귀), `#shareConsentReagree` |
+| D6 | `i18n/{ko,en,ja}.mts` | §4 개정 4키 + 신규 키 |
+| D9 | `계획/앱_명세.md`, `계획/상용_서비스_계획.md`, `UIUX-R_수정명세.md` §5.7, 임시 명세 상단 | 녹음 사본 예외·허용 범위 ③, §2 5번 예외, §5.7 옛 제안 표 → S3b-1~4 링크, “상세 명세로 대체” 한 줄 |
+
+### 명세와 다른 점·판단 (주니어 결과 파일에 옮겨 적는다)
+
+1. **맞춤 그룹:** `episodeHead-{postId}:top`은 `h3`·작성자 줄 두 구성원에 둔다(제목 줄은 줄바꿈 없이 작성자 칸 최대 55%·말줄임, 작성자 줄 높이 = 제목 첫 줄). `episodeAttach-{postId}:center-y`는 영상 제목이 있을 때만 붙인다(없으면 구성원 1개 경고 A1이 나므로). 동의 철회 3버튼은 390에서 줄바꿈되므로 맞춤 그룹을 두지 않았다.
+2. **문구 키 추가(§4 밖):** `profile.shareConsent.removedCount`(“ · 녹음 첨부 {count}개 삭제”, `done`의 `{removed}` 채움), `profile.shareConsent.loadFailed`·`saveFailed`(조회·반영 실패). `episode.stopRecording`은 재생 중 버튼 `title`로 쓴다(토글 버튼 이름은 `aria-pressed` 패턴에 따라 `playRecording` 고정).
+3. **`play()` 결과값:** `toggle`이 `playing|stopped|stale|gone|failed`를 돌려 누른 카드만 `onPostGone`을 부른다. uid만 바뀌고 세대가 같은 늦은 응답은 `stale`로 버리면서 상태도 `idle`로 비운다(단위 테스트 작성 중 발견한 결함 — 처음 구현은 `loading`이 남았다).
+4. **`episode.share.publicScope` 개정:** 명세 문구대로 “다시 게시하면 현재 세션 통계로 교체” 문장은 빠졌다.
+5. D10(진행 파일 `완료/` 이동·계획 §1 10-2·인수인계 §2)은 PR 번호가 필요해 주니어 4단계로 넘긴다.
+
+### 실제 실행 결과 (Mac, 로컬)
+
+| 명령 | 결과 |
+| --- | --- |
+| `node --test test/card_audio.test.js` (빈 stub) | **Red**: 10건 모두 실패(P3t·P4t 포함) |
+| 같은 명령 (구현 후) | 첫 실행 3건 실패 → 2건은 vm realm `deepEqual`(테스트 수정), 1건은 uid 변경 시 `loading` 잔류(제품 결함, 판단 3) → **10건 통과** |
+| `npx tsc --noEmit -p .` | 오류 0 |
+| 변이: `ensureElement`가 매번 새 요소 + auth 구독 제거 → `-g "S3b4-P(2\|5)t"` | P2t **실패**(요소 2개), P5t는 통과 — 로그아웃 시 피드 카드 언마운트(`stopPost`)가 먼저 정리하므로 auth 구독은 이중 방어. 원본 복원 |
+| `npx playwright test community.spec.js layout/profile.spec.js layout/community.spec.js -g "S3b4-\|profile\|community-"` | 1건 실패(취소 뒤 포커스 — 철회 버튼 재마운트) → effect로 수정 → 통과 |
+| `LAYOUT_SHOTS=1 … -g "community-pro\|community-logs\|consentWithdrawAsk"` | 14건 통과. 390·1280 다크 카드, 390 프로필 철회 확인을 시니어가 훑어봄(큰 썸네일 없음, ▶ 배지, 3버튼 줄바꿈) |
+| `git grep -n "어떤 경우에도 공개되지 않습니다" frontend/src` | 0건 |
+| `npm run build` 후 `npm test` | **432건 전부 통과**(`card_audio.test.js` 10건·i18n LB-1/I0-6·design_rules 포함) |
+| `npx playwright test community.spec.js cm-ui.spec.js av2-community.spec.js practice-record.spec.js layout/{community,profile,log,share-dialog}.spec.js` | **314건 전부 통과**(3.6m) |
+
+- 남은 테스트(주니어): P10t 녹음 삭제 쪽(`SongRecordParts`), P12t는 `npm test` LB-1로 확인, layout 재생 중·오류 상태 캡처(Q1~Q9 표), 전체 `npm test`·Playwright·Gradle.
+- 미실행: 전체 Playwright, 전체 Gradle, 실제 Supabase 서명 주소 재생, CI. 운영 배포·Scheduler 등록 없음.
+
+## 16. S3b-4 주니어 4단계 최종 검증 — 2026-11-14 / Mac / Gemini(주니어)
+
+- 선행: `step/S3b-4`(`75d9e2d`) 확인, `gh auth status` 활성 `choise-hun` 확인.
+- 남은 테스트 행 추가(`6a8f407`):
+  - `test/e2e/community.spec.js`: `S3b4-P10t 녹음 삭제 영향` 3건(영향 있음 `{1,1}`, 영향 `{0,0}`, 조회 실패 `500`).
+  - `test/e2e/layout/community.spec.js`: `community-card-audio` `layoutSuite` 추가(재생 중 `playing` 4개 폭 + 다크, 오류 `error` 4개 폭).
+- 최종 회귀 검증([결과/S3b-4](결과/S3b-4.md)):
+  - `npm run build`: 통과(`tsc --noEmit && vite build`, `dist/` 생성)
+  - `git grep -n "어떤 경우에도 공개되지 않습니다" frontend/src`: **0건**
+  - `npm test`: **432건 / 58 suite 전부 통과**(실패 0·skip 0, `card_audio.test.js` 10건·`i18n.test.js` LB-1 포함)
+  - `npx playwright test`: **780건 전부 통과**(10.6m)
+  - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js test/e2e/layout/profile.spec.js -g "community-pro|community-logs|community-card-audio|userWithNames|consentWithdrawAsk"`: **28건 통과**(19.9s), 4개 폭 × (첨부 없음·있음·재생 중·오류, 프로필 동의) + 다크 Q1~Q9 모두 `○`
+  - `./gradlew test --rerun-tasks`: **381건 전부 통과**(실패 0·오류 0·skip 0, `BUILD SUCCESSFUL in 1m 4s`)
+- D10 마무리: 이 파일 `완료/` 이동 + 완료 줄 추가, `계획/상용_서비스_계획.md` §1 10-2 갱신, `개발산출물/인수인계_메모.md` §2 목록 일치(2건).
+- PR [#17](https://github.com/choise-hun/doloop/pull/17)(base `main`, `0c1eb92`) CI 5개 성공 + Kotlin skipped 확인. Codex 리뷰 P2 1건(`LogPage.tsx:658` 및 `:155-166` `shareImpactOrNull` 지연 중 곡 전환/언마운트/계정 변경 가드 누락, 코멘트 `4569506462`) 확인 → 제품 코드 결함이므로 **시니어 3-P 핀포인트 수정**으로 인계. 머지·운영 배포·Scheduler 등록은 하지 않음.
+
+
+## 17. S3b-4 PR #17 시니어 3-P 핀포인트 수정 — 2026-11-14 / Mac / Claude(시니어)
+
+- 대상: Codex P2 `4569506462` — `LogPage.tsx` 곡 상세 삭제·목록 카드 삭제의 `shareImpactOrNull` await 뒤 화면·언마운트·계정 재확인 누락. 타당 판정.
+- 수정: `frontend/src/pages/LogPage.tsx` 뷰 세대 `viewSeqRef` + `captureView()`, 카드 `mountedRef`. 상세는 remove 뒤에도 재확인 후에만 목록 이동. 상세는 [결과/S3b-4](../결과/S3b-4.md) §6.
+- 회귀: `test/e2e/community.spec.js` S3b4-P10t 대기 중 화면 전환 2건 추가(Red 확인 → Green). 표적 검증 `npm run build` 통과, P10t 8 passed, community·practice-record·xss 103 passed.
+- 다음: 주니어 4단계 — 전체 회귀(`npm test`·`npx playwright test`·`./gradlew test`), 논리 단위 커밋·`step/S3b-4` push·PR #17 CI 대기·Codex 스레드 답글·결과 §6 CI 기록. 머지·운영 배포는 하지 않음.
+- 주니어 4단계 3-P 수정 반영(2026-11-14 / Mac / Gemini, 커밋 `c170bac`): `npm run build` 통과, `npm test` **432건 / 58 suite 전부 통과**, `npx playwright test` **782건 전부 통과**(11.4m), `./gradlew test --rerun-tasks` **381건 전부 통과**(53s). `step/S3b-4` push 및 PR #17 CI·Codex 스레드 `4569506462` 답글 진행.

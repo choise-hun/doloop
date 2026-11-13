@@ -518,6 +518,38 @@ function communityRoutes(opts = {}) {
       },
     ],
     [
+      // S3b-4: 카드 첨부 재생 주소(매번 새로 받는다)
+      (url) => /^\/api\/v1\/community\/episode-logs\/[^/]+\/attachments\/[^/]+\/url$/.test(url.pathname),
+      async (route) => {
+        const parts = new URL(route.request().url()).pathname.split('/');
+        const postId = decodeURIComponent(parts[5]);
+        const attachmentId = decodeURIComponent(parts[7]);
+        if (opts.onAttachmentUrl) return opts.onAttachmentUrl(route, fulfillJson, postId, attachmentId);
+        return fulfillJson(route, { url: `/mock-audio/${attachmentId}.weba?n=${Date.now()}`, expiresIn: 300 });
+      },
+    ],
+    [
+      // S3b-2 D11 / S3b-4 D7: 삭제 전 공유 영향
+      (url) => url.pathname === '/api/v1/community/me/share-impact',
+      async (route) => {
+        const q = new URL(route.request().url()).searchParams;
+        if (opts.onShareImpact) return opts.onShareImpact(route, fulfillJson, q);
+        return fulfillJson(route, { cards: 0, attachments: 0 });
+      },
+    ],
+    [
+      // S3b-4 D8: 녹음 첨부 동의 철회
+      (url) => url.pathname === '/api/v1/community/me/share-consent/withdraw-recording',
+      async (route) => {
+        const body = route.request().postDataJSON() || {};
+        if (opts.onWithdrawRecording) return opts.onWithdrawRecording(route, fulfillJson, body);
+        return fulfillJson(route, {
+          consent: { ...SHARE_CONSENT_ALLOWED, recordingAllowed: false, recordingWithdrawnAt: '2026-11-14T03:00:00Z' },
+          removedAttachments: body.removeExisting === true ? 2 : 0,
+        });
+      },
+    ],
+    [
       // S3b-3: 계정 단위 공유 동의. 기본은 동의됨(opts.consent로 바꾼다)
       (url) => url.pathname === '/api/v1/community/me/share-consent',
       async (route) => {
@@ -613,6 +645,10 @@ const EPISODE_POST_1 = {
   ],
   likeCount: 3,
   likedByMe: false,
+  // S3b-4: 녹음 사본 1개 첨부(공개 DTO에는 sourceTakeId·크기가 없다)
+  attachments: [
+    { attachmentId: '00000000-0000-4000-8000-00000000a901', kind: 'audio_copy', mime: 'audio/webm', durationSec: 42 },
+  ],
 };
 
 const EPISODE_POST_FOLLOWING = {
@@ -637,6 +673,7 @@ const EPISODE_POST_FOLLOWING = {
   ],
   likeCount: 0,
   likedByMe: false,
+  attachments: [],
 };
 
 const MY_EPISODE_LOG_1 = {

@@ -5,9 +5,15 @@ const { test, expect } = require('@playwright/test');
 const { layoutSuite, checkLayout } = require('../support/layout-check');
 const { mockApp: mockBaseApp, STATES } = require('../support/mock-app');
 
+const SHARE_CONSENT_ON = {
+  noticeVersion: 1, requiredVersion: 1, cardShareAllowed: true, recordingAllowed: true,
+  consentedVersion: 1, consentedAt: '2026-11-01T00:00:00Z', recordingWithdrawnAt: null,
+};
 const PF3_ROUTES = [
   [url => url.pathname === '/api/v1/categories', route => route.fulfill({ json: { categories: [] } })],
   [url => url.pathname === '/api/v1/community/me/episode-logs', route => route.fulfill({ json: { posts: [], next: null } })],
+  // S3b-4 D8: 프로필 공유 동의 섹션(기본 = 녹음까지 동의함)
+  [url => url.pathname === '/api/v1/community/me/share-consent', route => route.fulfill({ json: SHARE_CONSENT_ON })],
 ];
 function mockApp(page, options) {
   return mockBaseApp(page, { ...options, routes: [...PF3_ROUTES, ...(options.routes || [])] });
@@ -53,6 +59,13 @@ async function profileReady(page, state) {
     if (['userWithNames', 'userLongText', 'logoutSuccess'].includes(state)) {
       await expect(page.locator('#profileDisplayName')).toBeVisible();
     }
+    if (['userWithNames', 'consentWithdrawAsk'].includes(state)) {
+      await expect(page.locator('#shareConsentStatus')).toContainText('동의함');
+    }
+    if (state === 'consentWithdrawAsk') {
+      await page.locator('#shareConsentWithdraw').click();
+      await expect(page.locator('#withdrawRemoveAll')).toBeFocused();
+    }
     if (state === 'logoutSuccess') {
       await page.locator('#profileLogout').click();
       await expect(page.locator('#profileAuthMsg')).toHaveText('✓ 로그아웃했어요');
@@ -78,6 +91,7 @@ layoutSuite({
     { name: 'userLongText', mock: USER_LONG_TEXT },
     { name: 'userEmptyNames', mock: { ...USER_WITH_NAMES, me: { ...USER_WITH_NAMES.me, displayName: '', publicName: null } } },
     { name: 'logoutSuccess', mock: USER_WITH_NAMES },
+    { name: 'consentWithdrawAsk', mock: USER_WITH_NAMES },
   ],
   ready: profileReady,
   dark: 'userWithNames',
@@ -1019,4 +1033,73 @@ test('PF3-03/08 free 공개 폴더 off 허용 & 개별 confirm 취소 시 DELETE
   await page.locator('[data-profile-withdraw=s1]').click();
   expect(deletes).toBe(0);
   await expect(page.locator('[data-profile-withdraw=s1]')).toBeVisible();
+});
+
+// ---------------------------------------------------------------------------
+// S3b-4 D8: 녹음 첨부 동의 철회·재동의
+// ---------------------------------------------------------------------------
+test('S3b4-P11t 동의 철회: 첨부도 모두 삭제 → removeExisting:true, 상태 줄·삭제 개수 갱신, 재동의 버튼', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const bodies = [];
+  let agreed = 0;
+  await mockApp(page, {
+    ...USER_WITH_NAMES,
+    routes: [
+      [url => url.pathname === '/api/v1/community/me/share-consent/withdraw-recording', async route => {
+        bodies.push(route.request().postDataJSON());
+        return route.fulfill({ json: {
+          consent: { ...SHARE_CONSENT_ON, recordingAllowed: false, recordingWithdrawnAt: '2026-11-14T03:00:00Z' },
+          removedAttachments: 2,
+        } });
+      }],
+      [url => url.pathname === '/api/v1/community/me/share-consent', async route => {
+        if (route.request().method() === 'POST') {
+          agreed += 1;
+          expect(route.request().postDataJSON()).toEqual({ noticeVersion: 1 });
+        }
+        return route.fulfill({ json: SHARE_CONSENT_ON });
+      }],
+    ],
+  });
+  await page.goto('/profile.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await expect(page.locator('#shareConsentStatus')).toHaveText('동의함 (2026년 11월 1일)');
+
+  // 취소는 요청 없이 닫고 포커스를 철회 버튼으로 돌린다
+  await page.locator('#shareConsentWithdraw').click();
+  await page.locator('#withdrawCancel').click();
+  await expect(page.locator('#shareConsentWithdraw')).toBeFocused();
+  expect(bodies).toEqual([]);
+
+  await page.locator('#shareConsentWithdraw').click();
+  await page.locator('#withdrawRemoveAll').click();
+  await expect(page.locator('#shareConsentStatus')).toContainText('녹음 첨부 중단됨');
+  await expect(page.locator('#shareConsentMsg')).toHaveText('반영했어요 · 녹음 첨부 2개 삭제');
+  expect(bodies).toEqual([{ removeExisting: true }]);
+  await expect(page.locator('#shareConsentWithdraw')).toHaveCount(0);
+
+  await page.locator('#shareConsentReagree').click();
+  await expect(page.locator('#shareConsentStatus')).toContainText('동의함');
+  expect(agreed).toBe(1);
+});
+
+test('S3b4-P11t 새 첨부만 중단 → removeExisting:false', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const bodies = [];
+  await mockApp(page, {
+    ...USER_WITH_NAMES,
+    routes: [[url => url.pathname === '/api/v1/community/me/share-consent/withdraw-recording', async route => {
+      bodies.push(route.request().postDataJSON());
+      return route.fulfill({ json: {
+        consent: { ...SHARE_CONSENT_ON, recordingAllowed: false, recordingWithdrawnAt: '2026-11-14T03:00:00Z' },
+        removedAttachments: 0,
+      } });
+    }]],
+  });
+  await page.goto('/profile.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  await page.locator('#shareConsentWithdraw').click();
+  await page.locator('#withdrawKeep').click();
+  await expect(page.locator('#shareConsentMsg')).toHaveText('반영했어요');
+  expect(bodies).toEqual([{ removeExisting: false }]);
 });

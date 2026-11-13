@@ -71,3 +71,10 @@
 .episodeActions > * { min-height: 44px; max-width: 100%; }
 .profileFolders [data-share-row] { overflow-wrap: anywhere; }
 .profileFolders [data-share-row] > * { min-width: 0; }
+
+/* S3b-4 D8: 동의 철회 확인의 3버튼 — 좁은 폭에서는 줄바꿈 */
+.consentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

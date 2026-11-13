@@ -7,7 +7,7 @@ import { drive } from '../../lib/drive';
 import { safeAudioUrl } from '../../lib/security';
 import { t } from '../../lib/i18n.mts';
 import { PracticeSessionCard } from './PracticeSessionCard';
-import { fromSongSession } from '../../lib/episode.mts';
+import { fromSongSession, deleteConfirmText } from '../../lib/episode.mts';
 // i18n-keep: 'record.sessionSegment' 'record.sessionDurationLoops' 'record.btnDetailAccordion' 호환 키 보존
 import styles from './SongRecordParts.module.css';
 
@@ -157,8 +157,12 @@ export function TakeItemRow({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(t('record.confirmDeleteTake'))) return;
+    // D7: 공유 영향을 최대 3초 확인한다. 실패·시간 초과면 기본 문구로 진행.
+    if (deleting) return;
     setDeleting(true);
+    const impact = await apiClient.community.shareImpactOrNull({ takeId: take.id });
+    if (!isCurrent()) return;
+    if (!window.confirm(deleteConfirmText('take', impact))) { setDeleting(false); return; }
     try {
       await apiClient.takes.remove(take.id);
       if (!isCurrent()) return;
