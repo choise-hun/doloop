@@ -30,7 +30,7 @@
 | --- | --- |
 | `components/songRecord/PracticeSessionCard.module.css` | 상태 색 hex 4개 |
 | `components/community/EpisodeReportDialog.module.css` | 상태 색 hex 2개, `rgba` 6개 |
-| `components/songRecord/EpisodeShareDialog.module.css` | 상태 색 hex 1개, `rgba` 4개 |
+| `components/songRecord/EpisodeShareDialog.module.css` | `rgba` 2개(오버레이·그림자) |
 | `components/community/EpisodeLogFeed.module.css` | 상태 색 hex 1개, `rgba` 1개 |
 | `components/community/Community.module.css` | `rgba` 3개 |
 | `pages/PracticePage.module.css` | `#000000` 1개, `rgba` 2개 |

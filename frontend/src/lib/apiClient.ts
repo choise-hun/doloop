@@ -564,7 +564,40 @@ export interface PublicEpisodeLogDto {
   partStats: PublicPartStatDto[];
   likeCount: number;
   likedByMe: boolean;
+  /** S3b-1 §4.3: 서버는 항상 배열을 준다(청취 UI는 S3b-4). */
+  attachments?: PublicCardAttachmentDto[];
 }
+
+export interface PublicCardAttachmentDto {
+  attachmentId: string;
+  kind: string;
+  mime: string;
+  durationSec: number;
+}
+
+export interface MyCardAttachmentDto {
+  attachmentId: string;
+  sourceTakeId: string;
+  mime: string;
+  durationSec: number;
+  readyAt: string;
+}
+
+export interface ShareConsentDto {
+  noticeVersion: number;
+  requiredVersion: number;
+  cardShareAllowed: boolean;
+  recordingAllowed: boolean;
+  consentedVersion: number | null;
+  consentedAt: string | null;
+  recordingWithdrawnAt: string | null;
+}
+
+/** S3b-1 §4.4 공유 요청의 attachment. 키 생략 = 유지. */
+export type ShareAttachmentInput =
+  | { mode: 'keep' }
+  | { mode: 'none' }
+  | { mode: 'replace'; takeId: string; originalConfirmed: true; uploadId?: string };
 
 export interface EpisodeLogListResponse {
   posts: PublicEpisodeLogDto[];
@@ -593,6 +626,8 @@ export interface MyEpisodeLogDto {
   canRepublish: boolean;
   reportCounts: EpisodeReportCountsDto;
   card: PublicEpisodeLogDto | null;
+  /** ready 첨부만, 없으면 null(S3b-1 §4.3). */
+  attachment?: MyCardAttachmentDto | null;
 }
 
 export interface MyEpisodeLogListResponse {
@@ -951,17 +986,76 @@ async function updateMemo(sessionId: string, memo: string): Promise<{ ok: boolea
 
 async function shareEpisode(
   sessionId: string,
-  input: { title?: string; comment?: string }
+  input: { title?: string; comment?: string; attachment?: ShareAttachmentInput },
+  signal?: AbortSignal
 ): Promise<ShareEpisodeResponse> {
   requireLogin();
   const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share';
-  return await getAuthRef().apiFetch(path, {
+  const body: Record<string, unknown> = {
+    title: String(input?.title ?? ''),
+    comment: String(input?.comment ?? ''),
+  };
+  // 키 생략 = 유지(S3b-1 §4.4). 녹음 없는 첫 게시에는 attachment 키를 보내지 않는다.
+  if (input?.attachment) body.attachment = input.attachment;
+  return await getAuthRef().apiFetch(path, { method: 'POST', body: JSON.stringify(body), signal });
+}
+
+/** S3b-2 D4: Drive 녹음 사본을 서버에 올린다(multipart takeId + file). */
+async function uploadShareAttachment(
+  sessionId: string,
+  takeId: string,
+  file: Blob,
+  signal?: AbortSignal
+): Promise<{ uploadId: string; expiresAt: string }> {
+  requireLogin();
+  const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share/uploads';
+  const form = new FormData();
+  form.append('takeId', takeId);
+  form.append('file', file, 'recording.' + (EXT[file.type] || 'webm'));
+  const r = await getAuthRef().apiFetch(path, { method: 'POST', body: form, signal });
+  if (!r || typeof r.uploadId !== 'string' || !r.uploadId || typeof r.expiresAt !== 'string') {
+    throw new Error(t('episode.err.attachInvalid'));
+  }
+  return { uploadId: r.uploadId, expiresAt: r.expiresAt };
+}
+
+async function removeShareAttachment(sessionId: string, signal?: AbortSignal): Promise<{ ok: true; removed: number }> {
+  requireLogin();
+  const path = '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/share/attachment';
+  const r = await getAuthRef().apiFetch(path, { method: 'DELETE', signal });
+  if (!r || r.ok !== true || typeof r.removed !== 'number') throw new Error(t('episode.err.generic'));
+  return { ok: true, removed: r.removed };
+}
+
+function readShareConsent(r: any): ShareConsentDto {
+  // 모르는 응답({} 등)을 "동의됨/안 됨"으로 추측하지 않는다.
+  if (!r || typeof r.cardShareAllowed !== 'boolean' || typeof r.recordingAllowed !== 'boolean' ||
+      typeof r.noticeVersion !== 'number' || typeof r.requiredVersion !== 'number') {
+    throw new Error(t('episode.err.generic'));
+  }
+  return {
+    noticeVersion: r.noticeVersion,
+    requiredVersion: r.requiredVersion,
+    cardShareAllowed: r.cardShareAllowed,
+    recordingAllowed: r.recordingAllowed,
+    consentedVersion: typeof r.consentedVersion === 'number' ? r.consentedVersion : null,
+    consentedAt: typeof r.consentedAt === 'string' ? r.consentedAt : null,
+    recordingWithdrawnAt: typeof r.recordingWithdrawnAt === 'string' ? r.recordingWithdrawnAt : null,
+  };
+}
+
+async function getShareConsent(signal?: AbortSignal): Promise<ShareConsentDto> {
+  requireLogin();
+  return readShareConsent(await getAuthRef().apiFetch('/api/v1/community/me/share-consent', { signal }));
+}
+
+async function agreeShareConsent(noticeVersion: number, signal?: AbortSignal): Promise<ShareConsentDto> {
+  requireLogin();
+  return readShareConsent(await getAuthRef().apiFetch('/api/v1/community/me/share-consent', {
     method: 'POST',
-    body: JSON.stringify({
-      title: String(input?.title ?? ''),
-      comment: String(input?.comment ?? ''),
-    }),
-  });
+    body: JSON.stringify({ noticeVersion }),
+    signal,
+  }));
 }
 
 async function withdrawShareEpisode(sessionId: string, signal?: AbortSignal): Promise<WithdrawEpisodeResponse> {
@@ -1783,12 +1877,16 @@ export const apiClient = {
     myEpisodeLogs: communityMyEpisodeLogs,
     reportEpisode: communityReportEpisode,
     setEpisodeLike: communitySetEpisodeLike,
+    shareConsent: getShareConsent,
+    agreeShareConsent,
   },
   sessions: {
     list: listSessions,
     updateMemo,
     share: shareEpisode,
     withdrawShare: withdrawShareEpisode,
+    uploadShareAttachment,
+    removeShareAttachment,
   },
   saveProgress,
   takes: {

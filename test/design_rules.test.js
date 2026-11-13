@@ -40,7 +40,7 @@ const KNOWN_RAW_COLORS = {
   'frontend/src/components/community/Community.module.css': 3,
   'frontend/src/components/community/EpisodeLogFeed.module.css': 2,
   'frontend/src/components/community/EpisodeReportDialog.module.css': 8,
-  'frontend/src/components/songRecord/EpisodeShareDialog.module.css': 5,
+  'frontend/src/components/songRecord/EpisodeShareDialog.module.css': 2,
   'frontend/src/components/songRecord/PracticeSessionCard.module.css': 4,
   'frontend/src/pages/PracticePage.module.css': 3,
 };

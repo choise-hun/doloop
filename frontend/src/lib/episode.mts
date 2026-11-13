@@ -1,7 +1,7 @@
 // frontend/src/lib/episode.mts
 // CM-UI 세션 공유·피드 순수 어댑터, 유효성 검증, 에러 분류 및 URL 생성
 import type { PublicEpisodeLogDto, PublicPartStatDto, SessionWithSongDto, SongSessionDto, TakeDto } from './apiClient';
-import { t } from './i18n.mts';
+import { t, getLang, type LocaleCode } from './i18n.mts';
 
 export interface PracticeSessionCardModel {
   sessionId: string;
@@ -97,12 +97,26 @@ export function validateEpisodeText(raw: string, maxCodePoints: number, multilin
   return trimmed;
 }
 
-/** 공개 제목 결정 규칙: post.title -> youtubeTitle + ' 연습 기록' -> '연습 기록' */
-export function computeEpisodeTitle(post: { title?: string | null; youtubeTitle?: string | null }): string {
+const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** 세션 날짜(YYYY-MM-DD) 표기(S3b-3 D13): ko `2026년 11월 12일`, en `Nov 12, 2026`, ja `2026年11月12日`. 시간대 변환 없이 문자열로만 읽는다. */
+export function formatEpisodeDate(date: string, lang: LocaleCode = getLang()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || '').trim());
+  if (!m) return String(date || '');
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return String(date);
+  if (lang === 'en') return `${EN_MONTHS[mo - 1]} ${d}, ${y}`;
+  if (lang === 'ja') return `${y}\u5e74${mo}\u6708${d}\u65e5`;
+  return `${y}\ub144 ${mo}\uc6d4 ${d}\uc77c`;
+}
+
+/** 공개 제목 결정 규칙(S3b-3 D13): post.title -> 세션 날짜 -> '연습 기록'. 저장값은 빈 제목 그대로다. */
+export function computeEpisodeTitle(post: { title?: string | null; date?: string | null }): string {
   const custom = post.title?.trim();
   if (custom) return custom;
-  const yt = post.youtubeTitle?.trim();
-  if (yt) return t('episode.titleWithVideo', { title: yt });
+  if (post.date) return formatEpisodeDate(post.date);
   return t('episode.defaultTitle');
 }
 

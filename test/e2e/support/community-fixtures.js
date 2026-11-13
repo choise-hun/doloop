@@ -518,6 +518,35 @@ function communityRoutes(opts = {}) {
       },
     ],
     [
+      // S3b-3: 계정 단위 공유 동의. 기본은 동의됨(opts.consent로 바꾼다)
+      (url) => url.pathname === '/api/v1/community/me/share-consent',
+      async (route) => {
+        const method = route.request().method();
+        if (method === 'POST') {
+          if (opts.onAgreeConsent) return opts.onAgreeConsent(route, fulfillJson);
+          return fulfillJson(route, { ...SHARE_CONSENT_ALLOWED });
+        }
+        if (opts.onShareConsent) return opts.onShareConsent(route, fulfillJson);
+        return fulfillJson(route, { ...SHARE_CONSENT_ALLOWED, ...(opts.consent || {}) });
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/sessions\/[^/]+\/share\/uploads$/.test(url.pathname),
+      async (route) => {
+        const sessId = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[4]);
+        if (opts.onShareUpload) return opts.onShareUpload(route, fulfillJson, sessId);
+        return fulfillJson(route, { uploadId: '00000000-0000-4000-8000-00000000a001', expiresAt: '2026-11-13T00:30:00Z' }, 201);
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/sessions\/[^/]+\/share\/attachment$/.test(url.pathname),
+      async (route) => {
+        const sessId = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[4]);
+        if (opts.onRemoveAttachment) return opts.onRemoveAttachment(route, fulfillJson, sessId);
+        return fulfillJson(route, { ok: true, removed: 1 });
+      },
+    ],
+    [
       (url) => /^\/api\/v1\/sessions\/[^/]+\/share$/.test(url.pathname),
       async (route) => {
         const method = route.request().method();
@@ -542,6 +571,24 @@ function communityRoutes(opts = {}) {
     ],
   ];
 }
+
+const SHARE_CONSENT_ALLOWED = {
+  noticeVersion: 1,
+  requiredVersion: 1,
+  cardShareAllowed: true,
+  recordingAllowed: true,
+  consentedVersion: 1,
+  consentedAt: '2026-11-01T00:00:00Z',
+  recordingWithdrawnAt: null,
+};
+
+const SHARE_CONSENT_NONE = {
+  ...SHARE_CONSENT_ALLOWED,
+  cardShareAllowed: false,
+  recordingAllowed: false,
+  consentedVersion: null,
+  consentedAt: null,
+};
 
 const EPISODE_POST_1 = {
   postId: '00000000-0000-4000-8000-000000000901',
@@ -667,6 +714,8 @@ module.exports = {
   MY_EPISODE_LOG_1,
   EPISODE_POSTS_FIXTURE,
   MY_EPISODE_LOGS_FIXTURE,
+  SHARE_CONSENT_ALLOWED,
+  SHARE_CONSENT_NONE,
   communityRoutes,
   skipNameModal,
 };

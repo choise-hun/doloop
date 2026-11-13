@@ -74,34 +74,28 @@ test('CM-UI 순수 함수 2: validateEpisodeText (제어문자 거절, 줄바꿈
   assert.throws(() => validateEpisodeText(emoji81, 80, false), /길이/);
 });
 
-test('CM-UI 순수 함수 3: computeEpisodeTitle (공개 제목 결정 규칙)', async () => {
-  const { computeEpisodeTitle } = await import('../frontend/src/lib/episode.mts');
+test('CM-UI 순수 함수 3: computeEpisodeTitle (공개 제목 결정 규칙, S3b-3 D13)', async () => {
+  const { computeEpisodeTitle, formatEpisodeDate } = await import('../frontend/src/lib/episode.mts');
 
   // 1. trim된 post.title 우선
   assert.equal(
-    computeEpisodeTitle({ title: '  사용자 지정 제목  ', youtubeTitle: 'YT Title' }),
+    computeEpisodeTitle({ title: '  사용자 지정 제목  ', date: '2026-11-12' }),
     '사용자 지정 제목'
   );
 
-  // 2. title이 빈 문자열이고 youtubeTitle 있을 때
-  assert.equal(
-    computeEpisodeTitle({ title: '', youtubeTitle: 'Rick Astley - Never Gonna Give You Up' }),
-    'Rick Astley - Never Gonna Give You Up 연습 기록'
-  );
-  assert.equal(
-    computeEpisodeTitle({ title: '   ', youtubeTitle: 'Funk Study' }),
-    'Funk Study 연습 기록'
-  );
+  // 2. 빈 제목은 세션 날짜로 표기한다(영상 제목 기반 대체 문구는 쓰지 않는다)
+  assert.equal(computeEpisodeTitle({ title: '', date: '2026-11-12' }), '2026년 11월 12일');
+  assert.equal(computeEpisodeTitle({ title: '   ', date: '2026-01-05' }), '2026년 1월 5일');
 
-  // 3. title도 없고 youtubeTitle도 없을 때
-  assert.equal(
-    computeEpisodeTitle({ title: null, youtubeTitle: null }),
-    '연습 기록'
-  );
-  assert.equal(
-    computeEpisodeTitle({ title: '', youtubeTitle: '' }),
-    '연습 기록'
-  );
+  // 3. 날짜도 없으면 기본 문구
+  assert.equal(computeEpisodeTitle({ title: null, date: null }), '연습 기록');
+
+  // 4. 언어별 날짜 형식과 잘못된 값
+  assert.equal(formatEpisodeDate('2026-11-12', 'ko'), '2026년 11월 12일');
+  assert.equal(formatEpisodeDate('2026-11-12', 'en'), 'Nov 12, 2026');
+  assert.equal(formatEpisodeDate('2026-11-12', 'ja'), '2026年11月12日');
+  assert.equal(formatEpisodeDate('2026-13-01', 'ko'), '2026-13-01');
+  assert.equal(formatEpisodeDate('not-a-date', 'en'), 'not-a-date');
 });
 
 test('CM-UI 순수 함수 4: buildEpisodePracticeUrl (구간 재생 URL 조립)', async () => {
