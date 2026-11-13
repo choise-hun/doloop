@@ -286,5 +286,5 @@ Git 처리: 논리 단위 커밋·step/S3b-4 push·main 대상 신규 PR 생성�
   - `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/community.spec.js test/e2e/layout/profile.spec.js -g "community-pro|community-logs|community-card-audio|userWithNames|consentWithdrawAsk"`: **28건 통과**(19.9s), 4개 폭 × (첨부 없음·있음·재생 중·오류, 프로필 동의) + 다크 Q1~Q9 모두 `○`
   - `./gradlew test --rerun-tasks`: **381건 전부 통과**(실패 0·오류 0·skip 0, `BUILD SUCCESSFUL in 1m 4s`)
 - D10 마무리: 이 파일 `완료/` 이동 + 완료 줄 추가, `계획/상용_서비스_계획.md` §1 10-2 갱신, `개발산출물/인수인계_메모.md` §2 목록 일치(2건).
-- PR [#17](https://github.com/choise-hun/doloop/pull/17)(base `main`) 생성 후 CI 대기 및 리뷰 확인 진행. 머지·운영 배포·Scheduler 등록은 하지 않음.
+- PR [#17](https://github.com/choise-hun/doloop/pull/17)(base `main`, `0c1eb92`) CI 5개 성공 + Kotlin skipped 확인. Codex 리뷰 P2 1건(`LogPage.tsx:658` 및 `:155-166` `shareImpactOrNull` 지연 중 곡 전환/언마운트/계정 변경 가드 누락, 코멘트 `4569506462`) 확인 → 제품 코드 결함이므로 **시니어 3-P 핀포인트 수정**으로 인계. 머지·운영 배포·Scheduler 등록은 하지 않음.
 
