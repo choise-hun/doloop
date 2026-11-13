@@ -1,9 +1,9 @@
 /* frontend/src/styles/tokens.css */
-/* DESIGN.md 확정 규칙:
+/* 디자인 규칙(docs/rules/frontend-design.md) 요약:
  * 1. 바탕은 순백(#FFFFFF)을 절대 쓰지 않고 웜 뉴트럴(#F0EEEA, 표면 #F6F6F1)을 기본값으로 쓴다.
  * 2. 파란색(#1F3FC3)은 링크·근음 점 등 작은 면적에만 쓰고, 선택된 탭·칩·주 CTA 버튼은 가장 어두운 명도(#1D1D1F)로 만든다.
  * 3. 주황색(#C34811 / #E64D01)은 지금 칠 음(.now)과 핵심 스트릭 강조에만 제한 사용한다.
- * 4. 컨트롤(버튼·탭·토글·단일행 인풋·칩·배지)은 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
+ * 4. 컨트롤(버튼·탭·토글·단일행 인풋)과 기존 화면의 칩·배지는 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
  */
 :root {
   /* 1. 기본 배경·표면·글자·선 (순백 #FFFFFF 금지) */
@@ -176,7 +176,7 @@ a {
   display: none !important;
 }
 
-/* 공통 필 버튼 (DESIGN.md: 높이 48px/52px, 글자 약 35%, 좌우 패딩 높이의 0.45~0.75배, 곡률 9999px) */
+/* 공통 필 버튼 (docs/rules/frontend-design.md §3: 높이 48px/52px, 글자 약 35%, 좌우 패딩 높이의 0.45~0.75배, 곡률 9999px) */
 .pillBtn {
   font: inherit;
   font-weight: 700;
@@ -225,7 +225,7 @@ a {
   cursor: default;
 }
 
-/* 공통 직각 카드·패널 (DESIGN.md: 곡률 0px 강제) */
+/* 공통 직각 카드·패널 (docs/rules/frontend-design.md §2: 곡률 0px) */
 .cardBox,
 .panelBox {
   background: var(--surface);
