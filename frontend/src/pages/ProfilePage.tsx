@@ -25,7 +25,7 @@ export function ProfilePage(): React.ReactElement {
   const mountedRef = useRef(true);
 
   useEffect(() => {
-    document.title = 'Profile · ULeveLP';
+    document.title = 'Profile · RE:DO';
   }, []);
 
   useEffect(() => {

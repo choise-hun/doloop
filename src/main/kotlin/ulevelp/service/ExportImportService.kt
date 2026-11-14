@@ -226,7 +226,7 @@ class ExportImportService(
             ZipOutputStream(out, StandardCharsets.UTF_8).use { zip ->
                 // 1. 읽어주세요.txt
                 val readmeText = """
-                    ULeveLP 데이터 내보내기 안내
+                    RE:DO 데이터 내보내기 안내
 
                     이 ZIP 파일은 노션(Notion) 공식 템플릿과 100% 호환되는 CSV 백업 파일입니다.
 
@@ -239,7 +239,7 @@ class ExportImportService(
                     4. 녹음/*
                        - 연습 기록별 녹음 파일입니다.
 
-                    ULeveLP 설정 화면(settings.html)의 '가져오기 미리보기'를 통해 언제든지 다시 복원할 수 있습니다.
+                    RE:DO 설정 화면(settings.html)의 '가져오기 미리보기'를 통해 언제든지 다시 복원할 수 있습니다.
                 """.trimIndent()
                 zip.putNextEntry(ZipEntry("읽어주세요.txt"))
                 zip.write(readmeText.toByteArray(StandardCharsets.UTF_8))

@@ -53,10 +53,10 @@ describe('RZ3-4: React 화면 제목·설정 버튼', () => {
   test('5개 React 화면이 초기 document.title을 설정한다', () => {
     const want = {
       ChordsPage: '악기 연습실',
-      NotesPage: '학습 노트 · ULeveLP',
-      NoteDetailPage: '학습 노트 상세 · ULeveLP',
-      SettingsPage: '설정 · ULeveLP',
-      PrivacyPage: '개인정보처리방침 · ULeveLP',
+      NotesPage: '학습 노트 · RE:DO',
+      NoteDetailPage: '학습 노트 상세 · RE:DO',
+      SettingsPage: '설정 · RE:DO',
+      PrivacyPage: '개인정보처리방침 · RE:DO',
     };
     for (const [name, title] of Object.entries(want)) {
       assert.ok(read(`frontend/src/pages/${name}.tsx`).includes(`document.title = '${title}'`), name);

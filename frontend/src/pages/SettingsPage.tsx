@@ -38,7 +38,7 @@ const LANG_LABEL_KEY: Record<LangChoice, I18nKey> = {
 
 export function SettingsPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '설정 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
+    document.title = '설정 · RE:DO'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
@@ -897,7 +897,7 @@ export function SettingsPage(): React.ReactElement {
                   const url = URL.createObjectURL(res.blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = res.filename || 'ULeveLP-export.zip';
+                  a.download = res.filename || 'REDO-export.zip';
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
