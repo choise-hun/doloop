@@ -92,3 +92,31 @@ test('DS2-N2 홈에서 위 메뉴', async ({ page }) => {
   await expect(page.locator('nav.site-nav svg[aria-label="RE:DO"]')).toHaveCount(1);
 });
 
+
+// DS-2 3단계: 로고(66.56px + 간격 12px)를 넣은 뒤 위 메뉴가 두 줄이 되던 폭(회귀). layoutSuite 4개 폭(1280·1150·768·390) 사이라 따로 본다.
+// 820px 이하는 기능 메뉴가 탭 바로 내려가므로 821px 바로 위와 가장 좁은 폭이 빠듯하다
+for (const [stateName, width] of [
+  ['guest', 880],
+  ['user', 834],
+  ['guest', 320],
+]) {
+  test(`DS2-N3 ${stateName} ${width}px 로고가 있어도 위 메뉴 한 줄`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockApp(page, STATES[stateName]);
+    await page.goto('/privacy.html', { waitUntil: 'load' });
+    test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+    const top = page.locator('nav.site-nav');
+    await top.locator('svg[aria-label="RE:DO"]').waitFor();
+    await expect(page.locator('#navAuth')).toHaveAttribute('data-auth-state', stateName === 'user' ? 'signed-in' : 'signed-out');
+    await page.evaluate(() => document.fonts.ready);
+
+    const home = await top.locator('a[href="./"]').boundingBox();
+    const setting = await top.locator('a[href="settings.html"]').boundingBox();
+    const account = await page.locator('#navAuth').boundingBox();
+    // 같은 줄: 오른쪽 링크들의 윗선이 홈 링크 아랫선보다 위
+    expect(setting.y, 'SETTING이 다음 줄로 내려감').toBeLessThan(home.y + home.height - 0.5);
+    expect(account.y, '계정 링크가 다음 줄로 내려감').toBeLessThan(home.y + home.height - 0.5);
+    expect((await top.boundingBox()).height).toBeLessThan(64);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+  });
+}
