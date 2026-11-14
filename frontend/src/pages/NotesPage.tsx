@@ -62,7 +62,7 @@ function formatAgo(iso?: string | null): string {
 
 export function NotesPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '학습 노트 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
+    document.title = '학습 노트 · RE:DO'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();

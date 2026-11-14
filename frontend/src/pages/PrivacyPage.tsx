@@ -6,7 +6,7 @@ import styles from './SettingsPage.module.css';
 
 export function PrivacyPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '개인정보처리방침 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
+    document.title = '개인정보처리방침 · RE:DO'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   return (

@@ -172,7 +172,7 @@ class ExportImportApiTest {
         assertEquals(HttpStatusCode.OK, res.status)
         assertEquals("application/zip", res.headers[HttpHeaders.ContentType])
         val cd = res.headers[HttpHeaders.ContentDisposition] ?: ""
-        assertTrue(cd.contains("ULeveLP-export-"), "Content-Disposition must contain ULeveLP-export-: $cd")
+        assertTrue(cd.contains("REDO-export-"), "Content-Disposition must contain REDO-export-: $cd")
 
         val zipBytes = res.bodyAsBytes()
         val entries = readZipEntries(zipBytes)

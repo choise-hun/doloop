@@ -5,15 +5,22 @@
 }
 
 .wordmark {
-  font-family: var(--font-display);
-  font-weight: 900;
-  font-stretch: 125%;
-  font-size: clamp(56px, 13vw, 132px);
-  line-height: 0.95;
-  letter-spacing: -0.035em;
-  text-align: center;
+  align-self: center;
+  width: min(560px, 82%);
   margin: 20px 0 24px;
   color: var(--ink);
+}
+
+.wordmarkSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 480px) {
+  .wordmark {
+    width: 92%;
+  }
 }
 
 .homeRule {

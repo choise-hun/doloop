@@ -45,7 +45,7 @@ fun Route.registerExportImportRoutes(
             val data = exportImportService.loadExportData(user.id)
 
             val today = LocalDate.now(ZoneOffset.UTC)
-            val filename = "ULeveLP-export-$today.zip"
+            val filename = "REDO-export-$today.zip"
 
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.response.headers.append(

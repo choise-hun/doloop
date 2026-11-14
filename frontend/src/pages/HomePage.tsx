@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
+import { BrandLogo } from '../components/common/BrandLogo';
 import { useAuth } from '../lib/auth';
 import { apiClient, CategoryDto, LocalSongRecord, NoteSummaryDto, ProgressionDto, ProgressionScope, SongDto } from '../lib/apiClient';
 import { raw, safeUrl, thumb, videoIdFrom } from '../lib/security';
@@ -505,7 +506,9 @@ export function HomePage(): React.ReactElement {
   return (
     <AppShell variant="default" activeNav="home">
       <div className={styles.hero}>
-        <h1 className={`wordmark ${styles.wordmark}`}>ULeveLP</h1>
+        <h1 className={`wordmark ${styles.wordmark}`}>
+          <BrandLogo variant="wordmark" className={styles.wordmarkSvg} />
+        </h1>
         <hr className={`home-rule ${styles.homeRule}`} />
         <p className={`tagline ${styles.tagline}`}>{t('home.tagline')}</p>
 

@@ -3,6 +3,9 @@ import { t } from './i18n.mts';
 import { auth, MeProfile } from './auth';
 import { apiClient, TakeDto, TakeUploadMeta } from './apiClient';
 
+const DRIVE_FOLDER_NAME = 'REDO 녹음'; // i18n-keep: 구글 드라이브 고정 폴더명(D5-4, BR-1)
+const LEGACY_DRIVE_FOLDER_NAME = 'ULeveLP 녹음'; // i18n-keep: BR-1 이전 폴더명(기존 사용자 폴더 조회)
+
 export interface DriveMigrationProgress {
   current: number;
   total: number;
@@ -180,21 +183,31 @@ function createDriveModule() {
       }
     }
 
-    const query = encodeURIComponent(
-      "name = 'ULeveLP 녹음' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" // i18n-keep: 구글 드라이브 고정 폴더명(D5-4)
-    );
-    const searchRes = await fetch(
-      'https://www.googleapis.com/drive/v3/files?q=' + query + '&fields=files(id,name)&spaces=drive',
-      {
-        headers: { Authorization: 'Bearer ' + token },
+    async function findFolderByName(authToken: string, name: string): Promise<string | null> {
+      const query = encodeURIComponent(
+        "name = '" + name + "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+      );
+      const searchRes = await fetch(
+        'https://www.googleapis.com/drive/v3/files?q=' + query + '&fields=files(id,name)&spaces=drive',
+        {
+          headers: { Authorization: 'Bearer ' + authToken },
+        }
+      );
+      if (!searchRes.ok) {
+        throw new Error(t('drive.searchFolderFailed', { status: searchRes.status }));
       }
-    );
-    if (!searchRes.ok) {
-      throw new Error(t('drive.searchFolderFailed', { status: searchRes.status }));
+      const searchData = await searchRes.json();
+      if (searchData && Array.isArray(searchData.files) && searchData.files.length > 0) {
+        return searchData.files[0].id;
+      }
+      return null;
     }
-    const searchData = await searchRes.json();
-    if (searchData && Array.isArray(searchData.files) && searchData.files.length > 0) {
-      return searchData.files[0].id;
+
+    const existingId =
+      (await findFolderByName(token, DRIVE_FOLDER_NAME)) ??
+      (await findFolderByName(token, LEGACY_DRIVE_FOLDER_NAME));
+    if (existingId) {
+      return existingId;
     }
 
     const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
@@ -204,7 +217,7 @@ function createDriveModule() {
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: JSON.stringify({
-        name: 'ULeveLP 녹음', // i18n-keep: 구글 드라이브 고정 폴더명(D5-4)
+        name: DRIVE_FOLDER_NAME,
         mimeType: 'application/vnd.google-apps.folder',
       }),
     });

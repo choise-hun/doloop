@@ -40,7 +40,7 @@ function TimestampCell({ ts, videoId }: { ts?: string; videoId?: string }): Reac
 
 export function NoteDetailPage(): React.ReactElement {
   useEffect(() => {
-    document.title = '학습 노트 상세 · ULeveLP'; // i18n-keep: RZ3-4 소스 문자열 단언
+    document.title = '학습 노트 상세 · RE:DO'; // i18n-keep: RZ3-4 소스 문자열 단언
   }, []);
 
   const authState = useAuth();
