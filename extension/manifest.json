@@ -15,7 +15,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
-      "js": ["content.js"],
+      "js": ["content.js", "practice-panel.js"],
       "css": ["overlay.css"],
       "run_at": "document_idle"
     }

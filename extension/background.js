@@ -195,6 +195,7 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
 
 const MENU_LINK = 'redo-add-link';
 const MENU_PAGE = 'redo-add-page';
+const MENU_PANEL = 'redo-open-panel';
 
 /** 크롬 이벤트를 건다. 서비스 워커에서만 호출한다(테스트는 가짜 chromeApi로 부른다). */
 export function registerWithChrome(chromeApi) {
@@ -225,10 +226,21 @@ export function registerWithChrome(chromeApi) {
         contexts: ['page', 'video'],
         documentUrlPatterns: ['https://www.youtube.com/watch*', 'https://www.youtube.com/shorts/*'],
       });
+      chromeApi.contextMenus.create({
+        id: MENU_PANEL,
+        title: '연습 패널 열기',
+        contexts: ['page', 'video'],
+        documentUrlPatterns: ['https://www.youtube.com/watch*'],
+      });
     });
   });
 
   chromeApi.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === MENU_PANEL) {
+      if (!tab || typeof tab.id !== 'number') return;
+      chromeApi.tabs.sendMessage(tab.id, { type: 'REDO_PANEL_OPEN' }).catch(() => {});
+      return;
+    }
     if (info.menuItemId !== MENU_LINK && info.menuItemId !== MENU_PAGE) return;
     const videoId = extractVideoId(info.menuItemId === MENU_LINK ? info.linkUrl : info.pageUrl || (tab && tab.url));
     api.addSong(videoId).then((result) => {
