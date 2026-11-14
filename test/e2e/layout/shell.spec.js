@@ -66,3 +66,29 @@ test('W1-6 탭 바 링크 = 위 메뉴 링크', async ({ page }) => {
   expect(hrefs).toEqual(TAB_HREFS);
 });
 
+for (const width of [1280, 390]) {
+  test(`DS2-N1 ${width}px 위 메뉴 로고`, async ({ page }) => {
+    await open(page, '/privacy.html', width);
+    const homeLink = page.locator('nav.site-nav a[href="./"]');
+    await expect(homeLink).toHaveCount(1);
+    await expect(homeLink).toContainText('HOME');
+    expect(await homeLink.getAttribute('aria-current')).toBeNull();
+
+    const logo = homeLink.locator('svg[role="img"][aria-label="RE:DO"]');
+    await expect(logo).toHaveCount(1);
+    await expect(logo).toBeVisible();
+    const box = await logo.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.abs(box.height - 16)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(box.width - 66.56)).toBeLessThanOrEqual(1);
+  });
+}
+
+test('DS2-N2 홈에서 위 메뉴', async ({ page }) => {
+  await open(page, '/index.html', 1280);
+  const homeLink = page.locator('nav.site-nav a[href="./"]');
+  await expect(homeLink).toHaveCount(1);
+  await expect(homeLink).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('nav.site-nav svg[aria-label="RE:DO"]')).toHaveCount(1);
+});
+
