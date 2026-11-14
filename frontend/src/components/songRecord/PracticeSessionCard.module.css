@@ -123,7 +123,7 @@
 }
 
 .ghostMini {
-  font-size: 11px;
+  font-size: 12px;
   padding: 4px 8px;
   text-decoration: none;
 }
@@ -148,7 +148,7 @@
   flex: 1;
   max-width: 140px;
   height: 6px;
-  background: var(--panel-bg);
+  background: var(--surface2);
   border: 1px solid var(--line);
   overflow: hidden;
 }
@@ -162,7 +162,7 @@
 }
 
 .coverageBar::-webkit-progress-bar {
-  background: var(--panel-bg);
+  background: var(--surface2);
 }
 
 .coverageBar::-webkit-progress-value {
@@ -182,7 +182,7 @@
 }
 
 .coveragePct {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--ink);
@@ -196,7 +196,7 @@
 
 .partsToggleBtn {
   align-self: flex-start;
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 6px;
 }
 
@@ -205,7 +205,6 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  background: var(--panel-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card, 0);
 }
@@ -215,7 +214,7 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .partName {
@@ -248,7 +247,7 @@
 }
 
 .memoStatus {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -270,29 +269,29 @@
 }
 
 .shareBadgeNone {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
 .shareBadgePublished {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--good);
 }
 
 .shareBadgePaused {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink);
 }
 
 .shareBadgeWithdrawn {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
 .shareBadgeChecking {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -303,13 +302,13 @@
 }
 
 .shareBadgeHidden {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--bad);
 }
 
 .hiddenReason {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin: 0;
 }
@@ -321,12 +320,12 @@
 }
 
 .shareErrorText {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--bad);
 }
 
 .actionMsg {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink);
   margin: 0;
 }

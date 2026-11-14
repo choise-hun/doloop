@@ -77,7 +77,7 @@
 .setSec h2 {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 22px;
+  font-size: 24px;
   letter-spacing: -0.01em;
   color: var(--ink);
   margin: 0;
@@ -323,7 +323,7 @@
 }
 
 .creditTotal {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;

@@ -99,14 +99,14 @@
 }
 
 .charCount {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: normal;
   color: var(--muted);
   font-family: var(--font-mono);
 }
 
 .privacyNotice {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin: 0;
   line-height: 1.4;
