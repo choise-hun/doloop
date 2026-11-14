@@ -105,4 +105,8 @@
 
 ## 7. PR·CI·리뷰 확인
 
-- (PR 생성·CI 대기 후 채움)
+- PR: [PR #24](https://github.com/choise-hun/doloop/pull/24) (`step/EX-2` → `main`)
+- 리뷰 코멘트 (`chatgpt-codex-connector`, `65f6c33` 기준 1건):
+  1. **[P2] `extension/practice-panel.js:568`** ([코멘트](https://github.com/choise-hun/doloop/pull/24#discussion_r4574298283)): 광고 재생 중 [반복]/`Alt+L`로 반복을 켤 때 `ad` 여부를 확인하지 않아 `video.currentTime`이 본영상 `a`로 이동함.
+     - **판단: 타당 → 수정 반영**: `handleAction`에서 실시간 `ad = Boolean(document.querySelector(REDO_SEL.adShowing))`을 확인해 `!ad`일 때만 `currentTime = state.a`로 이동하도록 가드 추가(`setA`/`setB`/`restart`/배속 반영도 동일 `ad` 기준으로 일원화). `test/extension_ex2.test.js` `TC-EX-10 100회`에 광고 중 반복 재활성화 회귀 단언 추가.
+- `65f6c33` CI: 5 passed, 1 skipped(`Kotlin test (JDK 21)`, Kotlin 미변경) — [실행 43609936025](https://github.com/choise-hun/doloop/actions/runs/43609936025). 수정 커밋 push 후 최신 head CI 재확인.

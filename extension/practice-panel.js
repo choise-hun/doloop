@@ -517,7 +517,12 @@ function redoPanelInit() {
     }
 
     if (state.closed || state.videoMissing || !state.video) return;
-    if (state.ad && (act === 'setA' || act === 'setB' || act === 'restart')) return;
+    const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
+    if (ad !== state.ad) state.ad = ad;
+    if (ad && (act === 'setA' || act === 'setB' || act === 'restart')) {
+      render();
+      return;
+    }
 
     if (act === 'setA') {
       if (!Number.isFinite(state.video.duration)) {
@@ -564,7 +569,7 @@ function redoPanelInit() {
         return;
       }
       state.loopOn = true;
-      if (state.video.currentTime < state.a || state.video.currentTime >= state.b) {
+      if (!ad && (state.video.currentTime < state.a || state.video.currentTime >= state.b)) {
         state.video.currentTime = state.a;
       }
       clearTempStatus();
@@ -604,7 +609,7 @@ function redoPanelInit() {
       return;
     }
     state.rate = nextRate;
-    if (!state.ad) state.video.playbackRate = state.rate;
+    if (!ad) state.video.playbackRate = state.rate;
     clearTempStatus();
     render();
   }

@@ -232,7 +232,7 @@ test('TC-EX-10 100회: 가짜 video로 판정→되감기 100번 실행 시 매�
   }
   assert.equal(env.out('loops').textContent, '100회');
 
-  // 광고 중에는 setA·setB·restart가 비활성화되고 되감지 않는다
+  // 광고 중에는 setA·setB·restart가 비활성화되고 되감지 않으며, 반복을 켜도 광고 재생 위치를 옮기지 않는다
   env.setAd(true);
   env.video.currentTime = 5.2;
   env.fireVideo('timeupdate');
@@ -242,6 +242,13 @@ test('TC-EX-10 100회: 가짜 video로 판정→되감기 100번 실행 시 매�
   assert.equal(env.btn('setA').disabled, true);
   assert.equal(env.btn('setB').disabled, true);
   assert.equal(env.btn('restart').disabled, true);
+
+  env.btn('loop').listeners.click[0](); // 끄기
+  env.video.currentTime = 1;
+  env.btn('loop').listeners.click[0](); // 광고 중 다시 켜기
+  assert.equal(env.btn('loop').getAttribute('aria-pressed'), 'true');
+  assert.equal(env.video.currentTime, 1, '광고 중 반복을 켜도 본영상 A(2초)로 옮기지 않는다');
+  env.video.currentTime = 5.2;
 
   // 닫기 후 단축키 무시, 우클릭 REDO_PANEL_OPEN으로 재오픈
   env.btn('close').listeners.click[0]();
