@@ -208,6 +208,8 @@ div.redo-panel  role="region" aria-label="RE:DO 연습 패널" data-redo-collaps
 
 ## 9. EX-3 계약 (시니어 직접 구현 — EX-2 결과·EX-1 수동 검수를 본 뒤 고칠 수 있다)
 
+> **2026-11-15 구현:** 확장 내부 메시지·화면 세부 8건(D1 `kind:'switched'` 추가, D2 같은 본문일 때만 요청 공유, D3 미적용 저장 배속 전송, D4 `ratechange`로는 불러온 배속을 버리지 않음, D5~D8 저장 줄 링크·표시·위치·안내)을 정했다 — [결과/EX-3](../결과/EX-3.md) §3. 서버 API 계약은 그대로다.
+
 파일: `background.js`·`content.js`·`practice-panel.js`·`overlay.css`·`test/extension_ex1.test.js`(PR23-3을 패널 기준으로 옮김) 수정, `test/extension_ex3.test.js` 신규. 서버·DB·매니페스트 권한 변경 없음.
 
 | 메시지 | 요청 | 응답 |
