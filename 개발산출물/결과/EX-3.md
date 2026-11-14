@@ -90,3 +90,34 @@ EX-2 수동 6건(TC-EX-09·10·10b·11·12·EX2-화면)도 아직 미실시다([
 2. `gh pr create --base main --head step/EX-3`(Draft 아님 — 기능 완료, 수동 검수는 머지 전 사람 확인 항목으로 본문에 표기) → `gh pr checks <N> --watch` → 리뷰 코멘트 확인·처리(코드 결함이면 시니어 핀포인트 3-P로 돌린다)
 3. 이 파일 §7(새 절)에 PR 번호·CI 실행 번호·리뷰 처리, [진행_크롬확장](../진행_크롬확장.md) EX-3 행 상태 갱신. 수동 검수 §5는 사람이 한다 — 결과를 받기 전에는 "미실시"로 둔다
 4. 마지막 Step이므로 머지 준비 PR에서 진행 파일을 `완료/`로 옮길지는 수동 검수 결과를 보고 시니어·사용자가 정한다(지금 옮기지 않는다)
+
+## 7. 주니어 4단계 전체 회귀·PR·CI·리뷰 기록 (2026-11-15)
+
+- **PR**: [#25](https://github.com/choise-hun/doloop/pull/25) (`step/EX-3` → `main`, Draft 아님)
+- **CI (구현 최종 커밋 `186d881`)**: 실행 번호 `43635893626` ([Actions](https://github.com/choise-hun/doloop/actions/runs/43635893626)) — 5건 성공(`CI/Detect code changes`, `CI/Test (Node 22)`, `CI/Docker build & smoke`, `CI/E2E XSS & CSP (Playwright)`, `CI/CI ok`), 1건 스킵(`CI/Kotlin test (JDK 21)`, 서버 변경 없음)
+
+### 전체 회귀 실행 결과 (`186d881` 기준)
+
+```text
+$ node --test test/extension_ex3.test.js   → tests 12 / pass 12 / fail 0
+$ node --test test/extension_ex1.test.js   → tests 12 / pass 12 / fail 0
+$ node --test test/extension_ex2.test.js   → tests 16 / pass 16 / fail 0
+$ for f in practice-panel content background auth options; do node --check extension/$f.js; done   → 출력 없음
+$ grep -n "innerHTML\|chrome\.storage\|\.key\b" extension/practice-panel.js   → 0건
+$ npm test   → tests 482 / pass 482 / fail 0
+$ npm run build   → tsc --noEmit && vite build 통과
+$ npm run test:e2e   → 836 passed (10.9m)
+```
+
+- 미실행: `./gradlew test`(서버 변경 없음), §5 수동 검수 `EX3-M1`~`EX3-M6`(미실시 — 사람 확인 대기)
+
+### PR #25 리뷰 코멘트 (Codex Review — 시니어 3-P 인계 대상)
+
+`chatgpt-codex-connector[bot]`가 `186d881`에 대해 4종(중복 코멘트 포함 총 5건)의 코드 결함 지적을 남겼으며, 주니어 4단계 범위 규칙에 따라 `extension/`·`test/`는 수정하지 않고 시니어 3-P로 넘긴다.
+
+| 등급 | 위치 | 요약 | 링크 |
+| --- | --- | --- | --- |
+| P1 | `extension/practice-panel.js:1013` | `REDO_AUTH_CHANGED` 시 누적분·등록 상태만 지우고 `state.a`·`state.b`·`state.rate`·`state.loopOn`을 유지하여 `loadSaved()`가 조기 반환하고 B 계정에 A 계정 구간·배속이 저장될 수 있음 | [r4575473474](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473474) |
+| P2 | `extension/practice-panel.js:810` | `loadSaved()`가 유효한 A–B 구간이 없으면 조기 반환해 `{ a: null, b: null, rate: 0.75 }` 곡의 `pendingRate`가 설정되지 않고 저장 시 `1`로 덮일 수 있음 | [r4575473477](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473477) |
+| P2 | `extension/background.js:224` | `saving` 맵이 모든 탭에 공유되어 두 탭이 같은 곡·같은 본문(예: 각각 60초)을 동시에 저장하면 요청이 합쳐져 한쪽 60초가 유실될 수 있음 | [r4575473479](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473479) |
+| P2 | `extension/practice-panel.js:571` | 버퍼링(`paused === false`, `readyState = 2`, `waiting`) 중에도 `tick()`이 시간을 누적해 실제 재생 없이 연습 시간이 기록될 수 있음 (동일 위치 중복 코멘트 `r4575473481`·`r4575473484`) | [r4575473484](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473484) |
