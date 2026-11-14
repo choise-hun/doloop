@@ -1,0 +1,145 @@
+/* RE:DO 크롬 확장 — 유튜브 화면에 끼우는 요소. 모든 선택자는 redo- 접두어로 유튜브 스타일과 겹치지 않게 한다. */
+/* 색은 웹앱 tokens.css 값과 같다: 잉크 #1d1d1f, 종이 #f6f6f1, 주황 #e64d01, 선 #cfcec4 */
+
+.redo-logo {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* ── ③ 재생 화면 버튼 (화면 우측 상단 고정) ── */
+.redo-watch-btn {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 2100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 8px;
+  border: 1px solid #1d1d1f;
+  border-radius: 9999px;
+  background: #f6f6f1;
+  color: #1d1d1f;
+  font: 600 13px/1 "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+.redo-watch-btn:hover {
+  background: #1d1d1f;
+  color: #f6f6f1;
+}
+
+.redo-watch-btn:focus-visible {
+  outline: 2px solid #e64d01;
+  outline-offset: 2px;
+}
+
+.redo-watch-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.redo-watch-btn[data-redo-state="exists"] {
+  border-color: #e64d01;
+}
+
+.redo-watch-btn .redo-logo {
+  border-radius: 50%;
+}
+
+/* 전체 화면에서는 영상을 가리지 않는다 */
+:fullscreen .redo-watch-btn,
+:root:has(:fullscreen) .redo-watch-btn {
+  display: none;
+}
+
+/* ── ② 점 3개 메뉴 항목 ── */
+.redo-menu-item {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  cursor: pointer;
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  font-family: Roboto, Arial, sans-serif;
+  white-space: nowrap;
+  outline: none;
+}
+
+.redo-menu-item:hover,
+.redo-menu-item:focus-visible {
+  background: var(--yt-spec-10-percent-layer, rgb(0 0 0 / 0.1));
+}
+
+.redo-menu-item--legacy {
+  min-height: 36px;
+  padding: 0 12px 0 16px;
+  gap: 16px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.redo-menu-item--modern {
+  min-height: 40px;
+  padding: 2px 16px;
+  gap: 16px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.redo-menu-item .redo-logo {
+  width: 24px;
+  height: 24px;
+}
+
+/* ── 알림 (화면 우측 하단) ── */
+.redo-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 12px 16px 12px 12px;
+  border: 1px solid #1d1d1f;
+  border-top: 3px solid #e64d01;
+  background: #f6f6f1;
+  color: #1d1d1f;
+  font: 500 14px/1.4 "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.3);
+}
+
+.redo-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.redo-toast__action {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid #1d1d1f;
+  border-radius: 9999px;
+  background: #1d1d1f;
+  color: #f6f6f1;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.redo-toast__action:hover {
+  background: #f6f6f1;
+  color: #1d1d1f;
+}
+
+.redo-toast__action:focus-visible {
+  outline: 2px solid #e64d01;
+  outline-offset: 2px;
+}

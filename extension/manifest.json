@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "RE:DO 유튜브 연습 도우미",
+  "version": "1.0.0",
+  "description": "유튜브에서 영상을 RE:DO 연습곡으로 바로 추가하고, 영상 위에서 구간 반복과 배속 연습을 합니다.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA23GteabV0OzQIiAzw/GNOWDRDIlrZ6Mbiy0JIHUIWeSepUb6lppjqttDT0JdZEvkb3odXv+JQrqyGwhxkyEBpKIAJgX8scAjXQPpeaDAo/04rGDpEV7KVknvmlPZkMJ9QDByHnNA8dcHx1+oQaVcY01lI02a+JAUsTECkhGKgJ0x1j5zptDrCBHNdvDCSqwmg3UFCRSaZ6fk5w/N3PXgsotuynzIvMXefMomH6ahkTMNAU75Ul7verm4WWQ7mNojd2LjYnEFYpv302s942cGI08O0o6EQU2HhEZw9e1JaZq32P4MKVSrECMpC+Z6opUdtPxG8cF2+6shbkxeH1NJjwIDAQAB",
+  "permissions": ["storage", "identity", "contextMenus"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://ulevelp-d5ympfsmfq-du.a.run.app/*",
+    "https://vefrfhafmiiivpgjhqiu.supabase.co/*",
+    "http://127.0.0.1:3000/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+}
