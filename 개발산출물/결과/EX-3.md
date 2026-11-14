@@ -171,3 +171,8 @@ $ npm run test:e2e   → 836 passed (11.0m)
 ```
 
 - 미실행: `./gradlew test`(서버 변경 없음), §5 수동 검수 `EX3-M1`~`EX3-M6`(미실시 — 사람 확인 대기)
+
+### CI·새 리뷰 확인 (`971e029` 기준)
+
+- **CI**: 실행 번호 `43646421880` ([Actions](https://github.com/choise-hun/doloop/actions/runs/43646421880)) — 5건 성공(`CI/Detect code changes`, `CI/Test (Node 22)`, `CI/Docker build & smoke`, `CI/E2E XSS & CSP (Playwright)`, `CI/CI ok`), 1건 스킵(`CI/Kotlin test (JDK 21)`)
+- **새 리뷰**: `186d881` 리뷰(`5906882823`) 이후 추가 리뷰 없음 (4종 모두 `4bc86b6`에 반영 완료, 수동 검수 `EX3-M1`~`EX3-M6`은 사람 확인 대기)
