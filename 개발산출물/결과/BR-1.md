@@ -274,3 +274,31 @@ src/main/kotlin/ulevelp/service/TierService.kt:289:        removeShareAttachment
   - `chatgpt-codex-connector` (`66d53ec` 기준): `has_any_findings: false`, `has_unresolved_findings: false` ([코멘트](https://github.com/choise-hun/doloop/pull/20#issuecomment-6870362399)).
   - PR 인라인 코멘트(`pulls/20/comments`) 0건, 사용자/시니어 리뷰 0건.
 - **다음 담당:** GPT-6.1 Sol 시니어 3단계 독립 검증.
+
+## 7. 시니어 3단계 독립 검증 (2026-11-14, Claude)
+
+기준: PR #20 head `3089b19` = 로컬 `step/BR-1` = `origin/step/BR-1` 일치, 시작 시 `git status` 깨끗(보존할 사용자 변경 없음). `origin/main...3089b19` 코드 diff 전체를 명세 §0·§2~§7·§10과 대조했다.
+
+### 7-1. 판정
+
+| 항목 | 판정 | 근거 |
+| --- | --- | --- |
+| §4-1~4-12 파일별 변경 | 일치 | 문자열·좌표·viewBox·CSS 값이 명세와 같다. §2 유지 식별자·§10 금지 항목 변경 없음(S7 결과와 diff 대조) |
+| `drive.ts` `ensureFolder` | 결함 없음 | 저장 id → `REDO 녹음` → `ULeveLP 녹음` → 생성(`REDO 녹음`) 순서. 검색 `!ok`는 기존처럼 `drive.searchFolderFailed`를 던지고 옛 이름 조회로 넘어가지 않는다. PATCH·이름 변경 요청 없음. 한글 줄은 상수 2줄뿐 |
+| `BrandLogo` | 결함 없음 | §6 경로 4개·transform·콜론 좌표 일치, `currentColor`·`role="img"`·`aria-label="RE:DO"`, 인라인 style·hex 없음 |
+| 홈 layout (V7) | 새 경고 0 | 비STRICT 21/21 통과. `LAYOUT_STRICT=1`은 17 실패지만 **main(`origin/main` 워크트리 빌드)과 경고 종류·수치가 같고 라벨 글자(`ULeveLP…` 유무)만 다르다** → 기존 경고. h1·wordmark·svg 관련 경고 0건 |
+| V8 스크린샷 | ○ | 390·1280 다크 직접 확인: 로고 가운데, 잘림 없음, 다크에서 밝은색. `icon-180.png` 180×180, 잉크 바탕 밝은 `R:` |
+| 서버 3곳·Kotlin 단언 | 일치 | 문자열 3곳과 `REDO-export-` 단언 1곳. 로컬 gradle은 재실행하지 않음(코드 변경 없음, `66d53ec` CI `Kotlin test` 성공을 근거로 함) |
+
+### 7-2. 검증 구멍 1건 — 보강(미커밋)
+
+- **문제:** 새 폴더 **생성** 이름을 아무 테스트도 보지 않는다.
+- **재현:** `drive.ts`의 생성 본문 `name: DRIVE_FOLDER_NAME`을 `name: LEGACY_DRIVE_FOLDER_NAME`으로 바꿔도 `node --test test/br1_brand.test.js test/i18n.test.js` → `pass 21 / fail 0`(새 사용자에게 옛 이름 폴더가 생기는 회귀를 놓침).
+- **수정(`test/br1_brand.test.js` BR1-7만):** `ensureFolder` 범위(`function uploadBlob` 앞)에서 ① 생성 `method: 'POST'`가 옛 이름 조회 뒤에 있고 ② 생성 블록에 `name: DRIVE_FOLDER_NAME`이 있으며 ③ `LEGACY_DRIVE_FOLDER_NAME`이 파일 전체에서 2회(선언·조회)만 쓰이는지 단언. 기존 단언은 그대로.
+- **증거:** 같은 변이에서 `✖ BR1-7 … AssertionError: 폴더 생성 이름은 DRIVE_FOLDER_NAME이어야 함`(pass 6 / fail 1). 원복 후 V2 묶음 `tests 58 / pass 58 / fail 0`, `npm test` `tests 440 / pass 440 / fail 0`, `npm run build` 성공. 원본 코드(`drive.ts`) 변경 없음.
+
+### 7-3. 4단계(Gemini) 인계
+
+- 미커밋 변경: `test/br1_brand.test.js` 1개(+ 이 절, `진행_디자인D.md` BR-1 상태 칸).
+- 실행: `node --test test/br1_brand.test.js test/rz3_spa.test.js test/i18n.test.js test/security.test.js test/design_rules.test.js` → `npm test` → `npm run build` → `npx playwright test test/e2e/layout/home.spec.js`.
+- Git: `test(brand): assert BR1-7 creates folder with new name` + 문서 커밋 `docs(brand): record BR-1 senior verification`, `step/BR-1` push, PR #20 최신 head CI·리뷰 확인 후 결과 §6·진행 파일 갱신. 머지·배포는 하지 않는다.
