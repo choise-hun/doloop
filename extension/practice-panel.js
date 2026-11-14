@@ -419,7 +419,8 @@ function redoPanelInit() {
     video.addEventListener('ratechange', () => {
       if (state.closed || state.video !== video) return;
       const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
-      if (ad) return;
+      // 광고 중이거나, 광고가 끝났는데 tick이 아직 배속을 되돌리지 않았으면(wasAd) 유튜브가 바꾼 값을 받아들이지 않는다
+      if (ad || state.wasAd) return;
       if (Math.abs(video.playbackRate - state.rate) > 0.001) {
         state.rate = redoClampRate(video.playbackRate);
         render();
@@ -456,17 +457,25 @@ function redoPanelInit() {
     if (dirty) render();
   }
 
-  function findAndBindVideo(expectedId) {
+  function bindFound(video, fresh) {
+    const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
+    state.videoMissing = false;
+    attachVideo(video);
+    // 같은 영상을 다시 맞출 때 광고 중(또는 광고 직후 복원 전)이면 video.playbackRate는 광고 값이다.
+    // 예약한 배속을 지키고, 광고 뒤 tick이 적용한다.
+    const keepPending = !fresh && (ad || state.wasAd);
+    if (!keepPending) state.rate = redoClampRate(video.playbackRate);
+    state.wasAd = keepPending ? true : ad;
+    state.ad = ad;
+    render();
+    if (state.loopOn) startRaf();
+  }
+
+  function findAndBindVideo(expectedId, fresh) {
     clearVideoRetry();
     const first = document.querySelector(REDO_SEL.video);
     if (first) {
-      state.videoMissing = false;
-      attachVideo(first);
-      state.rate = redoClampRate(first.playbackRate);
-      state.ad = Boolean(document.querySelector(REDO_SEL.adShowing));
-      state.wasAd = state.ad;
-      render();
-      if (state.loopOn) startRaf();
+      bindFound(first, fresh);
       return;
     }
 
@@ -480,13 +489,7 @@ function redoPanelInit() {
       if (state.closed || state.videoId !== expectedId) return;
       const found = document.querySelector(REDO_SEL.video);
       if (found) {
-        state.videoMissing = false;
-        attachVideo(found);
-        state.rate = redoClampRate(found.playbackRate);
-        state.ad = Boolean(document.querySelector(REDO_SEL.adShowing));
-        state.wasAd = state.ad;
-        render();
-        if (state.loopOn) startRaf();
+        bindFound(found, fresh);
         return;
       }
       attempts += 1;
@@ -630,7 +633,8 @@ function redoPanelInit() {
       return;
     }
 
-    if (id !== state.videoId) {
+    const fresh = id !== state.videoId;
+    if (fresh) {
       state.a = null;
       state.b = null;
       state.loopOn = false;
@@ -651,7 +655,7 @@ function redoPanelInit() {
     }
 
     ensurePanel();
-    findAndBindVideo(id);
+    findAndBindVideo(id, fresh);
   }
 
   document.addEventListener('yt-navigate-finish', sync);

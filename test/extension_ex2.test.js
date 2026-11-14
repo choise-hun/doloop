@@ -179,7 +179,46 @@ function fakePanelEnv(href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ') {
     fireKeydown: (ev) => {
       for (const h of winListeners.keydown || []) h.fn(ev);
     },
+    fireDoc: (type) => {
+      for (const fn of docListeners[type] || []) fn();
+    },
+    setHref: (next) => {
+      ctx.location.href = next;
+    },
   };
+}
+
+// keydown 가짜 이벤트. preventDefault 호출 여부를 기록한다
+function altKey(code, extra = {}) {
+  const ev = {
+    code,
+    altKey: true,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    prevented: false,
+    composedPath: () => [{ tagName: 'DIV', isContentEditable: false }],
+    preventDefault() {
+      ev.prevented = true;
+    },
+    stopPropagation() {},
+    ...extra,
+  };
+  return ev;
+}
+
+// A=2, B=5 지정 후 반복을 켠 패널
+function loopingEnv() {
+  const env = fakePanelEnv();
+  env.video.currentTime = 2;
+  env.btn('setA').listeners.click[0]();
+  env.video.currentTime = 5;
+  env.btn('setB').listeners.click[0]();
+  env.btn('loop').listeners.click[0]();
+  assert.equal(env.btn('loop').getAttribute('aria-pressed'), 'true');
+  return env;
 }
 
 test('TC-EX-10 루프 판정: t >= b이고 loopOn·!ad·!seeking·a/b 존재일 때만 jump', () => {
@@ -464,4 +503,151 @@ test('EX2-메뉴: 메뉴 3개 생성, redo-open-panel 클릭 시 REDO_PANEL_OPEN
   } finally {
     globalThis.fetch = origFetch;
   }
+});
+
+test('PR24-S1 광고 배속 복원: 광고가 끝난 직후 ratechange가 tick보다 먼저 와도 사용자 배속으로 되돌린다', () => {
+  const env = fakePanelEnv();
+  env.btn('preset1').listeners.click[0](); // 0.75
+  assert.equal(env.video.playbackRate, 0.75);
+
+  env.setAd(true);
+  env.fireVideo('timeupdate'); // 광고 시작 관측
+  env.video.playbackRate = 1; // 광고는 1로 재생
+  env.fireVideo('ratechange');
+  assert.equal(env.out('rate').textContent, '0.75x', '광고 중 ratechange는 무시');
+
+  env.setAd(false);
+  env.video.playbackRate = 1; // 본영상을 다시 불러오며 유튜브가 1로 둔다 — tick보다 먼저 도착
+  env.fireVideo('ratechange');
+  env.fireVideo('timeupdate');
+  assert.equal(env.video.playbackRate, 0.75, '광고 뒤 tick이 예약 배속을 적용한다');
+  assert.equal(env.out('rate').textContent, '0.75x');
+
+  // 복원이 끝난 뒤의 유튜브 자체 속도 메뉴 변경은 받아들인다(§6.5)
+  env.video.playbackRate = 1.5;
+  env.fireVideo('ratechange');
+  assert.equal(env.out('rate').textContent, '1.50x');
+});
+
+test('PR24-S2 같은 영상 재동기화: 광고 중 REDO_PANEL_OPEN이 와도 예약 배속을 광고 값으로 덮지 않는다', () => {
+  const env = fakePanelEnv();
+  env.setAd(true);
+  env.fireVideo('timeupdate');
+  env.btn('preset1').listeners.click[0](); // 광고 중 0.75 예약
+  assert.equal(env.video.playbackRate, 1, '광고 중에는 video에 쓰지 않는다');
+
+  env.fireMessage({ type: 'REDO_PANEL_OPEN' }); // 패널이 열린 채 같은 영상에서 다시 열기
+  assert.equal(env.out('rate').textContent, '0.75x');
+
+  env.setAd(false);
+  env.fireVideo('timeupdate');
+  assert.equal(env.video.playbackRate, 0.75);
+
+  // 다른 영상으로 가면 그 영상의 배속을 읽는다(자동 적용 없음)
+  env.video.playbackRate = 1;
+  env.setHref('https://www.youtube.com/watch?v=jNQXAC9IVRw');
+  env.fireDoc('yt-navigate-finish');
+  assert.equal(env.out('rate').textContent, '1.00x');
+});
+
+test('EX2-ended: 반복 중 영상 끝이면 A로 돌아가 1회 늘고, 광고·반복 꺼짐에서는 그대로', () => {
+  const env = loopingEnv();
+  let plays = 0;
+  env.video.play = () => {
+    plays += 1;
+    return Promise.reject(new Error('autoplay'));
+  };
+
+  env.video.currentTime = 120;
+  env.fireVideo('ended');
+  assert.equal(env.video.currentTime, 2);
+  assert.equal(env.out('loops').textContent, '1회');
+  assert.equal(plays, 1);
+
+  env.setAd(true);
+  env.video.currentTime = 30;
+  env.fireVideo('ended');
+  assert.equal(env.video.currentTime, 30, '광고 끝(ended)에서는 되감지 않는다');
+  assert.equal(env.out('loops').textContent, '1회');
+
+  env.setAd(false);
+  env.btn('loop').listeners.click[0](); // 끄기
+  env.video.currentTime = 120;
+  env.fireVideo('ended');
+  assert.equal(env.video.currentTime, 120);
+  assert.equal(env.out('loops').textContent, '1회');
+});
+
+test('EX2-tick 가드: seeking 중 timeupdate는 되감지 않고, 같은 영상 재동기화로 리스너가 두 번 걸리지 않는다', () => {
+  const env = loopingEnv();
+
+  env.video.currentTime = 5.3;
+  env.video.seeking = true;
+  env.fireVideo('timeupdate');
+  assert.equal(env.video.currentTime, 5.3, 'tick이 video.seeking을 판정에 넘긴다');
+  assert.equal(env.out('loops').textContent, '0회');
+  env.video.seeking = false;
+
+  env.fireMessage({ type: 'REDO_PANEL_OPEN' });
+  env.fireDoc('yt-navigate-finish');
+  assert.equal(env.video.listeners.timeupdate.length, 1);
+  assert.equal(env.video.listeners.ended.length, 1);
+  assert.equal(env.video.listeners.ratechange.length, 1);
+  env.video.currentTime = 5.3;
+  env.fireVideo('timeupdate');
+  assert.equal(env.out('loops').textContent, '1회', '재동기화 뒤에도 1번에 1회');
+});
+
+test('EX2-전환: 다른 영상으로 가면 A·B·반복·횟수가 비고, 재생 화면이 아니면 패널이 사라진다', () => {
+  const env = loopingEnv();
+  env.video.currentTime = 5.1;
+  env.fireVideo('timeupdate');
+  assert.equal(env.out('loops').textContent, '1회');
+
+  env.setHref('https://www.youtube.com/watch?v=jNQXAC9IVRw');
+  env.fireDoc('yt-navigate-finish');
+  assert.equal(env.out('a').textContent, '--:--.-');
+  assert.equal(env.out('b').textContent, '--:--.-');
+  assert.equal(env.out('loops').textContent, '0회');
+  assert.equal(env.btn('loop').getAttribute('aria-pressed'), 'false');
+  env.video.currentTime = 9;
+  env.fireVideo('timeupdate');
+  assert.equal(env.video.currentTime, 9, '새 영상에서 옛 구간으로 되감지 않는다');
+
+  env.setHref('https://www.youtube.com/');
+  env.fireDoc('yt-navigate-finish');
+  assert.equal(env.panel(), null);
+});
+
+test('EX2-단축키 연결: 입력창·조합 중에는 가로채지 않고, Alt 단축키는 기본 동작을 막고 버튼과 같은 행동을 한다', () => {
+  const env = fakePanelEnv();
+  env.video.currentTime = 7;
+
+  const typing = altKey('BracketLeft', { composedPath: () => [{ tagName: 'INPUT', isContentEditable: false }] });
+  env.fireKeydown(typing);
+  assert.equal(typing.prevented, false);
+  assert.equal(env.out('a').textContent, '--:--.-');
+
+  const comment = altKey('BracketLeft', { composedPath: () => [{ tagName: 'DIV', isContentEditable: true }] });
+  env.fireKeydown(comment);
+  assert.equal(comment.prevented, false);
+
+  const composing = altKey('BracketLeft', { isComposing: true });
+  env.fireKeydown(composing);
+  assert.equal(composing.prevented, false);
+  assert.equal(env.out('a').textContent, '--:--.-');
+
+  const altGr = altKey('BracketLeft', { ctrlKey: true });
+  env.fireKeydown(altGr);
+  assert.equal(altGr.prevented, false);
+
+  const ok = altKey('BracketLeft');
+  env.fireKeydown(ok);
+  assert.equal(ok.prevented, true);
+  assert.equal(env.out('a').textContent, '00:07.0');
+
+  env.btn('collapse').listeners.click[0]();
+  const rate = altKey('Digit2');
+  env.fireKeydown(rate);
+  assert.equal(env.video.playbackRate, 0.75, '접혀 있어도 동작한다');
 });
