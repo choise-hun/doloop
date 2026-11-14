@@ -9,31 +9,25 @@
 - 색은 `tokens.css`의 변수로만 쓴다. 화면 CSS에 hex·`rgb()` 값을 직접 적지 않는다. 반투명이 필요하면 `color-mix(in srgb, var(--토큰) N%, transparent)`를 쓴다.
 - 순백(`#fff`, `#ffffff`)은 쓰지 않는다. 바탕은 `--bg`, 카드·패널 표면은 `--surface`, 한 단계 더 눌린 면은 `--surface2`다.
 - 강조는 색을 더하지 않고 명도와 굵기로 만든다. 글의 위계는 `--ink`(본문)와 `--muted`(보조), 글자 크기·굵기로 구분한다.
+- `--surface2` 면 위의 글자는 `--ink`를 쓴다. `--muted`는 대비 4.09라 쓰지 않는다.
 
 | 용도 | 토큰 | 쓰는 곳 |
 | --- | --- | --- |
 | 주 행동·선택 상태 | `--accent` / `--accent-ink` | 화면의 주 버튼, 선택된 탭·세그먼트 |
-| 파랑(메인 컬러) | `--link`, `--root`, `--blue-vivid` | 링크, 지판의 근음 점처럼 작은 면적만. 넓은 면에 칠하지 않는다 |
-| 주황(두 번째 포인트) | `--now*`, `--moved`, `--orange-*` | 지금 칠 음, 바뀐 음, 스트릭 강조만. 글자색으로 쓰지 않는다 |
+| 파랑(기존 화면 전용) | `--link`, `--root`, `--guide`, `--blue-vivid` | 본문 링크, 지판의 근음·가이드 음. 이미 쓰는 곳만 유지하고 새 화면·새 요소에는 쓰지 않는다 |
+| 주황(유일한 포인트) | `--now*`, `--moved`, `--orange-*` | 지금 칠 음, 바뀐 음, 스트릭·오늘 표시, 프레임 상단 바, "이어서" 표시. 표시·테두리·틴트에만 쓰고 글자색으로 쓰지 않는다(라이트 대비 3.3~3.6) |
 | 상태 | `--good`, `--bad` | 성공·오류 문구와 표시 |
 | 선 | `--line` | 카드·패널·입력의 1px 테두리 |
+| 덮는 면 | `--scrim` | 모달·서랍 뒤 배경. 다크에서도 어둡다 |
+| 영상 바탕 | `--media-bg` | 영상 레터박스 |
 
-- 화면 하나에 유채색은 한 가지를 기본으로 한다(스크린샷 질문 Q7).
-- 가장 어두운 채움(`--accent` 배경)은 한 화면에서 **동시에 보이는 주 행동 하나**와 선택 상태 표시에만 쓴다. 목록의 각 항목마다 어두운 버튼을 반복하지 않는다(Q1).
+- 새 화면의 유채색은 주황 하나다. 파랑은 위 표의 기존 용도에만 남는다(스크린샷 질문 Q7).
+- 가장 어두운 채움(`--accent` 배경)은 한 화면에서 **동시에 보이는 주 행동 하나**와 선택 상태 표시에만 쓴다. 목록의 각 항목마다 어두운 버튼을 반복하지 않는다(Q1). 예외: 홈 커뮤니티 배너 한 곳은 `--accent` 면 채움 + `--accent-ink` 글자로 만든다(DS-0). 배너 안의 이동은 버튼이 아니라 밑줄 텍스트 링크다. 다른 화면·다른 카드로 넓히지 않는다.
 - 다크 모드 값은 `tokens.css`의 `:root[data-theme="dark"]`와 `prefers-color-scheme` 블록 두 곳에 같은 값으로 둔다. 새 토큰을 추가하면 세 블록 모두에 넣는다.
 
-### 알려진 예외 (새로 늘리지 않는다)
+### 알려진 예외
 
-토큰 밖 색이 아래 파일에 남아 있다. `test/design_rules.test.js`가 파일별 개수를 고정해, 줄이는 것은 되고 늘리면 실패한다. 화면을 고칠 때 `--good`·`--bad`·`color-mix`로 바꾸고 테스트의 허용 개수를 함께 내린다.
-
-| 파일 | 남은 값 |
-| --- | --- |
-| `components/songRecord/PracticeSessionCard.module.css` | 상태 색 hex 4개 |
-| `components/community/EpisodeReportDialog.module.css` | 상태 색 hex 2개, `rgba` 6개 |
-| `components/songRecord/EpisodeShareDialog.module.css` | `rgba` 2개(오버레이·그림자) |
-| `components/community/EpisodeLogFeed.module.css` | 상태 색 hex 1개, `rgba` 1개 |
-| `components/community/Community.module.css` | `rgba` 3개 |
-| `pages/PracticePage.module.css` | `#000000` 1개, `rgba` 2개 |
+토큰 밖 색은 없다(DS-1에서 0으로 정리). `test/design_rules.test.js` DR-4가 `tokens.css` 밖의 hex·`rgb()`·`hsl()`을 모두 실패로 본다.
 
 ## 2. 형태
 
@@ -42,7 +36,7 @@
 - **직각:** 카드·패널·모달·썸네일·막대·여러 줄 입력.
 - 새 화면에서 태그·레벨·장르 같은 **누를 수 없는 라벨**은 필로 만들지 않는다. 직각 1px 테두리의 작은 라벨이나 `--muted` 글자로 쓴다. 기존 화면의 필 배지·칩은 그대로 둔다(아래 "기존 화면" 원칙).
 - 목록의 각 항목 안 행동은 필 버튼을 반복하지 않고 굵은 텍스트 링크로 쓴다(예: `연습하기 →`). 390·768폭에서는 링크의 터치 높이가 44px에 못 미치면 G7b 경고가 나오므로, 줄 전체를 링크로 만들거나 위아래 패딩으로 높이를 확보한다.
-- 직각 요소는 `border: 1px solid var(--line)` + `--bg`/`--surface` 배경으로 만들고, 두꺼운 테두리(2px 이상)나 검정 채움 상자로 만들지 않는다. hover는 `border-color: var(--ink)`다(정렬 규격 §5-4 표).
+- 직각 요소는 `border: 1px solid var(--line)` + `--bg`/`--surface` 배경으로 만들고, 두꺼운 테두리(2px 이상)나 검정 채움 상자로 만들지 않는다. hover는 `border-color: var(--ink)`다(정렬 규격 §5-4 표). 예외: 카드의 프레임 상단 바는 `border-top: 3px solid`로 만든다(주황 `--now-ring` 또는 `--ink`, DS-0). 목록 항목의 '이어서' 표시는 왼쪽 3px 주황 선이다. 이 두 가지 말고는 2px 이상 테두리를 쓰지 않는다.
 - JSX 인라인 `style`로 곡률·색을 넣지 않는다. CSS 모듈 클래스로 제어한다.
 
 ### 기존 화면을 고칠 때
@@ -62,7 +56,7 @@
 
 | 무엇 | 어디서 | 수준 |
 | --- | --- | --- |
-| 중간 곡률, 순백, 토큰 밖 색 증가 | `test/design_rules.test.js` (`npm test`, `frontend/src`의 모든 CSS) | 실패 |
+| 중간 곡률, 순백, 토큰 밖 색 | `test/design_rules.test.js` (`npm test`, `frontend/src`의 모든 CSS) | 실패 |
 | 금지 색·팔레트 밖 색(계산값) | 정렬 규격 G5a·G5b | 실패·경고 |
 | 터치 크기 | 정렬 규격 G7a·G7b | 실패·경고 |
 | 주 행동 하나, 유채색 절제, 곡률 일관, 다크 대비 | 스크린샷 질문 Q1·Q4·Q7·Q8·Q9 (정렬 규격 §6) | 사람·모델 검토 |
