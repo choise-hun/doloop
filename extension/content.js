@@ -1,4 +1,5 @@
-// RE:DO 크롬 확장 — 유튜브 화면 쪽: 화면 판별, 곡 추가 버튼·메뉴 항목, 알림 (EX-1 명세 §5.2~§5.3)
+// RE:DO 크롬 확장 — 유튜브 화면 쪽: 화면 판별, 점 3개 메뉴 항목, 알림 (EX-1 명세 §5.2~§5.3)
+// 재생 화면의 곡 추가·등록 상태는 EX-3부터 연습 패널(practice-panel.js)의 저장 줄이 맡는다.
 // 토큰은 다루지 않는다. "이 videoId 추가"만 서비스 워커에 요청한다.
 'use strict';
 
@@ -23,6 +24,8 @@ const REDO_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
 /** 메뉴 버튼을 누른 뒤 이 시간 안에 열린 팝업에만 항목을 넣는다(다른 팝업에 잘못 넣지 않기 위해) */
 const REDO_MENU_BIND_MS = 1500;
 const REDO_TOAST_MS = 3000;
+/** 화면 알림 함수. redoInit이 채운다. 연습 패널이 로그인 안내·곡 추가 결과를 보일 때 쓴다. */
+let redoToast = null;
 
 /** 목록 카드의 링크에서 videoId를 꺼낸다. 재생목록·믹스(list=)와 watch가 아닌 링크는 null. */
 function redoVideoIdFromCardHref(href, base) {
@@ -147,78 +150,6 @@ function redoInit() {
     const result = await ask({ type: 'ADD_SONG', videoId });
     showToast(result);
     return result;
-  }
-
-  // ── ③ 재생 화면 버튼 ──
-  let watchBtn = null;
-  let watchVideoId = null;
-  let watchOpenUrl = null;
-  /** 영상 전환·계정 변경마다 올린다. 그 전에 시작한 조회·추가의 늦은 응답은 버린다. */
-  let watchGen = 0;
-
-  function setWatchState(state) {
-    if (!watchBtn) return;
-    watchBtn.dataset.redoState = state;
-    watchBtn.disabled = state === 'busy';
-    watchBtn.querySelector('.redo-watch-btn__label').textContent =
-      state === 'exists' ? 'RE:DO에 있음' : state === 'busy' ? '추가하는 중…' : 'RE:DO에 추가';
-    watchBtn.title = state === 'exists' ? 'RE:DO 연습 화면 열기' : '이 영상을 RE:DO 연습곡으로 추가';
-  }
-
-  function ensureWatchBtn() {
-    if (watchBtn) return;
-    watchBtn = document.createElement('button');
-    watchBtn.type = 'button';
-    watchBtn.className = 'redo-watch-btn';
-    const label = document.createElement('span');
-    label.className = 'redo-watch-btn__label';
-    watchBtn.append(logoIcon(), label);
-    watchBtn.addEventListener('click', async () => {
-      const videoId = watchVideoId;
-      if (!videoId) return;
-      if (watchBtn.dataset.redoState === 'exists' && watchOpenUrl) {
-        window.open(watchOpenUrl, '_blank', 'noopener');
-        return;
-      }
-      const gen = watchGen;
-      setWatchState('busy');
-      const result = await addSong(videoId);
-      if (gen !== watchGen) return; // 그 사이 다른 영상으로 넘어갔거나 계정이 바뀌었다(새 조회가 상태를 정한다)
-      if (result && (result.kind === 'added' || result.kind === 'exists')) {
-        watchOpenUrl = result.openUrl || null;
-        setWatchState('exists');
-      } else {
-        setWatchState('idle');
-      }
-    });
-    document.body.appendChild(watchBtn);
-  }
-
-  /** @param {boolean} [force] 계정이 바뀌어 같은 영상이라도 다시 조회한다 */
-  async function syncWatchButton(force = false) {
-    const videoId = redoWatchVideoId(location.href);
-    if (!videoId) {
-      watchGen += 1;
-      watchVideoId = null;
-      watchOpenUrl = null;
-      if (watchBtn) {
-        watchBtn.remove();
-        watchBtn = null;
-      }
-      return;
-    }
-    if (!force && videoId === watchVideoId && watchBtn) return;
-    const gen = ++watchGen;
-    watchVideoId = videoId;
-    watchOpenUrl = null;
-    ensureWatchBtn();
-    setWatchState('idle');
-    const found = await ask({ type: 'LOOKUP_SONG', videoId });
-    if (gen !== watchGen) return; // 늦게 온 응답(다른 영상·이전 계정)은 버린다
-    if (found && found.state === 'exists') {
-      watchOpenUrl = found.openUrl || null;
-      setWatchState('exists');
-    }
   }
 
   // ── ② 점 3개 메뉴 항목 ──
@@ -369,29 +300,21 @@ function redoInit() {
   async function onNavigate() {
     pendingMenu = null;
     removeMenuItems();
-    syncWatchButton();
     const settings = await ask({ type: 'GET_SETTINGS' });
     if (settings) menuItemEnabled = settings.menuItem !== false;
   }
 
   // 유튜브는 화면 전환 때 문서를 새로 받지 않는다(P4)
   document.addEventListener('yt-navigate-finish', onNavigate);
-  window.addEventListener('popstate', () => setTimeout(syncWatchButton, 0));
 
-  // 우클릭 메뉴 결과는 서비스 워커가 보내 준다
+  // 우클릭 메뉴 결과는 서비스 워커가 보내 준다. 재생 화면의 등록 상태는 연습 패널이 같은 메시지를 듣고 맞춘다(EX-3).
   chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === 'REDO_AUTH_CHANGED') {
-      syncWatchButton(true);
-      return;
-    }
     if (!message || message.type !== 'REDO_TOAST') return;
     showToast(message.result);
-    const r = message.result;
-    if (r && message.videoId && message.videoId === watchVideoId && (r.kind === 'added' || r.kind === 'exists')) {
-      watchOpenUrl = r.openUrl || null;
-      setWatchState('exists');
-    }
   });
+
+  // 연습 패널(practice-panel.js, 같은 격리 영역)이 같은 알림을 쓴다
+  redoToast = showToast;
 
   onNavigate();
 }

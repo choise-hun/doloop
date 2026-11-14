@@ -64,8 +64,48 @@ const MSG = {
   invalid: '추가할 수 있는 영상이 아닙니다',
 };
 
+const SAVE_MSG = {
+  failed: '저장하지 못했습니다',
+  gone: 'RE:DO에서 삭제된 곡입니다. 다시 추가할 수 있습니다',
+  switched: '요청 도중 계정이 바뀌어 저장하지 않았습니다',
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function errorMessage(body) {
   return body && typeof body.message === 'string' && body.message.trim() ? body.message.trim() : null;
+}
+
+const finiteOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** 서버 SongDto에서 패널이 쓰는 값만 꺼낸다(EX-2 명세 §9). id가 없으면 null. */
+export function songSummary(song) {
+  if (!song || typeof song !== 'object' || typeof song.id !== 'string' || !song.id) return null;
+  const rate = finiteOrNull(song.rate);
+  return { id: song.id, a: finiteOrNull(song.a), b: finiteOrNull(song.b), rate: rate == null ? 1 : rate };
+}
+
+/** a·b는 둘 다 숫자이고 a < b일 때만 보낸다(서버는 a >= b를 400으로 거부한다). */
+function validRange(a, b) {
+  return typeof a === 'number' && typeof b === 'number' && Number.isFinite(a) && Number.isFinite(b) && a < b;
+}
+
+/** SAVE_PRACTICE 메시지 → POST /api/v1/practice/save 본문. 아는 필드만 옮긴다. 형식이 틀리면 null. */
+export function practiceSaveBody(msg) {
+  const m = msg && typeof msg === 'object' ? msg : {};
+  if (typeof m.songId !== 'string' || !UUID_RE.test(m.songId)) return null;
+  if (finiteOrNull(m.pos) == null || typeof m.date !== 'string' || !DATE_RE.test(m.date)) return null;
+  const body = { songId: m.songId, pos: m.pos };
+  if (validRange(m.a, m.b)) {
+    body.a = m.a;
+    body.b = m.b;
+  }
+  if (finiteOrNull(m.rate) != null) body.rate = m.rate;
+  body.date = m.date;
+  body.addSeconds = Number.isInteger(m.addSeconds) && m.addSeconds > 0 ? m.addSeconds : 0;
+  body.addLoops = Number.isInteger(m.addLoops) && m.addLoops > 0 ? m.addLoops : 0;
+  return body;
 }
 
 /**
@@ -114,31 +154,81 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
     return { res, body, apiBase };
   }
 
-  async function runAddSong(videoId) {
+  /** 같은 연습 저장 연타: 같은 탭·같은 본문이면 진행 중인 요청을 함께 쓴다 */
+  const saving = new Map();
+
+  async function runAddSong(videoId, extra) {
     const out = await authedFetch('/api/v1/songs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoId }),
+      body: JSON.stringify({ videoId, ...extra }),
     });
     if (out.fail === 'login') return { kind: 'login', message: MSG.login, action: 'login' };
     if (out.fail === 'network') return { kind: 'network', message: MSG.network };
     if (out.fail === 'switched') return { kind: 'error', message: MSG.switched };
     const { res, body, apiBase } = out;
     const openUrl = practiceUrl(apiBase, videoId);
-    if (res.status === 201) return { kind: 'added', message: MSG.added, action: 'open', openUrl };
-    if (res.status === 200) return { kind: 'exists', message: MSG.exists, action: 'open', openUrl };
-    return { kind: 'error', status: res.status, message: errorMessage(body) || MSG.failed };
+    const kind = res.status === 201 ? 'added' : res.status === 200 ? 'exists' : null;
+    if (!kind) return { kind: 'error', status: res.status, message: errorMessage(body) || MSG.failed };
+    const result = { kind, message: MSG[kind], action: 'open', openUrl };
+    const song = songSummary(body && body.song);
+    if (song) result.song = song;
+    return result;
   }
 
-  /** 곡 추가(§5.3). 결과는 화면 알림에 그대로 쓸 수 있는 모양이다. */
-  function addSong(videoId) {
+  /**
+   * 곡 추가(§5.3). 결과는 화면 알림에 그대로 쓸 수 있는 모양이다.
+   * opts(EX-3 패널): rate, a·b(둘 다 있고 a < b일 때만). 기존 곡이면 서버가 버린다(EX-2 명세 P11).
+   */
+  function addSong(videoId, opts = {}) {
     if (!isVideoId(videoId)) return Promise.resolve({ kind: 'error', message: MSG.invalid });
     const pending = adding.get(videoId);
     if (pending) return pending;
-    const run = runAddSong(videoId)
+    const extra = {};
+    if (finiteOrNull(opts.rate) != null) extra.rate = opts.rate;
+    if (validRange(opts.a, opts.b)) {
+      extra.a = opts.a;
+      extra.b = opts.b;
+    }
+    const run = runAddSong(videoId, extra)
       .catch(() => ({ kind: 'error', message: MSG.failed }))
       .finally(() => adding.delete(videoId));
     adding.set(videoId, run);
+    return run;
+  }
+
+  async function runSavePractice(body) {
+    const out = await authedFetch('/api/v1/practice/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (out.fail === 'login') return { kind: 'login', message: MSG.login, action: 'login' };
+    if (out.fail === 'network') return { kind: 'network', message: MSG.network };
+    if (out.fail === 'switched') return { kind: 'switched', message: SAVE_MSG.switched };
+    const { res, body: resBody } = out;
+    if (res.ok) {
+      // 서버가 keep:false라고 분명히 말할 때만 패널이 누적분을 뺀다(EX-2 명세 P8)
+      return { kind: 'saved', keep: !(resBody && resBody.keep === false) };
+    }
+    if (res.status === 404) return { kind: 'gone', message: SAVE_MSG.gone };
+    return { kind: 'error', status: res.status, message: errorMessage(resBody) || SAVE_MSG.failed };
+  }
+
+  /**
+   * 연습 저장(EX-2 명세 §9 SAVE_PRACTICE). 결과 kind: saved | login | network | switched | gone | error
+   * tabId: 보낸 탭. 같은 탭의 같은 본문 연타만 합친다 — 다른 탭의 누적분은 독립이라 합치면 한쪽이 유실된다(PR #25 P2).
+   */
+  function savePractice(msg, tabId = null) {
+    const body = practiceSaveBody(msg);
+    if (!body) return Promise.resolve({ kind: 'error', message: SAVE_MSG.failed });
+    const key = JSON.stringify([tabId, body]);
+    const pending = saving.get(key);
+    if (pending) return pending;
+    const run = runSavePractice(body)
+      .catch(() => ({ kind: 'error', message: SAVE_MSG.failed }))
+      .finally(() => saving.delete(key));
+    saving.set(key, run);
     return run;
   }
 
@@ -150,9 +240,11 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
       if (out.fail === 'login') return { state: 'login' };
       if (out.fail || !out.res.ok) return { state: 'unknown' };
       const body = out.body;
-      return body && body.song
-        ? { state: 'exists', openUrl: practiceUrl(out.apiBase, videoId) }
-        : { state: 'none' };
+      if (!body || !body.song) return { state: 'none' };
+      const result = { state: 'exists', openUrl: practiceUrl(out.apiBase, videoId) };
+      const song = songSummary(body.song);
+      if (song) result.song = song;
+      return result;
     } catch {
       return { state: 'unknown' };
     }
@@ -188,7 +280,7 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
     return { ok: true, message: '서버 연결됨 · 로그인 확인됨' };
   }
 
-  return { addSong, lookupSong, checkConnection };
+  return { addSong, lookupSong, savePractice, checkConnection };
 }
 
 // ───────────────────────── 크롬 연결부 (서비스 워커에서만 실행) ─────────────────────────
@@ -271,8 +363,10 @@ export function registerWithChrome(chromeApi) {
     if (!message || typeof message.type !== 'string' || sender.id !== chromeApi.runtime.id) return false;
     const fromExtensionPage = typeof sender.url === 'string' && sender.url.startsWith(chromeApi.runtime.getURL(''));
     let work = null;
-    if (message.type === 'ADD_SONG') work = api.addSong(message.videoId);
-    else if (message.type === 'LOOKUP_SONG') work = api.lookupSong(message.videoId);
+    if (message.type === 'ADD_SONG') {
+      work = api.addSong(message.videoId, { rate: message.rate, a: message.a, b: message.b });
+    } else if (message.type === 'LOOKUP_SONG') work = api.lookupSong(message.videoId);
+    else if (message.type === 'SAVE_PRACTICE') work = api.savePractice(message, sender.tab ? sender.tab.id : null);
     else if (message.type === 'GET_SETTINGS') work = getSettings().then((s) => ({ menuItem: s.menuItem }));
     else if (message.type === 'OPEN_OPTIONS') work = chromeApi.runtime.openOptionsPage().then(() => ({ ok: true }));
     else if (message.type === 'CHECK_CONNECTION' && fromExtensionPage) work = api.checkConnection();

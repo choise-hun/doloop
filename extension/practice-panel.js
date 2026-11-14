@@ -1,5 +1,6 @@
 // RE:DO 크롬 확장 — 유튜브 재생 화면 연습 패널: 구간 반복·배속·단축키·끌기/접기/닫기 (EX-2 명세 §3~§6)
-// 서버 호출·저장소 사용은 하지 않는다. content.js의 REDO_SEL·redoWatchVideoId를 같은 격리 영역에서 사용한다.
+// + 저장 줄: 곡 추가·등록 상태·연습 저장 (EX-3, 명세 §9). 서버 호출은 서비스 워커에 메시지로만 맡기고 토큰·저장소는 다루지 않는다.
+// content.js의 REDO_SEL·redoWatchVideoId·redoToast를 같은 격리 영역에서 사용한다.
 'use strict';
 
 const REDO_RATE_MIN = 0.25;
@@ -112,6 +113,65 @@ function redoClampPanelPos(p) {
   return { x: x === 0 ? 0 : x, y };
 }
 
+// ───────── EX-3 저장 연결 (EX-2 명세 §9) ─────────
+
+const REDO_MAX_ADD_SECONDS = 21600;
+const REDO_MAX_ADD_LOOPS = 100000;
+/** 한 번에 더하는 시간 상한(초). 탭이 멈췄다 깨어난 사이를 연습 시간으로 세지 않는다. */
+const REDO_MAX_TICK_SEC = 2;
+
+/**
+ * 연습 시간 누적(U8): 재생 중·광고 아님·패널 열림일 때만 지난 실제 시간(최대 2초)을 더한다.
+ * 멈춘 동안에는 last를 비워, 다시 재생할 때 멈춘 시간을 세지 않는다.
+ */
+function redoAccumulate({ acc, last, now, counting }) {
+  if (!counting || !Number.isFinite(now)) return { acc, last: null };
+  if (last == null) return { acc, last: now };
+  const dt = Math.max(0, Math.min(REDO_MAX_TICK_SEC, (now - last) / 1000));
+  return { acc: acc + dt, last: now };
+}
+
+/** 브라우저 로컬 날짜 YYYY-MM-DD */
+function redoLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const redoSameNum = (x, y) => (x == null || y == null ? x == y : Math.abs(x - y) < 0.001);
+
+/**
+ * SAVE_PRACTICE 메시지 본문. 구간은 패널에 둘 다 있으면 그 값, 아니면 마지막으로 받은 곡 값
+ * (이 API는 보낸 a·b로 덮어쓴다 — 빠뜨리면 저장된 구간이 지워진다).
+ */
+function redoBuildSave({ songId, t, a, b, song, rate, accSec, accLoops, date }) {
+  const msg = { type: 'SAVE_PRACTICE', songId, pos: redoRoundTime(t) };
+  if (a != null && b != null && a < b) {
+    msg.a = a;
+    msg.b = b;
+  } else if (song && song.a != null && song.b != null && song.a < song.b) {
+    msg.a = song.a;
+    msg.b = song.b;
+  }
+  msg.rate = redoClampRate(rate);
+  msg.date = date;
+  msg.addSeconds = Math.min(REDO_MAX_ADD_SECONDS, Math.max(0, Math.floor(accSec || 0)));
+  msg.addLoops = Math.min(REDO_MAX_ADD_LOOPS, Math.max(0, Math.floor(accLoops || 0)));
+  return msg;
+}
+
+async function redoPanelAsk(message) {
+  try {
+    return await chrome.runtime.sendMessage(message);
+  } catch {
+    // 확장을 다시 불러오면 이 페이지의 연결이 끊긴다
+    return null;
+  }
+}
+
+const REDO_RELOAD_MSG = '확장 프로그램이 갱신되었습니다. 페이지를 새로고침해 주세요';
+
 function redoPanelInit() {
   const state = {
     videoId: null,
@@ -128,9 +188,22 @@ function redoPanelInit() {
     pos: null,
     videoMissing: false,
     tempMsg: '',
+    // EX-3 저장 연결
+    gen: 0, // 영상·계정이 바뀔 때마다 올린다. 그 전에 시작한 조회·추가·저장 응답은 버린다
+    lookedUpFor: null, // 지금 세대에서 조회를 시작한 videoId
+    songState: 'unknown', // 'unknown' | 'none' | 'exists'
+    song: null, // { id, a, b, rate } — 서버에 마지막으로 저장됐다고 아는 값
+    openUrl: null,
+    busy: null, // 'add' | 'save' | null
+    pendingRate: null, // 불러온 저장 배속. [반복]을 켤 때 적용, 그 전에 패널로 배속을 바꾸면 버린다
+    notice: '',
+    accSec: 0,
+    accLoops: 0,
+    lastCountAt: null,
   };
 
   let panelEl = null;
+  const saveUi = {};
   let bodyEl = null;
   let collapseBtn = null;
   const btns = {};
@@ -320,6 +393,25 @@ function redoPanelInit() {
       row4.appendChild(btns[act]);
     }
 
+    // 저장 줄(EX-3): 미등록 [RE:DO에 추가] / 등록 "RE:DO에 있음" + [저장] + "저장 안 됨"
+    const saveRow = document.createElement('div');
+    saveRow.className = 'redo-panel__row redo-panel__save';
+    saveUi.row = saveRow;
+    saveUi.add = makeBtn('add', 'RE:DO에 추가', '이 영상을 구간·배속과 함께 RE:DO 연습곡으로 추가');
+    saveUi.link = document.createElement('a');
+    saveUi.link.className = 'redo-panel__link';
+    saveUi.link.dataset.redoOut = 'exists';
+    saveUi.link.target = '_blank';
+    saveUi.link.rel = 'noopener noreferrer';
+    saveUi.link.title = 'RE:DO 연습 화면 열기';
+    saveUi.link.textContent = 'RE:DO에 있음';
+    saveUi.save = makeBtn('save', '저장', '구간·배속·연습 시간을 RE:DO에 저장');
+    saveUi.dirty = document.createElement('span');
+    saveUi.dirty.className = 'redo-panel__dirty';
+    saveUi.dirty.dataset.redoOut = 'dirty';
+    saveUi.dirty.textContent = '저장 안 됨';
+    saveRow.append(saveUi.add, saveUi.link, saveUi.save, saveUi.dirty);
+
     const status = document.createElement('p');
     status.className = 'redo-panel__status';
     status.dataset.redoOut = 'status';
@@ -327,7 +419,7 @@ function redoPanelInit() {
     status.setAttribute('aria-live', 'polite');
     outs.status = status;
 
-    body.append(row1, row2, row3, row4, status);
+    body.append(row1, row2, row3, row4, saveRow, status);
     panel.append(head, body);
     document.body.appendChild(panel);
 
@@ -377,6 +469,8 @@ function redoPanelInit() {
       }
     }
 
+    renderSaveRow(noVideo);
+
     if (state.videoMissing) {
       outs.status.textContent = '영상을 찾지 못했습니다. 페이지를 새로고침해 주세요';
     } else if (state.tempMsg) {
@@ -384,8 +478,39 @@ function redoPanelInit() {
     } else if (state.ad) {
       outs.status.textContent = '광고가 끝나면 이어집니다';
     } else {
-      outs.status.textContent = '';
+      outs.status.textContent = state.notice;
     }
+  }
+
+  /** 저장할 배속: 불러온 배속을 아직 적용하지 않았으면 그 값(저장값을 지금 재생 배속으로 덮지 않는다) */
+  function rateToSave() {
+    return state.pendingRate != null ? state.pendingRate : state.rate;
+  }
+
+  /** 서버에 저장한 값과 다른 것이 있는지(구간·배속 변경 또는 1초 이상·1회 이상 누적) */
+  function hasUnsaved() {
+    const s = state.song;
+    if (!s) return false;
+    if (Math.floor(state.accSec) >= 1 || state.accLoops > 0) return true;
+    if (state.a != null && state.b != null && (!redoSameNum(state.a, s.a) || !redoSameNum(state.b, s.b))) return true;
+    return !redoSameNum(rateToSave(), s.rate);
+  }
+
+  function renderSaveRow(noVideo) {
+    if (!saveUi.row) return;
+    const registered = state.songState === 'exists' && Boolean(state.song);
+    saveUi.row.dataset.redoSaveState = state.busy || (registered ? 'exists' : state.songState);
+    saveUi.add.hidden = registered;
+    saveUi.add.disabled = state.busy === 'add';
+    saveUi.add.textContent = state.busy === 'add' ? '추가하는 중…' : 'RE:DO에 추가';
+    saveUi.link.hidden = !registered;
+    if (state.openUrl) saveUi.link.href = state.openUrl;
+    else if (typeof saveUi.link.removeAttribute === 'function') saveUi.link.removeAttribute('href');
+    saveUi.save.hidden = !registered;
+    // 광고 중·저장 중·영상 없음에는 저장을 잠근다
+    saveUi.save.disabled = state.busy === 'save' || state.ad || noVideo;
+    saveUi.save.textContent = state.busy === 'save' ? '저장하는 중…' : '저장';
+    saveUi.dirty.hidden = !(registered && hasUnsaved());
   }
 
   function attachVideo(video) {
@@ -399,12 +524,18 @@ function redoPanelInit() {
       if (state.video === video) tick();
     });
 
+    // 버퍼링 시작: 누적 기준 시각을 비운다. 반복이 꺼져 tick이 안 불려도 재개 첫 timeupdate가 대기 시간을 더하지 않는다
+    video.addEventListener('waiting', () => {
+      if (state.video === video) state.lastCountAt = null;
+    });
+
     video.addEventListener('ended', () => {
       if (state.closed || state.video !== video) return;
       const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
       if (state.loopOn && !ad && state.a != null) {
         video.currentTime = state.a;
         state.loops += 1;
+        state.accLoops += 1;
         try {
           const p = video.play();
           // 브라우저 자동재생 정책으로 play()가 거부될 수 있어 무시한다
@@ -436,6 +567,17 @@ function redoPanelInit() {
       state.ad = ad;
       dirty = true;
     }
+    // 연습 시간 누적(U8): 패널이 열려 있고(이 함수는 닫히면 끝난다) 재생 중이고 광고가 아닐 때
+    const unsavedBefore = hasUnsaved();
+    const counted = redoAccumulate({
+      acc: state.accSec,
+      last: state.lastCountAt,
+      now: Date.now(),
+      // 버퍼링 중에는 paused가 false여도 위치가 멈춘다. HAVE_FUTURE_DATA(3) 미만이면 세지 않는다(PR #25 P2)
+      counting: !ad && !state.video.paused && !state.video.ended && state.video.readyState >= 3,
+    });
+    state.accSec = counted.acc;
+    state.lastCountAt = counted.last;
     if (state.wasAd && !ad && Math.abs(state.video.playbackRate - state.rate) > 0.001) {
       state.video.playbackRate = state.rate;
     }
@@ -451,10 +593,11 @@ function redoPanelInit() {
     ) {
       state.video.currentTime = state.a;
       state.loops += 1;
+      state.accLoops += 1;
       dirty = true;
     }
     state.wasAd = ad;
-    if (dirty) render();
+    if (dirty || hasUnsaved() !== unsavedBefore) render();
   }
 
   function bindFound(video, fresh) {
@@ -512,6 +655,7 @@ function redoPanelInit() {
     if (act === 'close') {
       state.closed = true;
       state.loopOn = false;
+      state.lastCountAt = null;
       stopRaf();
       clearVideoRetry();
       clearTempStatus();
@@ -519,13 +663,23 @@ function redoPanelInit() {
       return;
     }
 
-    if (state.closed || state.videoMissing || !state.video) return;
+    if (state.closed) return;
+    if (act === 'add') {
+      addSong();
+      return;
+    }
+    if (state.videoMissing || !state.video) return;
     const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
     if (ad !== state.ad) state.ad = ad;
+    if (act === 'save') {
+      saveProgress();
+      return;
+    }
     if (ad && (act === 'setA' || act === 'setB' || act === 'restart')) {
       render();
       return;
     }
+    state.notice = '';
 
     if (act === 'setA') {
       if (!Number.isFinite(state.video.duration)) {
@@ -572,6 +726,12 @@ function redoPanelInit() {
         return;
       }
       state.loopOn = true;
+      if (state.pendingRate != null) {
+        // 불러온 저장 배속은 [반복]을 켤 때 적용한다(광고 중이면 광고 뒤 tick이 적용)
+        state.rate = state.pendingRate;
+        state.pendingRate = null;
+        if (!ad) state.video.playbackRate = state.rate;
+      }
       if (!ad && (state.video.currentTime < state.a || state.video.currentTime >= state.b)) {
         state.video.currentTime = state.a;
       }
@@ -592,6 +752,7 @@ function redoPanelInit() {
       state.b = null;
       state.loopOn = false;
       state.loops = 0;
+      state.pendingRate = null;
       stopRaf();
       clearTempStatus();
       render();
@@ -606,6 +767,8 @@ function redoPanelInit() {
       if (idx >= 0 && idx < REDO_RATE_PRESETS.length) nextRate = REDO_RATE_PRESETS[idx];
     }
     if (nextRate == null) return;
+    // 불러온 배속을 적용하기 전에 사용자가 배속을 바꾸면 불러온 값은 버린다
+    state.pendingRate = null;
 
     if (Math.abs(nextRate - state.rate) < 0.001) {
       setTempStatus('배속은 0.25~2.0 범위입니다');
@@ -617,9 +780,166 @@ function redoPanelInit() {
     render();
   }
 
+  // ───────── EX-3 저장 연결 ─────────
+
+  /** 영상·계정이 바뀌었다: 진행 중인 조회·추가·저장 응답을 버리고 등록 상태를 비운다 */
+  function resetSongState() {
+    state.gen += 1;
+    state.lookedUpFor = null;
+    state.songState = 'unknown';
+    state.song = null;
+    state.openUrl = null;
+    state.busy = null;
+    state.pendingRate = null;
+    state.notice = '';
+  }
+
+  function resetAccum() {
+    state.accSec = 0;
+    state.accLoops = 0;
+    state.lastCountAt = null;
+  }
+
+  function setRegistered(song, openUrl) {
+    state.songState = 'exists';
+    state.song = { id: song.id, a: song.a, b: song.b, rate: song.rate };
+    state.openUrl = openUrl || null;
+  }
+
+  /**
+   * 저장된 구간·배속을 패널에 채운다. 사용자가 이미 구간을 지정했으면 건드리지 않는다.
+   * 구간이 없어도 저장 배속은 pendingRate로 보존한다 — 안 그러면 다음 저장이 지금 배속으로 덮는다(PR #25 P2).
+   */
+  function loadSaved(song) {
+    if (state.a != null || state.b != null) return;
+    const hasRange = song.a != null && song.b != null && song.a < song.b;
+    const rate = typeof song.rate === 'number' && Number.isFinite(song.rate) ? redoClampRate(song.rate) : null;
+    if (rate != null) state.pendingRate = Math.abs(rate - state.rate) > 0.001 ? rate : null;
+    if (hasRange) {
+      state.a = song.a;
+      state.b = song.b;
+      state.notice = `저장된 구간·배속(${(rate != null ? rate : state.rate).toFixed(2)}x)을 불러왔습니다. [반복]을 켜면 적용됩니다`;
+    } else if (state.pendingRate != null) {
+      state.notice = `저장된 배속(${state.pendingRate.toFixed(2)}x)을 불러왔습니다. 구간을 정하고 [반복]을 켜면 적용됩니다`;
+    }
+  }
+
+  function lookup() {
+    resetSongState();
+    const gen = state.gen;
+    const videoId = state.videoId;
+    state.lookedUpFor = videoId;
+    render();
+    redoPanelAsk({ type: 'LOOKUP_SONG', videoId }).then((found) => {
+      // 늦게 온 응답(다른 영상·이전 계정)이나, 그 사이 추가가 끝나 이미 등록된 경우는 버린다
+      if (gen !== state.gen || state.songState === 'exists') return;
+      if (found && found.state === 'exists' && found.song && found.song.id) {
+        setRegistered(found.song, found.openUrl);
+        loadSaved(found.song);
+      } else {
+        state.songState = 'none';
+      }
+      render();
+    });
+  }
+
+  function addSong() {
+    const videoId = state.videoId;
+    if (!videoId || state.busy) return;
+    const gen = state.gen;
+    const msg = { type: 'ADD_SONG', videoId, rate: rateToSave() };
+    if (state.a != null && state.b != null && state.a < state.b) {
+      msg.a = state.a;
+      msg.b = state.b;
+    }
+    state.busy = 'add';
+    render();
+    redoPanelAsk(msg).then((result) => {
+      if (typeof redoToast === 'function') redoToast(result);
+      if (gen !== state.gen) return; // 그 사이 다른 영상으로 넘어갔거나 계정이 바뀌었다(새 조회가 상태를 정한다)
+      state.busy = null;
+      if (result && (result.kind === 'added' || result.kind === 'exists') && result.song && result.song.id) {
+        // 기존 곡(200)이면 서버는 보낸 구간·배속을 버린다. 패널 값은 그대로 두고 "저장 안 됨"으로 보인다(P11)
+        setRegistered(result.song, result.openUrl);
+        loadSaved(result.song);
+      }
+      render();
+    });
+  }
+
+  function saveProgress() {
+    if (!state.song || state.busy || state.ad) return;
+    const gen = state.gen;
+    const msg = redoBuildSave({
+      songId: state.song.id,
+      t: state.video.currentTime,
+      a: state.a,
+      b: state.b,
+      song: state.song,
+      rate: rateToSave(),
+      accSec: state.accSec,
+      accLoops: state.accLoops,
+      date: redoLocalDate(new Date()),
+    });
+    state.busy = 'save';
+    clearTempStatus();
+    render();
+    redoPanelAsk(msg).then((res) => {
+      if (gen !== state.gen) return; // 영상·계정이 바뀐 뒤 도착한 응답은 새 패널에 넣지 않는다
+      state.busy = null;
+      applySaveResult(res, msg);
+    });
+  }
+
+  function applySaveResult(res, msg) {
+    if (!res) {
+      setTempStatus(REDO_RELOAD_MSG);
+      return;
+    }
+    if (res.kind === 'saved') {
+      // 서버는 보낸 구간·배속·위치를 저장했다(keep이어도 — PracticeService)
+      state.song = { ...state.song, a: msg.a != null ? msg.a : null, b: msg.b != null ? msg.b : null, rate: msg.rate };
+      if (res.keep === false) {
+        // 저장 중에 더 쌓인 몫은 남긴다
+        state.accSec = Math.max(0, state.accSec - msg.addSeconds);
+        state.accLoops = Math.max(0, state.accLoops - msg.addLoops);
+        setTempStatus('저장했습니다');
+      } else {
+        // 그날 첫 기록이 60초 미만이면 시간은 기록되지 않는다. 누적분을 남겨 다음 저장에 더한다(P8)
+        setTempStatus('구간·배속을 저장했습니다. 연습 시간은 1분부터 기록됩니다');
+      }
+      return;
+    }
+    if (res.kind === 'login') {
+      if (typeof redoToast === 'function') redoToast({ kind: 'login', message: '로그인이 필요합니다', action: 'login' });
+      render();
+      return;
+    }
+    if (res.kind === 'network') {
+      setTempStatus('서버에 연결하지 못했습니다');
+      return;
+    }
+    if (res.kind === 'gone') {
+      state.songState = 'none';
+      state.song = null;
+      state.openUrl = null;
+      state.pendingRate = null;
+      setTempStatus('RE:DO에서 삭제된 곡입니다. 다시 추가할 수 있습니다');
+      return;
+    }
+    if (res.kind === 'switched') {
+      resetAccum();
+      setTempStatus('요청 도중 계정이 바뀌어 저장하지 않았습니다');
+      return;
+    }
+    setTempStatus(res.message || '저장하지 못했습니다');
+  }
+
   function sync() {
     const id = redoWatchVideoId(location.href);
     if (!id) {
+      resetSongState();
+      resetAccum();
       clearVideoRetry();
       stopRaf();
       clearTempStatus();
@@ -644,6 +964,9 @@ function redoPanelInit() {
       state.videoMissing = false;
       clearTempStatus();
       stopRaf();
+      // 영상이 바뀌면 누적분을 버리고 그 전 영상의 조회·저장 응답을 받지 않는다
+      resetSongState();
+      resetAccum();
     }
     state.videoId = id;
 
@@ -656,6 +979,7 @@ function redoPanelInit() {
 
     ensurePanel();
     findAndBindVideo(id, fresh);
+    if (state.lookedUpFor !== id) lookup();
   }
 
   document.addEventListener('yt-navigate-finish', sync);
@@ -689,9 +1013,36 @@ function redoPanelInit() {
   );
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === 'REDO_PANEL_OPEN') {
+    if (!message) return;
+    if (message.type === 'REDO_PANEL_OPEN') {
       state.closed = false;
       sync();
+      return;
+    }
+    if (message.type === 'REDO_AUTH_CHANGED') {
+      // 등록 상태·누적분·불러온 구간·반복은 계정별이다. 비우고 같은 영상이라도 다시 조회한다.
+      // 구간을 남기면 loadSaved가 새 계정 값을 건너뛰고 이전 계정 구간을 새 계정 곡에 저장한다(PR #25 P1).
+      // state.rate는 지금 영상의 실제 재생 배속이라 두고, 새 계정 저장 배속은 loadSaved의 pendingRate로 들어온다.
+      state.a = null;
+      state.b = null;
+      state.loopOn = false;
+      state.loops = 0;
+      stopRaf();
+      clearTempStatus();
+      resetAccum();
+      resetSongState();
+      if (state.videoId && !state.closed && panelEl) lookup();
+      else render();
+      return;
+    }
+    if (message.type === 'REDO_TOAST') {
+      // 우클릭 "RE:DO에 추가" 결과: 지금 영상이면 저장 줄을 등록 상태로
+      const r = message.result;
+      if (!r || message.videoId !== state.videoId || !(r.kind === 'added' || r.kind === 'exists')) return;
+      if (!r.song || !r.song.id || state.songState === 'exists') return;
+      setRegistered(r.song, r.openUrl);
+      loadSaved(r.song);
+      render();
     }
   });
 

@@ -397,23 +397,45 @@ test('PR23-4: 응답 본문을 읽는 동안에도 제한 시간이 적용된다
   assert.equal((await api2.addSong('dQw4w9WgXcQ')).kind, 'network');
 });
 
-// content.js를 돌릴 최소 DOM. 재생 화면 버튼에 필요한 만큼만 흉내 낸다.
+// content.js + practice-panel.js를 돌릴 최소 DOM. EX-3부터 재생 화면의 곡 추가·등록 상태는 연습 패널 저장 줄이 맡는다.
 function fakeDom(href) {
+  const match = (el, sel) => {
+    if (sel.startsWith('.')) return el.className.split(' ').includes(sel.slice(1));
+    const m = sel.match(/^\[data-redo-(act|out)="([^"]+)"\]$/);
+    return Boolean(m) && el.dataset[m[1] === 'act' ? 'redoAct' : 'redoOut'] === m[2];
+  };
+  const find = (root, sel) => {
+    for (const c of root.children) {
+      if (match(c, sel)) return c;
+      const deep = find(c, sel);
+      if (deep) return deep;
+    }
+    return null;
+  };
   const make = (tag) => {
     const el = {
-      tagName: tag,
+      tagName: tag.toUpperCase(),
       children: [],
       parent: null,
       dataset: {},
       style: {},
       listeners: {},
+      attrs: {},
       className: '',
       textContent: '',
       title: '',
       disabled: false,
+      hidden: false,
+      offsetWidth: 280,
+      offsetHeight: 200,
       classList: { add: (c) => (el.className = `${el.className} ${c}`.trim()) },
-      setAttribute() {},
-      getAttribute: () => null,
+      setAttribute(k, v) {
+        el.attrs[k] = String(v);
+      },
+      getAttribute: (k) => (k in el.attrs ? el.attrs[k] : null),
+      removeAttribute(k) {
+        delete el.attrs[k];
+      },
       append(...kids) {
         for (const k of kids) el.appendChild(k);
       },
@@ -429,37 +451,30 @@ function fakeDom(href) {
       addEventListener(type, fn) {
         (el.listeners[type] ||= []).push(fn);
       },
-      querySelector(sel) {
-        const cls = sel.replace(/^\./, '');
-        for (const c of el.children) {
-          if (c.className.split(' ').includes(cls)) return c;
-          const deep = c.querySelector(sel);
-          if (deep) return deep;
-        }
-        return null;
-      },
+      querySelector: (sel) => find(el, sel),
     };
     return el;
   };
   const body = make('body');
-  const docListeners = {};
+  const video = make('video');
+  Object.assign(video, { currentTime: 0, duration: 120, playbackRate: 1, seeking: false, paused: true });
   const document = {
     body,
     createElement: make,
     createElementNS: (_ns, tag) => make(tag),
-    querySelector: () => null,
+    querySelector: (sel) => (sel === '#movie_player video.html5-main-video' ? video : find(body, sel)),
     querySelectorAll: () => [],
-    addEventListener: (type, fn) => ((docListeners[type] ||= []).push(fn)),
+    addEventListener() {},
   };
-  const watchBtn = () => body.children.find((c) => c.className === 'redo-watch-btn') || null;
-  return { document, body, watchBtn, location: { href, origin: 'https://www.youtube.com' } };
+  const el = (sel) => find(body, sel);
+  return { document, body, el, location: { href, origin: 'https://www.youtube.com' } };
 }
 
-test('PR23-3: 계정이 바뀌면 같은 영상의 재생 화면 버튼 상태를 다시 조회한다', async () => {
+test('PR23-3: 계정이 바뀌면 같은 영상의 패널 저장 줄 상태를 다시 조회한다', async () => {
   const dom = fakeDom('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   const sent = [];
   const lookups = [];
-  let onMessage = null;
+  const listeners = [];
   const opened = [];
   const chrome = {
     runtime: {
@@ -471,12 +486,15 @@ test('PR23-3: 계정이 바뀌면 같은 영상의 재생 화면 버튼 상태�
         if (m.type === 'ADD_SONG') return Promise.resolve({ kind: 'added', message: 'ok', action: 'open', openUrl: 'u' });
         return Promise.resolve(null);
       },
-      onMessage: { addListener: (fn) => (onMessage = fn) },
+      // content.js와 practice-panel.js가 각각 건다
+      onMessage: { addListener: (fn) => listeners.push(fn) },
     },
   };
-  const window = { open: (...a) => opened.push(a), addEventListener() {} };
+  const onMessage = (m) => listeners.forEach((fn) => fn(m));
+  const window = { open: (...a) => opened.push(a), addEventListener() {}, innerWidth: 1280, innerHeight: 800 };
   const ctx = vm.createContext({
     URL,
+    Element: function Element() {},
     document: dom.document,
     location: dom.location,
     chrome,
@@ -484,14 +502,20 @@ test('PR23-3: 계정이 바뀌면 같은 영상의 재생 화면 버튼 상태�
     setTimeout,
     clearTimeout,
     requestAnimationFrame: (fn) => setTimeout(fn, 0),
+    cancelAnimationFrame: clearTimeout,
   });
   vm.runInContext(fs.readFileSync(path.join(EXT, 'content.js'), 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(path.join(EXT, 'practice-panel.js'), 'utf8'), ctx);
   const tick = () => new Promise((r) => setTimeout(r, 0));
-  const label = () => dom.watchBtn().querySelector('.redo-watch-btn__label').textContent;
+  const label = () => {
+    const link = dom.el('[data-redo-out="exists"]');
+    return link && !link.hidden ? link.textContent : dom.el('[data-redo-act="add"]').textContent;
+  };
 
+  assert.equal(dom.el('.redo-watch-btn'), null, '재생 화면 버튼은 패널 안으로 옮겨졌다(EX-3)');
   await tick();
   assert.equal(lookups.length, 1);
-  lookups[0]({ state: 'exists', openUrl: 'https://x/practice.html?v=dQw4w9WgXcQ' });
+  lookups[0]({ state: 'exists', openUrl: 'https://x/practice.html?v=dQw4w9WgXcQ', song: { id: 's-A', a: null, b: null, rate: 1 } });
   await tick();
   assert.equal(label(), 'RE:DO에 있음', 'A에게 있는 곡');
 
@@ -504,11 +528,11 @@ test('PR23-3: 계정이 바뀌면 같은 영상의 재생 화면 버튼 상태�
   await tick();
   assert.equal(lookups.length, 3);
   lookups[2]({ state: 'none' });
-  lookups[1]({ state: 'exists', openUrl: 'stale' });
+  lookups[1]({ state: 'exists', openUrl: 'stale', song: { id: 's-stale', a: null, b: null, rate: 1 } });
   await tick();
   assert.equal(label(), 'RE:DO에 추가', '이전 조회의 늦은 응답은 버린다');
 
-  dom.watchBtn().listeners.click[0]();
+  dom.el('[data-redo-act="add"]').listeners.click[0]();
   await tick();
   assert.equal(opened.length, 0, '열기 대신 곡 추가');
   assert.ok(sent.some((m) => m.type === 'ADD_SONG' && m.videoId === 'dQw4w9WgXcQ'));
