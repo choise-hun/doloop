@@ -524,6 +524,11 @@ function redoPanelInit() {
       if (state.video === video) tick();
     });
 
+    // 버퍼링 시작: 누적 기준 시각을 비운다. 반복이 꺼져 tick이 안 불려도 재개 첫 timeupdate가 대기 시간을 더하지 않는다
+    video.addEventListener('waiting', () => {
+      if (state.video === video) state.lastCountAt = null;
+    });
+
     video.addEventListener('ended', () => {
       if (state.closed || state.video !== video) return;
       const ad = Boolean(document.querySelector(REDO_SEL.adShowing));
@@ -568,7 +573,8 @@ function redoPanelInit() {
       acc: state.accSec,
       last: state.lastCountAt,
       now: Date.now(),
-      counting: !ad && !state.video.paused && !state.video.ended,
+      // 버퍼링 중에는 paused가 false여도 위치가 멈춘다. HAVE_FUTURE_DATA(3) 미만이면 세지 않는다(PR #25 P2)
+      counting: !ad && !state.video.paused && !state.video.ended && state.video.readyState >= 3,
     });
     state.accSec = counted.acc;
     state.lastCountAt = counted.last;
@@ -800,15 +806,22 @@ function redoPanelInit() {
     state.openUrl = openUrl || null;
   }
 
-  /** 저장된 구간·배속을 패널에 채운다. 사용자가 이미 구간을 지정했으면 건드리지 않는다. */
+  /**
+   * 저장된 구간·배속을 패널에 채운다. 사용자가 이미 구간을 지정했으면 건드리지 않는다.
+   * 구간이 없어도 저장 배속은 pendingRate로 보존한다 — 안 그러면 다음 저장이 지금 배속으로 덮는다(PR #25 P2).
+   */
   function loadSaved(song) {
     if (state.a != null || state.b != null) return;
-    if (song.a == null || song.b == null || !(song.a < song.b)) return;
-    state.a = song.a;
-    state.b = song.b;
-    const rate = redoClampRate(song.rate);
-    state.pendingRate = Math.abs(rate - state.rate) > 0.001 ? rate : null;
-    state.notice = `저장된 구간·배속(${rate.toFixed(2)}x)을 불러왔습니다. [반복]을 켜면 적용됩니다`;
+    const hasRange = song.a != null && song.b != null && song.a < song.b;
+    const rate = typeof song.rate === 'number' && Number.isFinite(song.rate) ? redoClampRate(song.rate) : null;
+    if (rate != null) state.pendingRate = Math.abs(rate - state.rate) > 0.001 ? rate : null;
+    if (hasRange) {
+      state.a = song.a;
+      state.b = song.b;
+      state.notice = `저장된 구간·배속(${(rate != null ? rate : state.rate).toFixed(2)}x)을 불러왔습니다. [반복]을 켜면 적용됩니다`;
+    } else if (state.pendingRate != null) {
+      state.notice = `저장된 배속(${state.pendingRate.toFixed(2)}x)을 불러왔습니다. 구간을 정하고 [반복]을 켜면 적용됩니다`;
+    }
   }
 
   function lookup() {
@@ -1007,7 +1020,15 @@ function redoPanelInit() {
       return;
     }
     if (message.type === 'REDO_AUTH_CHANGED') {
-      // 등록 상태·누적분은 계정별이다. 0으로 하고 같은 영상이라도 다시 조회한다
+      // 등록 상태·누적분·불러온 구간·반복은 계정별이다. 비우고 같은 영상이라도 다시 조회한다.
+      // 구간을 남기면 loadSaved가 새 계정 값을 건너뛰고 이전 계정 구간을 새 계정 곡에 저장한다(PR #25 P1).
+      // state.rate는 지금 영상의 실제 재생 배속이라 두고, 새 계정 저장 배속은 loadSaved의 pendingRate로 들어온다.
+      state.a = null;
+      state.b = null;
+      state.loopOn = false;
+      state.loops = 0;
+      stopRaf();
+      clearTempStatus();
       resetAccum();
       resetSongState();
       if (state.videoId && !state.closed && panelEl) lookup();

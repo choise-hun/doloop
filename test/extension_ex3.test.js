@@ -91,7 +91,8 @@ function panelEnv(href = `https://www.youtube.com/watch?v=${VID}`) {
 
   const body = make('body');
   const video = make('video');
-  Object.assign(video, { currentTime: 0, duration: 300, playbackRate: 1, seeking: false, paused: true, ended: false });
+  // readyState 4 = HAVE_ENOUGH_DATA(정상 재생). 버퍼링 재현은 테스트에서 2로 낮춘다
+  Object.assign(video, { currentTime: 0, duration: 300, playbackRate: 1, seeking: false, paused: true, ended: false, readyState: 4 });
   video.play = () => Promise.resolve();
 
   const document = {
@@ -593,4 +594,103 @@ test('EX3-우클릭 추가: 같은 영상의 REDO_TOAST 결과로 저장 줄이 
   assert.equal(env.registered(), false, '다른 영상의 결과는 무시');
   env.message({ type: 'REDO_TOAST', videoId: VID, result: { kind: 'added', openUrl: 'u', song: { id: SONG_ID, a: null, b: null, rate: 1 } } });
   assert.equal(env.registered(), true);
+});
+
+// ───────── PR #25 리뷰 회귀 (시니어 3-P) ─────────
+
+test('PR25-1(P1): 계정이 바뀌면 이전 계정의 구간·반복을 비우고 새 계정의 저장 구간·배속을 불러와 저장한다', async () => {
+  const env = await registeredEnv(); // A 계정: 10–20초·0.75x
+  env.click('loop'); // A의 0.75x 적용
+  assert.equal(env.video.playbackRate, 0.75);
+
+  env.message({ type: 'REDO_AUTH_CHANGED' });
+  await flush();
+  assert.equal(env.out('a').textContent, '--:--.-', '이전 계정 구간을 보이지 않는다');
+  env.last('LOOKUP_SONG').resolve({ state: 'exists', openUrl: 'x', song: { id: 'b-song', a: 30, b: 40, rate: 1.25 } });
+  await flush();
+  assert.equal(env.out('a').textContent, '00:30.0', 'B 계정의 저장 구간을 불러온다');
+  env.click('save');
+  const msg = env.last('SAVE_PRACTICE').msg;
+  assert.equal(msg.songId, 'b-song');
+  assert.equal(msg.a, 30);
+  assert.equal(msg.b, 40);
+  assert.equal(msg.rate, 1.25, 'A의 0.75x를 B에 저장하지 않는다');
+});
+
+test('PR25-2(P2): 구간 없이 배속만 저장된 곡은 그 배속을 보존해 저장한다', async () => {
+  const env = await registeredEnv({ id: SONG_ID, a: null, b: null, rate: 0.75 });
+  assert.equal(env.dirty(), false, '불러온 직후에는 저장 안 된 변경이 없다(배속 보존)');
+  env.play(5);
+  env.click('save');
+  assert.equal(env.last('SAVE_PRACTICE').msg.rate, 0.75, '기본 1x로 서버 0.75x를 덮지 않는다');
+  // 구간을 정하고 [반복]을 켜면 불러온 배속이 적용된다
+  env.video.currentTime = 3;
+  env.click('setA');
+  env.video.currentTime = 7;
+  env.click('setB');
+  env.last('SAVE_PRACTICE').resolve({ kind: 'saved', keep: true });
+  await flush();
+  env.click('loop');
+  assert.equal(env.video.playbackRate, 0.75);
+});
+
+test('PR25-3(P2): 다른 탭에서 같은 본문으로 동시에 저장해도 각각 보낸다(같은 탭 연타만 합친다)', async () => {
+  const { registerWithChrome } = await load('background.js');
+  let onMessage = null;
+  const origFetch = globalThis.fetch;
+  let saves = 0;
+  globalThis.fetch = async () => {
+    saves += 1;
+    await new Promise((r) => setTimeout(r, 10));
+    return jsonResponse(200, { keep: false });
+  };
+  try {
+    const session = { accessToken: 'tok', refreshToken: 'r', expiresAt: Date.now() + 3_600_000, sid: 's' };
+    registerWithChrome({
+      storage: {
+        local: { async get(k) { return k === 'redo:session' ? { [k]: session } : {}; }, async set() {}, async remove() {} },
+        onChanged: { addListener() {} },
+      },
+      runtime: { id: 'ext', onInstalled: { addListener() {} }, onMessage: { addListener: (fn) => (onMessage = fn) }, getURL: (p) => `chrome-extension://ext/${p}` },
+      contextMenus: { onClicked: { addListener() {} } },
+      tabs: { query: async () => [], sendMessage: async () => {} },
+    });
+    const ask = (m, tabId) =>
+      new Promise((resolve) => onMessage(m, { id: 'ext', url: 'https://www.youtube.com/watch', tab: { id: tabId } }, resolve));
+    await Promise.all([ask(saveMsg({ addSeconds: 60 }), 1), ask(saveMsg({ addSeconds: 60 }), 2)]);
+    assert.equal(saves, 2, '독립된 두 탭의 60초는 합치지 않는다');
+    await Promise.all([ask(saveMsg(), 1), ask(saveMsg(), 1)]);
+    assert.equal(saves, 3, '같은 탭 연타는 1회');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('PR25-4(P2): 버퍼링(readyState<3·waiting) 중에는 연습 시간을 세지 않는다', async () => {
+  const env = await registeredEnv();
+  env.play(5);
+  // 재생 중 버퍼링: paused=false 그대로, readyState 2, 위치 고정. 반복 rAF처럼 tick이 계속 불린다
+  env.video.readyState = 2;
+  env.fireVideo('waiting');
+  for (let i = 0; i < 60; i += 1) {
+    env.advance(1000);
+    env.fireVideo('timeupdate');
+  }
+  // 재생 재개: 첫 관측은 기준점이라 대기 시간이 2초 상한으로도 들어오지 않는다
+  env.video.readyState = 4;
+  env.fireVideo('playing');
+  env.play(3);
+  env.click('save');
+  assert.equal(env.last('SAVE_PRACTICE').msg.addSeconds, 8, '버퍼링 60초는 빠진다');
+
+  // 반복 없이(rAF 없이) 버퍼링: waiting 뒤 재개 첫 timeupdate가 대기 시간을 더하지 않는다
+  const quiet = await registeredEnv();
+  quiet.play(4);
+  quiet.video.readyState = 2;
+  quiet.fireVideo('waiting');
+  quiet.advance(30_000);
+  quiet.video.readyState = 4;
+  quiet.play(2);
+  quiet.click('save');
+  assert.equal(quiet.last('SAVE_PRACTICE').msg.addSeconds, 6);
 });

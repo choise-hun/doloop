@@ -154,7 +154,7 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
     return { res, body, apiBase };
   }
 
-  /** 같은 연습 저장 연타: 같은 곡·같은 본문이면 진행 중인 요청을 함께 쓴다 */
+  /** 같은 연습 저장 연타: 같은 탭·같은 본문이면 진행 중인 요청을 함께 쓴다 */
   const saving = new Map();
 
   async function runAddSong(videoId, extra) {
@@ -215,11 +215,14 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
     return { kind: 'error', status: res.status, message: errorMessage(resBody) || SAVE_MSG.failed };
   }
 
-  /** 연습 저장(EX-2 명세 §9 SAVE_PRACTICE). 결과 kind: saved | login | network | switched | gone | error */
-  function savePractice(msg) {
+  /**
+   * 연습 저장(EX-2 명세 §9 SAVE_PRACTICE). 결과 kind: saved | login | network | switched | gone | error
+   * tabId: 보낸 탭. 같은 탭의 같은 본문 연타만 합친다 — 다른 탭의 누적분은 독립이라 합치면 한쪽이 유실된다(PR #25 P2).
+   */
+  function savePractice(msg, tabId = null) {
     const body = practiceSaveBody(msg);
     if (!body) return Promise.resolve({ kind: 'error', message: SAVE_MSG.failed });
-    const key = JSON.stringify(body);
+    const key = JSON.stringify([tabId, body]);
     const pending = saving.get(key);
     if (pending) return pending;
     const run = runSavePractice(body)
@@ -363,7 +366,7 @@ export function registerWithChrome(chromeApi) {
     if (message.type === 'ADD_SONG') {
       work = api.addSong(message.videoId, { rate: message.rate, a: message.a, b: message.b });
     } else if (message.type === 'LOOKUP_SONG') work = api.lookupSong(message.videoId);
-    else if (message.type === 'SAVE_PRACTICE') work = api.savePractice(message);
+    else if (message.type === 'SAVE_PRACTICE') work = api.savePractice(message, sender.tab ? sender.tab.id : null);
     else if (message.type === 'GET_SETTINGS') work = getSettings().then((s) => ({ menuItem: s.menuItem }));
     else if (message.type === 'OPEN_OPTIONS') work = chromeApi.runtime.openOptionsPage().then(() => ({ ok: true }));
     else if (message.type === 'CHECK_CONNECTION' && fromExtensionPage) work = api.checkConnection();
