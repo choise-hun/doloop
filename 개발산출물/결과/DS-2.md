@@ -1,7 +1,7 @@
 # DS-2 결과 — 홈 적용(프레임 바, 잉크 배너, 스트릭·구간 배지 주황, 카드 제목, 상단 메뉴 로고)
 
 > 작업: DS-2 (2단계 구현·3단계 시니어 검증·4단계 최종 마무리) | 브랜치: `step/DS-2` | PR: [#21](https://github.com/choise-hun/doloop/pull/21) | 기준 명세: [DS-2_구현명세.md](../명세/DS-2_구현명세.md)
-> 상태: 시니어 3단계 수정 반영 및 4단계 전체 회귀 통과(§3·§6-5) — 커밋·push·최신 head CI 확인 진행
+> 상태: 시니어 3단계 수정 반영 및 4단계 전체 회귀·PR #21 최신 head CI 통과 완료(§6-5·§7) — 사용자 머지 대기 (코드·검증 기준 head `31e78ed`)
 
 ## 1. 바꾼 파일 목록
 
@@ -217,7 +217,7 @@ PR head = 로컬 `step/DS-2` = `49d9592` 일치, 시작 시 `git status` 깨끗�
 | `npx playwright test test/e2e/layout/` (전 화면 layout) | 미실행 | **480 passed (5.7m)** (실패 0) |
 | `npm run test:e2e` (E2E 전체) | 미실행 | **797 passed (10.7m)** (실패 0) |
 
-**미실행(남은 확인):** 최신 head CI(`push` 후 `gh pr checks 21 --watch` 및 리뷰 코멘트 확인 예정). 운영 배포·실계정 확인은 그대로 미실행이다.
+**미실행(남은 확인):** 운영 배포·실계정 확인은 그대로 미실행이다. (PR #21 최신 head CI 및 리뷰 확인 결과는 §7에 기록)
 
 ### 6-6. 미커밋 변경 (주니어 4단계 인계)
 
@@ -230,3 +230,13 @@ PR head = 로컬 `step/DS-2` = `49d9592` 일치, 시작 시 `git status` 깨끗�
 충돌 파일 없음. 명세와 달라진 점: §4 F4에 미디어 블록 2개, §6에 `DS2-N3`이 더해졌다(명세 §7 "390폭 두 줄이면 멈추고 보고"의 같은 문제를 다른 폭에서 고친 것이다). §5의 "모든 폭에서 한 줄"은 비로그인 821~840px·308px 미만에서 아직 참이 아니다.
 
 DS-3 입력 추가: ④ 비로그인 821~840px 상단 메뉴 두 줄(DS-2 이전부터 있던 문제, 간격으로는 해결 불가) ⑤ `navRow`처럼 `@폭`이 없는 `center-y` 그룹은 쌓이면 검사기가 조용히 건너뛴다 — 한 줄이어야 하는 줄은 전용 단언이 필요하다.
+
+## 7. PR · CI · 리뷰 확인 (4단계 최종 마무리)
+
+- **PR:** [#21](https://github.com/choise-hun/doloop/pull/21) (`step/DS-2` → `main`)
+- **최신 코드 head `31e78ed` (`802030a` 포함) CI 결과:** [Run #43560131650](https://github.com/choise-hun/doloop/actions/runs/43560131650) — 5/5 실행 성공, 1건 건너뜀 (`Detect code changes` 6s, `Test (Node 22)` 26s, `Docker build & smoke test` 1m41s, `E2E XSS & CSP (Playwright, spa)` 12m6s, `CI ok` 3s; `Kotlin test (JDK 21)`은 서버·빌드 설정 무변경으로 `SKIPPED`). (직전 2단계 head `49d9592` CI도 5/5 성공, 1 SKIPPED)
+- **리뷰 코멘트 확인:**
+  - `chatgpt-codex-connector` (`8878526` 기준): `has_any_findings: false`, `has_unresolved_findings: false`, `status: completed` ([코멘트](https://github.com/choise-hun/doloop/pull/21#issuecomment-6871566672)). `31e78ed` 시점 추가 코멘트 없음.
+  - PR 인라인 코멘트(`pulls/21/comments`) 0건, GitHub PR 리뷰(`reviews`) 0건.
+  - 시니어 3단계 독립 검증 결과는 §6에 기록·반영 완료.
+- **다음 담당:** 사용자 PR #21 머지 → DS-3 범위 결정(BR-2는 별도 진행 가능).
