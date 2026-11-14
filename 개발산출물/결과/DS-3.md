@@ -140,3 +140,64 @@ D2·D3 줄 번호와 46·23곳 개수는 명세와 같았다(스크립트가 줄
   - `chatgpt-codex-connector[bot]` (`d26161e` 기준): `has_any_findings: false`, `has_unresolved_findings: false`, `status: completed` ([코멘트](https://github.com/choise-hun/doloop/pull/22#issuecomment-6874831212)) — 지적 0건, 처리 불필요.
   - PR 인라인 코멘트(`pulls/22/comments`) 0건, GitHub PR 리뷰(`reviews`) 0건.
 - **다음:** 시니어 3단계 검증(결과 §2 명세와 달라진 점 3건·§5 768/1150px 스크린샷 검토) 및 사용자 PR #22 머지.
+
+## 9. 시니어 3단계 독립 검증 (2026-11-14, Claude — 대상 head `2688bcb`, 코드 head `d26161e`)
+
+PR #22 head와 `origin/step/DS-3`(`2688bcb`)가 같은 것을 확인하고 별도 worktree에서 검증했다. **결함 0건 — 코드 수정 없음.** 이 절과 진행 파일 상태 줄만 고쳤다(미커밋, 주니어 4단계가 커밋·push).
+
+### 9-1. 명세 대조
+
+| 항목 | 판정 | 근거 |
+| --- | --- | --- |
+| D2·D3 값 교체 | 일치 | `git diff origin/main...HEAD`의 `font-size` 줄이 D2 7곳·D3 올림 46곳뿐이고 "유지" 23곳·굵기·패딩 무변경. `DR-6` 통과가 개수(23)를 교차 확인 |
+| D4 `--panel-bg` | 일치 | `--surface2` 5곳·삭제 3곳·`.thumbPlaceholder` `--ink` |
+| D5·D6 메뉴 | 일치 | 홈 글자 `span.brandText` 감쌈, 821~880px 숨김, 820px 이하 `inline-flex`·`min-height: 44px` |
+| §2-1 `font:` 축약 풀기(`ProfilePage.module.css:69`) | **승인** | 명세 P1의 조사 누락(시니어 몫)이다. D7이 축약 크기를 금지하므로 푸는 것이 맞고, 축약이 초기화하던 굵기·글꼴 모양·줄 높이를 명시해 보이는 값이 같다. `letter-spacing`·`color`는 축약과 무관 |
+| §2-2 D6 규칙을 820px 블록 맨 앞에 | **승인** | `.navItem`·`.navMainItem`은 같은 우선순위(클래스 1개)라 뒤에 오는 선언이 이긴다. 기능 메뉴는 `navItem navMainItem`을 함께 가지므로 D6을 뒤에 두면 `display: none`이 덮인다. 명세 D6은 "블록 안"만 정했고 순서는 정하지 않아 명세 위반이 아니다 |
+| §2-3 `scrollWidth - clientWidth <= 0` | 명세와 같음 | 차이 아님 |
+| 규칙 문서·보관본 | 일치 | `bash scripts/check-config-sync.sh` → `차이 0건` |
+
+### 9-2. 단언이 가드 누락을 잡는지 (시니어 직접 변이, 하나씩 넣고 `git checkout`으로 원복)
+
+주니어 V5(4종)에 겹치지 않는 변이를 골랐다.
+
+| 변이 | 결과 |
+| --- | --- |
+| `PracticeSessionCard.module.css:151` `--surface2` → `--panel-bg` | `DR-7` 실패: `PracticeSessionCard.module.css → --panel-bg` |
+| `EpisodeLogCard.module.css:20` 유지 항목 `10px` → `12px` | `DR-6` 실패: `실제 0개, 표는 1`(허용 표 감소 방향) |
+| `ProfilePage.module.css:69`를 `font: 12px var(--font-mono)`로 되돌림 | `DR-6` 실패: `font: 12px var(--font-mono)` |
+| `EpisodeShareDialog.module.css:263` `8px` → `0.5rem` | `DR-6` 실패: `font-size: 0.5rem`(단계 밖) |
+| `EpisodeLogCard.module.css:194` `.coverageBarWrap` `--surface2` → `--panel-bg` 후 빌드 | `DS3-P1` 실패: `Expected rgb(225, 224, 214)` / `Received rgba(0, 0, 0, 0)`. 원복·재빌드 뒤 `1 passed` |
+
+정적 추적: `DS3-N1`의 줄바꿈은 `.navMain`(`min-width: 0`, `flex-wrap`)이 `.navLinks`보다 먼저 꺾일 수 있어 SETTING `top` 단언만으로는 놓칠 수 있으나, 같은 테스트의 메뉴 높이 < 64px 단언(두 줄이면 약 88px)이 잡는다. 주니어 V5 ③(`.brandText` 블록 삭제 → `DS3-N1 guest 821·830·840` 실패)이 실제 증거다. `DS3-N3`은 1280px에서 높이 < 44를 단언해 D6이 넓은 폭으로 번지는 것을 잡는다.
+
+### 9-3. 실행 결과 (Mac 로컬, worktree `../doloop-ds3`, head `2688bcb`)
+
+| 명령 | 결과 |
+| --- | --- |
+| `node --test test/design_rules.test.js` | `tests 7 · pass 7 · fail 0` |
+| `npm test` | `tests 442 · pass 442 · fail 0` (빌드 전 첫 실행은 441 — `dist` 유무에 따른 테스트 개수 차이이며 빌드 뒤 442로 같다. main은 440 + `DR-6`·`DR-7`) |
+| `npm run build` | `✓ built`, 오류 0 |
+| `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/` | `519 passed (6.5m)`, 스크린샷 319장 |
+
+미실행: `npm run test:e2e` 전체(주니어 4단계 836 passed 기록을 따르고 코드 무수정이라 다시 돌리지 않음), Firefox·Safari, 실제 기기·운영.
+
+### 9-4. 스크린샷 검토 (§5에서 열어 보지 않은 768·1150px)
+
+직접 연 장: `community-logs-communityPro-768`, `home-userData-1150`, `practice-userData-768`(연습 기록 카드 구간 2장으로 잘라 봄), `share-dialog-compose-compose-768`, `settings-userPro-1150`, `progressions-userData-768`, `community-guest-guest-1150`.
+
+| 질문 | 768 | 1150 | 메모 |
+| --- | --- | --- | --- |
+| Q3 위계 | 통과 | 통과 | 12px 배지·메타(`PRO`·`레퍼런스`·공유 상태 문구·`진행 5개`·`C Major`)가 카드 제목보다 작게 읽힌다 |
+| Q4 두 줄 배지 | 통과 | 통과 | 배지·`파트 N개 보기`·`좋아요`·`신고` 한 줄 |
+| Q6 카드 배지 줄 | 통과 | — | 연습 기록 카드의 진행 막대 바탕이 보인다(`--surface2`) |
+| 메뉴 | 통과 | 통과 | 768px 홈·SETTING·계정 한 줄, 1150px 기능 메뉴 한 줄 |
+| G3 잘림 | 없음 | 없음 | 자동 검사와 같다 |
+
+관찰(DS-3 회귀 아님, 고치지 않음): ① 커뮤니티 카드 `NO VIDEO` 글자 위에 재생 배지(▶)가 겹친다. `.playBadge`는 20×20 고정 박스·절대 위치라 글자를 10→12px로 올려도 박스 위치·크기가 같고, `NO VIDEO`(10px)는 유지 항목이다 — DS-3 전부터 같은 배치. ② `progressions-userData-768`처럼 고정 하단 탭 바가 전체 페이지 캡처 중간에 찍히는 것은 `fullPage` 캡처 방식 때문이다.
+
+### 9-5. 주니어 4단계 인계
+
+- 미커밋 변경: `개발산출물/결과/DS-3.md`(이 절), `개발산출물/진행_디자인D.md`(DS-3 상태 줄·다음 할 일). 코드 변경 없음.
+- 할 일: 두 파일 커밋(`docs(design): record DS-3 senior review`) → `step/DS-3` push → PR #22 최신 head CI 종료 확인(`gh pr checks 22 --watch`) → 새 리뷰 코멘트 확인 → 결과 §9 끝과 진행 파일에 최신 head·CI run 기록.
+- 다시 돌릴 테스트: 문서 전용 변경이라 `npm test`만(CI가 전체를 다시 돈다).
