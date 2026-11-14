@@ -169,5 +169,14 @@ test('BR1-7: drive.ts가 REDO 녹음을 먼저 조회하고 LEGACY를 뒤에 조
     newLookupIdx < legacyLookupIdx,
     'DRIVE_FOLDER_NAME 조회가 LEGACY_DRIVE_FOLDER_NAME 조회보다 앞에 와야 함'
   );
+  // 새 폴더 생성(POST)은 옛 이름 조회 뒤에 오고, 이름은 새 이름이어야 한다(D7).
+  const uploadIdx = body.indexOf('function uploadBlob');
+  const ensureBody = uploadIdx === -1 ? body : body.slice(0, uploadIdx);
+  const createIdx = ensureBody.indexOf("method: 'POST'");
+  assert.ok(createIdx > legacyLookupIdx, 'ensureFolder의 폴더 생성(POST)이 옛 이름 조회 뒤에 있어야 함');
+  const createBlock = ensureBody.slice(createIdx);
+  assert.ok(/name:\s*DRIVE_FOLDER_NAME\b/.test(createBlock), '폴더 생성 이름은 DRIVE_FOLDER_NAME이어야 함');
+  const legacyUses = src.match(/\bLEGACY_DRIVE_FOLDER_NAME\b/g) || [];
+  assert.equal(legacyUses.length, 2, `LEGACY_DRIVE_FOLDER_NAME은 선언 1회·조회 1회만 써야 함(실제 ${legacyUses.length}회)`);
   assert.ok(!/method\s*:\s*['"]PATCH['"]/i.test(src), "method: 'PATCH' 금지");
 });
