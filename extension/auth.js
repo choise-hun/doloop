@@ -16,7 +16,7 @@ export const FETCH_TIMEOUT_MS = 10_000;
 export const REFRESH_MARGIN_MS = 60_000;
 
 export class AuthError extends Error {
-  /** @param {'network'|'rejected'|'cancelled'} kind */
+  /** @param {'network'|'rejected'|'cancelled'} kind cancelled: 로그인 창을 닫았거나, 요청 도중 계정이 바뀌었다 */
   constructor(kind, message) {
     super(message);
     this.name = 'AuthError';
@@ -24,14 +24,36 @@ export class AuthError extends Error {
   }
 }
 
-/** 시간 제한이 있는 fetch. 시간 초과·연결 실패는 그대로 던진다(호출 쪽에서 network로 분류). */
-export async function fetchWithTimeout(fetchImpl, url, init = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+/**
+ * 시간 제한이 있는 fetch. 시간 초과·연결 실패는 그대로 던진다(호출 쪽에서 network로 분류).
+ * readBody를 주면 본문 읽기까지 같은 제한 시간 안에 끝내고 { res, body }를 돌려준다.
+ * (헤더만 먼저 오고 본문이 멈추면 res.json()이 제한 없이 기다리기 때문이다)
+ */
+export async function fetchWithTimeout(fetchImpl, url, init = {}, timeoutMs = FETCH_TIMEOUT_MS, readBody) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('timeout'));
+    }, timeoutMs);
+  });
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    const res = await Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), timeout]);
+    if (!readBody) return res;
+    const body = await Promise.race([readBody(res), timeout]);
+    return { res, body };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** 본문을 JSON으로 읽는다. 본문이 없거나 JSON이 아니면 null. */
+export async function readJsonOrNull(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
   }
 }
 
@@ -87,6 +109,8 @@ function sessionFromTokenResponse(body, nowMs) {
       : nowMs + (typeof body.expires_in === 'number' ? body.expires_in : 3600) * 1000;
   return {
     accessToken: body.access_token,
+    // 로그인 한 번을 가리키는 값. 갱신해도 유지하고, 다시 로그인하면 바뀐다(계정 변경 판별용).
+    sid: '',
     refreshToken: body.refresh_token,
     expiresAt,
     email: (body.user && typeof body.user.email === 'string' && body.user.email) || '',
@@ -100,8 +124,11 @@ function sessionFromTokenResponse(body, nowMs) {
  * @param {{getRedirectURL: Function, launchWebAuthFlow: Function}} [deps.identity] chrome.identity (로그인할 때만 필요)
  * @param {() => number} [deps.now]
  */
-export function createAuth({ storage, fetchImpl, identity, now = () => Date.now() }) {
-  /** 진행 중인 갱신. 동시 요청이 겹쳐도 갱신은 한 번만 한다(갱신 토큰은 1회용). */
+export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(), timeoutMs = FETCH_TIMEOUT_MS }) {
+  /**
+   * 진행 중인 갱신 { refreshToken, promise }. 같은 세션의 동시 요청은 갱신을 한 번만 한다(갱신 토큰은 1회용).
+   * 그 사이 다른 세션으로 바뀌었으면 새 세션의 요청은 여기에 묶이지 않는다.
+   */
   let refreshing = null;
 
   const tokenHeaders = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
@@ -118,22 +145,19 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
 
   async function requestToken(grantType, body) {
     let res;
+    let json;
     try {
-      res = await fetchWithTimeout(fetchImpl, `${SUPABASE_URL}/auth/v1/token?grant_type=${grantType}`, {
-        method: 'POST',
-        headers: tokenHeaders,
-        body: JSON.stringify(body),
-      });
+      ({ res, body: json } = await fetchWithTimeout(
+        fetchImpl,
+        `${SUPABASE_URL}/auth/v1/token?grant_type=${grantType}`,
+        { method: 'POST', headers: tokenHeaders, body: JSON.stringify(body) },
+        timeoutMs,
+        readJsonOrNull
+      ));
     } catch {
       throw new AuthError('network', '인증 서버에 연결하지 못했습니다');
     }
     if (res.status >= 500) throw new AuthError('network', '인증 서버에 연결하지 못했습니다');
-    let json = null;
-    try {
-      json = await res.json();
-    } catch {
-      /* 본문 없음 */
-    }
     if (!res.ok) {
       const detail = json && (json.error_description || json.msg || json.error);
       throw new AuthError('rejected', detail ? String(detail) : '인증 서버가 요청을 거부했습니다');
@@ -142,6 +166,8 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
     if (!session) throw new AuthError('rejected', '인증 응답에 토큰이 없습니다');
     return session;
   }
+
+  const switched = () => new AuthError('cancelled', '요청 도중 계정이 바뀌었습니다');
 
   async function runRefresh(used) {
     let next;
@@ -152,15 +178,20 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
       // 연결 실패·시간 초과·5xx는 잠깐의 장애일 수 있어 세션을 남기고 호출 쪽에 알린다.
       if (err instanceof AuthError && err.kind === 'rejected') {
         const current = await getSession();
-        if (current && current.refreshToken === used.refreshToken) await clearSession();
+        if (!current) return null;
+        if (current.refreshToken !== used.refreshToken) throw switched();
+        await clearSession();
         return null;
       }
       throw err;
     }
-    // 갱신하는 사이 로그아웃했거나 다른 계정으로 다시 로그인했으면 결과를 버린다.
+    // 갱신하는 사이 로그아웃했으면 로그인 필요, 다른 세션으로 다시 로그인했으면 요청을 취소한다.
+    // 새 세션의 토큰을 돌려주면 이전 계정에서 시작한 요청이 새 계정 인증으로 나간다.
     const current = await getSession();
-    if (!current || current.refreshToken !== used.refreshToken) return current ? current.accessToken : null;
+    if (!current) return null;
+    if (current.refreshToken !== used.refreshToken) throw switched();
     if (!next.email) next.email = used.email || '';
+    next.sid = used.sid || '';
     await storage.set({ [SESSION_KEY]: next });
     return next.accessToken;
   }
@@ -170,16 +201,22 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
    * 만료 60초 이내면 먼저 갱신한다. 연결 실패는 AuthError('network')를 던진다.
    */
   async function getAccessToken() {
-    if (refreshing) return refreshing;
     const session = await getSession();
     if (!session) return null;
+    if (refreshing && refreshing.refreshToken === session.refreshToken) return refreshing.promise;
     if (session.expiresAt - now() > REFRESH_MARGIN_MS) return session.accessToken;
-    if (!refreshing) {
-      refreshing = runRefresh(session).finally(() => {
-        refreshing = null;
-      });
-    }
-    return refreshing;
+    const entry = { refreshToken: session.refreshToken, promise: null };
+    entry.promise = runRefresh(session).finally(() => {
+      if (refreshing === entry) refreshing = null;
+    });
+    refreshing = entry;
+    return entry.promise;
+  }
+
+  /** 요청에 쓴 액세스 토큰이 지금 세션의 것일 때만 지운다(늦게 온 401이 새 로그인 세션을 지우지 않게). */
+  async function clearSessionIfToken(usedAccessToken) {
+    const current = await getSession();
+    if (current && current.accessToken === usedAccessToken) await clearSession();
   }
 
   /** Google 로그인. 옵션 화면에서 호출한다(사용자 동작 필요). 성공하면 세션을 돌려준다. */
@@ -200,6 +237,7 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
     const { code, error } = parseAuthRedirect(responseUrl || '');
     if (!code) throw new AuthError('rejected', error || '로그인을 마치지 못했습니다');
     const session = await requestToken('pkce', { auth_code: code, code_verifier: verifier });
+    session.sid = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12)));
     await storage.set({ [SESSION_KEY]: session });
     return session;
   }
@@ -210,14 +248,16 @@ export function createAuth({ storage, fetchImpl, identity, now = () => Date.now(
     await clearSession();
     if (!session) return;
     try {
-      await fetchWithTimeout(fetchImpl, `${SUPABASE_URL}/auth/v1/logout?scope=local`, {
-        method: 'POST',
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.accessToken}` },
-      });
+      await fetchWithTimeout(
+        fetchImpl,
+        `${SUPABASE_URL}/auth/v1/logout?scope=local`,
+        { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.accessToken}` } },
+        timeoutMs
+      );
     } catch {
       /* 이미 지웠다 */
     }
   }
 
-  return { getSession, getAccessToken, clearSession, signIn, signOut };
+  return { getSession, getAccessToken, clearSession, clearSessionIfToken, signIn, signOut };
 }

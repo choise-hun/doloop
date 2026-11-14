@@ -167,7 +167,7 @@ function apiHarness(background, { token = 'tok', respond }) {
   let cleared = 0;
   const auth = {
     getAccessToken: async () => (typeof token === 'function' ? token() : token),
-    clearSession: async () => {
+    clearSessionIfToken: async () => {
       cleared += 1;
     },
   };
@@ -286,4 +286,271 @@ test('EX-1: 매니페스트 — 권한·대상·파일이 명세 §4와 같고 �
   const hex = require('node:crypto').createHash('sha256').update(der).digest('hex').slice(0, 32);
   const id = [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
   assert.equal(id, 'pamcfmpmaoehcmddfieihilojkfjfpld');
+});
+
+// ───────── PR #23 리뷰 결함 회귀 (3-P) ─────────
+
+const sessionB = () => ({
+  accessToken: 'access-B',
+  refreshToken: 'refresh-B',
+  expiresAt: NOW + 3_600_000,
+  email: 'b@example.com',
+  sid: 'sid-B',
+});
+
+test('PR23-1: 갱신 중 로그아웃 후 B로 다시 로그인하면 A에서 시작한 요청은 B 토큰으로 보내지 않는다', async () => {
+  const { createAuth, AuthError } = await load('auth.js');
+  const background = await load('background.js');
+  const storage = memoryStorage({ [SESSION_KEY]: session({ expiresAt: NOW - 1, sid: 'sid-A' }) });
+  const apiCalls = [];
+  let releaseRefresh;
+  const fetchImpl = async (url, init) => {
+    if (url.includes('/auth/v1/token')) {
+      await new Promise((r) => (releaseRefresh = r));
+      return jsonResponse(200, { access_token: 'access-A2', refresh_token: 'refresh-A2', expires_in: 3600 });
+    }
+    apiCalls.push({ url, auth: init.headers.Authorization });
+    return jsonResponse(201, { song: {} });
+  };
+  const auth = createAuth({ storage, fetchImpl, now: () => NOW });
+  const api = background.createApi({ auth, fetchImpl, getSettings: async () => background.normalizeSettings({}) });
+
+  const pending = api.addSong('dQw4w9WgXcQ');
+  await new Promise((r) => setTimeout(r, 5));
+  // 옵션 화면: A 로그아웃 → B 로그인
+  await storage.remove(SESSION_KEY);
+  await storage.set({ [SESSION_KEY]: sessionB() });
+  // B가 새로 시작한 요청은 A의 갱신에 묶이지 않고 B 토큰을 받는다
+  assert.equal(await auth.getAccessToken(), 'access-B');
+  releaseRefresh();
+  const result = await pending;
+  assert.equal(apiCalls.length, 0, 'A에서 시작한 곡 추가는 보내지 않는다');
+  assert.equal(result.kind, 'error');
+  assert.equal(storage.data[SESSION_KEY].accessToken, 'access-B', 'B 세션 유지');
+
+  // auth 단위: 갱신 결과는 취소(cancelled)로 끝난다
+  const s2 = memoryStorage({ [SESSION_KEY]: session({ expiresAt: NOW - 1, sid: 'sid-A' }) });
+  const auth2 = createAuth({
+    storage: s2,
+    fetchImpl: async () => {
+      await s2.set({ [SESSION_KEY]: sessionB() });
+      return jsonResponse(200, { access_token: 'access-A2', refresh_token: 'refresh-A2', expires_in: 3600 });
+    },
+    now: () => NOW,
+  });
+  await assert.rejects(auth2.getAccessToken(), (err) => err instanceof AuthError && err.kind === 'cancelled');
+});
+
+test('PR23-2: 늦게 온 401은 요청에 쓴 세션일 때만 지운다', async () => {
+  const { createAuth } = await load('auth.js');
+  const background = await load('background.js');
+  const make = (swap) => {
+    const storage = memoryStorage({ [SESSION_KEY]: session({ sid: 'sid-A' }) });
+    const fetchImpl = async () => {
+      if (swap) {
+        await storage.remove(SESSION_KEY);
+        await storage.set({ [SESSION_KEY]: sessionB() });
+      }
+      return jsonResponse(401, { message: 'expired' });
+    };
+    const auth = createAuth({ storage, fetchImpl, now: () => NOW });
+    const api = background.createApi({ auth, fetchImpl, getSettings: async () => background.normalizeSettings({}) });
+    return { storage, api };
+  };
+  const swapped = make(true);
+  assert.equal((await swapped.api.lookupSong('dQw4w9WgXcQ')).state, 'login');
+  assert.equal(swapped.storage.data[SESSION_KEY].accessToken, 'access-B', '새 세션은 지우지 않는다');
+
+  const same = make(false);
+  assert.equal((await same.api.addSong('dQw4w9WgXcQ')).kind, 'login');
+  assert.equal(SESSION_KEY in same.storage.data, false, '요청에 쓴 세션이면 지운다');
+});
+
+test('PR23-4: 응답 본문을 읽는 동안에도 제한 시간이 적용된다', async () => {
+  const { createAuth, fetchWithTimeout, AuthError } = await load('auth.js');
+  const background = await load('background.js');
+  const hang = () => new Promise(() => {});
+  const stalled = async () => ({ status: 200, ok: true, json: hang });
+
+  await assert.rejects(fetchWithTimeout(stalled, 'https://x', {}, 30, (res) => res.json()));
+
+  const storage = memoryStorage({ [SESSION_KEY]: session({ expiresAt: NOW - 1 }) });
+  const auth = createAuth({ storage, fetchImpl: stalled, now: () => NOW, timeoutMs: 30 });
+  await assert.rejects(auth.getAccessToken(), (err) => err instanceof AuthError && err.kind === 'network');
+  assert.equal(storage.data[SESSION_KEY].refreshToken, 'refresh-old', '시간 초과는 장애로 보고 세션 유지');
+
+  const fresh = memoryStorage({ [SESSION_KEY]: session() });
+  const api = background.createApi({
+    auth: createAuth({ storage: fresh, fetchImpl: stalled, now: () => NOW }),
+    fetchImpl: stalled,
+    getSettings: async () => background.normalizeSettings({}),
+    timeoutMs: 30,
+  });
+  assert.equal((await api.lookupSong('dQw4w9WgXcQ')).state, 'unknown');
+  const stalledError = async () => ({ status: 403, ok: false, json: hang });
+  const api2 = background.createApi({
+    auth: createAuth({ storage: fresh, fetchImpl: stalledError, now: () => NOW }),
+    fetchImpl: stalledError,
+    getSettings: async () => background.normalizeSettings({}),
+    timeoutMs: 30,
+  });
+  assert.equal((await api2.addSong('dQw4w9WgXcQ')).kind, 'network');
+});
+
+// content.js를 돌릴 최소 DOM. 재생 화면 버튼에 필요한 만큼만 흉내 낸다.
+function fakeDom(href) {
+  const make = (tag) => {
+    const el = {
+      tagName: tag,
+      children: [],
+      parent: null,
+      dataset: {},
+      style: {},
+      listeners: {},
+      className: '',
+      textContent: '',
+      title: '',
+      disabled: false,
+      classList: { add: (c) => (el.className = `${el.className} ${c}`.trim()) },
+      setAttribute() {},
+      getAttribute: () => null,
+      append(...kids) {
+        for (const k of kids) el.appendChild(k);
+      },
+      appendChild(k) {
+        k.parent = el;
+        el.children.push(k);
+        return k;
+      },
+      remove() {
+        if (el.parent) el.parent.children = el.parent.children.filter((c) => c !== el);
+        el.parent = null;
+      },
+      addEventListener(type, fn) {
+        (el.listeners[type] ||= []).push(fn);
+      },
+      querySelector(sel) {
+        const cls = sel.replace(/^\./, '');
+        for (const c of el.children) {
+          if (c.className.split(' ').includes(cls)) return c;
+          const deep = c.querySelector(sel);
+          if (deep) return deep;
+        }
+        return null;
+      },
+    };
+    return el;
+  };
+  const body = make('body');
+  const docListeners = {};
+  const document = {
+    body,
+    createElement: make,
+    createElementNS: (_ns, tag) => make(tag),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (type, fn) => ((docListeners[type] ||= []).push(fn)),
+  };
+  const watchBtn = () => body.children.find((c) => c.className === 'redo-watch-btn') || null;
+  return { document, body, watchBtn, location: { href, origin: 'https://www.youtube.com' } };
+}
+
+test('PR23-3: 계정이 바뀌면 같은 영상의 재생 화면 버튼 상태를 다시 조회한다', async () => {
+  const dom = fakeDom('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  const sent = [];
+  const lookups = [];
+  let onMessage = null;
+  const opened = [];
+  const chrome = {
+    runtime: {
+      id: 'ext',
+      sendMessage: (m) => {
+        sent.push(m);
+        if (m.type === 'LOOKUP_SONG') return new Promise((r) => lookups.push(r));
+        if (m.type === 'GET_SETTINGS') return Promise.resolve({ menuItem: true });
+        if (m.type === 'ADD_SONG') return Promise.resolve({ kind: 'added', message: 'ok', action: 'open', openUrl: 'u' });
+        return Promise.resolve(null);
+      },
+      onMessage: { addListener: (fn) => (onMessage = fn) },
+    },
+  };
+  const window = { open: (...a) => opened.push(a), addEventListener() {} };
+  const ctx = vm.createContext({
+    URL,
+    document: dom.document,
+    location: dom.location,
+    chrome,
+    window,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame: (fn) => setTimeout(fn, 0),
+  });
+  vm.runInContext(fs.readFileSync(path.join(EXT, 'content.js'), 'utf8'), ctx);
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const label = () => dom.watchBtn().querySelector('.redo-watch-btn__label').textContent;
+
+  await tick();
+  assert.equal(lookups.length, 1);
+  lookups[0]({ state: 'exists', openUrl: 'https://x/practice.html?v=dQw4w9WgXcQ' });
+  await tick();
+  assert.equal(label(), 'RE:DO에 있음', 'A에게 있는 곡');
+
+  // A 계정 조회가 하나 더 진행 중인 채로 계정이 바뀐다(늦게 온 A 응답은 버려야 한다)
+  onMessage({ type: 'REDO_AUTH_CHANGED' });
+  await tick();
+  assert.equal(lookups.length, 2, '계정이 바뀌면 같은 영상이라도 다시 조회');
+  assert.equal(label(), 'RE:DO에 추가', '조회 전까지 이전 계정 상태를 보이지 않는다');
+  onMessage({ type: 'REDO_AUTH_CHANGED' });
+  await tick();
+  assert.equal(lookups.length, 3);
+  lookups[2]({ state: 'none' });
+  lookups[1]({ state: 'exists', openUrl: 'stale' });
+  await tick();
+  assert.equal(label(), 'RE:DO에 추가', '이전 조회의 늦은 응답은 버린다');
+
+  dom.watchBtn().listeners.click[0]();
+  await tick();
+  assert.equal(opened.length, 0, '열기 대신 곡 추가');
+  assert.ok(sent.some((m) => m.type === 'ADD_SONG' && m.videoId === 'dQw4w9WgXcQ'));
+});
+
+test('PR23-3: 서비스 워커는 계정이 바뀔 때만(갱신 제외) 유튜브 탭에 알린다', async () => {
+  const background = await load('background.js');
+  const { isAccountChange, registerWithChrome } = background;
+  const A = session({ sid: 'sid-A' });
+  assert.equal(isAccountChange(A, { ...A, accessToken: 'n', refreshToken: 'n2' }), false, '갱신은 계정 변경이 아니다');
+  assert.equal(isAccountChange(A, undefined), true, '로그아웃');
+  assert.equal(isAccountChange(undefined, sessionB()), true, '로그인');
+  assert.equal(isAccountChange(A, sessionB()), true, '다른 세션으로 교체');
+  assert.equal(isAccountChange(undefined, undefined), false);
+
+  const listeners = {};
+  const sentTo = [];
+  const storage = memoryStorage();
+  const chromeApi = {
+    storage: { local: storage, onChanged: { addListener: (fn) => (listeners.changed = fn) } },
+    runtime: { id: 'ext', onInstalled: { addListener() {} }, onMessage: { addListener() {} }, getURL: (p) => `chrome-extension://ext/${p}` },
+    contextMenus: { onClicked: { addListener() {} } },
+    tabs: {
+      query: async (q) => {
+        assert.deepEqual(q, { url: 'https://www.youtube.com/*' });
+        return [{ id: 1 }, { id: 2 }];
+      },
+      sendMessage: async (id, m) => {
+        sentTo.push([id, m.type]);
+        if (id === 2) throw new Error('no receiver');
+      },
+    },
+  };
+  registerWithChrome(chromeApi);
+  listeners.changed({ [SESSION_KEY]: { oldValue: A, newValue: { ...A, accessToken: 'n' } } }, 'local');
+  listeners.changed({ 'redo:settings': { newValue: {} } }, 'local');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(sentTo.length, 0, '갱신·설정 변경은 알리지 않는다');
+  listeners.changed({ [SESSION_KEY]: { oldValue: A } }, 'local');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(sentTo, [
+    [1, 'REDO_AUTH_CHANGED'],
+    [2, 'REDO_AUTH_CHANGED'],
+  ]);
 });

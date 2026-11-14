@@ -129,3 +129,22 @@
   2. **[P2] `extension/background.js:98`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855738)): 지연된 401 응답이 현재 저장된 새 세션까지 `auth.clearSession()`으로 무조건 삭제함. **판단: 타당** (`extension/background.js:96-98`에서 요청 시점 토큰/세션 대조 후 삭제 필요).
   3. **[P2] `extension/content.js:206`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855743)): 같은 영상에서 계정 전환 시 `if (videoId === watchVideoId && watchBtn) return;` 조기 반환과 인증 변경 알림 부재로 버튼 상태(`RE:DO에 있음`)가 갱신되지 않음. **판단: 타당** (`extension/content.js:204-206`).
   4. **[P2] `extension/auth.js:34`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855747)): `fetchWithTimeout`이 `fetchImpl()` 반환 시 `finally`에서 타이머를 해제해 응답 본문(`res.json()`) 지연 시 10초 제한이 적용되지 않음. **판단: 타당** (`extension/auth.js:28-36`).
+
+## 9. PR #23 리뷰 결함 핀포인트 수정 (시니어 3-P, 2026-11-14)
+
+기준: `step/EX-1` head `ded017d`(CI 통과). 읽은 범위는 `extension/auth.js`·`extension/background.js`·`extension/content.js`의 해당 함수와 직접 호출부, `test/extension_ex1.test.js`뿐이다. **그 밖(`options.js`·`overlay.css`·서버)은 이번에 다시 보지 않았다 = 미검증.**
+
+| # | 코멘트 | 판정 | 수정 | 회귀 테스트 |
+|---|---|---|---|---|
+| 1 | [P1 auth.js:162](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855731) 갱신 중 계정 전환 시 B 토큰 반환 | 타당 | `runRefresh`: 갱신이 끝났을 때 세션이 바뀌었으면(갱신 토큰 불일치) `AuthError('cancelled')`를 던진다(거부 응답 분기도 같음). `getAccessToken`: 진행 중 갱신은 **같은 갱신 토큰의 세션일 때만** 함께 쓴다 — 전에는 B가 새로 시작한 요청도 A의 갱신에 묶였다. `background.authedFetch`는 `cancelled` → `fail: 'switched'` → 곡 추가 알림 "요청 도중 계정이 바뀌어 추가하지 않았습니다"(조회는 `unknown`, 연결 확인은 연결 실패 문구) | `PR23-1` |
+| 2 | [P2 background.js:98](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855738) 늦은 401이 새 세션 삭제 | 타당 | `auth.clearSessionIfToken(usedAccessToken)` 추가: 요청에 쓴 액세스 토큰이 지금 세션 것일 때만 지운다. `authedFetch`의 401 분기가 이것을 부른다 | `PR23-2` |
+| 3 | [P2 content.js:206](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855743) 같은 영상에서 계정 전환 시 버튼 상태 미갱신 | 타당 | ① 저장 세션에 `sid`(로그인 1회 식별값, `signIn`에서 생성·갱신 때 유지) ② 서비스 워커 `chrome.storage.onChanged`에서 `isAccountChange`(있음↔없음 또는 `sid` 변경, 토큰 갱신은 제외)이면 `tabs.query({url:'https://www.youtube.com/*'})` 탭에 `REDO_AUTH_CHANGED` 전송(권한 추가 없음 — 유튜브 host_permissions로 url 필터 가능) ③ 콘텐츠 스크립트는 이 메시지에 `syncWatchButton(true)`로 같은 영상도 다시 조회하고, `watchGen` 세대값으로 이전 계정의 늦은 조회·추가 응답을 버린다 | `PR23-3`(콘텐츠 스크립트 가짜 DOM), `PR23-3`(서비스 워커 알림) |
+| 4 | [P2 auth.js:34](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855747) 본문 소비 전 타이머 해제 | 타당 | `fetchWithTimeout(…, timeoutMs, readBody)`: `readBody`를 주면 본문 읽기까지 같은 제한 시간 안에서 `Promise.race`로 끝내고 `{ res, body }`를 돌려준다(5번째 인자 없으면 기존과 같이 `res`). 토큰 요청(`requestToken`)과 API 호출(`authedFetch`)이 `readJsonOrNull`로 본문을 함께 읽는다. 테스트용으로 `createAuth`·`createApi`에 `timeoutMs`(기본 10초) 주입 | `PR23-4` |
+
+계약 영향: 서버 API·DB·manifest 권한 변화 없음. 확장 내부 export만 늘었다(`readJsonOrNull`, `isAccountChange`, `registerWithChrome` export, `auth.clearSessionIfToken`). 저장 세션 모양에 `sid` 추가 — 이전 버전으로 저장된 세션은 `sid`가 없고 `''`로 취급한다(갱신해도 계정 변경으로 보지 않는다).
+
+검증(로컬, 2026-11-14, `node --test --test-timeout=3000 test/extension_ex1.test.js`):
+- **Red**(수정 전, 테스트만 추가): tests 12 · pass 7 · fail 4 · cancelled 1 — `PR23-1` 3000ms 시간 초과(B의 요청이 A의 갱신에 묶여 멈춤), `PR23-2` 새 세션 삭제(`Cannot read properties of undefined (reading 'accessToken')`), `PR23-4` `Missing expected rejection`, `PR23-3` 콘텐츠 재조회 없음(`1 !== 2`), `PR23-3` 워커 `isAccountChange is not a function`
+- **Green**(수정 후): tests 12 · pass 12 · fail 0. 기존 `TC-EX-07` 하니스의 가짜 auth는 `clearSession` → `clearSessionIfToken`으로 이름만 맞췄다(단언 그대로)
+- `node --check` 3개 파일 통과
+- 미실행(주니어 4단계): `npm test` 전체, `npm run build`, `./gradlew test`, `npm run test:e2e`, 커밋·push·PR #23 갱신·CI. 실제 크롬에서 계정 전환 수동 확인은 EX-1 검수(TC-EX-04~07)에 함께 본다

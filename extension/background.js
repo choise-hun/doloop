@@ -1,6 +1,6 @@
 // RE:DO 크롬 확장 — 서비스 워커: API 중계, 우클릭 메뉴, 메시지 처리 (EX-1 명세 §5.2~§5.4)
 // 토큰은 여기서만 쓴다. 콘텐츠 스크립트에는 결과(알림 문구·열기 주소)만 돌려준다.
-import { AuthError, createAuth, fetchWithTimeout } from './auth.js';
+import { AuthError, FETCH_TIMEOUT_MS, SESSION_KEY, createAuth, fetchWithTimeout, readJsonOrNull } from './auth.js';
 
 export const DEFAULT_API_BASE = 'https://ulevelp-d5ympfsmfq-du.a.run.app';
 export const DEV_API_BASE = 'http://127.0.0.1:3000';
@@ -40,6 +40,16 @@ export function normalizeSettings(raw) {
   };
 }
 
+/**
+ * 저장된 세션 변화가 계정 변경(로그인·로그아웃·다른 로그인으로 교체)인지. 토큰 갱신은 sid가 같아 해당하지 않는다.
+ * 콘텐츠 스크립트는 이때만 사용자별 화면 상태를 다시 조회한다.
+ */
+export function isAccountChange(oldValue, newValue) {
+  if (!oldValue !== !newValue) return true;
+  if (!oldValue) return false;
+  return (oldValue.sid || '') !== (newValue.sid || '');
+}
+
 export function practiceUrl(apiBase, videoId) {
   return `${apiBase}/practice.html?v=${encodeURIComponent(videoId)}`;
 }
@@ -48,19 +58,14 @@ const MSG = {
   added: 'RE:DO에 추가했습니다',
   exists: '이미 RE:DO에 있는 곡입니다',
   login: '로그인이 필요합니다',
+  switched: '요청 도중 계정이 바뀌어 추가하지 않았습니다',
   failed: '추가하지 못했습니다',
   network: '서버에 연결하지 못했습니다',
   invalid: '추가할 수 있는 영상이 아닙니다',
 };
 
-async function readErrorMessage(res) {
-  try {
-    const body = await res.json();
-    if (body && typeof body.message === 'string' && body.message.trim()) return body.message.trim();
-  } catch {
-    /* 본문 없음 */
-  }
-  return null;
+function errorMessage(body) {
+  return body && typeof body.message === 'string' && body.message.trim() ? body.message.trim() : null;
 }
 
 /**
@@ -69,35 +74,44 @@ async function readErrorMessage(res) {
  * @param {Function} deps.fetchImpl
  * @param {() => Promise<{apiBase: string, menuItem: boolean}>} deps.getSettings
  */
-export function createApi({ auth, fetchImpl, getSettings }) {
+export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIMEOUT_MS }) {
   /** 같은 영상 연타: 진행 중인 요청을 함께 쓴다 */
   const adding = new Map();
 
-  /** 인증을 붙여 호출한다. { res } 또는 { fail: 'login' | 'network' } */
+  /**
+   * 인증을 붙여 호출하고 본문(JSON 또는 null)까지 제한 시간 안에 읽는다.
+   * { res, body, apiBase } 또는 { fail: 'login' | 'network' | 'switched' }
+   */
   async function authedFetch(path, init = {}) {
     let token;
     try {
       token = await auth.getAccessToken();
     } catch (err) {
       if (err instanceof AuthError && err.kind === 'network') return { fail: 'network' };
+      if (err instanceof AuthError && err.kind === 'cancelled') return { fail: 'switched' };
       throw err;
     }
     if (!token) return { fail: 'login' };
     const { apiBase } = await getSettings();
     let res;
+    let body;
     try {
-      res = await fetchWithTimeout(fetchImpl, `${apiBase}${path}`, {
-        ...init,
-        headers: { ...(init.headers || {}), Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      });
+      ({ res, body } = await fetchWithTimeout(
+        fetchImpl,
+        `${apiBase}${path}`,
+        { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+        timeoutMs,
+        readJsonOrNull
+      ));
     } catch {
       return { fail: 'network' };
     }
     if (res.status === 401) {
-      await auth.clearSession();
+      // 그 사이 다시 로그인한 세션은 지우지 않는다
+      await auth.clearSessionIfToken(token);
       return { fail: 'login' };
     }
-    return { res, apiBase };
+    return { res, body, apiBase };
   }
 
   async function runAddSong(videoId) {
@@ -108,11 +122,12 @@ export function createApi({ auth, fetchImpl, getSettings }) {
     });
     if (out.fail === 'login') return { kind: 'login', message: MSG.login, action: 'login' };
     if (out.fail === 'network') return { kind: 'network', message: MSG.network };
-    const { res, apiBase } = out;
+    if (out.fail === 'switched') return { kind: 'error', message: MSG.switched };
+    const { res, body, apiBase } = out;
     const openUrl = practiceUrl(apiBase, videoId);
     if (res.status === 201) return { kind: 'added', message: MSG.added, action: 'open', openUrl };
     if (res.status === 200) return { kind: 'exists', message: MSG.exists, action: 'open', openUrl };
-    return { kind: 'error', status: res.status, message: (await readErrorMessage(res)) || MSG.failed };
+    return { kind: 'error', status: res.status, message: errorMessage(body) || MSG.failed };
   }
 
   /** 곡 추가(§5.3). 결과는 화면 알림에 그대로 쓸 수 있는 모양이다. */
@@ -134,7 +149,7 @@ export function createApi({ auth, fetchImpl, getSettings }) {
       const out = await authedFetch(`/api/v1/songs/by-video/${videoId}`);
       if (out.fail === 'login') return { state: 'login' };
       if (out.fail || !out.res.ok) return { state: 'unknown' };
-      const body = await out.res.json();
+      const body = out.body;
       return body && body.song
         ? { state: 'exists', openUrl: practiceUrl(out.apiBase, videoId) }
         : { state: 'none' };
@@ -147,16 +162,19 @@ export function createApi({ auth, fetchImpl, getSettings }) {
   async function checkConnection() {
     const { apiBase } = await getSettings();
     try {
-      const health = await fetchWithTimeout(fetchImpl, `${apiBase}/api/health`, {
-        headers: { Accept: 'application/json' },
-      });
+      const health = await fetchWithTimeout(
+        fetchImpl,
+        `${apiBase}/api/health`,
+        { headers: { Accept: 'application/json' } },
+        timeoutMs
+      );
       if (health.status === 403) {
         return { ok: false, message: '서버가 이 확장 프로그램의 출처를 허용하지 않습니다(ALLOWED_ORIGINS 확인)' };
       }
       if (!health.ok) return { ok: false, message: `서버 응답 ${health.status}` };
       // 크롬은 확장의 GET에는 Origin을 붙이지 않고 POST에는 붙인다. 곡 추가(POST)가 막히는지는 POST로 봐야 안다.
       // 서버 CORS는 경로와 무관하게 허용 목록에 없는 출처를 403으로 거부한다(없는 POST 경로는 404·405).
-      const probe = await fetchWithTimeout(fetchImpl, `${apiBase}/api/health`, { method: 'POST' });
+      const probe = await fetchWithTimeout(fetchImpl, `${apiBase}/api/health`, { method: 'POST' }, timeoutMs);
       if (probe.status === 403) {
         return { ok: false, message: '서버가 이 확장 프로그램의 출처를 허용하지 않습니다(ALLOWED_ORIGINS 확인)' };
       }
@@ -165,7 +183,7 @@ export function createApi({ auth, fetchImpl, getSettings }) {
     }
     const out = await authedFetch('/api/v1/songs/by-video/aaaaaaaaaaa');
     if (out.fail === 'login') return { ok: true, message: '서버 연결됨 · 로그인이 필요합니다' };
-    if (out.fail === 'network') return { ok: false, message: MSG.network };
+    if (out.fail === 'network' || out.fail === 'switched') return { ok: false, message: MSG.network };
     if (!out.res.ok) return { ok: false, message: `서버 연결됨 · 인증 호출 실패(${out.res.status})` };
     return { ok: true, message: '서버 연결됨 · 로그인 확인됨' };
   }
@@ -178,7 +196,8 @@ export function createApi({ auth, fetchImpl, getSettings }) {
 const MENU_LINK = 'redo-add-link';
 const MENU_PAGE = 'redo-add-page';
 
-function registerWithChrome(chromeApi) {
+/** 크롬 이벤트를 건다. 서비스 워커에서만 호출한다(테스트는 가짜 chromeApi로 부른다). */
+export function registerWithChrome(chromeApi) {
   const storage = chromeApi.storage.local;
   // 토큰이 든 저장소를 콘텐츠 스크립트(유튜브 페이지 쪽)에서 읽지 못하게 한다. 워커가 깨어날 때마다 다시 건다.
   // local 영역의 setAccessLevel은 크롬 버전에 따라 없다(134에는 없음 — 결과/EX-1 §4). 없으면 건너뛴다:
@@ -217,6 +236,23 @@ function registerWithChrome(chromeApi) {
       // 설치 전에 열려 있던 탭에는 콘텐츠 스크립트가 없다. 그때는 알림을 보낼 곳이 없다.
       chromeApi.tabs.sendMessage(tab.id, { type: 'REDO_TOAST', result, videoId }).catch(() => {});
     });
+  });
+
+  // 계정이 바뀌면 유튜브 탭에 알린다: 재생 화면 버튼의 "RE:DO에 있음"은 사용자별 상태다.
+  // 유튜브 host_permissions가 있어 url로 탭을 고를 수 있다. 콘텐츠 스크립트가 없는 탭은 무시한다.
+  chromeApi.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes[SESSION_KEY]) return;
+    const { oldValue, newValue } = changes[SESSION_KEY];
+    if (!isAccountChange(oldValue, newValue)) return;
+    chromeApi.tabs.query({ url: 'https://www.youtube.com/*' }).then(
+      (tabs) => {
+        for (const tab of tabs) {
+          if (typeof tab.id !== 'number') continue;
+          chromeApi.tabs.sendMessage(tab.id, { type: 'REDO_AUTH_CHANGED' }).catch(() => {});
+        }
+      },
+      () => {}
+    );
   });
 
   chromeApi.runtime.onMessage.addListener((message, sender, sendResponse) => {

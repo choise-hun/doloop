@@ -152,6 +152,8 @@ function redoInit() {
   let watchBtn = null;
   let watchVideoId = null;
   let watchOpenUrl = null;
+  /** 영상 전환·계정 변경마다 올린다. 그 전에 시작한 조회·추가의 늦은 응답은 버린다. */
+  let watchGen = 0;
 
   function setWatchState(state) {
     if (!watchBtn) return;
@@ -177,9 +179,10 @@ function redoInit() {
         window.open(watchOpenUrl, '_blank', 'noopener');
         return;
       }
+      const gen = watchGen;
       setWatchState('busy');
       const result = await addSong(videoId);
-      if (videoId !== watchVideoId) return; // 그 사이 다른 영상으로 넘어갔다
+      if (gen !== watchGen) return; // 그 사이 다른 영상으로 넘어갔거나 계정이 바뀌었다(새 조회가 상태를 정한다)
       if (result && (result.kind === 'added' || result.kind === 'exists')) {
         watchOpenUrl = result.openUrl || null;
         setWatchState('exists');
@@ -190,9 +193,11 @@ function redoInit() {
     document.body.appendChild(watchBtn);
   }
 
-  async function syncWatchButton() {
+  /** @param {boolean} [force] 계정이 바뀌어 같은 영상이라도 다시 조회한다 */
+  async function syncWatchButton(force = false) {
     const videoId = redoWatchVideoId(location.href);
     if (!videoId) {
+      watchGen += 1;
       watchVideoId = null;
       watchOpenUrl = null;
       if (watchBtn) {
@@ -201,13 +206,14 @@ function redoInit() {
       }
       return;
     }
-    if (videoId === watchVideoId && watchBtn) return;
+    if (!force && videoId === watchVideoId && watchBtn) return;
+    const gen = ++watchGen;
     watchVideoId = videoId;
     watchOpenUrl = null;
     ensureWatchBtn();
     setWatchState('idle');
     const found = await ask({ type: 'LOOKUP_SONG', videoId });
-    if (videoId !== watchVideoId) return; // 늦게 온 응답은 버린다
+    if (gen !== watchGen) return; // 늦게 온 응답(다른 영상·이전 계정)은 버린다
     if (found && found.state === 'exists') {
       watchOpenUrl = found.openUrl || null;
       setWatchState('exists');
@@ -373,6 +379,10 @@ function redoInit() {
 
   // 우클릭 메뉴 결과는 서비스 워커가 보내 준다
   chrome.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'REDO_AUTH_CHANGED') {
+      syncWatchButton(true);
+      return;
+    }
     if (!message || message.type !== 'REDO_TOAST') return;
     showToast(message.result);
     const r = message.result;
