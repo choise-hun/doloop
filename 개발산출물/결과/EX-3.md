@@ -121,3 +121,53 @@ $ npm run test:e2e   → 836 passed (10.9m)
 | P2 | `extension/practice-panel.js:810` | `loadSaved()`가 유효한 A–B 구간이 없으면 조기 반환해 `{ a: null, b: null, rate: 0.75 }` 곡의 `pendingRate`가 설정되지 않고 저장 시 `1`로 덮일 수 있음 | [r4575473477](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473477) |
 | P2 | `extension/background.js:224` | `saving` 맵이 모든 탭에 공유되어 두 탭이 같은 곡·같은 본문(예: 각각 60초)을 동시에 저장하면 요청이 합쳐져 한쪽 60초가 유실될 수 있음 | [r4575473479](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473479) |
 | P2 | `extension/practice-panel.js:571` | 버퍼링(`paused === false`, `readyState = 2`, `waiting`) 중에도 `tick()`이 시간을 누적해 실제 재생 없이 연습 시간이 기록될 수 있음 (동일 위치 중복 코멘트 `r4575473481`·`r4575473484`) | [r4575473484](https://github.com/choise-hun/doloop/pull/25#discussion_r4575473484) |
+
+## 8. 시니어 3-P 핀포인트 검증 — PR #25 Codex 리뷰 4종 (2026-11-15)
+
+- 입력: PR #25 head `946595c`(로컬 일치, `git status` 깨끗), 리뷰 r4575473474·r4575473477·r4575473479·r4575473481/r4575473484(중복)
+- 읽기 범위: `extension/practice-panel.js`의 `tick`·`attachVideo`·`loadSaved`·`lookup`·`addSong`·`saveProgress`·`sync`·`REDO_AUTH_CHANGED` 처리, `extension/background.js`의 `savePractice`·`onMessage`, `test/extension_ex3.test.js` 하네스. **이 밖은 읽지 않았다 = 미검증**
+
+| # | 리뷰 | 판정 | 원인 | 수정 | 회귀 테스트 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | P1 계정 전환 시 이전 계정 구간·배속 유지 | **반영** | `REDO_AUTH_CHANGED`가 누적·등록 상태만 지우고 `a`·`b`·`loopOn`을 남겨 `loadSaved()`가 조기 반환 → B 곡에 A 구간·A `pendingRate` 없이 지금 배속 저장 | 계정 전환 시 `a`·`b`·`loopOn`·`loops`를 비우고 rAF·임시 문구 정리(영상 전환 `sync()` fresh 분기와 같은 범위). `state.rate`는 영상의 실제 재생 배속이라 유지하고, B의 저장 배속은 `loadSaved`가 `pendingRate`로 넣는다 | `PR25-1(P1)` — B 저장값 30–40초·1.25x 전송 확인 |
+| 2 | P2 구간 없는 곡의 저장 배속 덮어쓰기 | **반영** | `loadSaved()`가 유효 구간이 없으면 배속까지 건너뜀 → `rateToSave()`=지금 배속(1x)이 서버 0.75x를 덮음 | 구간 복원과 배속 보존을 분리: 숫자 배속이면 구간 유무와 무관하게 `pendingRate` 설정, 구간이 없으면 "저장된 배속(…)… 구간을 정하고 [반복]을 켜면 적용됩니다" 안내 | `PR25-2(P2)` — 불러온 직후 "저장 안 됨" 없음, 저장 `rate:0.75`, 구간 지정 후 [반복] 시 0.75x 적용 |
+| 3 | P2 서로 다른 탭 저장이 한 요청으로 합쳐짐 | **반영** | 서비스 워커 `saving` 키가 본문만이라 두 탭의 독립된 같은 본문(60초씩)을 1회 POST로 합치고, 두 패널 모두 `keep:false`로 60초씩 차감 → 60초 유실 | 키를 `[보낸 탭 id, 본문]`으로. `savePractice(msg, tabId = null)` 둘째 인자(선택) 추가, `onMessage`가 `sender.tab.id`를 넘김. 같은 탭 연타 합치기(EX3-연타)는 유지 | `PR25-3(P2)` — 탭 1·2 동시 60초는 2회, 같은 탭 연타는 1회 |
+| 4 | P2 버퍼링 중 시간 누적 | **반영** | `counting`이 `paused`·`ended`·광고만 봐서, 반복 rAF가 버퍼링 중에도 `tick()`을 불러 대기 시간 전체 누적 | `counting`에 `video.readyState >= 3`(HAVE_FUTURE_DATA) 추가, `waiting` 이벤트에서 `lastCountAt = null`(반복이 꺼져 rAF가 없을 때 재개 첫 `timeupdate`가 대기 시간을 최대 2초 더하는 경로도 막음) | `PR25-4(P2)` — 반복 rAF 경로 60초·rAF 없는 경로 30초 모두 제외 |
+
+- 계약: 서버 API·메시지 타입·응답 모양 변경 없음. `createApi().savePractice`에 선택 인자 `tabId`만 추가(기존 호출은 그대로 동작 — EX3-연타·EX3-오류가 인자 없이 통과). 테스트 하네스의 가짜 `video`에 실제 브라우저 기본값과 같은 `readyState: 4`를 추가(기존 단언 변경·완화 없음)
+- 테스트 작성 중 수정: `PR25-2`의 "저장 안 됨 없음" 확인을 `play(5)` 앞으로 옮겼다(쌓인 5초 때문에 당연히 dirty). 수정 전 코드에서도 그 시점에 `rateToSave()=1≠0.75`로 실패함을 Red에서 확인
+
+### Red → Green
+
+```text
+# 수정 전(extension/ stash) — 새 테스트 4건만 실패
+$ node --test test/extension_ex3.test.js   → pass 12 / fail 4 (PR25-1·2·3·4)
+  PR25-1: actual '00:10.0' expected '--:--.-' / PR25-3: actual 1 expected 2 / PR25-4: actual 68 expected 8
+# 수정 후
+$ node --test test/extension_ex3.test.js   → tests 16 / pass 16 / fail 0
+$ node --test test/extension_ex1.test.js   → tests 12 / pass 12 / fail 0
+$ node --test test/extension_ex2.test.js   → tests 16 / pass 16 / fail 0
+$ for f in practice-panel content background auth options; do node --check extension/$f.js; done   → 출력 없음
+$ grep -n "innerHTML\|chrome\.storage\|\.key\b" extension/practice-panel.js   → 0건
+```
+
+### 주니어 4단계 인계
+
+- 미커밋 변경: `extension/background.js`, `extension/practice-panel.js`, `test/extension_ex3.test.js`, 이 결과 파일 §8, `개발산출물/진행_크롬확장.md` EX-3 줄
+- 할 일: 위 표적 회귀 재실행 + `npm test`·`npm run build`·`npm run test:e2e` → 커밋 2개(`fix(extension): PR #25 리뷰 4종 …` 코드·테스트 / `docs(extension): EX-3 3-P 기록`) → `step/EX-3` push(기존 PR #25 갱신) → `gh pr checks 25 --watch` → 새 리뷰 확인 → 이 §8 아래에 CI run·새 리뷰 처리 기록
+- 미실행: `npm test`·`build`·E2E(주니어), 수동 검수 EX3-M1~M6(사람 — 특히 실제 유튜브 버퍼링 시 `readyState` 변화와 두 탭 동시 저장은 수동으로만 확인 가능)
+
+### 4단계 전체 회귀 (`4bc86b6` 기준)
+
+```text
+$ node --test test/extension_ex1.test.js   → tests 12 / pass 12 / fail 0
+$ node --test test/extension_ex2.test.js   → tests 16 / pass 16 / fail 0
+$ node --test test/extension_ex3.test.js   → tests 16 / pass 16 / fail 0
+$ for f in practice-panel content background auth options; do node --check extension/$f.js; done   → 출력 없음
+$ grep -n "innerHTML\|chrome\.storage\|\.key\b" extension/practice-panel.js   → 0건
+$ npm test   → tests 486 / pass 486 / fail 0
+$ npm run build   → tsc --noEmit && vite build 통과
+$ npm run test:e2e   → 836 passed (11.0m)
+```
+
+- 미실행: `./gradlew test`(서버 변경 없음), §5 수동 검수 `EX3-M1`~`EX3-M6`(미실시 — 사람 확인 대기)
