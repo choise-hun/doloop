@@ -1056,7 +1056,7 @@ export const KO = {
   'home.errInvalidYoutubeUrl': "유튜브 영상 링크가 아니에요",
   'home.ariaDashboard': "연습 연속성 대시보드",
   'home.linkViewLog': "기록 보기 →",
-  'home.titleRecentSong': "가장 최근 연습했던 곡",
+  'home.titleRecentSong': "RECENT",
   'home.shortcutLabel': "(바로가기)",
   'home.btnResumeSong': "▶ 이어서 구간 연습하기 →",
   'home.emptyRecentSong': "아직 연습 중인 곡이 없어요. 위 입력창에 유튜브 링크를 붙여넣어 시작하세요.",

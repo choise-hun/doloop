@@ -1042,7 +1042,7 @@ export const EN: Record<I18nKey, string> = {
   'home.errInvalidYoutubeUrl': "Not a valid YouTube video link",
   'home.ariaDashboard': "Practice continuity dashboard",
   'home.linkViewLog': "View Log →",
-  'home.titleRecentSong': "Most Recently Practiced Song",
+  'home.titleRecentSong': "RECENT",
   'home.shortcutLabel': "(Shortcut)",
   'home.btnResumeSong': "▶ Resume A-B Practice →",
   'home.emptyRecentSong': "No songs in progress yet. Paste a YouTube link above to start practicing.",

@@ -4,6 +4,7 @@ import { useAuth, auth } from '../../lib/auth';
 import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
 import { t, type I18nKey } from '../../lib/i18n.mts';
 import { BetaBadge } from '../common/BetaBadge';
+import { BrandLogo } from '../common/BrandLogo';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy' | 'profile';
@@ -104,7 +105,9 @@ export function AppShell({
             href="./"
             className={styles.brandLink}
             aria-current={activeNav === 'home' ? 'page' : undefined}
+            data-align-group="navRow:center-y"
           >
+            <BrandLogo variant="wordmark" className={styles.navLogo} />
             {t('nav.home')}
           </a>
           {MAIN_NAV.map((item) =>
@@ -141,6 +144,7 @@ export function AppShell({
             href="settings.html"
             className={styles.navItem}
             aria-current={activeNav === 'settings' ? 'page' : undefined}
+            data-align-group="navRow:center-y"
           >
             {t('nav.settings')}
           </a>

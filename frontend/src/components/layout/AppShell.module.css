@@ -35,10 +35,20 @@
 }
 
 .brandLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   color: var(--ink);
   text-decoration: none;
   padding: 8px 2px;
   white-space: nowrap;
+}
+
+.navLogo {
+  display: block;
+  height: 16px;
+  aspect-ratio: 416 / 100;
+  flex-shrink: 0;
 }
 
 .brandLink:hover,
@@ -153,6 +163,40 @@
 /* W-1: 좁은 폭(≤820px) 하단 탭 바 — 명세 개발산출물/명세/W-1_구현명세.md §1 */
 .tabBar {
   display: none;
+}
+
+/* DS-2: 로고(66.56px + 간격)가 들어간 만큼 빠듯한 폭에서 메뉴 간격을 줄여 한 줄을 지킨다.
+   기능 메뉴가 다 보이는 821px 바로 위 구간과, 가장 좁은 전화 폭 두 곳이다 */
+@media (min-width: 821px) and (max-width: 960px) {
+  .siteNav {
+    gap: 0 12px;
+  }
+
+  .navMain {
+    gap: 0 8px;
+  }
+
+  .navLinks {
+    gap: 12px;
+  }
+
+  .brandLink {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .siteNav {
+    gap: 0 8px;
+  }
+
+  .navLinks {
+    gap: 8px;
+  }
+
+  .brandLink {
+    gap: 8px;
+  }
 }
 
 @media (max-width: 820px) {
