@@ -1,7 +1,7 @@
 # DS-3 결과 — 글자 크기 단계 정리, 없는 토큰 정리, 상단 메뉴 한 줄·터치 높이
 
-> 작업: DS-3 2단계(1차 구현·검증) | 브랜치: `step/DS-3` | PR: 아직 없음(주니어 4단계에서 생성) | 기준 명세: [DS-3_구현명세.md](../명세/DS-3_구현명세.md)
-> 상태: 구현·로컬 검증 V1~V9 완료, `step/DS-3` push 완료. **PR 생성·CI·리뷰 확인은 하지 않았다**(주니어 인계). 사용자 승인: 2026-11-14 U1~U7 모두 추천안.
+> 작업: DS-3 (2단계 구현·4단계 최종 테스트·PR·CI) | 브랜치: `step/DS-3` | PR: [#22](https://github.com/choise-hun/doloop/pull/22) | 기준 명세: [DS-3_구현명세.md](../명세/DS-3_구현명세.md)
+> 상태: 4단계 로컬 재검증 5건·PR #22 CI 통과·리뷰 코멘트 확인 완료(코드 기준 head `d26161e`) — 시니어 3단계 검증·사용자 머지 대기. 사용자 승인: 2026-11-14 U1~U7 모두 추천안.
 
 ## 1. 바꾼 파일
 
@@ -84,9 +84,8 @@ D2·D3 줄 번호와 46·23곳 개수는 명세와 같았다(스크립트가 줄
 
 ## 6. 미실행 범위
 
-- PR 생성, GitHub CI, PR 리뷰 확인(주니어 4단계).
 - 운영 배포, 실제 로그인 데이터 화면, 실제 기기.
-- V8의 768·1150px과 열어 보지 않은 화면의 사람·모델 검토.
+- V8의 768·1150px과 열어 보지 않은 화면의 사람·모델 검토(시니어 3단계 검토 대기).
 - Firefox·Safari(`::-moz-progress-bar` 바탕 포함)는 Playwright chromium만 돌렸다.
 
 ## 7. 남긴 것
@@ -94,4 +93,50 @@ D2·D3 줄 번호와 46·23곳 개수는 명세와 같았다(스크립트가 줄
 - 화면별 남은 G7b 건수(U7, 390 / 768px, 상태 합산): chords 225/226 · ch(악기 연습실) 163/163 · home 119/123 · community 107/94 · notes 55/55 · practice 43/43 · share 38/35 · note 30/30 · log 25/23 · profile 24/24 · progressions 22/22 · settings 20/20 · privacy 2/2.
 - 308px 미만 메뉴 두 줄(지원 폭 밖).
 - 화면 제목 크기 차이: `ChordsPage` 24 · `LogPage` 32 · `CommunityPage` 24 · 나머지 `clamp`.
-- 구현 전 기준선 실행에서 `PF2-07`이 1회 실패했고(DS-3 변경 전 코드), 구현 뒤 V6·V7에서는 통과했다. 간헐 실패로 보이며 원인은 조사하지 않았다.
+- 구현 전 기준선 실행에서 `PF2-07`이 1회 실패했고(DS-3 변경 전 코드), 구현 뒤 V6·V7 및 4단계 재실행(`npm run test:e2e` 836 passed)에서는 모두 통과했다.
+
+## 8. 4단계 최종 재검증 · PR · CI · 리뷰 확인 (2026-11-14, head `d26161e`)
+
+### 8-1. 로컬 재검증 (코드 무수정)
+
+| 명령 | 결과 | 비고 |
+| --- | --- | --- |
+| `npm test` | **tests 442 · suites 58 · pass 442 · fail 0** | `duration_ms 4000.527958` (`DR-6`·`DR-7` 포함) |
+| `npm run build` | **오류 0** (`✓ 177 modules transformed.`, `✓ built in 888ms`) | `tsc --noEmit && vite build` |
+| `npx playwright test test/e2e/layout/` | **519 passed (6.3m)**, 실패 0 | 전 화면 layout spec |
+| `npm run test:e2e` | **836 passed (11.1m)**, 실패 0 | `PF2-07`(545번 항목) 통과 확인, 재실패 없음 |
+| `bash scripts/check-config-sync.sh` | **차이 0건** | 10개 동기화 대상 모두 `같음` |
+
+```text
+# npm test
+ℹ tests 442
+ℹ suites 58
+ℹ pass 442
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4000.527958
+
+# npm run build
+✓ 177 modules transformed.
+✓ built in 888ms
+
+# npx playwright test test/e2e/layout/
+  519 passed (6.3m)
+
+# npm run test:e2e
+  836 passed (11.1m)
+
+# bash scripts/check-config-sync.sh
+차이 0건
+```
+
+### 8-2. PR · CI · 리뷰 확인
+
+- **PR:** [#22](https://github.com/choise-hun/doloop/pull/22) (`step/DS-3` → `main`)
+- **코드 head `d26161e` CI 결과:** [Run #43577994057](https://github.com/choise-hun/doloop/actions/runs/43577994057) — 5/5 실행 성공, 1건 건너뜀 (`Detect code changes` 4s, `Test (Node 22)` 40s, `Docker build & smoke test` 1m41s, `E2E XSS & CSP (Playwright, spa)` 10m5s, `CI ok` 2s; `Kotlin test (JDK 21)`은 서버·빌드 설정 무변경으로 `SKIPPED`).
+- **리뷰 코멘트 확인:**
+  - `chatgpt-codex-connector[bot]` (`d26161e` 기준): `has_any_findings: false`, `has_unresolved_findings: false`, `status: completed` ([코멘트](https://github.com/choise-hun/doloop/pull/22#issuecomment-6874831212)) — 지적 0건, 처리 불필요.
+  - PR 인라인 코멘트(`pulls/22/comments`) 0건, GitHub PR 리뷰(`reviews`) 0건.
+- **다음:** 시니어 3단계 검증(결과 §2 명세와 달라진 점 3건·§5 768/1150px 스크린샷 검토) 및 사용자 PR #22 머지.
