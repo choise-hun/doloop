@@ -120,3 +120,65 @@ for (const [stateName, width] of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   });
 }
+
+// DS-3: 상단 메뉴 한 줄(전용 단언)·홈 글자 숨김 구간·터치 높이 — 명세 개발산출물/명세/DS-3_구현명세.md §6
+// navRow:center-y는 구성원이 위아래로 쌓이면 검사기가 판정을 건너뛰므로 "쌓이지 않는다"를 여기서 직접 본다
+async function openNav(page, stateName, width) {
+  await page.setViewportSize({ width, height: 800 });
+  await mockApp(page, STATES[stateName]);
+  await page.goto('/privacy.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  const top = page.locator('nav.site-nav');
+  await top.locator('svg[aria-label="RE:DO"]').waitFor();
+  await expect(page.locator('#navAuth')).toHaveAttribute('data-auth-state', stateName === 'user' ? 'signed-in' : 'signed-out');
+  await page.evaluate(() => document.fonts.ready);
+  return top;
+}
+
+const DS3_WIDTHS = [320, 360, 390, 768, 820, 821, 830, 840, 860, 880, 881, 900, 960, 961, 1150, 1280];
+for (const stateName of ['guest', 'user']) {
+  for (const width of DS3_WIDTHS) {
+    test(`DS3-N1 ${stateName} ${width}px 위 메뉴 한 줄`, async ({ page }) => {
+      const top = await openNav(page, stateName, width);
+      const home = await top.locator('a[href="./"]').boundingBox();
+      const setting = await top.locator('a[href="settings.html"]').boundingBox();
+      const account = await page.locator('#navAuth').boundingBox();
+      expect(setting.y, 'SETTING이 다음 줄로 내려감').toBeLessThan(home.y + home.height - 0.5);
+      expect(account.y, '계정 링크가 다음 줄로 내려감').toBeLessThan(home.y + home.height - 0.5);
+      expect((await top.boundingBox()).height).toBeLessThan(64);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    });
+  }
+}
+
+for (const width of [820, 850, 881]) {
+  test(`DS3-N2 ${width}px 홈 글자는 821~880px에서만 숨는다`, async ({ page }) => {
+    const top = await openNav(page, 'guest', width);
+    const homeLink = top.locator('a[href="./"]');
+    const text = homeLink.getByText('HOME');
+    await expect(text).toHaveCount(1);
+    const logo = homeLink.locator('svg[aria-label="RE:DO"]');
+    await expect(logo).toBeVisible();
+    expect(Math.abs((await logo.boundingBox()).width - 66.56)).toBeLessThanOrEqual(1);
+    await expect(top.getByRole('link', { name: /RE:DO/ })).toHaveCount(1);
+    if (width === 850) await expect(text).toBeHidden();
+    else await expect(text).toBeVisible();
+  });
+}
+
+for (const width of [390, 768, 1280]) {
+  test(`DS3-N3 ${width}px 위 메뉴 터치 높이`, async ({ page }) => {
+    const top = await openNav(page, 'guest', width);
+    const boxes = [];
+    for (const loc of [top.locator('a[href="./"]'), top.locator('a[href="settings.html"]'), page.locator('#navAuth')]) {
+      boxes.push(await loc.boundingBox());
+    }
+    if (width <= 820) {
+      for (const b of boxes) expect(b.height).toBeGreaterThanOrEqual(44);
+      const cy = boxes.map((b) => b.y + b.height / 2);
+      expect(Math.abs(cy[0] - cy[1]), 'navRow 세로 중심').toBeLessThanOrEqual(1);
+    } else {
+      for (const b of boxes) expect(b.height).toBeLessThan(44);
+    }
+  });
+}
