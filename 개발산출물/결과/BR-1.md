@@ -1,7 +1,7 @@
 # BR-1 결과 — 서비스 이름 RE:DO 교체, 로고 SVG·컴포넌트, 파비콘
 
-> 작업: BR-1 (2단계 구현·검증·PR) | 브랜치: `step/BR-1` | PR: [#20](https://github.com/choise-hun/doloop/pull/20) | 기준 명세: [BR-1_구현명세.md](../명세/BR-1_구현명세.md)
-> 상태: 1차 구현·로컬 검증(V1~V12, S1~S7)·CI 통과 완료 — 시니어 3단계 독립 검증 대기 (코드·검증 기준 head `66d53ec`)
+> 작업: BR-1 (4단계 최종 검증·문서·PR/CI 마무리) | 브랜치: `step/BR-1` | PR: [#20](https://github.com/choise-hun/doloop/pull/20) | 기준 명세: [BR-1_구현명세.md](../명세/BR-1_구현명세.md)
+> 상태: 시니어 3단계 검증(결함 0, BR1-7 단언 보강) 및 4단계 최종 검증·PR #20 CI 6/6 통과 완료 — 사용자 머지 대기 (코드·검증 기준 head `0f13b49`)
 
 ## 1. 바꾼 파일 목록
 
@@ -267,13 +267,13 @@ src/main/kotlin/ulevelp/service/TierService.kt:289:        removeShareAttachment
 - **BR-2 입력:** 명세 §8(Google OAuth 동의 화면 앱 이름·로고, Supabase 인증 메일, 선택적 도메인 연결) + 실제 Drive 계정 확인 2건(새 계정에서 `REDO 녹음` 생성, 옛 폴더가 있는 계정에서 `ULeveLP 녹음` 재사용).
 - **관찰(고치지 않음):** 영어·일본어 설정 문구의 폴더 이름(`REDO Recordings`·`REDO 録音`)은 실제 폴더 이름(`REDO 녹음`)과 다르다(기존 동작 유지). [EX-1 명세](../명세/EX-1_크롬확장_구현명세.md)의 `"ULevelP에 추가"` 문구는 EX-1 착수 때 고친다.
 
-## 6. PR · CI · 리뷰 확인 (2단계 마무리)
+## 6. PR · CI · 리뷰 확인 (4단계 최종 마무리)
 - **PR:** [#20](https://github.com/choise-hun/doloop/pull/20) (`step/BR-1` → `main`)
-- **코드 head `66d53ec` CI 결과:** [Run #43547579506](https://github.com/choise-hun/doloop/actions/runs/43547579506) — 6/6 성공 (`Detect code changes`, `Test (Node 22)`, `Kotlin test (JDK 21)`, `Docker build & smoke test`, `E2E XSS & CSP (Playwright, spa)`, `CI ok`).
+- **최신 코드 head `0f13b49` (`7a283a8` 포함) CI 결과:** [Run #43549731592](https://github.com/choise-hun/doloop/actions/runs/43549731592) — 6/6 성공 (`Detect code changes`, `Test (Node 22)`, `Kotlin test (JDK 21)`, `Docker build & smoke test`, `E2E XSS & CSP (Playwright, spa)`, `CI ok`). (직전 코드 head `66d53ec` CI: [Run #43547579506](https://github.com/choise-hun/doloop/actions/runs/43547579506) 6/6 성공)
 - **리뷰 코멘트 확인:**
-  - `chatgpt-codex-connector` (`66d53ec` 기준): `has_any_findings: false`, `has_unresolved_findings: false` ([코멘트](https://github.com/choise-hun/doloop/pull/20#issuecomment-6870362399)).
-  - PR 인라인 코멘트(`pulls/20/comments`) 0건, 사용자/시니어 리뷰 0건.
-- **다음 담당:** GPT-6.1 Sol 시니어 3단계 독립 검증.
+  - `chatgpt-codex-connector` (`66d53ec` 기준): `has_any_findings: false`, `has_unresolved_findings: false` ([코멘트](https://github.com/choise-hun/doloop/pull/20#issuecomment-6870362399)). `0f13b49` 시점 추가 코멘트 없음.
+  - PR 인라인 코멘트(`pulls/20/comments`) 0건, GitHub PR 리뷰(`reviews`) 0건. 시니어 3단계 독립 검증 결과는 §7에 기록·반영 완료.
+- **다음 담당:** 사용자 PR #20 머지 → BR-2(사람)·DS-2 착수.
 
 ## 7. 시니어 3단계 독립 검증 (2026-11-14, Claude)
 
@@ -302,3 +302,17 @@ src/main/kotlin/ulevelp/service/TierService.kt:289:        removeShareAttachment
 - 미커밋 변경: `test/br1_brand.test.js` 1개(+ 이 절, `진행_디자인D.md` BR-1 상태 칸).
 - 실행: `node --test test/br1_brand.test.js test/rz3_spa.test.js test/i18n.test.js test/security.test.js test/design_rules.test.js` → `npm test` → `npm run build` → `npx playwright test test/e2e/layout/home.spec.js`.
 - Git: `test(brand): assert BR1-7 creates folder with new name` + 문서 커밋 `docs(brand): record BR-1 senior verification`, `step/BR-1` push, PR #20 최신 head CI·리뷰 확인 후 결과 §6·진행 파일 갱신. 머지·배포는 하지 않는다.
+
+## 8. 4단계 최종 검증 (2026-11-14, Gemini)
+
+시니어 3단계 보강(`7a283a8`, `test/br1_brand.test.js` `BR1-7` 폴더 생성 이름 단언) 반영 후 앱 코드·명세 변경 없이 §7-3 실행 목록을 재검증했다.
+
+| 항목 | 명령 | 결과 | 출력 끝부분·요약 |
+| --- | --- | --- | --- |
+| V2 묶음 | `node --test test/br1_brand.test.js test/rz3_spa.test.js test/i18n.test.js test/security.test.js test/design_rules.test.js` | 통과 (58/58) | `ℹ tests 58`, `ℹ suites 4`, `ℹ pass 58`, `ℹ fail 0`, `ℹ duration_ms 210.1185` |
+| V3 | `npm test` | 통과 (440/440) | `ℹ tests 440`, `ℹ suites 58`, `ℹ pass 440`, `ℹ fail 0`, `ℹ duration_ms 3866.683` |
+| V4 | `npm run build` | 통과 (오류 0) | `tsc --noEmit && vite build`, `✓ 177 modules transformed.`, `✓ built in 846ms` |
+| V7 (비STRICT) | `npx playwright test test/e2e/layout/home.spec.js` | 통과 (21/21) | `21 passed (12.5s)` |
+| S3 재확인 | `git grep -n "ULeveLP" -- test src/test` | 0줄 | 출력 없음 |
+
+- **미실행 범위:** `§5-1`과 동일(실제 Google Drive 계정 폴더 생성·조회 확인, 실제 로그인 상태의 ZIP 내려받기, 운영 배포). 로컬 `./gradlew`는 서버 코드 변경이 없어 재실행하지 않고 `0f13b49` CI `Kotlin test (JDK 21)` 통과(`2m24s`, [Run #43549731592](https://github.com/choise-hun/doloop/actions/runs/43549731592))로 확인했다.
