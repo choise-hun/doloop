@@ -116,7 +116,16 @@
 
 ## 8. PR·CI (주니어 4단계가 채운다)
 
-- PR: —
-- CI: —
-- 전체 회귀: —
-- 리뷰 코멘트: —
+- PR: [PR #23](https://github.com/choise-hun/doloop/pull/23) (`step/EX-1` → `main`)
+- CI: `417bd54` 기준 6/6 통과 (`CI/Detect code changes` 6s, `CI/Test (Node 22)` 29s, `CI/Kotlin test (JDK 21)` 2m33s, `CI/Docker build & smoke` 1m26s, `CI/E2E XSS & CSP (Playwright)` 9m47s, `CI/CI ok` 3s). 문서 갱신 커밋 push 후 최신 head CI 재확인.
+- 전체 회귀 (2026-11-14 로컬, `417bd54`):
+  - `npm test`: 449 passed, 0 failed (58 suites)
+  - `npm run build`: `tsc --noEmit && vite build` 성공 (177 modules transformed)
+  - `./gradlew test`: 383 passed, 0 failed, 0 skipped (44 suites, BUILD SUCCESSFUL)
+  - `npm run test:e2e`: 836 passed
+  - 미실행: 실제 로그인·곡 추가 수동 검수(TC-EX-04~07)는 §5 사람 설정 뒤 진행
+- 리뷰 코멘트 (`chatgpt-codex-connector`, `417bd54` 기준 4건 — 4단계 범위상 `extension/` 미수정, 시니어 3-P/후속 조치 인계):
+  1. **[P1] `extension/auth.js:162`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855731)): 갱신 중 로그아웃 후 B 계정으로 재로그인 시 `current.accessToken`을 반환해 A의 요청이 B 인증으로 실행될 수 있음. **판단: 타당** (`extension/auth.js:162`에서 `current.refreshToken !== used.refreshToken`일 때 `null` 반환/취소 필요).
+  2. **[P2] `extension/background.js:98`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855738)): 지연된 401 응답이 현재 저장된 새 세션까지 `auth.clearSession()`으로 무조건 삭제함. **판단: 타당** (`extension/background.js:96-98`에서 요청 시점 토큰/세션 대조 후 삭제 필요).
+  3. **[P2] `extension/content.js:206`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855743)): 같은 영상에서 계정 전환 시 `if (videoId === watchVideoId && watchBtn) return;` 조기 반환과 인증 변경 알림 부재로 버튼 상태(`RE:DO에 있음`)가 갱신되지 않음. **판단: 타당** (`extension/content.js:204-206`).
+  4. **[P2] `extension/auth.js:34`** ([코멘트](https://github.com/choise-hun/doloop/pull/23#discussion_r4573855747)): `fetchWithTimeout`이 `fetchImpl()` 반환 시 `finally`에서 타이머를 해제해 응답 본문(`res.json()`) 지연 시 10초 제한이 적용되지 않음. **판단: 타당** (`extension/auth.js:28-36`).
