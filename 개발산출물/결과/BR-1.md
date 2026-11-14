@@ -1,7 +1,7 @@
 # BR-1 결과 — 서비스 이름 RE:DO 교체, 로고 SVG·컴포넌트, 파비콘
 
-> 작업: BR-1 (2단계 구현·검증·PR) | 브랜치: `step/BR-1` | 기준 명세: [BR-1_구현명세.md](../명세/BR-1_구현명세.md)
-> 상태: 1차 구현·로컬 검증(V1~V12, S1~S7) 완료 — PR 생성 및 CI 확인 대기(시니어 3단계 검증 인계 예정)
+> 작업: BR-1 (2단계 구현·검증·PR) | 브랜치: `step/BR-1` | PR: [#20](https://github.com/choise-hun/doloop/pull/20) | 기준 명세: [BR-1_구현명세.md](../명세/BR-1_구현명세.md)
+> 상태: 1차 구현·로컬 검증(V1~V12, S1~S7)·CI 통과 완료 — 시니어 3단계 독립 검증 대기 (코드·검증 기준 head `66d53ec`)
 
 ## 1. 바꾼 파일 목록
 
@@ -266,3 +266,11 @@ src/main/kotlin/ulevelp/service/TierService.kt:289:        removeShareAttachment
 - **DS-2 입력:** ① 상단 메뉴 로고는 `BrandLogo`(`wordmark`, 시안 높이 16px)로 넣는다 ② 홈 로고의 폭·여백(`min(560px, 82%)`, `margin: 20px 0 24px`) 재조정 여부를 함께 본다 ③ `stack`·`mark` 형태는 아직 화면에서 쓰지 않는다.
 - **BR-2 입력:** 명세 §8(Google OAuth 동의 화면 앱 이름·로고, Supabase 인증 메일, 선택적 도메인 연결) + 실제 Drive 계정 확인 2건(새 계정에서 `REDO 녹음` 생성, 옛 폴더가 있는 계정에서 `ULeveLP 녹음` 재사용).
 - **관찰(고치지 않음):** 영어·일본어 설정 문구의 폴더 이름(`REDO Recordings`·`REDO 録音`)은 실제 폴더 이름(`REDO 녹음`)과 다르다(기존 동작 유지). [EX-1 명세](../명세/EX-1_크롬확장_구현명세.md)의 `"ULevelP에 추가"` 문구는 EX-1 착수 때 고친다.
+
+## 6. PR · CI · 리뷰 확인 (2단계 마무리)
+- **PR:** [#20](https://github.com/choise-hun/doloop/pull/20) (`step/BR-1` → `main`)
+- **코드 head `66d53ec` CI 결과:** [Run #43547579506](https://github.com/choise-hun/doloop/actions/runs/43547579506) — 6/6 성공 (`Detect code changes`, `Test (Node 22)`, `Kotlin test (JDK 21)`, `Docker build & smoke test`, `E2E XSS & CSP (Playwright, spa)`, `CI ok`).
+- **리뷰 코멘트 확인:**
+  - `chatgpt-codex-connector` (`66d53ec` 기준): `has_any_findings: false`, `has_unresolved_findings: false` ([코멘트](https://github.com/choise-hun/doloop/pull/20#issuecomment-6870362399)).
+  - PR 인라인 코멘트(`pulls/20/comments`) 0건, 사용자/시니어 리뷰 0건.
+- **다음 담당:** GPT-6.1 Sol 시니어 3단계 독립 검증.
