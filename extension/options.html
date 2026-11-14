@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RE:DO 유튜브 연습 도우미 — 설정</title>
+<style>
+  :root { --bg: #F0EEEA; --surface: #f6f6f1; --ink: #1d1d1f; --muted: #6b6a63; --line: #cfcec4; --orange: #e64d01; --good: #2f6b3a; --bad: #b3261e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header img { width: 40px; height: 40px; display: block; }
+  h1 { margin: 0; font-size: 20px; line-height: 1.3; }
+  section { background: var(--surface); border: 1px solid var(--line); padding: 16px; margin-bottom: 16px; }
+  h2 { margin: 0 0 8px; font-size: 14px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  button { min-height: 40px; padding: 0 18px; border: 1px solid var(--ink); border-radius: 9999px; background: var(--ink); color: var(--surface); font: inherit; font-weight: 700; cursor: pointer; }
+  button.secondary { background: var(--surface); color: var(--ink); }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  label.choice { display: flex; align-items: center; gap: 8px; min-height: 36px; cursor: pointer; }
+  code { font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+  .status { min-height: 22px; margin: 12px 0 0; font-size: 13px; }
+  .status[data-tone="good"] { color: var(--good); }
+  .status[data-tone="bad"] { color: var(--bad); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icon-128.png" alt="">
+    <h1>RE:DO 유튜브 연습 도우미</h1>
+  </header>
+
+  <section aria-labelledby="h-account">
+    <h2 id="h-account">계정</h2>
+    <p id="account-state">확인하는 중…</p>
+    <div class="row">
+      <button type="button" id="sign-in" hidden>Google로 로그인</button>
+      <button type="button" id="sign-out" class="secondary" hidden>로그아웃</button>
+    </div>
+    <p class="status" id="account-status" role="status"></p>
+  </section>
+
+  <section aria-labelledby="h-server">
+    <h2 id="h-server">서비스 주소</h2>
+    <label class="choice"><input type="radio" name="api-base" value="https://ulevelp-d5ympfsmfq-du.a.run.app"> 운영 <code>https://ulevelp-d5ympfsmfq-du.a.run.app</code></label>
+    <label class="choice"><input type="radio" name="api-base" value="http://127.0.0.1:3000"> 개발용 <code>http://127.0.0.1:3000</code></label>
+    <div class="row" style="margin-top: 8px;">
+      <button type="button" id="check" class="secondary">연결 확인</button>
+    </div>
+    <p class="status" id="check-status" role="status"></p>
+  </section>
+
+  <section aria-labelledby="h-menu">
+    <h2 id="h-menu">곡 추가</h2>
+    <label class="choice"><input type="checkbox" id="menu-item"> 유튜브 목록의 점 3개 메뉴에 "RE:DO에 추가" 넣기</label>
+    <p class="muted">끄더라도 영상 링크를 우클릭하면 "RE:DO에 추가"를 쓸 수 있습니다. 바꾼 설정은 유튜브에서 다음 화면으로 넘어갈 때 적용됩니다.</p>
+  </section>
+
+  <section aria-labelledby="h-info">
+    <h2 id="h-info">연결 정보</h2>
+    <p class="muted">확장 프로그램 출처 <code id="ext-origin"></code><br>로그인 돌아오는 주소 <code id="ext-redirect"></code></p>
+  </section>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>
