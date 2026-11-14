@@ -92,7 +92,7 @@
 - [x] `npm test` → 실패 0건 (464 passed) / 커밋 범위: §3의 6개 파일 + 문서(`결과/EX-2.md`, `진행_크롬확장.md`)뿐
 - [x] `grep -n "innerHTML\|chrome\.storage\|\.key\b" extension/practice-panel.js` → 결과 없음
 - [x] 수동 검수표 6건 결과를 `결과/EX-2.md`에 기록(전부 미실시와 사유 기록)
-- [ ] PR(base `main`) · 최신 커밋 CI 종료 · 리뷰 확인 뒤 진행 파일 §1 갱신 (커밋·PR 후 채움)
+- [x] PR(base `main`) · 최신 커밋 CI 종료 · 리뷰 확인 뒤 진행 파일 §1 갱신 (`PR #24` / `b48867a` CI 통과)
 
 ## 5. 명세와 달라진 점
 
@@ -108,5 +108,6 @@
 - PR: [PR #24](https://github.com/choise-hun/doloop/pull/24) (`step/EX-2` → `main`)
 - 리뷰 코멘트 (`chatgpt-codex-connector`, `65f6c33` 기준 1건):
   1. **[P2] `extension/practice-panel.js:568`** ([코멘트](https://github.com/choise-hun/doloop/pull/24#discussion_r4574298283)): 광고 재생 중 [반복]/`Alt+L`로 반복을 켤 때 `ad` 여부를 확인하지 않아 `video.currentTime`이 본영상 `a`로 이동함.
-     - **판단: 타당 → 수정 반영**: `handleAction`에서 실시간 `ad = Boolean(document.querySelector(REDO_SEL.adShowing))`을 확인해 `!ad`일 때만 `currentTime = state.a`로 이동하도록 가드 추가(`setA`/`setB`/`restart`/배속 반영도 동일 `ad` 기준으로 일원화). `test/extension_ex2.test.js` `TC-EX-10 100회`에 광고 중 반복 재활성화 회귀 단언 추가.
-- `65f6c33` CI: 5 passed, 1 skipped(`Kotlin test (JDK 21)`, Kotlin 미변경) — [실행 43609936025](https://github.com/choise-hun/doloop/actions/runs/43609936025). 수정 커밋 push 후 최신 head CI 재확인.
+     - **판단: 타당 → 수정 반영(`b48867a`)** · [답글](https://github.com/choise-hun/doloop/pull/24#discussion_r4574366424): `handleAction`에서 실시간 `ad = Boolean(document.querySelector(REDO_SEL.adShowing))`을 확인해 `!ad`일 때만 `currentTime = state.a`로 이동하도록 가드 추가(`setA`/`setB`/`restart`/배속 반영도 동일 `ad` 기준으로 일원화). `test/extension_ex2.test.js` `TC-EX-10 100회`에 광고 중 반복 재활성화 회귀 단언 추가.
+- `65f6c33` CI: 5 passed, 1 skipped(`Kotlin test (JDK 21)`) — [실행 43609936025](https://github.com/choise-hun/doloop/actions/runs/43609936025)
+- `b48867a` 최신 코드 CI: 5 passed, 1 skipped(`Kotlin test (JDK 21)`) — [실행 43611261464](https://github.com/choise-hun/doloop/actions/runs/43611261464) (`Detect code changes` 7s, `Test (Node 22)` 36s, `Docker build & smoke test` 1m35s, `E2E XSS & CSP (Playwright, spa)` 11m38s, `CI ok` 4s). 추가 리뷰 코멘트 없음.
