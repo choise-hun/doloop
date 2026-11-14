@@ -1042,7 +1042,7 @@ export const JA: Record<I18nKey, string> = {
   'home.errInvalidYoutubeUrl': "YouTube動画のリンクではありません",
   'home.ariaDashboard': "練習継続ダッシュボード",
   'home.linkViewLog': "記録を見る →",
-  'home.titleRecentSong': "最近練習した曲",
+  'home.titleRecentSong': "RECENT",
   'home.shortcutLabel': "(ショートカット)",
   'home.btnResumeSong': "▶ 続きから区間練習する →",
   'home.emptyRecentSong': "まだ練習中の曲がありません。上の入力欄にYouTubeリンクを貼り付けて始めましょう。",

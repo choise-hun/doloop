@@ -138,6 +138,11 @@
 
 .streakCellToday {
   border-color: var(--now-ring);
+  background: color-mix(in srgb, var(--now-ring) 12%, transparent);
+}
+
+.streakCellToday .dowText {
+  color: var(--ink);
 }
 
 .streakCellDone {
@@ -154,6 +159,10 @@
 
 .streakCellDone .dowText {
   color: var(--surface2);
+}
+
+.streakCellDone.streakCellToday {
+  border-color: var(--now-ring);
 }
 
 .dayNum {
@@ -228,7 +237,7 @@
   justify-content: center;
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink);
 }
 
 .recentInfo {
@@ -253,6 +262,16 @@
   font-size: 12px;
   color: var(--muted);
   margin: 0;
+}
+
+.recentSegmentLoop {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border: 1px solid var(--now-ring);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--now-ring) 12%, transparent);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* 장르 바로가기: 스트릭 달력 칸과 같은 모양. 줄 아랫선은 왼쪽 스트릭 막대 아랫선과 맞춘다 */
@@ -487,6 +506,14 @@
   min-height: 400px;
 }
 
+.barAccent {
+  border-top: 3px solid var(--now-ring);
+}
+
+.barInk {
+  border-top: 3px solid var(--ink);
+}
+
 .frameHead {
   display: flex;
   align-items: baseline;
@@ -586,6 +613,14 @@
   color: var(--muted);
   font-family: var(--font-mono);
   white-space: nowrap;
+}
+
+.curItem {
+  box-shadow: inset 3px 0 0 var(--now-ring);
+}
+
+.curItem a {
+  padding-left: 10px;
 }
 
 .curItem .itemMeta {
@@ -910,8 +945,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 0;
   margin-top: 16px;
   margin-bottom: 24px;
@@ -929,13 +964,13 @@
   font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: var(--ink);
+  color: var(--accent-ink);
   margin: 0;
 }
 
 .communityBannerDesc {
   font-size: 13px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--accent-ink) 82%, transparent);
   margin: 0;
   line-height: 1.4;
 }
@@ -946,15 +981,18 @@
   white-space: nowrap;
   font-weight: 700;
   font-size: 13px;
-  color: var(--ink);
+  color: var(--accent-ink);
   text-decoration: underline;
   text-underline-offset: 4px;
-  padding: 8px 12px;
-  border-radius: var(--radius-pill);
+  min-height: 44px;
 }
 
 .communityBannerLink:hover {
-  background: var(--panel-bg);
+  text-decoration-thickness: 2px;
+}
+
+.communityBannerLink:focus-visible {
+  outline-color: var(--accent-ink);
 }
 
 @media (max-width: 600px) {

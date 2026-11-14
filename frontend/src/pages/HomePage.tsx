@@ -478,6 +478,12 @@ export function HomePage(): React.ReactElement {
         }
       : null;
 
+  const recentHasLoop =
+    recentSong != null &&
+    recentSong.a != null &&
+    recentSong.b != null &&
+    recentSong.b > recentSong.a;
+
   // 노션 바로가기 링크 — 노션 연동은 동결·은닉(계획/앱_명세.md §5). 설정 고급 메뉴에 주소를 넣은 사용자에게만 보인다
   const nlPracticeUrl = safeUrl(raw.get('ulp:notion-practice'));
   const nlNotesUrl = safeUrl(raw.get('ulp:notion-notes'));
@@ -569,11 +575,11 @@ export function HomePage(): React.ReactElement {
         </form>
       </div>
 
-      {/* 상단 연속성 위젯: 주간 스트릭(Mo~Su)·작심삼일 + 가장 최근 연습했던 곡 */}
+      {/* 상단 연속성 위젯: WEEKLY(Mo~Su)·작심삼일 + RECENT */}
       <section className={styles.topWidgets} aria-label={t('home.ariaDashboard')}>
-        <div className={styles.widgetCard} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
+        <div className={`${styles.widgetCard} ${styles.barAccent}`} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
-            <h2 className={styles.widgetTitle}>WEEKLY STREAK</h2>
+            <h2 className={styles.widgetTitle}>WEEKLY</h2>
             <SafeLink href="log.html" className={styles.widgetLink}>
               {t('home.linkViewLog')}
             </SafeLink>
@@ -587,6 +593,7 @@ export function HomePage(): React.ReactElement {
                 }`}
                 data-date={d.dateStr}
                 data-practiced={d.practiced ? '1' : '0'}
+                data-today={d.isToday ? '1' : undefined}
               >
                 <span className={styles.dowText}>{d.dowLabel}</span>
                 <span className={styles.dayNum}>{d.dayNumber}</span>
@@ -611,7 +618,7 @@ export function HomePage(): React.ReactElement {
           </SafeLink>
         </div>
 
-        <div className={styles.widgetCard} id="recentSongCard" data-align-group="top1:top,bottom@821">
+        <div className={`${styles.widgetCard} ${styles.barInk}`} id="recentSongCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>{t('home.titleRecentSong')}</h2>
             {recentSong && (
@@ -641,7 +648,11 @@ export function HomePage(): React.ReactElement {
                 >
                   {recentSong.title}
                 </p>
-                <p className={styles.recentSegment} id="recentSongSegment">
+                <p
+                  className={`${styles.recentSegment}${recentHasLoop ? ` ${styles.recentSegmentLoop}` : ''}`}
+                  id="recentSongSegment"
+                  data-align-group="songText:left"
+                >
                   {formatRecentSongSegment(recentSong)}
                 </p>
                 <SafeLink
@@ -672,7 +683,7 @@ export function HomePage(): React.ReactElement {
       {/* 하단 메인 분할 대시보드: 좌측 BETTER (연습실) | 우측 VAULT (학습) */}
       <div className={`frames ${styles.splitFrames}`}>
         <section
-          className={`frame ${styles.frame}`}
+          className={`frame ${styles.frame} ${styles.barAccent}`}
           id="betterFrame"
           aria-labelledby="fBetter"
           data-align-group="frames:top,bottom@821"
@@ -783,7 +794,7 @@ export function HomePage(): React.ReactElement {
         </section>
 
         <section
-          className={`frame ${styles.frame}`}
+          className={`frame ${styles.frame} ${styles.barInk}`}
           id="vaultFrame"
           aria-labelledby="fVault"
           data-align-group="frames:top,bottom@821"
@@ -959,13 +970,18 @@ export function HomePage(): React.ReactElement {
         id="homeCommunityBanner"
         aria-labelledby="homeCommunityTitle"
       >
-        <div className={styles.communityBannerContent}>
+        <div className={styles.communityBannerContent} data-align-group="bannerText:left">
           <h2 className={styles.communityBannerTitle} id="homeCommunityTitle">
             {t('home.communityTitle')}
           </h2>
           <p className={styles.communityBannerDesc}>{t('home.communityDescription')}</p>
         </div>
-        <SafeLink href="community.html" className={styles.communityBannerLink} id="homeCommunityLink">
+        <SafeLink
+          href="community.html"
+          className={styles.communityBannerLink}
+          id="homeCommunityLink"
+          data-align-group="bannerText:left"
+        >
           {t('home.communityLink')}
         </SafeLink>
       </section>

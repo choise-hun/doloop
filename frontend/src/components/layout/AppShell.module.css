@@ -35,10 +35,20 @@
 }
 
 .brandLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   color: var(--ink);
   text-decoration: none;
   padding: 8px 2px;
   white-space: nowrap;
+}
+
+.navLogo {
+  display: block;
+  height: 16px;
+  aspect-ratio: 416 / 100;
+  flex-shrink: 0;
 }
 
 .brandLink:hover,
