@@ -12,7 +12,7 @@
 | DS-1 | 시니어 명세 → 주니어 | 토큰·규칙 개정(주황 값, 3px 바 예외, 배너 예외), 토큰 밖 색 25곳 교체, `design_rules.test.js` 허용 개수 내리기, 대비 처리안 | 결과/DS-0 §2·§3 → `명세/DS-1_구현명세.md`, `결과/DS-1.md` | `npm test` 통과, 토큰 밖 색 0, 규칙 문서와 토큰 일치 | **완료** (PR #19 머지 2026-11-14) | 중 |
 | BR-1 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-1) | 사용자에게 보이는 이름 RE:DO 교체(화면 문구·다국어 21줄·`<title>`·화면 제목 5곳·내보내기 파일 이름), 로고 SVG·`BrandLogo` 컴포넌트, 홈 큰 글자 → 로고, 파비콘·`icon-180.png`. 매니페스트·OG·크롬 확장은 코드에 없어 만들지 않는다. 내부 식별자(Kotlin 패키지·`app_id`·`ULEVELP_CONFIG`·Cloud Run 서비스·DB)는 유지 | 결과/DS-0 §1 로고 좌표 → [`명세/BR-1_구현명세.md`](명세/BR-1_구현명세.md), [`결과/BR-1.md`](결과/BR-1.md) | `test/br1_brand.test.js`·`npm test`·빌드·홈 layout spec 통과, 검색 7개 기대 건수 일치(명세 §7) | **완료** (PR #20 머지 2026-11-14, `main`=`fa339c0`) | 중 |
 | BR-2 | 사람 | Google OAuth 동의 화면 앱 이름, Supabase 인증 메일, (선택) 도메인 구입·연결. 방법·비용은 [BR-1 명세 §8](명세/BR-1_구현명세.md) | BR-1 | 외부 화면에서 새 이름 확인, 실제 Drive 계정 확인 2건 | 대기 | 낮음 |
-| DS-2 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-2) | 홈 적용: 프레임 상단 바 3px 4곳(WEEKLY·BETTER 주황, RECENT·VAULT 잉크), 커뮤니티 배너 잉크 면 채움, 오늘 칸 주황 테두리+틴트, 최근 곡 구간 배지, CHORDS '이어서' 줄 왼쪽 3px 선, 카드 제목 `WEEKLY`·`RECENT`, 빈 썸네일 글자 `--ink`, 상단 메뉴 로고(`AppShell`의 HOME 링크 안). 정렬규격 순서(배치 약속 → spec 실패 → 구현 → `home`·`shell` layout spec → 4개 폭 스크린샷) | DS-1·BR-1 → [`명세/DS-2_구현명세.md`](명세/DS-2_구현명세.md), [`결과/DS-2.md`](결과/DS-2.md) | `DS2-1~8`·`DS2-N1~2`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 9대 질문 검토(명세 §7 V1~V10) | **리뷰 대기** — [PR #21](https://github.com/choise-hun/doloop/pull/21), V1~V10 통과·CI 확인; 머지 시 완료 | 중 |
+| DS-2 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-2) | 홈 적용: 프레임 상단 바 3px 4곳(WEEKLY·BETTER 주황, RECENT·VAULT 잉크), 커뮤니티 배너 잉크 면 채움, 오늘 칸 주황 테두리+틴트, 최근 곡 구간 배지, CHORDS '이어서' 줄 왼쪽 3px 선, 카드 제목 `WEEKLY`·`RECENT`, 빈 썸네일 글자 `--ink`, 상단 메뉴 로고(`AppShell`의 HOME 링크 안). 정렬규격 순서(배치 약속 → spec 실패 → 구현 → `home`·`shell` layout spec → 4개 폭 스크린샷) | DS-1·BR-1 → [`명세/DS-2_구현명세.md`](명세/DS-2_구현명세.md), [`결과/DS-2.md`](결과/DS-2.md) | `DS2-1~8`·`DS2-N1~3`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 9대 질문 검토(명세 §7 V1~V10) | **4단계 전체 회귀 통과 → 커밋·push·최신 head CI 확인 진행** — [PR #21](https://github.com/choise-hun/doloop/pull/21) 위에 3단계 수정 반영(`npm test` 440, `home+shell` 46, `layout/` 480, `test:e2e` 797 passed). 머지 시 완료 | 중 |
 | DS-3 | 시니어 명세 → 주니어 | 다른 화면 전파(필요한 곳만), 글자 크기 20종 단계 정리 | DS-2 → `결과/DS-3.md` | 화면별 layout spec 통과 | 대기(범위는 DS-2 뒤 결정) | 높음 |
 
 순서: DS-1 → BR-1(DS-1과 병행 가능) → DS-2 → DS-3. BR은 M0-1(Capacitor 번들 ID·스토어 이름) 전에 끝낸다.
@@ -47,11 +47,10 @@
 - 진행 표에 적었던 "manifest·파비콘·OG·크롬 확장"은 코드에 없었다(`frontend/index.html`에 아이콘·OG 태그 없음, `public/`에 매니페스트 없음, `extension/` 폴더 없음). 파비콘만 새로 만들고 나머지는 범위 밖으로 뺐다(명세 U5·U6).
 - 콜론(`:`)은 파일 이름에 쓰기 어렵다(Windows 금지, 브라우저가 `_`로 바꿈). 파일·폴더 이름은 `REDO`로 쓰는 안을 명세에 넣었다(U1).
 - DS-2 조사에서 나온 것: ① `home.spec.js:83-86`이 프레임 테두리를 `borderWidth === '1px'`로 단언해 상단 바 3px을 넣으면 깨진다(명세 U4·T0) ② 홈 배너 링크 hover가 쓰는 `--panel-bg`는 `tokens.css`에 없는 토큰이다(같은 토큰을 `PracticeSessionCard.module.css`·`EpisodeLogCard.module.css`도 쓴다 — DS-3 입력) ③ 전역 포커스 외곽선이 `--accent`라 잉크 배너 위에서 보이지 않는다(명세 D9) ④ 주황 틴트 위 `--muted`는 라이트 4.31이라 오늘 칸 요일 글자를 `--ink`로 바꾼다(명세 D3) ⑤ 표준 가짜 데이터의 날짜가 `2026-11-03` 고정이라 "오늘+완료" 칸은 전용 상태로 만들어야 한다(명세 T4).
+- DS-2 시니어 3단계에서 나온 것: 상단 메뉴에 로고를 넣자 두 줄이 되는 폭이 넓어졌다(`main` 비로그인 821~849px → PR head 300~331·821~928px, 로그인 821 → 300~303·821~899px). layout 검사 폭(1280·1150·768·390) 사이라 477건이 모두 통과했고, `navRow:center-y`는 쌓이면 판정을 건너뛴다. `AppShell.module.css`에 폭별 간격 축소를 넣고 `DS2-N3` 3건을 더했다(수정 뒤 비로그인 300~307·821~840px, 로그인 없음). 비로그인 821~840px은 DS-2 이전부터 있던 문제라 DS-3 입력으로 넘긴다.
 
 ## 4. 다음 세션 시작 지시
 
-1. 사용자가 [DS-2 명세](명세/DS-2_구현명세.md) §0의 U1~U4와 §1 판정을 승인했는지 확인한다. 승인 전에는 구현하지 않는다. 승인하지 않은 항목은 그 항목의 "다른 선택"으로 명세 §3·§4의 해당 줄을 시니어가 먼저 고친다.
-2. 승인 뒤 주니어 2단계: `main` 최신화(`git fetch origin main:main && git checkout main && git pull --ff-only`, 미커밋 변경 보존) → 브랜치 `step/DS-2` → 명세 §7 순서(배치 약속 표 → T0~T8·N1·N2 Red → F1~F5 구현 → V2~V10) → `결과/DS-2.md` → 커밋·push·PR(base `main`)·CI. 명세·이 파일의 미커밋 변경은 첫 커밋(`docs(design): add DS-2 spec`)에 함께 넣는다.
-3. 시니어 3단계: PR의 `AppShell` 변경이 다른 화면 layout spec에 낸 실패·경고, T0 단언 교체, 오늘+완료 칸 선언 순서를 먼저 본다.
-4. BR-2(사람)는 [BR-1 명세 §8](명세/BR-1_구현명세.md)을 보고 외부 화면 이름 변경·실제 Drive 계정 확인 2건·(선택) 도메인 연결을 진행한다(DS-2와 무관하게 진행 가능).
-5. DS-2 다음은 DS-3(범위는 DS-2 완료 후 결정).
+1. **주니어 4단계(DS-2 마무리):** `step/DS-2`에서 `git status`로 미커밋 2개 코드 파일(`AppShell.module.css`·`shell.spec.js`)과 문서 3개를 확인한다. [결과/DS-2 §6](결과/DS-2.md)의 수정이 Red→Green 기록과 맞는지 본 뒤 `npm test` · `npm run build` · `npx playwright test test/e2e/layout/`(기대 480) · `npm run test:e2e`(기대 797)를 돌리고, 결과 §3·§6-5와 이 파일을 실제 수치로 고친다. 커밋(`fix(design): keep top nav on one row with logo` + `docs(design): record DS-2 senior review`)·push → PR #21 최신 head CI와 리뷰 확인. 머지·배포는 하지 않는다.
+2. BR-2(사람)는 [BR-1 명세 §8](명세/BR-1_구현명세.md)을 보고 외부 화면 이름 변경·실제 Drive 계정 확인 2건·(선택) 도메인 연결을 진행한다(DS-2와 무관하게 진행 가능).
+3. PR #21 머지 뒤 DS-3: 범위를 먼저 정한다. 입력은 [결과/DS-2](결과/DS-2.md) §5의 DS-3 입력 ①~③과 §6-6의 ④·⑤다.
