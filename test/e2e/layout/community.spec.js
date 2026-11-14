@@ -178,3 +178,24 @@ test('CM-UI CUI-01 커뮤니티 제목과 탭 렌더 검증', async ({ page }) =
   await expect(page.locator('#chipAll')).toBeVisible();
   await expect(page.locator('#chipLog')).toBeVisible();
 });
+
+// DS-3: 없는 토큰(--panel-bg)을 쓰던 진행 막대 바탕이 --surface2로 칠해진다 (명세 §6 T6)
+test('DS3-P1 진행 막대 바탕', async ({ page }) => {
+  const { mockApp } = require('../support/mock-app');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, COMMUNITY_PRO);
+  await page.goto('/community.html#logs', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+  const wrap = page.locator(`[data-post-id="${EPISODE_POST_1.postId}"] [class*="coverageBarWrap"]`);
+  await wrap.waitFor({ state: 'visible' });
+  const got = await wrap.evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--surface2)';
+    document.body.appendChild(probe);
+    const want = window.getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { bg: window.getComputedStyle(el).backgroundColor, want };
+  });
+  expect(got.want).not.toBe('rgba(0, 0, 0, 0)');
+  expect(got.bg).toBe(got.want);
+});

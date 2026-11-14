@@ -108,7 +108,7 @@ export function AppShell({
             data-align-group="navRow:center-y"
           >
             <BrandLogo variant="wordmark" className={styles.navLogo} />
-            {t('nav.home')}
+            <span className={styles.brandText}>{t('nav.home')}</span>
           </a>
           {MAIN_NAV.map((item) =>
             item.href ? (

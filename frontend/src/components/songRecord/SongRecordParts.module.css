@@ -224,7 +224,7 @@
   min-height: 26px;
   height: 26px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: var(--radius-pill);
 }
 
@@ -264,16 +264,16 @@
 .partRange {
   font-family: var(--font-mono);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .partDuration {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .partBadge {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--good);
   font-weight: 700;
 }
@@ -299,7 +299,7 @@
   min-height: 28px;
   height: 28px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: var(--radius-pill);
 }
 
@@ -313,7 +313,7 @@
   min-height: 28px;
   height: 28px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--bad);
   border-radius: var(--radius-pill);
 }

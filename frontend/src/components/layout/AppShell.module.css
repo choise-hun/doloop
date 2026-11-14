@@ -185,6 +185,14 @@
   }
 }
 
+/* DS-3: 비로그인 821~840px은 간격을 다 줄여도 약 20px이 모자란다.
+   821~880px에서만 홈 링크의 글자를 숨기고 로고만 둔다(로고의 읽기 이름 RE:DO가 링크 이름으로 남는다) */
+@media (min-width: 821px) and (max-width: 880px) {
+  .brandText {
+    display: none;
+  }
+}
+
 @media (max-width: 360px) {
   .siteNav {
     gap: 0 8px;
@@ -200,6 +208,15 @@
 }
 
 @media (max-width: 820px) {
+  /* DS-3: 탭 바가 있는 폭에서는 위 메뉴 링크의 터치 높이를 44px로 맞춘다.
+     .navItem의 display를 정하므로 아래 .navMainItem(display: none)보다 앞에 둔다 */
+  .brandLink,
+  .navItem {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
   .navMainItem {
     display: none;
   }

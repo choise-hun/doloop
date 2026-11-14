@@ -293,7 +293,7 @@
 
 .noteCardDesc {
   grid-column: 1 / -1;
-  font-size: 14.5px;
+  font-size: 14px;
   color: var(--ink);
   line-height: 1.5;
   margin: 0;

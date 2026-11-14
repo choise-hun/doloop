@@ -30,7 +30,7 @@
 .accountCard h2 {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 22px;
+  font-size: 24px;
   letter-spacing: -0.01em;
   color: var(--ink);
   margin: 0;
@@ -66,7 +66,7 @@
   overflow-wrap: anywhere;
 }
 .episodeRow h3 { margin: 0; font-size: 16px; color: var(--ink); }
-.episodeRow time { font: 12px var(--font-mono); color: var(--muted); }
+.episodeRow time { font-family: var(--font-mono); font-size: 12px; font-weight: 400; font-style: normal; line-height: normal; color: var(--muted); }
 .episodeActions { display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; }
 .episodeActions > * { min-height: 44px; max-width: 100%; }
 .profileFolders [data-share-row] { overflow-wrap: anywhere; }
