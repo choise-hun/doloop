@@ -62,8 +62,8 @@
 }
 
 .errorBox {
-  color: #dc2626;
-  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
 }
 
 .moreRow {

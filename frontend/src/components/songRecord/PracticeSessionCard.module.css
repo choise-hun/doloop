@@ -277,13 +277,13 @@
 .shareBadgePublished {
   font-size: 11px;
   font-weight: 700;
-  color: #059669;
+  color: var(--good);
 }
 
 .shareBadgePaused {
   font-size: 11px;
   font-weight: 700;
-  color: #d97706;
+  color: var(--ink);
 }
 
 .shareBadgeWithdrawn {
@@ -305,7 +305,7 @@
 .shareBadgeHidden {
   font-size: 11px;
   font-weight: 700;
-  color: #dc2626;
+  color: var(--bad);
 }
 
 .hiddenReason {
@@ -322,7 +322,7 @@
 
 .shareErrorText {
   font-size: 11px;
-  color: #dc2626;
+  color: var(--bad);
 }
 
 .actionMsg {

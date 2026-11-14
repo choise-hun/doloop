@@ -104,7 +104,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #000000;
+  background: var(--media-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   overflow: hidden;
@@ -570,7 +570,7 @@
 .ppScrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--scrim);
   z-index: 20;
 }
 
@@ -780,7 +780,7 @@
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--scrim);
   z-index: 40;
   display: flex;
   align-items: center;

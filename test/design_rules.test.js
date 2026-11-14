@@ -33,17 +33,8 @@ const ALLOWED_RADIUS = new Set([
   'var(--radius-pill)', 'var(--radius-card)', 'var(--radius-card, 0)',
 ]);
 
-// 토큰 밖 색이 남아 있는 파일과 허용 개수(hex + rgb()/hsl() 호출 수).
-// 줄이는 것은 되고 늘리면 실패한다. 화면을 고쳐 토큰으로 바꾸면 이 숫자를 함께 내린다.
-// 새 파일은 0이어야 한다(이 표에 추가하지 않는다).
-const KNOWN_RAW_COLORS = {
-  'frontend/src/components/community/Community.module.css': 3,
-  'frontend/src/components/community/EpisodeLogFeed.module.css': 2,
-  'frontend/src/components/community/EpisodeReportDialog.module.css': 8,
-  'frontend/src/components/songRecord/EpisodeShareDialog.module.css': 2,
-  'frontend/src/components/songRecord/PracticeSessionCard.module.css': 4,
-  'frontend/src/pages/PracticePage.module.css': 3,
-};
+// 토큰 밖 색은 0이다(DS-1). 새 예외를 이 표에 추가하지 않는다.
+const KNOWN_RAW_COLORS = {};
 
 function countRawColors(src) {
   const hex = src.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
@@ -76,7 +67,7 @@ test('DR-3: 모든 CSS에서 순백(#fff/#ffffff)을 쓰지 않는다', () => {
   assert.deepEqual(bad, [], '순백 사용');
 });
 
-test('DR-4: 토큰 밖 색(hex·rgb()·hsl())은 알려진 개수보다 늘지 않는다', () => {
+test('DR-4: tokens.css 밖에서 hex·rgb()·hsl()을 쓰지 않는다', () => {
   const over = [];
   const stale = [];
   for (const { rel, src } of cssFiles) {
@@ -91,4 +82,15 @@ test('DR-4: 토큰 밖 색(hex·rgb()·hsl())은 알려진 개수보다 늘지 �
   for (const rel of Object.keys(KNOWN_RAW_COLORS)) {
     assert.ok(cssFiles.some((f) => f.rel === rel), 'KNOWN_RAW_COLORS에 없는 파일이 적혀 있음: ' + rel);
   }
+});
+
+test('DR-5: 주황 토큰을 글자색으로 쓰지 않는다', () => {
+  const bad = [];
+  for (const { rel, src } of cssFiles) {
+    if (rel === TOKENS) continue;
+    for (const m of src.matchAll(/(?:^|[\s;{])color\s*:\s*var\(--(?:orange-[a-z]+|now-ring|moved)\)/g)) {
+      bad.push(rel + ' → ' + m[0].trim());
+    }
+  }
+  assert.deepEqual(bad, [], '주황 토큰을 글자색으로 사용');
 });
