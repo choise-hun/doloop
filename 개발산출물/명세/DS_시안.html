@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RE:DO 디자인 시안 (DS-0)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<!--
+  최종 결정은 개발산출물/결과/DS-0_디자인결정.md가 기준이다(파랑·네이비 선택지는 최종에서 폐기).
+  DS-0 결정용 시안 페이지. 제품 코드가 아니다(이 파일의 hex·곡률은 design_rules 검사 대상이 아님).
+  축(잉크·파랑·주황·프레임·배너·주 행동·스트릭·링크·보조 글자·로고·헤더 장식)을 따로 골라 섞어 본다.
+  상태는 URL 해시에 저장되므로 링크를 복사하면 같은 조합이 열린다. "결정 내용 복사"로 진행 파일에 붙일 요약을 만든다.
+-->
+<style>
+:root {
+  --bg: #F0EEEA; --surface: #F6F6F1; --surface2: #E1E0D6; --line: #CFCEC4;
+  --ink: #191265; --muted: #6B6A63; --ui-ink: #1D1D1F;
+  --blue-text: #191265; --wide: #191265;
+  --orange: #E64D01;
+  --accent: #191265; --accent-ink: #F6F6F1;
+  --streak-done: #191265; --head: #191265;
+  --logo-main: #191265; --logo-dot1: #E64D01; --logo-dot2: #191265;
+  --now-tint: color-mix(in srgb, var(--orange) 20%, var(--surface));
+  --paper: #F6F6F1;
+  --font-body: "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Archivo", "Noto Sans KR", sans-serif;
+  --pill: 9999px;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--blue-text); outline-offset: 2px; }
+
+/* ---------- 레이아웃: 왼쪽 컨트롤 / 오른쪽 캔버스 ---------- */
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); min-height: 100vh; }
+.side { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); padding: 16px; color: var(--ui-ink); display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 920px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+.sideHead { display: flex; flex-direction: column; gap: 4px; }
+.sideTag { align-self: flex-start; font-family: var(--font-mono); font-size: 11px; font-weight: 700; border: 1px solid var(--ui-ink); padding: 1px 6px; }
+.sideTitle { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 16px; }
+.sideDesc { margin: 0; font-size: 12px; color: var(--muted); }
+.grp { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.grpLabel { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.opt { min-height: 30px; padding: 0 11px; border-radius: var(--pill); border: 1px solid var(--line); background: var(--bg); color: var(--ui-ink); font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.opt:hover { border-color: var(--ui-ink); }
+.opt[aria-pressed="true"] { background: var(--ui-ink); border-color: var(--ui-ink); color: var(--surface); }
+.dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--ui-ink) 25%, transparent); flex-shrink: 0; }
+.presetList { display: flex; flex-direction: column; gap: 4px; }
+.presetList .opt { justify-content: flex-start; border-radius: 0; min-height: 34px; }
+.contrast { width: 100%; border-collapse: collapse; font-size: 12px; }
+.contrast td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.contrast td:last-child { text-align: right; font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.pass { color: var(--good, #2F6B3A); } .warn { color: #B3261E; }
+:root[data-theme="dark"] .warn { color: #F2867C; } :root[data-theme="dark"] .pass { color: #6FBF7E; }
+.notes { margin: 0; padding-left: 16px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.notes li.chg::marker { color: var(--orange); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.out { width: 100%; min-height: 120px; font-family: var(--font-mono); font-size: 11px; background: var(--bg); color: var(--ui-ink); border: 1px solid var(--line); padding: 8px; resize: vertical; }
+
+.main { padding: 24px 16px 80px; min-width: 0; }
+.canvas { container-type: inline-size; container-name: cv; max-width: var(--cw, 1120px); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.canvas[data-w="768"], .canvas[data-w="390"] { outline: 1px dashed var(--muted); outline-offset: 10px; }
+.secLabel { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; margin: 8px 0 -8px; }
+
+/* ---------- 로고 ---------- */
+.logo { display: block; color: var(--logo-main); }
+.lm { fill: var(--logo-main); }
+.ld1 { fill: var(--logo-dot1); }
+.ld2 { fill: var(--logo-dot2); }
+.lt { font-family: var(--font-display); font-weight: 900; font-stretch: 125%; }
+
+/* ---------- 브랜드 보드 ---------- */
+.brand { background: var(--surface); border: 1px solid var(--line); padding: 20px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+.brandCol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.brandH { margin: 0; font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+.logoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.logoCard { background: #F0EEEA; border: 1px solid var(--line); padding: 14px 12px 10px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; text-align: left; color: var(--ui-ink); }
+.logoCard:hover { border-color: var(--ink); }
+.logoCard[aria-pressed="true"] { border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); }
+.logoCard em { font-style: normal; font-size: 11px; color: #6B6A63; }
+.logoCard span { font-size: 11px; font-weight: 700; font-family: var(--font-mono); color: #6B6A63; }
+.icons { display: flex; gap: 10px; flex-wrap: wrap; }
+.icon { width: 76px; height: 76px; border-radius: 22%; display: flex; align-items: center; justify-content: center; padding: 16px; } /* OS 아이콘 마스크 미리보기 */
+.icon.light { border: 1px solid var(--line); }
+.palette { display: flex; gap: 10px; flex-wrap: wrap; }
+.sw { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-family: var(--font-mono); color: var(--muted); }
+.sw i { display: block; width: 64px; height: 44px; }
+.stack { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.sq { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; padding: 18px; }
+
+/* ---------- 홈 미리보기 ---------- */
+.nav { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); font-family: var(--font-display); font-weight: 800; font-size: 14px; letter-spacing: .02em; }
+.navMain, .navLinks { display: flex; align-items: center; flex-wrap: wrap; gap: 0 20px; }
+.navItem { color: var(--head); text-decoration: none; padding: 8px 2px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.navItem.cur { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.navLogo { padding: 8px 4px 8px 0; }
+.navLogo svg { height: 16px; width: auto; }
+.beta { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 5px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); }
+:root[data-deco="c"] .beta { background: var(--orange); border-color: var(--orange); color: var(--paper); }
+
+.hero { display: flex; flex-direction: column; }
+.heroMark { width: min(560px, 82%); margin: 22px auto 26px; }
+.heroMark svg { width: 100%; height: auto; }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+:root[data-deco="c"] .rule { border-top: 2px solid var(--ink); }
+.tagline { font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: .06em; text-align: center; margin: 22px 0 16px; }
+.go { width: min(640px, 100%); margin: 0 auto 8px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.inp { width: 100%; min-height: 48px; padding: 0 22px; border-radius: var(--pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 16px; }
+.goActs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.pillBtn, .ghostBtn { min-height: 48px; padding: 0 26px; border-radius: var(--pill); font-weight: 700; font-size: 17px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.pillBtn { background: var(--accent); border: 1px solid var(--accent); color: var(--accent-ink); }
+.ghostBtn { background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cardHead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cardTitle { color: var(--head); margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 14px; letter-spacing: .04em; }
+.lnk { color: var(--head); font-size: 12px; font-weight: 700; white-space: nowrap; background: none; border: 0; padding: 0; cursor: pointer; }
+.lnk:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.streak { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.day { border: 1px solid var(--line); background: var(--bg); padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--font-mono); }
+.day small { font-size: 11px; color: var(--muted); }
+.day b { font-size: 14px; }
+.day.done { background: var(--streak-done); border-color: var(--streak-done); color: var(--paper); }
+.day.done small { color: color-mix(in srgb, var(--paper) 78%, transparent); }
+.day.today { border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); background: var(--now-tint); }
+.streakBar { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--line); font-size: 13px; font-weight: 700; }
+.dots { display: inline-flex; gap: 6px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--ink); }
+.dots i.on { background: var(--orange); border-color: var(--orange); }
+
+.recent { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 14px; }
+.thumb { aspect-ratio: 16/9; background: var(--surface2); border: 1px solid var(--line); overflow: hidden; }
+.thumb svg { display: block; width: 100%; height: 100%; }
+.recentInfo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.songTitle { margin: 0; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seg2 { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.loop { font-weight: 700; font-size: 11px; padding: 1px 6px; border: 1px solid var(--orange); background: var(--now-tint); color: var(--ink); }
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+.cat { min-height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--bg); font-family: var(--font-mono); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.cat.on { border-color: var(--ink); }
+.cat.add { border-style: dashed; color: var(--muted); }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.frame { background: var(--surface); border: 1px solid var(--line); padding: 24px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.frameHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.frameHead h2 { color: var(--head); margin: 0; font-family: var(--font-display); font-weight: 900; font-stretch: 115%; font-size: 30px; line-height: 1; letter-spacing: -.02em; }
+.frameHead span { font-size: 13px; color: var(--muted); font-weight: 700; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sub { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.subHead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.subTitle { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+.list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.list li { border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 4px; min-height: 42px; }
+.list .t { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.list .m { font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.num { font-family: var(--font-mono); font-size: 12px; margin-right: 4px; }
+.list li.cur .m { color: var(--ink); font-weight: 700; }
+.secBtn { min-height: 42px; width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-weight: 700; font-size: 14px; cursor: pointer; }
+.noteBox { background: var(--bg); border: 1px solid var(--line); padding: 14px; display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 14px; }
+.noteBody { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.noteBody p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noteT { font-weight: 700; font-size: 14px; }
+.noteS { font-size: 12px; color: var(--muted); }
+.scope { display: flex; gap: 6px; flex-wrap: wrap; }
+.scope button { min-height: 30px; padding: 0 13px; border-radius: var(--pill); border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; }
+.scope button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.progs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.prog { background: var(--bg); border: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.progHead { display: flex; justify-content: space-between; gap: 6px; }
+.badge { font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 1px 6px; border: 1px solid var(--line); }
+.key { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 700; }
+.chords { font-family: var(--font-mono); font-weight: 700; font-size: 14px; color: var(--ink); word-break: keep-all; }
+.progSub { margin: 0; font-size: 12px; color: var(--muted); }
+.progActs { display: flex; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 20px 24px; background: var(--surface); border: 1px solid var(--line); }
+.banner h2 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: .04em; }
+.banner p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.banner .lnk { font-size: 13px; }
+:root[data-banner="fill"] .banner { background: var(--wide); border-color: var(--wide); color: var(--paper); }
+:root[data-banner="fill"] .banner p { color: color-mix(in srgb, var(--paper) 82%, transparent); }
+:root[data-banner="fill"] .banner .lnk { color: var(--paper); text-decoration: underline; text-underline-offset: 4px; }
+:root[data-banner="line"] .banner { border-left: 5px solid var(--wide); }
+:root[data-banner="fill"] .banner h2 { color: var(--paper); }
+
+/* ---------- 프레임 강도 (시안 D) ---------- */
+:root[data-frame="full"] #wStreak, :root[data-frame="bar"] #wStreak { border-top: 4px solid var(--orange); }
+:root[data-frame="full"] #wRecent, :root[data-frame="bar"] #wRecent { border-top: 4px solid var(--wide); }
+:root[data-frame="full"] #better, :root[data-frame="bar"] #better { border-top: 5px solid var(--orange); }
+:root[data-frame="full"] #vault, :root[data-frame="bar"] #vault { border-top: 5px solid var(--wide); }
+:root[data-frame="bar"] #wStreak, :root[data-frame="bar"] #wRecent { border-top-width: 3px; }
+:root[data-frame="bar"] #better, :root[data-frame="bar"] #vault { border-top-width: 3px; }
+:root[data-frame="full"] .frameHead { margin: -24px -24px 0; padding: 18px 24px 14px; }
+:root[data-frame="full"] #better .frameHead { background: color-mix(in srgb, var(--orange) 10%, var(--surface)); }
+:root[data-frame="full"] #vault .frameHead { background: color-mix(in srgb, var(--wide) 9%, var(--surface)); }
+:root:not([data-frame="none"]) .num { color: var(--blue-text); font-weight: 700; }
+:root:not([data-frame="none"]) .list li.cur { box-shadow: inset 3px 0 0 var(--orange); padding-left: 10px; }
+
+/* ---------- 폭 반응 (컨테이너 기준) ---------- */
+@container cv (max-width: 820px) {
+  .two, .split, .cols, .progs, .brand { grid-template-columns: 1fr; }
+}
+@container cv (max-width: 480px) {
+  .frame, .card { padding: 16px; }
+  :root[data-frame="full"] .frameHead { margin: -16px -16px 0; padding: 14px 16px 12px; }
+  .navMain, .navLinks { gap: 0 12px; }
+  .recent, .noteBox { grid-template-columns: 96px minmax(0, 1fr); }
+  .heroMark { width: 92%; }
+  .banner { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+
+
+<div class="layout">
+  <aside class="side" aria-label="시안 컨트롤">
+    <div class="sideHead">
+      <span class="sideTag">DS-0 · 결정용 시안</span>
+      <h1 class="sideTitle">RE:DO 홈 디자인 고르기</h1>
+      <p class="sideDesc">축마다 하나씩 골라 섞어 보세요. 조합은 주소(#…)에 저장되어 링크로 다시 열 수 있습니다.</p>
+    </div>
+    <div class="grp">
+      <span class="grpLabel">출발점 프리셋</span>
+      <div class="presetList" id="presets"></div>
+    </div>
+    <div id="axes"></div>
+    <div class="grp">
+      <span class="grpLabel">대비율 (WCAG AA: 글자 4.5 · 표시 3.0)</span>
+      <table class="contrast" id="contrast"></table>
+    </div>
+    <div class="grp">
+      <span class="grpLabel">현재 규칙(frontend-design.md) 대비 바뀌는 점</span>
+      <ul class="notes" id="notes"></ul>
+    </div>
+    <div class="grp">
+      <span class="grpLabel">결정 기록</span>
+      <div class="actions">
+        <button type="button" class="opt" id="copyBtn">결정 내용 복사</button>
+        <button type="button" class="opt" id="linkBtn">이 조합 링크 복사</button>
+      </div>
+      <textarea class="out" id="out" readonly aria-label="결정 요약"></textarea>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="canvas" id="canvas" data-w="full">
+
+      <p class="secLabel">BRAND — RE:DO</p>
+      <section class="brand" aria-label="브랜드 보드">
+        <div class="brandCol">
+          <h2 class="brandH">로고 형태 · 누르면 전체에 적용</h2>
+          <div class="logoGrid" id="formGrid"></div>
+          <h2 class="brandH">로고 색 · 누르면 홈에 적용</h2>
+          <div class="logoGrid" id="logoGrid"></div>
+          <h2 class="brandH">세로 조합 (1:1)</h2>
+          <div class="stack">
+            <div class="sq" style="background:#F0EEEA;border:1px solid var(--line);--logo-main:#1D1D1F;--logo-dot1:#1D1D1F;--logo-dot2:#1D1D1F"><svg class="logo" data-kind="stack" width="100%"></svg></div>
+            <div class="sq" style="background:#0010AB;--logo-main:#F6F6F1;--logo-dot1:#E64D01;--logo-dot2:#E64D01"><svg class="logo" data-kind="stack" width="100%"></svg></div>
+            <div class="sq" style="background:#191265;--logo-main:#F6F6F1;--logo-dot1:#E64D01;--logo-dot2:#F6F6F1"><svg class="logo" data-kind="stack" width="100%"></svg></div>
+          </div>
+        </div>
+        <div class="brandCol">
+          <h2 class="brandH">앱 아이콘 (OS 마스크 미리보기)</h2>
+          <div class="icons">
+            <div class="icon" style="background:#1D1D1F;--logo-main:#F6F6F1;--logo-dot1:#F6F6F1;--logo-dot2:#F6F6F1"><svg class="logo" data-kind="mono" width="100%"></svg></div>
+            <div class="icon" style="background:#191265;--logo-main:#F6F6F1;--logo-dot1:#E64D01;--logo-dot2:#F6F6F1"><svg class="logo" data-kind="mono" width="100%"></svg></div>
+            <div class="icon" style="background:#0010AB;--logo-main:#F6F6F1;--logo-dot1:#F6F6F1;--logo-dot2:#F6F6F1"><svg class="logo" data-kind="mono" width="100%"></svg></div>
+            <div class="icon light" style="background:#F6F6F1;--logo-main:#191265;--logo-dot1:#E64D01;--logo-dot2:#E64D01"><svg class="logo" data-kind="mono" width="100%"></svg></div>
+          </div>
+          <h2 class="brandH">팔레트 (현재 선택)</h2>
+          <div class="palette" id="palette"></div>
+        </div>
+      </section>
+
+      <p class="secLabel">HOME — 홈 화면 미리보기</p>
+
+      <nav class="nav" aria-label="사이트">
+        <span class="navMain">
+          <span class="navLogo" aria-label="RE:DO"><svg class="logo" data-kind="wm"></svg></span>
+          <a class="navItem cur">HOME</a><a class="navItem">LEARN</a><a class="navItem">PRACTICE</a><a class="navItem">TRAILS</a><a class="navItem">커뮤니티</a><a class="navItem">CHORDS</a><a class="navItem">NOTES <span class="beta">BETA</span></a>
+        </span>
+        <span class="navLinks"><a class="navItem">SETTING</a><a class="navItem">S</a></span>
+      </nav>
+
+      <div class="hero">
+        <div class="heroMark" role="img" aria-label="RE:DO"><svg class="logo" data-kind="wm"></svg></div>
+        <hr class="rule">
+        <p class="tagline">DIVE INTO SOUND</p>
+        <div class="go">
+          <input class="inp" value="https://www.youtube.com/watch?v=JM_R1R2p2M4" aria-label="유튜브 링크">
+          <div class="goActs">
+            <button type="button" class="pillBtn">▶ 바로 연습</button>
+            <button type="button" class="ghostBtn">노트 만들기</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="two">
+        <div class="card" id="wStreak">
+          <div class="cardHead"><h2 class="cardTitle">WEEKLY</h2><button class="lnk">기록 보기 →</button></div>
+          <div class="streak">
+            <div class="day done"><small>Mo</small><b>9</b></div>
+            <div class="day"><small>Tu</small><b>10</b></div>
+            <div class="day done"><small>We</small><b>11</b></div>
+            <div class="day done"><small>Th</small><b>12</b></div>
+            <div class="day today"><small>Fr</small><b>13</b></div>
+            <div class="day"><small>Sa</small><b>14</b></div>
+            <div class="day"><small>Su</small><b>15</b></div>
+          </div>
+          <div class="streakBar"><span>작심삼일 도전하기 · 연속 2일째 (2/3)</span><span class="dots"><i class="on"></i><i class="on"></i><i></i></span></div>
+        </div>
+        <div class="card" id="wRecent">
+          <div class="cardHead"><h2 class="cardTitle">RECENT</h2><button class="lnk">(바로가기)</button></div>
+          <div class="recent">
+            <div class="thumb"><svg viewBox="0 0 124 70"><rect width="124" height="70" fill="#20201E"/><rect x="24" y="14" width="52" height="42" fill="#E64D01" fill-opacity=".3" stroke="#E64D01" stroke-width="1.5"/><polyline points="8,42 22,30 34,48 48,20 62,45 76,26 92,40 114,34" fill="none" stroke="#ECECE4" stroke-width="1.5"/><circle cx="48" cy="20" r="4" fill="#4C63FF"/></svg></div>
+            <div class="recentInfo">
+              <p class="songTitle">John Mayer — Slow Dancing in a Burning Room (Intro Loop)</p>
+              <p class="seg2"><span class="loop">0:38 ~ 0:55 · 0.75×</span><span>구간 연습 중</span></p>
+              <button class="lnk" style="text-align:left">▶ 이어서 구간 연습하기 →</button>
+            </div>
+          </div>
+          <div class="cats"><span class="cat on">네오소울</span><span class="cat">블루스 릭</span><span class="cat">2-5-1 보이싱</span><span class="cat">펑크 커팅</span><span class="cat add">+</span></div>
+        </div>
+      </section>
+
+      <div class="split">
+        <section class="frame" id="better">
+          <div class="frameHead"><h2>BETTER</h2><span>연습실</span></div>
+          <div class="cols">
+            <div class="sub">
+              <div class="subHead"><h3 class="subTitle">CHORDS · 7가지 연습 모드</h3></div>
+              <ul class="list">
+                <li><span class="t"><span class="num">1 ·</span>스케일 연습</span></li>
+                <li><span class="t"><span class="num">2 ·</span>코드톤 지도</span></li>
+                <li><span class="t"><span class="num">3 ·</span>보이싱 매트릭스</span></li>
+                <li><span class="t"><span class="num">4 ·</span>탑노트 5도권</span></li>
+                <li class="cur"><span class="t"><span class="num">5 ·</span>코드 재해석</span><span class="m">이어서</span></li>
+                <li><span class="t"><span class="num">6 ·</span>2-5-1 탐색</span></li>
+                <li><span class="t"><span class="num">7 ·</span>더블 스탑 연습</span></li>
+              </ul>
+              <button class="secBtn">코드 연습실</button>
+            </div>
+            <div class="sub">
+              <div class="subHead"><h3 class="subTitle">PLAYER · 내 연습 곡</h3><button class="lnk">곡 보관함 →</button></div>
+              <ul class="list">
+                <li><span class="t">John Mayer — Slow Dancing</span><span class="m">0.75× · 11/13</span></li>
+                <li><span class="t">Tom Misch — Nightrider</span><span class="m">0.85× · 11/12</span></li>
+                <li><span class="t">Mateus Asato — Let It Be</span><span class="m">0.80× · 11/11</span></li>
+                <li><span class="t">Cory Wong — Dean Town</span><span class="m">0.70× · 11/09</span></li>
+                <li><span class="t">Tame Impala — The Less I Know</span><span class="m">1.00× · 11/07</span></li>
+              </ul>
+              <button class="secBtn">플레이어</button>
+            </div>
+          </div>
+        </section>
+        <section class="frame" id="vault">
+          <div class="frameHead"><h2>VAULT</h2><span>학습</span></div>
+          <div class="sub">
+            <div class="subHead"><h3 class="subTitle">최근 공부한 내용</h3><button class="lnk">전체 노트 →</button></div>
+            <div class="noteBox">
+              <div class="thumb"><svg viewBox="0 0 132 74"><rect width="132" height="74" fill="#191265"/><text x="12" y="30" fill="#F6F6F1" font-family="Archivo, sans-serif" font-weight="900" font-size="14">II - V - I</text><text x="12" y="48" fill="#C9CFEE" font-family="JetBrains Mono, monospace" font-size="10">Dm9 → G13 → CM9</text><rect x="92" y="14" width="28" height="16" fill="#E64D01"/><text x="106" y="25" text-anchor="middle" fill="#F6F6F1" font-family="JetBrains Mono" font-size="9" font-weight="700">AI</text></svg></div>
+              <div class="noteBody">
+                <p class="noteT">Mateus Asato 스타일 멜로딕 더블 스탑 &amp; 트라이어드 보이싱</p>
+                <p class="noteS">3현·2현 가이드톤 슬라이드와 루트 생략 Drop 2 전환</p>
+                <button class="lnk" style="text-align:left">확인하기 →</button>
+              </div>
+            </div>
+          </div>
+          <div class="sub">
+            <div class="subHead"><h3 class="subTitle">취향 코드 진행 꺼내보기</h3><button class="lnk">코드 진행 모음 →</button></div>
+            <div class="scope"><button class="on">레퍼런스</button><button>분석</button><button>합산</button></div>
+            <div class="progs">
+              <div class="prog">
+                <div class="progHead"><span class="badge">레퍼런스</span><span class="key">C Major</span></div>
+                <span class="chords">CM7 - C7 - F#m7b5 - Fm6</span>
+                <p class="progSub">Neo-Soul Minor Plagal Cadence</p>
+                <div class="progActs"><button class="lnk"># 랜덤으로 ↻</button><button class="lnk">▶ 연주하기 →</button></div>
+              </div>
+              <div class="prog">
+                <div class="progHead"><span class="badge">취향</span><span class="key">진행 4개</span></div>
+                <span class="chords">IVmaj7 → III7(#9) → vi9 → II13</span>
+                <p class="progSub">자주 나오는 진행 · 4번</p>
+                <div class="progActs"><button class="lnk">취향 통계 보기 →</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="banner">
+        <div><h2>WHAT YOU DO?</h2><p>다른 연습생들이 공유한 실전 루프와 세션 기록을 둘러보세요.</p></div>
+        <button class="lnk">커뮤니티 둘러보기 →</button>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var LIGHT = { bg: '#F0EEEA', surface: '#F6F6F1', surface2: '#E1E0D6', line: '#CFCEC4', ui: '#1D1D1F' };
+  var DARK = { bg: '#171716', surface: '#20201E', surface2: '#2B2A27', line: '#3A3935', ui: '#ECECE4' };
+  var PAPER = '#F6F6F1';
+  var INK = { charcoal: { l: '#1D1D1F', d: '#ECECE4' }, navy: { l: '#191265', d: '#E2E5FB' } };
+  var MUTED = { base: { l: '#6B6A63', d: '#9C9A92' }, deep: { l: '#5C5B55', d: '#ABA9A0' }, navy: { l: '#55546B', d: '#A6A8C0' } };
+  /* fd = 다크 모드 면 채움, td = 다크 모드 글자 */
+  var BLUE = { '191265': { fd: '#2B2580', td: '#B4B8F7' }, '0010AB': { fd: '#1A2BC4', td: '#8794FF' }, '0B369A': { fd: '#2A3C9C', td: '#7F95E6' }, '1F3FC3': { fd: '#2F4BD0', td: '#8C9CF5' } };
+  var ORANGE = { 'E64D01': { d: '#FF6B2B' }, 'C34811': { d: '#E07B4A' } };
+
+  var AXES = [
+    { key: 'ink', label: '본문 글자 (목록·곡 제목·설명)', opts: [['charcoal', '차콜 #1D1D1F', '#1D1D1F'], ['navy', '네이비 #191265', '#191265']] },
+    { key: 'head', label: '탭·박스 제목·이동 링크(→)', opts: [['blue', '파랑(통일색)'], ['ink', '본문과 같게']] },
+    { key: 'blue', label: '파랑 — 한 색으로 통일 (제목·번호·바·배너·스트릭)', opts: [['191265', '네이비 #191265', '#191265'], ['0010AB', '#0010AB', '#0010AB'], ['0B369A', '#0B369A', '#0B369A'], ['1F3FC3', '#1F3FC3', '#1F3FC3']] },
+    { key: 'orange', label: '주황 (오늘·지금·이어서)', opts: [['E64D01', '#E64D01', '#E64D01'], ['C34811', '#C34811', '#C34811']] },
+    { key: 'frame', label: '프레임 표현 (시안 D 강도)', opts: [['bar', '얇은 상단 바만'], ['full', '상단 바 + 머리 틴트'], ['none', '없음']] },
+    { key: 'banner', label: '커뮤니티 배너', opts: [['fill', '면 채움'], ['line', '왼쪽 굵은 선'], ['plain', '기본 카드']] },
+    { key: 'cta', label: '주 행동·선택 세그먼트', opts: [['ink', '잉크 채움'], ['blue', '파랑 채움']] },
+    { key: 'streak', label: '스트릭 완료 칸', opts: [['blue', '파랑'], ['ink', '잉크']] },
+    { key: 'muted', label: '보조 글자 (대비 보정)', opts: [['base', '현행'], ['deep', '진하게'], ['navy', '네이비 회색']] },
+    { key: 'form', label: '로고 형태', opts: [['chamfer', '모서리 깎임 (원안 보정)'], ['round', '직각 + 원'], ['type', '제목 서체 (Archivo)']] },
+    { key: 'colon', label: '로고 콜론 위치', opts: [['bars', 'E 가운데·아래 획에 맞춤'], ['center', '상하 대칭 (E 틈에 맞춤)']] },
+    { key: 'logo', label: '로고 색', opts: [['colonTop', '제목색 + 콜론 위 주황'], ['colonAll', '제목색 + 콜론 주황'], ['mono', '제목색 단색'], ['inkTop', '본문색 + 콜론 위 주황']] },
+    { key: 'deco', label: '헤더 장식 (시안 C)', opts: [['plain', '절제 (1px 선)'], ['c', '주황 BETA + 2px 선']] },
+    { key: 'theme', label: '테마', opts: [['light', '라이트'], ['dark', '다크']] },
+    { key: 'w', label: '미리보기 폭', opts: [['full', '1120'], ['768', '768'], ['390', '390']] }
+  ];
+
+  var PICK = { ink: 'charcoal', head: 'blue', blue: '191265', orange: 'E64D01', frame: 'bar', banner: 'fill', cta: 'ink', streak: 'blue', muted: 'base', form: 'chamfer', colon: 'bars', logo: 'colonTop', deco: 'plain' };
+  function mix(o) { return Object.assign({}, PICK, o); }
+  var PRESETS = [
+    ['결정안 (2026-11-14) · 로고 원안 보정', mix({})],
+    ['결정안 + 로고 "직각 + 원"', mix({ form: 'round' })],
+    ['결정안 + 로고 "제목 서체"', mix({ form: 'type' })],
+    ['D 첨부 원안 (차콜, 사진 1)', mix({ head: 'ink', blue: '0B369A', orange: 'C34811', frame: 'full', streak: 'ink', logo: 'mono' })],
+    ['C 원안 (글자 전체 네이비)', mix({ ink: 'navy', frame: 'none', banner: 'plain', streak: 'ink', deco: 'c' })],
+    ['현재 운영 (베이스라인)', mix({ head: 'ink', blue: '1F3FC3', orange: 'C34811', frame: 'none', banner: 'plain', streak: 'ink', logo: 'mono' })]
+  ];
+  var FORMS = [
+    ['chamfer', '모서리 깎임 (원안 보정)', '45° 깎임은 화면의 다른 곳에 없는 형태'],
+    ['round', '직각 + 원', '직각 카드·둥근 필 버튼과 같은 형태 언어'],
+    ['type', '제목 서체 (Archivo)', 'BETTER·VAULT 제목과 같은 글자']
+  ];
+  var LOGOS = [['colonTop', '콜론 위 주황'], ['colonAll', '콜론 주황'], ['mono', '단색'], ['inkTop', '차콜 + 콜론 위 주황']];
+
+  var state = Object.assign({ theme: 'light', w: 'full' }, PICK);
+  var root = document.documentElement;
+
+  /* ---------- 로고 도형 ---------- */
+  var G = {
+    R: { w: 84, d: 'M0 0H50C70 0 82 13 82 30C82 44 74 53 63 57L84 100H55L37 62H26V100H0Z M26 24H48C54 24 57 27 57 32C57 36 54 38 48 38H26Z' },
+    E: { w: 70, d: 'M0 0H70V24H26V38H70V62H26V76H70V100H0Z' },
+    Dchamfer: { w: 80, d: 'M0 0H52L80 28V72L52 100H0Z M26 24H42L56 38V62L42 76H26Z' },
+    Ochamfer: { w: 90, d: 'M28 0H62L90 28V72L62 100H28L0 72V28Z M36 24H54L66 36V64L54 76H36L24 64V36Z' },
+    Dround: { w: 90, d: 'M0 0H40A50 50 0 0 1 40 100H0Z M26 24H40A26 26 0 0 1 40 76H26Z' },
+    Oround: { w: 100, d: 'M50 0A50 50 0 0 1 50 100A50 50 0 0 1 50 0Z M50 24A26 26 0 0 0 50 76A26 26 0 0 0 50 24Z' }
+  };
+  var GAP = 12, FS = 138, tw = {};
+  function textW(s) {
+    if (tw[s]) return tw[s];
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('style', 'position:absolute;visibility:hidden;width:0;height:0');
+    var t = document.createElementNS(ns, 'text');
+    t.setAttribute('class', 'lt');
+    t.setAttribute('font-size', FS);
+    t.textContent = s;
+    svg.appendChild(t);
+    document.body.appendChild(svg);
+    var w = t.getComputedTextLength() || s.length * 118;
+    document.body.removeChild(svg);
+    tw[s] = w;
+    return w;
+  }
+  function row(items, form, colon, y) {
+    var x = 0, h = '';
+    items.forEach(function (it) {
+      if (it === ':') {
+        var y1 = colon === 'bars' ? 38 : 14, y2 = colon === 'bars' ? 76 : 62;
+        h += '<rect class="ld1" x="' + x + '" y="' + (y + y1) + '" width="24" height="24"/><rect class="ld2" x="' + x + '" y="' + (y + y2) + '" width="24" height="24"/>';
+        x += 24 + GAP;
+      } else if (form === 'type') {
+        h += '<text class="lm lt" x="' + x + '" y="' + (y + 100) + '" font-size="' + FS + '">' + it + '</text>';
+        x += textW(it) + GAP;
+      } else {
+        it.split('').forEach(function (ch) {
+          var g = G[ch] || G[ch + form];
+          h += '<path class="lm" fill-rule="evenodd" transform="translate(' + x + ' ' + y + ')" d="' + g.d + '"/>';
+          x += g.w + GAP;
+        });
+      }
+    });
+    return { h: h, w: x - GAP };
+  }
+  function build(kind, form, colon) {
+    if (kind === 'stack') {
+      var a = row(['RE', ':'], form, colon, 0), b = row(['DO'], form, colon, 110);
+      return { vb: (form === 'type' ? '0 -4 ' : '0 0 ') + Math.ceil(Math.max(a.w, b.w)) + (form === 'type' ? ' 216' : ' 210'), h: a.h + b.h };
+    }
+    var r = row(kind === 'mono' ? ['R', ':'] : ['RE', ':', 'DO'], form, colon, 0);
+    return { vb: (form === 'type' ? '0 -4 ' : '0 0 ') + Math.ceil(r.w) + (form === 'type' ? ' 108' : ' 100'), h: r.h };
+  }
+  function fillLogos() {
+    document.querySelectorAll('svg.logo[data-kind]').forEach(function (el) {
+      var host = el.closest('[data-form]');
+      var b = build(el.getAttribute('data-kind'), host ? host.getAttribute('data-form') : state.form, state.colon);
+      el.setAttribute('viewBox', b.vb);
+      el.innerHTML = b.h;
+    });
+  }
+
+  function readHash() {
+    try {
+      location.hash.replace(/^#/, '').split('&').forEach(function (kv) {
+        var p = kv.split('=');
+        var ax = AXES.filter(function (a) { return a.key === p[0]; })[0];
+        if (ax && ax.opts.some(function (o) { return o[0] === p[1]; })) state[p[0]] = p[1];
+      });
+    } catch (e) {}
+  }
+  function writeHash() {
+    try { history.replaceState(null, '', '#' + AXES.map(function (a) { return a.key + '=' + state[a.key]; }).join('&')); } catch (e) {}
+  }
+
+  function lum(hex) {
+    var c = hex.replace('#', '');
+    var rgb = [0, 2, 4].map(function (i) {
+      var v = parseInt(c.substr(i, 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  }
+  function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+  function computed() {
+    var dark = state.theme === 'dark', base = dark ? DARK : LIGHT, t = dark ? 'd' : 'l';
+    var blueHex = '#' + state.blue;
+    var blueFill = dark ? BLUE[state.blue].fd : blueHex;
+    var blueText = dark ? BLUE[state.blue].td : blueHex;
+    var orange = dark ? ORANGE[state.orange].d : '#' + state.orange;
+    var ink = INK[state.ink][t];
+    var head = state.head === 'blue' ? blueText : ink;
+    var accent = state.cta === 'blue' ? blueFill : ink;
+    var accentInk = state.cta === 'blue' ? PAPER : (dark ? base.bg : PAPER);
+    var streakDone = state.streak === 'blue' ? blueFill : (dark ? '#4A4944' : ink);
+    var logoMain = state.logo === 'inkTop' ? ink : head;
+    return {
+      bg: base.bg, surface: base.surface, surface2: base.surface2, line: base.line, ui: base.ui,
+      ink: ink, head: head, muted: MUTED[state.muted][t], blueFill: blueFill, blueText: blueText, orange: orange,
+      accent: accent, accentInk: accentInk, streakDone: streakDone, logoMain: logoMain,
+      dot1: state.logo === 'mono' ? logoMain : orange, dot2: state.logo === 'colonAll' ? orange : logoMain
+    };
+  }
+
+  function apply() {
+    var c = computed();
+    var map = {
+      '--bg': c.bg, '--surface': c.surface, '--surface2': c.surface2, '--line': c.line, '--ui-ink': c.ui,
+      '--ink': c.ink, '--head': c.head, '--muted': c.muted, '--blue-text': c.blueText, '--wide': c.blueFill, '--orange': c.orange,
+      '--accent': c.accent, '--accent-ink': c.accentInk, '--streak-done': c.streakDone,
+      '--logo-main': c.logoMain, '--logo-dot1': c.dot1, '--logo-dot2': c.dot2
+    };
+    Object.keys(map).forEach(function (k) { root.style.setProperty(k, map[k]); });
+    root.setAttribute('data-theme', state.theme);
+    root.setAttribute('data-frame', state.frame);
+    root.setAttribute('data-banner', state.banner);
+    root.setAttribute('data-deco', state.deco);
+    var cv = document.getElementById('canvas');
+    cv.setAttribute('data-w', state.w);
+    cv.style.setProperty('--cw', state.w === 'full' ? '1120px' : state.w + 'px');
+    document.querySelectorAll('[data-axis]').forEach(function (b) {
+      b.setAttribute('aria-pressed', state[b.getAttribute('data-axis')] === b.getAttribute('data-val') ? 'true' : 'false');
+    });
+    fillLogos();
+    writeHash();
+    renderPalette(c);
+    renderContrast(c);
+    renderNotes();
+    renderOut();
+  }
+
+  function pickBtn(cls, key, val, html) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.setAttribute('data-axis', key);
+    b.setAttribute('data-val', val);
+    b.innerHTML = html;
+    b.addEventListener('click', function () { state[key] = val; apply(); });
+    return b;
+  }
+  function renderAxes() {
+    var wrap = document.getElementById('axes');
+    AXES.forEach(function (a) {
+      var g = document.createElement('div');
+      g.className = 'grp';
+      var l = document.createElement('span');
+      l.className = 'grpLabel';
+      l.textContent = a.label;
+      var s = document.createElement('div');
+      s.className = 'seg';
+      a.opts.forEach(function (o) {
+        s.appendChild(pickBtn('opt', a.key, o[0], (o[2] ? '<span class="dot" style="background:' + o[2] + '"></span>' : '') + o[1]));
+      });
+      g.appendChild(l);
+      g.appendChild(s);
+      wrap.appendChild(g);
+    });
+    var pw = document.getElementById('presets');
+    PRESETS.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt';
+      b.textContent = p[0];
+      b.addEventListener('click', function () { Object.assign(state, p[1]); apply(); });
+      pw.appendChild(b);
+    });
+    var navy = '#191265', or = '#E64D01', ch = '#1D1D1F';
+    var fg = document.getElementById('formGrid');
+    FORMS.forEach(function (f) {
+      var b = pickBtn('logoCard', 'form', f[0], '<svg class="logo" data-kind="wm" width="100%"></svg><span>' + f[1] + '</span><em>' + f[2] + '</em>');
+      b.setAttribute('data-form', f[0]);
+      b.style.setProperty('--logo-main', navy);
+      b.style.setProperty('--logo-dot1', or);
+      b.style.setProperty('--logo-dot2', navy);
+      fg.appendChild(b);
+    });
+    var lg = document.getElementById('logoGrid');
+    LOGOS.forEach(function (lo) {
+      var m = { mono: [navy, navy, navy], colonTop: [navy, or, navy], colonAll: [navy, or, or], inkTop: [ch, or, ch] }[lo[0]];
+      var b = pickBtn('logoCard', 'logo', lo[0], '<svg class="logo" data-kind="wm" width="100%"></svg><span>' + lo[1] + '</span>');
+      b.style.setProperty('--logo-main', m[0]);
+      b.style.setProperty('--logo-dot1', m[1]);
+      b.style.setProperty('--logo-dot2', m[2]);
+      lg.appendChild(b);
+    });
+  }
+
+  function renderPalette(c) {
+    var items = [['본문', c.ink], ['제목·링크', c.head], ['파랑 면', c.blueFill], ['주황', c.orange], ['바탕', c.bg], ['표면', c.surface]];
+    document.getElementById('palette').innerHTML = items.map(function (i) {
+      return '<span class="sw"><i style="background:' + i[1] + ';border:1px solid var(--line)"></i>' + i[0] + '<br>' + i[1].toUpperCase() + '</span>';
+    }).join('');
+  }
+
+  function renderContrast(c) {
+    var rows = [
+      ['본문 / 바탕', c.ink, c.bg, 4.5],
+      ['제목·링크 / 표면', c.head, c.surface, 4.5],
+      ['보조 글자 / 눌린 면', c.muted, c.surface2, 4.5],
+      ['보조 글자 / 표면', c.muted, c.surface, 4.5],
+      ['주 버튼 글자 / 버튼', c.accentInk, c.accent, 4.5],
+      ['스트릭 완료 글자 / 칸', PAPER, c.streakDone, 4.5],
+      ['주황 표시 / 바탕 (비텍스트)', c.orange, c.bg, 3]
+    ];
+    if (state.banner === 'fill') rows.push(['배너 글자 / 배너 면', PAPER, c.blueFill, 4.5]);
+    document.getElementById('contrast').innerHTML = rows.map(function (r) {
+      var v = ratio(r[1], r[2]);
+      return '<tr><td>' + r[0] + '</td><td class="' + (v >= r[3] ? 'pass' : 'warn') + '">' + v.toFixed(2) + (v >= r[3] ? ' ✓' : ' ✗') + '</td></tr>';
+    }).join('');
+  }
+
+  function notes() {
+    var n = [];
+    n.push(['chg', '파랑을 #' + state.blue + ' 한 색으로 통일: `--blue-vivid`·`--blue-deep`·`--link`·`--root`를 같은 값으로 (다크는 밝은 대응값)']);
+    if (state.head === 'blue') n.push(['chg', '새 토큰 `--head` 추가(탭·박스 제목·이동 링크 색). 본문 `--ink`는 그대로']);
+    if (state.ink === 'navy') n.push(['chg', '`--ink`를 네이비로 바꿈 → 전 화면 본문 글자색 변경']);
+    if (state.orange !== 'C34811') n.push(['chg', '주황 기본값을 #' + state.orange + '로 바꿈 (`--orange-terra`·`--now-ring`·`--moved`)']);
+    if (state.frame !== 'none') n.push(['chg', '상단 색 바(' + (state.frame === 'bar' ? '3px' : '4~5px') + '): "2px 이상 두꺼운 테두리 금지" 예외 추가 + 한 화면 유채색 2개 허용(Q7 개정)']);
+    if (state.frame === 'full') n.push(['chg', '프레임 머리 틴트: 넓은 면 유채색(10% 이하 혼합) 허용 범위 추가']);
+    if (state.banner === 'fill') n.push(['chg', '배너 면 채움: "파랑은 작은 면적만" 규칙에 배너 예외 추가']);
+    if (state.cta === 'blue') n.push(['chg', '주 행동·선택 세그먼트 = 파랑 채움: "가장 어두운 채움" 규칙 개정']);
+    if (state.streak === 'blue') n.push(['chg', '스트릭 완료 칸 파랑 채움']);
+    if (state.muted !== 'base') n.push(['chg', '`--muted` 값 변경 (대비 4.5 확보)']);
+    if (state.deco === 'c') n.push(['chg', 'BETA 배지 주황 채움·홈 구분선 2px']);
+    n.push(['chg', '서비스 이름 ULeveLP → RE:DO, 로고 교체: 별도 BR 단계(문구·title·manifest·파비콘·OG·확장)']);
+    if (state.blue === '191265' && state.ink === 'charcoal') n.push(['', '확인 필요: 네이비는 작은 면적(번호·지판 근음 점)에서 차콜과 거의 같게 보인다. 근음 점은 DS-1에서 실제 지판 화면으로 확인']);
+    return n;
+  }
+  function renderNotes() {
+    document.getElementById('notes').innerHTML = notes().map(function (x) {
+      return '<li class="' + x[0] + '">' + x[1].replace(/`([^`]+)`/g, '<code>$1</code>') + '</li>';
+    }).join('');
+  }
+
+  function renderOut() {
+    var lab = function (k) {
+      var a = AXES.filter(function (x) { return x.key === k; })[0];
+      return a.opts.filter(function (o) { return o[0] === state[k]; })[0][1];
+    };
+    var lines = ['DS-0 결정 (' + new Date().toISOString().slice(0, 10) + ')'];
+    AXES.forEach(function (a) { if (a.key !== 'theme' && a.key !== 'w') lines.push('- ' + a.label + ': ' + lab(a.key)); });
+    lines.push('- 계산값(라이트): ink ' + INK[state.ink].l + ' · head ' + (state.head === 'blue' ? '#' + state.blue : INK[state.ink].l) + ' · blue #' + state.blue + ' · orange #' + state.orange + ' · muted ' + MUTED[state.muted].l);
+    lines.push('- 규칙 개정 필요:');
+    notes().forEach(function (x) { lines.push('  - ' + x[1]); });
+    lines.push('- 시안 링크: DS_시안.html' + location.hash);
+    document.getElementById('out').value = lines.join('\n');
+  }
+
+  function copy(text, btn) {
+    var done = function () { var o = btn.textContent; btn.textContent = '복사됨'; setTimeout(function () { btn.textContent = o; }, 1400); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+    } catch (e) {}
+    var o = document.getElementById('out'); o.select(); try { document.execCommand('copy'); done(); } catch (e) {}
+  }
+  document.getElementById('copyBtn').addEventListener('click', function () { copy(document.getElementById('out').value, this); });
+  document.getElementById('linkBtn').addEventListener('click', function () { copy(location.href, this); });
+
+  readHash();
+  renderAxes();
+  apply();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { tw = {}; apply(); });
+})();
+</script>
+</body>
+</html>
