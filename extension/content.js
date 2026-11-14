@@ -16,6 +16,7 @@ const REDO_SEL = {
   menuRowLegacy: 'tp-yt-paper-item',
   menuRowModern: 'yt-list-item-view-model',
   adShowing: '#movie_player.ad-showing',
+  video: '#movie_player video.html5-main-video',
 };
 
 const REDO_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
