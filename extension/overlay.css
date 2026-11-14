@@ -8,55 +8,6 @@
   display: block;
 }
 
-/* ── ③ 재생 화면 버튼 (화면 우측 상단 고정) ── */
-.redo-watch-btn {
-  position: fixed;
-  top: 64px;
-  right: 16px;
-  z-index: 2100;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 14px 0 8px;
-  border: 1px solid #1d1d1f;
-  border-radius: 9999px;
-  background: #f6f6f1;
-  color: #1d1d1f;
-  font: 600 13px/1 "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
-}
-
-.redo-watch-btn:hover {
-  background: #1d1d1f;
-  color: #f6f6f1;
-}
-
-.redo-watch-btn:focus-visible {
-  outline: 2px solid #e64d01;
-  outline-offset: 2px;
-}
-
-.redo-watch-btn:disabled {
-  cursor: progress;
-  opacity: 0.7;
-}
-
-.redo-watch-btn[data-redo-state="exists"] {
-  border-color: #e64d01;
-}
-
-.redo-watch-btn .redo-logo {
-  border-radius: 50%;
-}
-
-/* 전체 화면에서는 영상을 가리지 않는다 */
-:fullscreen .redo-watch-btn,
-:root:has(:fullscreen) .redo-watch-btn {
-  display: none;
-}
-
 /* ── ② 점 3개 메뉴 항목 ── */
 .redo-menu-item {
   display: flex;
@@ -144,10 +95,10 @@
   outline-offset: 2px;
 }
 
-/* ── ④ 재생 화면 연습 패널 (EX-2) ── */
+/* ── ④ 재생 화면 연습 패널 (EX-2). EX-3부터 재생 화면 버튼 자리(상단 바 아래)를 쓰고 곡 추가·저장 줄을 품는다 ── */
 .redo-panel {
   position: fixed;
-  top: 108px;
+  top: 64px;
   right: 16px;
   width: 280px;
   z-index: 2100;
@@ -277,4 +228,47 @@
   line-height: 1.35;
   color: #1d1d1f;
   overflow-wrap: anywhere;
+}
+
+/* ── 저장 줄 (EX-3) ── */
+.redo-panel__save {
+  padding-top: 8px;
+  border-top: 1px solid #cfcec4;
+}
+
+.redo-panel__save [hidden] {
+  display: none;
+}
+
+.redo-panel__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #1d1d1f;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: #e64d01;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.redo-panel__link:focus-visible {
+  outline: 2px solid #e64d01;
+  outline-offset: 2px;
+}
+
+.redo-panel__save .redo-panel__btn[data-redo-act="save"] {
+  flex: 0 0 auto;
+  min-width: 64px;
+}
+
+/* 주황은 글자색으로 쓰지 않는다(대비 3.3~3.6, docs/rules/frontend-design.md). 잉크 글자 + 왼쪽 주황 표시선 */
+.redo-panel__dirty {
+  flex: 0 0 auto;
+  padding-left: 6px;
+  border-left: 3px solid #e64d01;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1d1d1f;
+  white-space: nowrap;
 }
