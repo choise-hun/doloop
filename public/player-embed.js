@@ -1,6 +1,6 @@
 // M1A-2 플레이어 전용 페이지(player-embed.html): 부모(앱) ↔ YouTube IFrame API 다리. 명세 §5.2·§5.3
 // 부모 → {type:'cmd', cmd:'play'|'pause'|'seek'|'rate'|'cue', value}
-// 플레이어 → {type:'ready', duration, rates, title, author} · {type:'status', time, duration, state, rate, title, author} · {type:'error', code}
+// 플레이어 → {type:'ready', duration, rates, title, author} · {type:'status', time, duration, state, rate, rates, title, author} · {type:'error', code}
 // 로그인·저장소 접근 없음. 겹치는 요소 없음(YouTube RMF).
 'use strict';
 (function () {
@@ -44,6 +44,7 @@
       duration: player.getDuration(),
       state: player.getPlayerState(),
       rate: player.getPlaybackRate(),
+      rates: player.getAvailablePlaybackRates(),
       title: meta.title,
       author: meta.author,
     });

@@ -56,6 +56,11 @@ export function shouldUseRemotePlayer(): boolean {
 
 const finiteOr = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const textOr = (v: unknown): string => (typeof v === 'string' ? v : '');
+const ratesOr = (v: unknown, fallback: number[]): number[] => {
+  if (!Array.isArray(v)) return fallback;
+  const valid = v.filter((r): r is number => typeof r === 'number' && Number.isFinite(r));
+  return valid.length ? valid : fallback;
+};
 
 export function createRemotePlayer(
   mountId: string,
@@ -110,10 +115,7 @@ export function createRemotePlayer(
       ready = true;
       window.clearTimeout(timeoutId);
       duration = finiteOr(d.duration, 0);
-      if (Array.isArray(d.rates)) {
-        const valid = d.rates.filter((r): r is number => typeof r === 'number' && Number.isFinite(r));
-        if (valid.length) rates = valid;
-      }
+      rates = ratesOr(d.rates, rates);
       title = textOr(d.title);
       author = textOr(d.author);
       events.onReady?.();
@@ -127,6 +129,8 @@ export function createRemotePlayer(
       if (!ready) return;
       setTime(finiteOr(d.time, time));
       duration = finiteOr(d.duration, duration);
+      // 영상 전환(cue) 뒤 지원 배속이 바뀐다 — onStateChange(PLAYING)에서 PracticePage가 읽기 전에 반영
+      rates = ratesOr(d.rates, rates);
       title = textOr(d.title);
       author = textOr(d.author);
       const nextState = finiteOr(d.state, state ?? -1);

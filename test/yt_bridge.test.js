@@ -219,3 +219,72 @@ test('ready가 15초 안에 오지 않으면 onError({data:"timeout"}), error �
   s.emit({ type: 'error', code: 150 });
   assert.deepEqual(r.log, [['error', 'timeout'], ['error', 150]]);
 });
+
+test('Y7 status의 rates로 지원 배속을 갱신하고(영상 전환 뒤), onStateChange 전에 반영한다. 잘못된 rates는 무시', () => {
+  const s = setup();
+  let seen = null;
+  const p = s.api.createRemotePlayer('player', {
+    videoId: 'AAAAAAAAAAA',
+    events: { onStateChange: () => { seen = [...p.getAvailablePlaybackRates()]; } },
+  });
+  s.emit(READY);
+  p.cueVideoById({ videoId: 'BBBBBBBBBBB', startSeconds: 0 });
+  s.emit({ type: 'status', time: 0, duration: 90, state: 1, rate: 1, rates: [1] });
+  assert.deepEqual(seen, [1], 'PLAYING 콜백 시점에 새 영상 목록');
+  assert.deepEqual([...p.getAvailablePlaybackRates()], [1]);
+  s.emit({ type: 'status', time: 1, duration: 90, state: 1, rate: 1, rates: [] });
+  s.emit({ type: 'status', time: 1, duration: 90, state: 1, rate: 1, rates: ['x', NaN] });
+  s.emit({ type: 'status', time: 1, duration: 90, state: 1, rate: 1 });
+  assert.deepEqual([...p.getAvailablePlaybackRates()], [1], '빈·잘못된·없는 rates는 이전 값 유지');
+});
+
+// public/player-embed.js: 가짜 YT.Player로 status 메시지에 rates가 실리는지 본다(영상 전환 뒤 목록 갱신의 출처)
+function setupEmbed() {
+  const sent = [];
+  const listeners = [];
+  const intervals = [];
+  let player = null;
+  let rates = [0.25, 0.5, 1, 1.5, 2];
+  const parent = { postMessage: (msg, origin) => sent.push({ msg, origin }) };
+  const el = { style: {} };
+  const window = {
+    parent,
+    addEventListener: (type, fn) => { if (type === 'message') listeners.push(fn); },
+    YT: {
+      Player: function (id, opts) {
+        player = {
+          opts,
+          getCurrentTime: () => 0, getDuration: () => 100, getPlayerState: () => 1, getPlaybackRate: () => 1,
+          getAvailablePlaybackRates: () => rates.slice(),
+          getVideoData: () => ({ title: 'T', author: 'A' }),
+          cueVideoById: () => { rates = [1]; },
+        };
+        return player;
+      },
+    },
+  };
+  const ctx = {
+    window,
+    location: { search: '?v=AAAAAAAAAAA&parent=capacitor%3A%2F%2Flocalhost', origin: 'https://p.test', href: 'https://p.test/player-embed.html' },
+    document: { documentElement: el, body: { style: {} }, createElement: () => ({}), head: { appendChild: () => {} } },
+    URLSearchParams, Number, setInterval: (fn) => intervals.push(fn),
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public/player-embed.js'), 'utf8'), ctx);
+  window.onYouTubeIframeAPIReady();
+  player.opts.events.onReady();
+  const cmd = (cmd, value) => listeners.forEach((fn) => fn({ origin: 'capacitor://localhost', source: parent, data: { type: 'cmd', cmd, value } }));
+  return { sent, player, cmd };
+}
+
+test('P1 player-embed status는 rates를 싣고, cue 뒤 새 영상 목록으로 바뀐다', () => {
+  const e = setupEmbed();
+  assert.deepEqual([...e.sent[0].msg.rates], [0.25, 0.5, 1, 1.5, 2]);
+  e.player.opts.events.onStateChange();
+  assert.deepEqual([...e.sent.at(-1).msg.rates], [0.25, 0.5, 1, 1.5, 2]);
+  e.cmd('cue', { videoId: 'BBBBBBBBBBB', startSeconds: 0 });
+  e.player.opts.events.onStateChange();
+  const last = e.sent.at(-1);
+  assert.equal(last.msg.type, 'status');
+  assert.deepEqual([...last.msg.rates], [1]);
+  assert.equal(last.origin, 'capacitor://localhost');
+});

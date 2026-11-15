@@ -24,9 +24,10 @@ const FAKE_PLAYER = `<!doctype html><html><body><script>
   window.addEventListener('message', function (e) {
     if (e.origin !== parentOrigin || e.source !== window.parent) return;
     window.__cmds.push(e.data);
-    if (e.data && e.data.cmd === 'play') send({ type: 'status', time: 42, duration: 200, state: 1, rate: 1, title: 'Remote Song', author: 'Remote Band' });
+    // 재생 status는 첫 ready와 다른 지원 배속 목록을 싣는다(영상 전환 뒤 목록 갱신, PR #39 리뷰)
+    if (e.data && e.data.cmd === 'play') send({ type: 'status', time: 42, duration: 200, state: 1, rate: 1, rates: [0.5, 1], title: 'Remote Song', author: 'Remote Band' });
   });
-  send({ type: 'ready', duration: 200, rates: [0.5, 0.75, 1, 1.5], title: 'Remote Song', author: 'Remote Band' });
+  send({ type: 'ready', duration: 200, rates: [0.25, 0.5, 0.75, 1], title: 'Remote Song', author: 'Remote Band' });
   send({ type: 'status', time: 0, duration: 200, state: 5, rate: 1, title: 'Remote Song', author: 'Remote Band' });
 </script></body></html>`;
 
@@ -71,10 +72,17 @@ test('R1 iOS 원격 분기: YT 스크립트 없이 #player iframe이 플레이�
   expect(player).not.toBeNull();
   // ready → onReady가 길이를 반영한 뒤에야 ▶가 명령을 보낸다(준비 전 클릭은 PracticePage가 무시)
   await expect(page.locator('#tDur')).toHaveText('3:20');
+  const rateBtn = (label) => page.locator('#rates button', { hasText: new RegExp(`^${label.replace('.', '\\.')}$`) });
+  await expect(rateBtn('0.25')).toBeEnabled();
+  await expect(rateBtn('0.75')).toBeEnabled();
   await page.locator('#playBtn').click();
   await expect.poll(() => player.evaluate(() => window.__cmds.map((c) => c.cmd))).toContain('play');
   await expect(page.locator('#playBtn')).toHaveText('❚❚');
   await expect(page.locator('#tNow')).toHaveText(/^0:4[2-3]$/);
+  await expect(rateBtn('0.25')).toBeDisabled();
+  await expect(rateBtn('0.75')).toBeDisabled();
+  await expect(rateBtn('0.5')).toBeEnabled();
+  await expect(rateBtn('1.0')).toBeEnabled();
 
   expect(await page.evaluate(() => typeof window.YT)).toBe('undefined');
   expect(ytApiRequests).toEqual([]);
