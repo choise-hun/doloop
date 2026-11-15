@@ -27,7 +27,7 @@
 
 | Step | 담당 | 입력 | 결과 파일 | 완료 기준 | 상태 | effort |
 | --- | --- | --- | --- | --- | --- | --- |
-| WF-1 문구·재생목록 모달·시안·문서 | 시니어 원스톱(예상 diff 150줄 안팎, 명세 비용 ≥ 구현 비용) | 수정 목록, `PlaylistImportModal.tsx` | [결과/WF-1](결과/WF-1.md), [결과/WF-0](결과/WF-0_하네스차용검토.md), [WF_시안.html](명세/WF_시안.html) | 빌드, `community.spec.js` WF-1 2건 + CM-8 통과, PR CI 통과 | PR 올림(번호는 §5) | 중 |
+| WF-1 문구·재생목록 모달·시안·문서 | 시니어 원스톱(예상 diff 150줄 안팎, 명세 비용 ≥ 구현 비용) | 수정 목록, `PlaylistImportModal.tsx` | [결과/WF-1](결과/WF-1.md), [결과/WF-0](결과/WF-0_하네스차용검토.md), [WF_시안.html](명세/WF_시안.html) | 빌드, `community.spec.js` WF-1 4건 + 가져오기 기존 3건 통과, PR CI 통과 | PR [#33](https://github.com/choise-hun/doloop/pull/33) | 중 |
 | WF-2 플레이어 녹음 섹션·화면 폭 | 시니어 직접 구현(기존 DOM·`#recMsg`·`#recDriveBanner` 등 테스트 셀렉터를 옮김) | **사용자 선택**(§4), WF_시안.html, [프론트 정렬규격](프론트_정렬규격.md) §1 | `결과/WF-2.md` | 정렬규격 순서(배치 약속 → spec 실패 → 구현 → `layout/practice.spec.js` 통과 → 4개 폭 스크린샷) | **사용자 선택 대기** | 높음 |
 
 - WF-2에서 화면 폭 방안으로 "나(크게 보기 전환 버튼)"까지 고르면 독립 동선이 하나 더 생기므로 WF-3으로 나눈다. "가(폭 상한 올리기)"만이면 CSS 몇 줄이라 WF-2에 합친다(§1.2 하한).
@@ -41,7 +41,7 @@
 
 ## 5. 실행 기록
 
-- WF-1 (2026-11-15): 브랜치 `fix/WF-1-playlist-mic`. 명령·결과는 [결과/WF-1](결과/WF-1.md) §4.
+- WF-1 (2026-11-15): 브랜치 `fix/WF-1-playlist-mic`. PR [#33](https://github.com/choise-hun/doloop/pull/33). 명령·결과는 [결과/WF-1](결과/WF-1.md) §4, 리뷰 P2 3건 반영은 §4-1. 첫 커밋 `ec32414` CI 통과(Kotlin test는 변경 없음으로 skipping).
 
 ## 6. 겪은 문제
 

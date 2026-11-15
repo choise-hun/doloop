@@ -993,8 +993,16 @@ export function HomePage(): React.ReactElement {
         me={authState.me}
         onClose={() => setImportModalUrl(null)}
         onImported={() => setCatRefreshKey((k) => k + 1)}
-        onOnlyThis={(vid) => {
-          window.location.href = 'practice.html?v=' + encodeURIComponent(vid);
+        onOnlyThis={(vid, restore) => {
+          // WF-1: 모달이 계정 곡을 새로 만들었으면 이 기기의 구간·배속·위치를 연습 화면 주소로 넘긴다
+          const q = new URLSearchParams({ v: vid });
+          if (restore) {
+            if (restore.a != null) q.set('a', String(restore.a));
+            if (restore.b != null) q.set('b', String(restore.b));
+            q.set('r', String(restore.rate));
+            if (restore.t != null) q.set('t', String(restore.t));
+          }
+          window.location.href = 'practice.html?' + q.toString();
         }}
       />
 

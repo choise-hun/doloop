@@ -8,6 +8,7 @@ import {
 } from '../../lib/apiClient';
 import type { MeProfile } from '../../lib/auth';
 import { communityErrorKey } from '../../lib/community.mts';
+import { json } from '../../lib/security';
 import { t } from '../../lib/i18n.mts';
 import styles from './Community.module.css';
 
@@ -16,8 +17,18 @@ export interface PlaylistImportModalProps {
   me: MeProfile | null;
   onClose: () => void;
   onImported: (result: PlaylistImportResultDto) => void;
-  onOnlyThis?: (videoId: string) => void;
+  // restore: 모달이 계정 곡을 새로 만든 경우, 이 기기에 남아 있던 구간·배속·위치(연습 화면이 이 값으로 연다)
+  onOnlyThis?: (videoId: string, restore?: PlaylistOnlyThisRestore) => void;
 }
+
+export interface PlaylistOnlyThisRestore {
+  a: number | null;
+  b: number | null;
+  rate: number;
+  t: number | null;
+}
+
+const finiteOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 function extractVideoIdFromPlaylistUrl(rawUrl: string | null): string | null {
   if (!rawUrl) return null;
@@ -112,7 +123,8 @@ export function PlaylistImportModal({
   // WF-1: "이 곡만 열기" — 분류를 직접 골랐으면 곡을 계정에 넣고 그 분류에 담은 뒤 연다. 손대지 않았으면 예전처럼 열기만 한다
   async function openOnlyThis(vid: string) {
     if (busyRef.current) return;
-    if (!touched || !preview) {
+    // 가져오기를 이미 끝냈으면 분류는 그때 만들어졌다 — 다시 만들지 않고 열기만 한다
+    if (!touched || !preview || result) {
       close();
       onOnlyThis?.(vid);
       return;
@@ -121,34 +133,55 @@ export function PlaylistImportModal({
     setBusy(true);
     setErr(null);
     const my = pvSeq.current;
+    // 취소·닫힘·다른 url로 바뀌면 남은 저장 요청을 보내지 않는다
+    const alive = () => my === pvSeq.current;
     try {
-      const song = (await apiClient.songs.byVideo(vid)) ?? (await apiClient.songs.create({ videoId: vid }));
-      if (!song) throw new Error('song create failed');
+      let restore: PlaylistOnlyThisRestore | undefined;
+      let song = await apiClient.songs.byVideo(vid);
+      if (!alive()) return;
+      if (!song) {
+        // 계정에 없던 곡: 이 기기의 구간·배속·위치가 서버 기본값에 덮이지 않게 함께 넘긴다
+        const local = json.get<{ a?: unknown; b?: unknown; rate?: unknown; pos?: unknown } | null>(`ulp:v:${vid}`, null);
+        const a = finiteOrNull(local?.a);
+        const b = finiteOrNull(local?.b);
+        const rate = finiteOrNull(local?.rate);
+        if (local) restore = { a, b, rate: rate ?? 1, t: finiteOrNull(local.pos) };
+        song = await apiClient.songs.create({
+          videoId: vid,
+          ...(rate != null ? { rate } : {}),
+          ...(a != null ? { a } : {}),
+          ...(b != null ? { b } : {}),
+        });
+        if (!song) throw new Error('song create failed');
+        if (!alive()) return;
+      }
       let catId = categoryId;
       if (choice === 'new') {
         const name = categoryName.trim() || (preview.title || '').slice(0, 20);
         const created = await apiClient.categories.create(name);
+        if (!alive()) return;
         if (!created) throw new Error('category create failed');
         catId = created.id;
-        if (my === pvSeq.current) {
-          // 뒤 단계가 실패해 다시 누를 때 같은 분류를 또 만들지 않게 기존 분류 선택으로 바꿔 둔다
-          setCategories((prev) => [...prev, created]);
-          setCategoryId(created.id);
-          setChoice('existing');
-        }
+        // 뒤 단계가 실패해 다시 누를 때 같은 분류를 또 만들지 않게 기존 분류 선택으로 바꿔 둔다
+        setCategories((prev) => [...prev, created]);
+        setCategoryId(created.id);
+        setChoice('existing');
       }
       const ids = song.categoryIds || [];
       if (catId && !ids.includes(catId)) {
         await apiClient.songs.update(song.id, { categoryIds: [...ids, catId] });
+        if (!alive()) return;
       }
-      if (my !== pvSeq.current) return;
       close();
-      onOnlyThis?.(vid);
+      onOnlyThis?.(vid, restore);
     } catch (eObj) {
-      if (my === pvSeq.current) setErr(communityErrorKey(eObj));
+      if (alive()) setErr(communityErrorKey(eObj));
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      // 닫힌 뒤 끝난 옛 작업이 새로 열린 모달의 busy를 풀지 않게 한다(닫을 때 close()가 이미 풀었다)
+      if (alive()) {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
   }
 
