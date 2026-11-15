@@ -1988,6 +1988,20 @@ export function PracticePage(): React.ReactElement {
               </div>
             </div>
             <div className={`pp-transport ${styles.ppTransport}`}>
+              {/* PR-1: ⏮ 맨 왼쪽, −5 · ▶ · +5 가운데. 글자 U+23EE는 모바일에서 컬러 이모지로 그려져 SVG로 그린다 */}
+              <button
+                type="button"
+                className={`pp-tbtn ${styles.ppTbtn} ${styles.ppStartBtn}`}
+                id="startBtn"
+                data-align-group="transport:top,bottom,height"
+                aria-label={t('practice.ariaRestartSegment')}
+                onClick={jumpToLoopStart}
+              >
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <rect x="5" y="5" width="2.5" height="14" />
+                  <path d="M19 5v14L8.5 12z" />
+                </svg>
+              </button>
               <button
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn}`}
@@ -1997,16 +2011,6 @@ export function PracticePage(): React.ReactElement {
                 onClick={() => handleSkip(-5)}
               >
                 −5
-              </button>
-              <button
-                type="button"
-                className={`pp-tbtn ${styles.ppTbtn}`}
-                id="startBtn"
-                data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.ariaRestartSegment')}
-                onClick={jumpToLoopStart}
-              >
-                ⏮
               </button>
               <button
                 type="button"
@@ -2198,6 +2202,7 @@ export function PracticePage(): React.ReactElement {
                   type="button"
                   className={`pp-toggle ${styles.ppToggle}`}
                   id="loopBtn"
+                  data-align-group="looprow:top,bottom,height"
                   disabled={!hasBothPoints}
                   aria-pressed={loopOn}
                   onClick={handleToggleLoop}
@@ -2207,6 +2212,7 @@ export function PracticePage(): React.ReactElement {
                 <div className={styles.waitWrap}>
                   <select
                     id="waitSelect"
+                    data-align-group="looprow:top,bottom,height"
                     className={styles.waitSelect}
                     value={waitLeadSec}
                     onChange={(e) => {
@@ -2232,6 +2238,7 @@ export function PracticePage(): React.ReactElement {
                     type="button"
                     className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
                     id="btnWaitTimer"
+                    data-align-group="looprow:top,bottom,height"
                     aria-pressed={waitLeadSec > 0 || waitTimerOn}
                     aria-label={
                       countdownSec != null
@@ -2264,6 +2271,7 @@ export function PracticePage(): React.ReactElement {
                   type="button"
                   className={`pp-icon ${styles.ppIcon}`}
                   id="clearBtn"
+                  data-align-group="looprow:top,bottom,height"
                   aria-label={t('practice.ariaClearLoop')}
                   onClick={handleClearLoop}
                 >
