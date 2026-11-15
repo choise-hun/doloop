@@ -1,7 +1,7 @@
 # WF-2 결과 — 플레이어 녹음 섹션(C안)·화면 폭(가)
 
-> 2026-11-15 / 시니어(Claude) 직접 구현 / 브랜치 `feat/WF-2-rec-section`. 진행 파일: [진행_웹수정WF](../진행_웹수정WF.md). 시안: [WF_시안.html](../명세/WF_시안.html) C안
-> 전체 회귀·PR 생성·CI 대기는 주니어 4단계 몫이다(§6).
+> 2026-11-15 / 시니어(Claude) 직접 구현 / 브랜치 `feat/WF-2-rec-section`. 진행 파일: [완료/진행_웹수정WF](../완료/진행_웹수정WF.md). 시안: [WF_시안.html](../명세/WF_시안.html) C안
+> 전체 회귀·PR 생성·CI 대기는 주니어 4단계에서 완료했다(§4·§6).
 
 ## 1. 사용자 결정
 
@@ -65,7 +65,19 @@
 
 - 위 e2e 554건은 문구 키 삭제·예외 사유 영문화 **전**에 돌린 것이다. 그 뒤 `npx playwright test test/e2e/layout/practice.spec.js test/e2e/layout/ui-polish.spec.js test/e2e/practice-record.spec.js` → `73 passed (47.4s)`로 다시 확인했다.
 - 코드·테스트 파일은 9개(다국어 사전 3개 포함), diff 약 450줄이다.
-- 미실행: 나머지 e2e 전체(`npx playwright test`), CI. 실제 마이크·실제 Drive 연결·실제 녹음 업로드(사람 확인).
+
+### 주니어 4단계 전체 회귀·PR·CI 검증 (2026-11-15, `c505514`)
+
+| 명령·항목 | 결과 |
+| --- | --- |
+| `npm run build` | `✓ built in 848ms` (`tsc --noEmit && vite build`) |
+| `npm test` | `pass 490, fail 0` (`suites 58, skipped 0`) |
+| `npx playwright test` | `861 passed (11.5m)` |
+| PR [#34](https://github.com/choise-hun/doloop/pull/34) | `feat/WF-2-rec-section` → `main` (`c505514`) |
+| CI [Run #43704313760](https://github.com/choise-hun/doloop/actions/runs/43704313760) | `5 successful, 1 skipped` (`Detect code changes` 6s, `Test (Node 22)` 28s, `E2E XSS & CSP (Playwright, spa)` 12m13s, `Docker build & smoke test` 1m38s, `CI ok` 3s 통과; `Kotlin test (JDK 21)` 백엔드 변경 없음으로 skipped) |
+| PR 리뷰 코멘트 | `chatgpt-codex-connector` Code Review 완료 (`has_any_findings: false`, `has_unresolved_findings: false`, 라인 코멘트 0건) |
+
+- 미실행 범위: 실제 마이크·실제 Drive 연결·실제 녹음 업로드(사람 확인), PR 머지 및 운영 Cloud Run 재배포(사용자).
 
 ## 5. 스크린샷 검토 (390×844 · 768×900 · 1150×800 · 1280×800 · 1920×1080, 로그인·Drive 미연결)
 
@@ -81,8 +93,8 @@
 
 스크린샷 원본은 세션 임시 폴더에 있어 남지 않는다. 다시 찍으려면 `LAYOUT_SHOTS=1`.
 
-## 6. 주니어 4단계에 넘길 것
+## 6. 주니어 4단계 완료 체크
 
-1. `npm run build` → `npm test` → `npx playwright test` 전체 실행, 실패 시 원인·수정
-2. `feat/WF-2-rec-section` → main PR 생성, `gh pr checks --watch`, 리뷰 코멘트 수집(타당성 판단이 필요한 지적은 시니어 3-P)
-3. 이 파일 §4에 전체 회귀·CI 결과 추가, 진행 파일 상태 갱신. WF-2가 마지막 step이므로 `git mv 개발산출물/진행_웹수정WF.md 개발산출물/완료/` + 완료 줄, 인수인계 메모 §2 목록 맞춤
+1. **완료** — `npm run build` → `npm test` → `npx playwright test` 전체 실행 통과(§4)
+2. **완료** — `feat/WF-2-rec-section` → `main` [PR #34](https://github.com/choise-hun/doloop/pull/34) 생성, `gh pr checks --watch` 통과, 리뷰 코멘트 0건 확인
+3. **완료** — 이 파일 §4·진행 파일 §5 기록, `git mv 개발산출물/진행_웹수정WF.md 개발산출물/완료/` + 완료 줄, `인수인계_메모.md` §2 목록 맞춤
