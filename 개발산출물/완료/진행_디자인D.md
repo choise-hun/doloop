@@ -1,19 +1,21 @@
 # 진행 — 디자인 개편(DS)·이름 교체(BR)
 
+> **완료 2026-11-15** — 마지막 PR: BR-2 마감 문서 PR(`docs/BR-2-close`)
+
 > 목표: 홈 화면을 DS-0 결정대로 고치고(주황 한 색 포인트, 얇은 프레임 바, 잉크 배너), 서비스 이름과 로고를 RE:DO로 바꾼다.
-> 근거: [DS-0 결과](결과/DS-0_디자인결정.md) · [시안 페이지](명세/DS_시안.html) · [디자인 규칙](../docs/rules/frontend-design.md) · [계획 §4 디자인 규칙 후속](../계획/상용_서비스_계획.md)
+> 근거: [DS-0 결과](../결과/DS-0_디자인결정.md) · [시안 페이지](../명세/DS_시안.html) · [디자인 규칙](../../docs/rules/frontend-design.md) · [계획 §4 디자인 규칙 후속](../../계획/상용_서비스_계획.md)
 > 승인: 2026-11-14 사용자가 DS-0 결정을 확정하고 다음 단계 진행을 요청. 단계별 명세 승인 뒤 구현한다.
 
 ## 1. 단계 표
 
 | Step | 담당 | 내용 | 입력 → 결과 | 완료 기준 | 상태 | effort |
 | --- | --- | --- | --- | --- | --- | --- |
-| DS-0 | 시니어 | 시안 페이지 제작, 사용자 결정 기록 | 첨부 시안 → [결과/DS-0](결과/DS-0_디자인결정.md) | 결정표 확정, PR CI 통과 | **완료** (2026-11-14) | 중 |
+| DS-0 | 시니어 | 시안 페이지 제작, 사용자 결정 기록 | 첨부 시안 → [결과/DS-0](../결과/DS-0_디자인결정.md) | 결정표 확정, PR CI 통과 | **완료** (2026-11-14) | 중 |
 | DS-1 | 시니어 명세 → 주니어 | 토큰·규칙 개정(주황 값, 3px 바 예외, 배너 예외), 토큰 밖 색 25곳 교체, `design_rules.test.js` 허용 개수 내리기, 대비 처리안 | 결과/DS-0 §2·§3 → `명세/DS-1_구현명세.md`, `결과/DS-1.md` | `npm test` 통과, 토큰 밖 색 0, 규칙 문서와 토큰 일치 | **완료** (PR #19 머지 2026-11-14) | 중 |
-| BR-1 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-1) | 사용자에게 보이는 이름 RE:DO 교체(화면 문구·다국어 21줄·`<title>`·화면 제목 5곳·내보내기 파일 이름), 로고 SVG·`BrandLogo` 컴포넌트, 홈 큰 글자 → 로고, 파비콘·`icon-180.png`. 매니페스트·OG·크롬 확장은 코드에 없어 만들지 않는다. 내부 식별자(Kotlin 패키지·`app_id`·`ULEVELP_CONFIG`·Cloud Run 서비스·DB)는 유지 | 결과/DS-0 §1 로고 좌표 → [`명세/BR-1_구현명세.md`](명세/BR-1_구현명세.md), [`결과/BR-1.md`](결과/BR-1.md) | `test/br1_brand.test.js`·`npm test`·빌드·홈 layout spec 통과, 검색 7개 기대 건수 일치(명세 §7) | **완료** (PR #20 머지 2026-11-14, `main`=`fa339c0`) | 중 |
-| BR-2 | 사람 | Google OAuth 동의 화면 앱 이름, Supabase 인증 메일, (선택) 도메인 구입·연결. 방법·비용은 [BR-1 명세 §8](명세/BR-1_구현명세.md) | BR-1 | 외부 화면에서 새 이름 확인, 실제 Drive 계정 확인 2건 | **사람 진행 중** (2026-11-15 착수, 체크리스트 §5) | 낮음 |
-| DS-2 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-2) | 홈 적용: 프레임 상단 바 3px 4곳(WEEKLY·BETTER 주황, RECENT·VAULT 잉크), 커뮤니티 배너 잉크 면 채움, 오늘 칸 주황 테두리+틴트, 최근 곡 구간 배지, CHORDS '이어서' 줄 왼쪽 3px 선, 카드 제목 `WEEKLY`·`RECENT`, 빈 썸네일 글자 `--ink`, 상단 메뉴 로고(`AppShell`의 HOME 링크 안). 정렬규격 순서(배치 약속 → spec 실패 → 구현 → `home`·`shell` layout spec → 4개 폭 스크린샷) | DS-1·BR-1 → [`명세/DS-2_구현명세.md`](명세/DS-2_구현명세.md), [`결과/DS-2.md`](결과/DS-2.md) | `DS2-1~8`·`DS2-N1~3`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 9대 질문 검토(명세 §7 V1~V10) | **완료** (PR #21 머지 2026-11-14, `main`=`29624e3`; [PR #21](https://github.com/choise-hun/doloop/pull/21) 코드 head `802030a`·`31e78ed` [CI Run #43560131650](https://github.com/choise-hun/doloop/actions/runs/43560131650) 5/5 성공·Kotlin 1 SKIPPED, `npm test` 440, `home+shell` 46, `layout/` 480, `test:e2e` 797 passed) | 중 |
-| DS-3 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-3) | 글자 크기 단계 정리(9단계 + `clamp` 3가지, 단계 밖 7곳 교체, 11px 이하 본문 46곳 → 12px), 없는 토큰 `--panel-bg` 8곳 정리, 상단 메뉴 한 줄(비로그인 821~840px)·전용 단언·메뉴 터치 높이 44px, 규칙 문서 §3·§4와 정적 검사 `DR-6`·`DR-7`. 프레임 바·배지의 다른 화면 전파와 홈 터치 높이는 넣지 않는다 | DS-2 → [`명세/DS-3_구현명세.md`](명세/DS-3_구현명세.md), [`결과/DS-3.md`](결과/DS-3.md) | `DR-6`·`DR-7`·`DS3-N1~N3`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 검토(명세 §7 V1~V9) | **완료** (PR #22 머지 2026-11-14) — [PR #22](https://github.com/choise-hun/doloop/pull/22), 코드 head `d26161e` CI 통과([Run #43577994057](https://github.com/choise-hun/doloop/actions/runs/43577994057) 5/5 성공·Kotlin 1 SKIPPED); 시니어 3단계 검증 완료(결함 0건·코드 수정 없음, [결과 §9](결과/DS-3.md)); 주니어 4단계 반영 완료(head `8ad40d6` [CI Run #43581739637](https://github.com/choise-hun/doloop/actions/runs/43581739637) 2/2 성공·4 SKIPPED, `npm test` 442 passed, 새 리뷰 코멘트 0건) (2026-11-14, 사용자 U1~U7 승인; 4단계 재실행 `npm test` 442, `layout/` 519, `test:e2e` 836 passed(`PF2-07` 통과), `check-config-sync.sh` 차이 0건, Codex 리뷰 지적 0건) | 높음 |
+| BR-1 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-1) | 사용자에게 보이는 이름 RE:DO 교체(화면 문구·다국어 21줄·`<title>`·화면 제목 5곳·내보내기 파일 이름), 로고 SVG·`BrandLogo` 컴포넌트, 홈 큰 글자 → 로고, 파비콘·`icon-180.png`. 매니페스트·OG·크롬 확장은 코드에 없어 만들지 않는다. 내부 식별자(Kotlin 패키지·`app_id`·`ULEVELP_CONFIG`·Cloud Run 서비스·DB)는 유지 | 결과/DS-0 §1 로고 좌표 → [`명세/BR-1_구현명세.md`](../명세/BR-1_구현명세.md), [`결과/BR-1.md`](../결과/BR-1.md) | `test/br1_brand.test.js`·`npm test`·빌드·홈 layout spec 통과, 검색 7개 기대 건수 일치(명세 §7) | **완료** (PR #20 머지 2026-11-14, `main`=`fa339c0`) | 중 |
+| BR-2 | 사람 | Google OAuth 동의 화면 앱 이름, Supabase 인증 메일, (선택) 도메인 구입·연결. 방법·비용은 [BR-1 명세 §8](../명세/BR-1_구현명세.md) | BR-1 | 외부 화면에서 새 이름 확인, 실제 Drive 계정 확인 2건 | **완료** (2026-11-15 사용자 확인, §5 — ①④⑤ 완료·② 불필요·③ 안 함) | 낮음 |
+| DS-2 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-2) | 홈 적용: 프레임 상단 바 3px 4곳(WEEKLY·BETTER 주황, RECENT·VAULT 잉크), 커뮤니티 배너 잉크 면 채움, 오늘 칸 주황 테두리+틴트, 최근 곡 구간 배지, CHORDS '이어서' 줄 왼쪽 3px 선, 카드 제목 `WEEKLY`·`RECENT`, 빈 썸네일 글자 `--ink`, 상단 메뉴 로고(`AppShell`의 HOME 링크 안). 정렬규격 순서(배치 약속 → spec 실패 → 구현 → `home`·`shell` layout spec → 4개 폭 스크린샷) | DS-1·BR-1 → [`명세/DS-2_구현명세.md`](../명세/DS-2_구현명세.md), [`결과/DS-2.md`](../결과/DS-2.md) | `DS2-1~8`·`DS2-N1~3`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 9대 질문 검토(명세 §7 V1~V10) | **완료** (PR #21 머지 2026-11-14, `main`=`29624e3`; [PR #21](https://github.com/choise-hun/doloop/pull/21) 코드 head `802030a`·`31e78ed` [CI Run #43560131650](https://github.com/choise-hun/doloop/actions/runs/43560131650) 5/5 성공·Kotlin 1 SKIPPED, `npm test` 440, `home+shell` 46, `layout/` 480, `test:e2e` 797 passed) | 중 |
+| DS-3 | 시니어 명세 → **[주니어]** (Step 분할 없음, §2-3) | 글자 크기 단계 정리(9단계 + `clamp` 3가지, 단계 밖 7곳 교체, 11px 이하 본문 46곳 → 12px), 없는 토큰 `--panel-bg` 8곳 정리, 상단 메뉴 한 줄(비로그인 821~840px)·전용 단언·메뉴 터치 높이 44px, 규칙 문서 §3·§4와 정적 검사 `DR-6`·`DR-7`. 프레임 바·배지의 다른 화면 전파와 홈 터치 높이는 넣지 않는다 | DS-2 → [`명세/DS-3_구현명세.md`](../명세/DS-3_구현명세.md), [`결과/DS-3.md`](../결과/DS-3.md) | `DR-6`·`DR-7`·`DS3-N1~N3`·`npm test`·빌드·전 화면 layout spec·E2E 통과, 스크린샷 검토(명세 §7 V1~V9) | **완료** (PR #22 머지 2026-11-14) — [PR #22](https://github.com/choise-hun/doloop/pull/22), 코드 head `d26161e` CI 통과([Run #43577994057](https://github.com/choise-hun/doloop/actions/runs/43577994057) 5/5 성공·Kotlin 1 SKIPPED); 시니어 3단계 검증 완료(결함 0건·코드 수정 없음, [결과 §9](../결과/DS-3.md)); 주니어 4단계 반영 완료(head `8ad40d6` [CI Run #43581739637](https://github.com/choise-hun/doloop/actions/runs/43581739637) 2/2 성공·4 SKIPPED, `npm test` 442 passed, 새 리뷰 코멘트 0건) (2026-11-14, 사용자 U1~U7 승인; 4단계 재실행 `npm test` 442, `layout/` 519, `test:e2e` 836 passed(`PF2-07` 통과), `check-config-sync.sh` 차이 0건, Codex 리뷰 지적 0건) | 높음 |
 
 순서: DS-1 → BR-1(DS-1과 병행 가능) → DS-2 → DS-3. DS-3 PR이 머지돼도 BR-2(사람)가 남아 있으면 이 파일은 `완료/`로 옮기지 않는다. BR은 M0-1(Capacitor 번들 ID·스토어 이름) 전에 끝낸다.
 
@@ -61,17 +63,16 @@
 
 ## 4. 다음 세션 시작 지시
 
-1. DS-0~DS-3·BR-1은 머지 완료. 남은 것은 BR-2(사람)뿐이다. §5 체크리스트에서 사용자가 끝낸 항목을 받아 칸을 채운다.
-2. ① ② ④ ⑤가 모두 끝나면(도메인 ③은 선택 — 안 하기로 하면 `안 함`으로 적는다) 이 파일을 `완료/`로 옮기는 문서 PR을 연다. 도메인을 연결하면 §8-3 코드 변경은 별도 작업 ID로 계획 §4에 올린다.
+작업 끝. 남은 후속: BR-2 확인 중 발견한 ① 마이크 권한 문구의 노션 언급(`practice.micPermissionNeeded`) ② Google OAuth 앱 게시 상태가 "테스트"라 Drive 연결 때 테스트 경고 화면이 뜸(콘솔 → 대상 → 앱 게시, 사람) — [계획 §4](../../계획/상용_서비스_계획.md)에 올렸다.
 
 ## 5. BR-2 체크리스트 (사람, 2026-11-15 착수)
 
-근거: [BR-1 명세 §8](명세/BR-1_구현명세.md). 운영 `ulevelp-00018-pps`(`server:5647552`)에 BR-1 이름이 반영돼 있으므로 ④ ⑤는 운영 주소에서 확인한다.
+근거: [BR-1 명세 §8](../명세/BR-1_구현명세.md). 운영 `ulevelp-00018-pps`(`server:5647552`)에 BR-1 이름이 반영돼 있으므로 ④ ⑤는 운영 주소에서 확인한다.
 
 | # | 곳 | 할 일 | 확인 방법 | 상태 |
 | --- | --- | --- | --- | --- |
-| ① | Google Cloud 콘솔(프로젝트 `ulevelp`) → Google 인증 플랫폼 → 브랜딩(OAuth 동의 화면) | 앱 이름 `RE:DO`, 로고 `public/icon-180.png`(정사각형 PNG). 바꾸면 Google 재검토가 걸릴 수 있다 | 로그아웃 후 운영에서 Google 로그인 → 동의 화면에 `RE:DO` 표시 | 대기 |
-| ② | Supabase 대시보드 → Authentication → Emails(템플릿)·SMTP 설정 | 인증 메일 제목·본문의 서비스 이름, 보내는 사람 이름을 `RE:DO`로 | 테스트 계정으로 인증 메일을 받아 제목·보낸 사람 확인 | 대기 |
-| ③ | (선택) 도메인 | 구입 여부·방법 결정: Firebase Hosting(무료, 요청 60초 제한) 또는 부하 분산기(월 약 $18). 하면 Supabase URL Configuration·OAuth 원본/리디렉션도 추가 | 새 주소에서 로그인까지 | 결정 대기 |
-| ④ | 운영, 새 Google 계정(Drive에 옛 폴더 없음) | 연습 화면에서 녹음 하나 저장 | Drive에 `REDO 녹음` 폴더가 새로 생김 | 대기 |
-| ⑤ | 운영, 옛 `ULeveLP 녹음` 폴더가 있는 계정 | 녹음 하나 저장 | 새 폴더를 만들지 않고 `ULeveLP 녹음`에 저장됨 | 대기 |
+| ① | Google Cloud 콘솔(프로젝트 `ulevelp`) → Google 인증 플랫폼 → 브랜딩(OAuth 동의 화면) | 앱 이름 `RE:DO`, 로고 `public/icon-180.png`(정사각형 PNG). 바꾸면 Google 재검토가 걸릴 수 있다 | 로그아웃 후 운영에서 Google 로그인 → 동의 화면에 `RE:DO` 표시 | **완료** (2026-11-15 사용자) |
+| ② | Supabase 대시보드 → Authentication → Emails(템플릿)·SMTP 설정 | 인증 메일 제목·본문의 서비스 이름, 보내는 사람 이름을 `RE:DO`로 | 테스트 계정으로 인증 메일을 받아 제목·보낸 사람 확인 | **불필요** (2026-11-15) — 로그인은 Google OAuth뿐(`frontend/src/lib/auth.ts:305` `signInWithOAuth({ provider: 'google' })`)이라 Supabase가 인증 메일을 보내지 않는다. 이메일 가입·링크 로그인을 도입할 때 다시 본다 |
+| ③ | (선택) 도메인 | 구입 여부·방법 결정: Firebase Hosting(무료, 요청 60초 제한) 또는 부하 분산기(월 약 $18). 하면 Supabase URL Configuration·OAuth 원본/리디렉션도 추가 | 새 주소에서 로그인까지 | **안 함** (2026-11-15 사용자 결정) — Cloud Run 기본 주소 유지 |
+| ④ | 운영, 새 Google 계정(Drive에 옛 폴더 없음) | 연습 화면에서 녹음 하나 저장 | Drive에 `REDO 녹음` 폴더가 새로 생김 | **완료** (2026-11-15 사용자) |
+| ⑤ | 운영, 옛 `ULeveLP 녹음` 폴더가 있는 계정 | 녹음 하나 저장 | 새 폴더를 만들지 않고 `ULeveLP 녹음`에 저장됨 | **완료** (2026-11-15 사용자) |
