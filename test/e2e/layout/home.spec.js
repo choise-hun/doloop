@@ -8,6 +8,12 @@ const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES } = require('../support/mock-app');
 const { COMMUNITY_FREE_ME, communityRoutes } = require('../support/community-fixtures');
 
+const RECENT_MEMO = '2절 코러스 들어가기 전 슬라이드가 늦다. 메트로놈 70부터 다시, 왼손 3번 손가락 위치 확인하고 넘어가기';
+const HOME_RECENT_MEMO = {
+  ...STATES.userData,
+  songs: STATES.userData.songs.map((s, i) => (i === 0 ? { ...s, memo: RECENT_MEMO } : s)),
+};
+
 const HOME_CURATION = {
   ...STATES.userData,
   me: COMMUNITY_FREE_ME,
@@ -17,7 +23,7 @@ const HOME_CURATION = {
 layoutSuite({
   name: 'home',
   path: '/index.html',
-  states: ['guest', 'guestLocal', 'userData', { name: 'curation', mock: HOME_CURATION }],
+  states: ['guest', 'guestLocal', 'userData', { name: 'curation', mock: HOME_CURATION }, { name: 'recentMemo', mock: HOME_RECENT_MEMO }],
   ready: async (page, state) => {
     await page.locator('#weeklyStreakCard').waitFor();
     if (state === 'userData' || state === 'curation') {
@@ -210,56 +216,42 @@ test('DS2-4 오늘 연습을 마친 칸', async ({ page }) => {
   expect(style.dowC).toBe(colors.surface2);
 });
 
-test('DS2-5 구간 배지', async ({ page }) => {
+// RC-1(2026-11-15 사용자 결정): RECENT 구간 표시는 배지(주황 테두리·틴트) 없이 회색 글자다.
+// 헤더 링크는 다른 카드처럼 "… →" 문구, 본문의 중복 이어서 링크는 없애고 그 자리에 곡 메모 한 줄을 둔다.
+test('RC-1 RECENT 구간은 배지 없음·헤더 이어서 연습·본문 링크 없음', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, STATES.userData);
   await page.goto('/index.html', { waitUntil: 'load' });
   await page.locator('#recentSongSegment').waitFor();
 
   const colors = await resolveTokenColors(page);
-  const loopStyle = await page.locator('#recentSongSegment').evaluate((el) => {
+  const seg = await page.locator('#recentSongSegment').evaluate((el) => {
     const s = window.getComputedStyle(el);
-    return {
-      topW: s.borderTopWidth,
-      rightW: s.borderRightWidth,
-      bottomW: s.borderBottomWidth,
-      leftW: s.borderLeftWidth,
-      topC: s.borderTopColor,
-      rightC: s.borderRightColor,
-      bottomC: s.borderBottomColor,
-      leftC: s.borderLeftColor,
-      bg: s.backgroundColor,
-      color: s.color,
-      radius: s.borderTopLeftRadius,
-    };
+    return { topW: s.borderTopWidth, leftW: s.borderLeftWidth, bg: s.backgroundColor, color: s.color };
   });
+  expect(seg.topW).toBe('0px');
+  expect(seg.leftW).toBe('0px');
+  expect(seg.bg).toBe('rgba(0, 0, 0, 0)');
+  expect(seg.color).toBe(colors.muted);
 
-  expect(loopStyle.topW).toBe('1px');
-  expect(loopStyle.rightW).toBe('1px');
-  expect(loopStyle.bottomW).toBe('1px');
-  expect(loopStyle.leftW).toBe('1px');
-  expect(loopStyle.topC).toBe(colors.nowRing);
-  expect(loopStyle.rightC).toBe(colors.nowRing);
-  expect(loopStyle.bottomC).toBe(colors.nowRing);
-  expect(loopStyle.leftC).toBe(colors.nowRing);
-  expect(loopStyle.bg).toBe(colors.tint);
-  expect(loopStyle.color).toBe(colors.ink);
-  expect(loopStyle.radius).toBe('0px');
+  await expect(page.locator('#recentSongGo')).toHaveText('이어서 연습 →');
+  await expect(page.locator('#recentSongBody a')).toHaveCount(0);
+  // 메모가 빈 곡이면 메모 줄이 없다
+  await expect(page.locator('#recentSongMemo')).toHaveCount(0);
+});
 
-  // 구간이 없을 때(a: null, b: null)는 배지가 붙지 않는다
-  await mockApp(page, {
-    ...STATES.userData,
-    songs: STATES.userData.songs.map((s) => ({ ...s, a: null, b: null })),
-  });
+test('RC-1 RECENT 곡 메모는 한 줄 말줄임으로 보인다', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApp(page, HOME_RECENT_MEMO);
   await page.goto('/index.html', { waitUntil: 'load' });
-  await page.locator('#recentSongSegment').waitFor();
-
-  const noLoopStyle = await page.locator('#recentSongSegment').evaluate((el) => {
+  const memo = page.locator('#recentSongMemo');
+  await expect(memo).toHaveText(RECENT_MEMO);
+  const m = await memo.evaluate((el) => {
     const s = window.getComputedStyle(el);
-    return { topW: s.borderTopWidth, color: s.color };
+    return { ws: s.whiteSpace, ov: s.textOverflow };
   });
-  expect(noLoopStyle.topW).toBe('0px');
-  expect(noLoopStyle.color).toBe(colors.muted);
+  expect(m.ws).toBe('nowrap');
+  expect(m.ov).toBe('ellipsis');
 });
 
 test('DS2-6 이어서 줄', async ({ page }) => {

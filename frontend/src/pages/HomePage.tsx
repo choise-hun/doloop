@@ -457,6 +457,7 @@ export function HomePage(): React.ReactElement {
     b: number | null;
     pos: number | null;
     rate: number | null;
+    memo: string;
   } | null = activeUid
     ? songs[0]
       ? {
@@ -466,6 +467,7 @@ export function HomePage(): React.ReactElement {
           b: songs[0].b,
           pos: songs[0].pos,
           rate: songs[0].rate,
+          memo: (songs[0].memo || '').trim(),
         }
       : null
     : localSongs[0]
@@ -476,14 +478,9 @@ export function HomePage(): React.ReactElement {
           b: localSongs[0].b,
           pos: localSongs[0].pos,
           rate: localSongs[0].rate,
+          memo: '',
         }
       : null;
-
-  const recentHasLoop =
-    recentSong != null &&
-    recentSong.a != null &&
-    recentSong.b != null &&
-    recentSong.b > recentSong.a;
 
   // 노션 바로가기 링크 — 노션 연동은 동결·은닉(계획/앱_명세.md §5). 설정 고급 메뉴에 주소를 넣은 사용자에게만 보인다
   const nlPracticeUrl = safeUrl(raw.get('ulp:notion-practice'));
@@ -649,20 +646,20 @@ export function HomePage(): React.ReactElement {
                 >
                   {recentSong.title}
                 </p>
-                <p
-                  className={`${styles.recentSegment}${recentHasLoop ? ` ${styles.recentSegmentLoop}` : ''}`}
-                  id="recentSongSegment"
-                  data-align-group="songText:left"
-                >
+                <p className={styles.recentSegment} id="recentSongSegment" data-align-group="songText:left">
                   {formatRecentSongSegment(recentSong)}
                 </p>
-                <SafeLink
-                  href={buildPracticeResumeHref(recentSong)}
-                  className={styles.widgetLink}
-                  data-align-group="songText:left"
-                >
-                  {t('home.btnResumeSong')}
-                </SafeLink>
+                {recentSong.memo && (
+                  <p
+                    className={styles.recentMemo}
+                    id="recentSongMemo"
+                    data-align-group="songText:left"
+                    data-layout-ignore="G3: 최근 곡 메모는 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
+                    title={recentSong.memo}
+                  >
+                    {recentSong.memo}
+                  </p>
+                )}
               </div>
             </div>
           ) : (

@@ -264,14 +264,13 @@
   margin: 0;
 }
 
-.recentSegmentLoop {
-  align-self: flex-start;
-  padding: 1px 6px;
-  border: 1px solid var(--now-ring);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--now-ring) 12%, transparent);
+.recentMemo {
+  font-size: 12px;
   color: var(--ink);
-  font-weight: 700;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 장르 바로가기: 스트릭 달력 칸과 같은 모양. 줄 아랫선은 왼쪽 스트릭 막대 아랫선과 맞춘다 */
