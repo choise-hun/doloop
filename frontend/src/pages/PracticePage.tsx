@@ -2547,6 +2547,7 @@ function PresetNameDialog({
   const [err, setErr] = useState('');
   const savingRef = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -2564,6 +2565,8 @@ function PresetNameDialog({
     e.preventDefault();
     if (!trimmed || savingRef.current) return;
     savingRef.current = true;
+    // 저장 중에는 입력·버튼이 모두 비활성이라 초점이 body로 빠지면 플레이어 단축키가 동작한다 → 카드에 초점을 둔다
+    cardRef.current?.focus();
     setSaving(true);
     setErr('');
     const failure = await onSubmit(trimmed);
@@ -2571,6 +2574,7 @@ function PresetNameDialog({
     if (failure) {
       setSaving(false);
       setErr(failure);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -2583,7 +2587,11 @@ function PresetNameDialog({
     }
     if (e.key !== 'Tab' || !dialogRef.current) return;
     const focusable = dialogRef.current.querySelectorAll<HTMLElement>(PRESET_DIALOG_FOCUSABLE);
-    if (focusable.length === 0) return;
+    if (focusable.length === 0) {
+      e.preventDefault();
+      cardRef.current?.focus();
+      return;
+    }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (e.shiftKey && document.activeElement === first) {
@@ -2608,7 +2616,14 @@ function PresetNameDialog({
         if (e.target === e.currentTarget) cancel();
       }}
     >
-      <form className={styles.modalCard} noValidate onSubmit={(e) => void submit(e)}>
+      <form
+        ref={cardRef}
+        className={styles.modalCard}
+        tabIndex={-1}
+        aria-busy={saving}
+        noValidate
+        onSubmit={(e) => void submit(e)}
+      >
         <h2 className={styles.modalTitle} id="presetDialogTitle">
           {t('practice.presetSave')}
         </h2>

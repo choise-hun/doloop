@@ -215,6 +215,38 @@ test('T2: 프리셋 저장 및 병합 다이얼로그 호출', async ({ page }) 
   expect(putPayload.merge).toBe(true);
 });
 
+test('T2b: 프리셋 저장 응답을 기다리는 동안 초점이 모달 안에 남아 Space가 재생으로 새지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await mockApp(page, {
+    ...USER_DATA_SR,
+    routes: [...(USER_DATA_SR.routes || []), [(url) => url.pathname.includes('/presets'), async (route) => {
+      if (route.request().method() !== 'PUT') return route.fulfill({ json: { presets: [] } });
+      await gate;
+      const body = JSON.parse(route.request().postData() || '{}');
+      return route.fulfill({ json: { preset: { id: 'p-new', name: body.name, a: body.a, b: body.b, rate: 1, parts: [] } } });
+    }]],
+  });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#presetSection').waitFor();
+  await page.locator('#setA').click();
+  await page.locator('#setB').click();
+  await page.locator('#btnSavePreset').click();
+  await page.locator('#presetDialogInput').fill('벌스');
+  await page.locator('#presetDialogInput').press('Enter');
+  await expect(page.locator('#presetDialogSave')).toBeDisabled();
+  const inside = () => page.evaluate(() => document.getElementById('presetDialog').contains(document.activeElement));
+  expect(await inside()).toBe(true);
+  await page.keyboard.press('Tab');
+  expect(await inside()).toBe(true);
+  const label = await page.locator('#playBtn').getAttribute('aria-label');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#playBtn')).toHaveAttribute('aria-label', label);
+  release();
+  await expect(page.locator('#presetDialog')).toHaveCount(0);
+});
+
 test('T3: 세션 커버리지 게이지 바 및 아코디언 상세 목록', async ({ page }) => {
   const sessionWithParts = {
     ...USER_DATA_SR,
