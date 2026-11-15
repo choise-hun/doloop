@@ -1167,7 +1167,7 @@ export const EN: Record<I18nKey, string> = {
   'practice.driveConnectFailed': "Failed to connect Google Drive storage.",
   'practice.recNotSupported': "This browser does not support audio recording",
   'practice.confirmDiscardUnsavedRec': "You have an unuploaded recording. Discard it and record a new one?",
-  'practice.micPermissionNeeded': "Microphone permission required. If opened inside Notion, please open in a browser tab.",
+  'practice.micPermissionNeeded': "Microphone permission required. Allow the microphone from your browser's address bar.",
   'practice.micOpenFailed': "Could not access microphone",
   'practice.recRecording': "Recording",
   'practice.songsLoadFailed': "Could not load songs",

@@ -270,6 +270,67 @@ test('CM-8 PLAY 가져오기: 연습 화면 #urlForm에 list URL 제출 → 이 
   expect(importPostCount).toBe(0);
 });
 
+test('WF-1 이 곡만 열기: 분류 이름을 고친 뒤에는 바깥 클릭으로 닫히지 않고, 곡을 그 새 분류에 담아 연다', async ({ page }) => {
+  const calls = { categoryNames: [], patches: [] };
+  await mockApp(page, {
+    ...STATES.userData,
+    me: COMMUNITY_FREE_ME,
+    routes: [
+      ...communityRoutes({}),
+      [
+        (url) => url.pathname === '/api/v1/categories',
+        (route) => {
+          if (route.request().method() !== 'POST') return route.fallback();
+          calls.categoryNames.push(route.request().postDataJSON().name);
+          return route.fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: JSON.stringify({ category: { id: 'cat-new', name: '기타 연습', position: 0 } }),
+          });
+        },
+      ],
+      [
+        (url) => /^\/api\/v1\/songs\/[^/]+$/.test(url.pathname),
+        (route) => {
+          if (route.request().method() !== 'PATCH') return route.fallback();
+          calls.patches.push(route.request().postDataJSON());
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ song: null }) });
+        },
+      ],
+    ],
+  });
+  await page.goto('/practice.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await page.locator('#urlInput').fill('https://www.youtube.com/watch?v=abcdefghij1&list=PL1');
+  await page.locator('#urlForm button[type="submit"]').click();
+  await expect(page.locator('#playlistCatName')).toBeVisible();
+  await page.locator('#playlistCatName').fill('기타 연습');
+
+  // 입력을 바꾼 뒤 바깥(배경)을 눌러도 닫히지 않고 입력이 남는다
+  await page.locator('#playlistImportModal').click({ position: { x: 4, y: 4 } });
+  await expect(page.locator('#playlistImportModal')).toBeVisible();
+  await expect(page.locator('#playlistCatName')).toHaveValue('기타 연습');
+
+  await page.locator('#playlistOnlyThis').click();
+  await expect(page.locator('#playlistImportModal')).toHaveCount(0);
+  expect(calls.categoryNames).toEqual(['기타 연습']);
+  expect(calls.patches).toHaveLength(1);
+  expect(calls.patches[0].categoryIds).toContain('cat-new');
+});
+
+test('WF-1 가져오기 모달: 입력을 건드리지 않았으면 바깥 클릭으로 닫힌다', async ({ page }) => {
+  await mockApp(page, { ...STATES.userData, me: COMMUNITY_FREE_ME, routes: communityRoutes({}) });
+  await page.goto('/practice.html', { waitUntil: 'load' });
+  test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
+
+  await page.locator('#urlInput').fill('https://www.youtube.com/watch?v=abcdefghij1&list=PL1');
+  await page.locator('#urlForm button[type="submit"]').click();
+  await expect(page.locator('#playlistCatName')).toBeVisible();
+  await page.locator('#playlistImportModal').click({ position: { x: 4, y: 4 } });
+  await expect(page.locator('#playlistImportModal')).toHaveCount(0);
+});
+
 test('CM-9 TRAILS LOG: /community.html#summary → 84일 집계 탭 → 팔로잉 선택 시 logs?scope=following 호출 및 카드 표시', async ({ page }) => {
   const scopesCalled = [];
   await mockApp(page, {

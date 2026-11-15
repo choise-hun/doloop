@@ -2523,7 +2523,9 @@ export function PracticePage(): React.ReactElement {
         onClose={() => setImportModalUrl(null)}
         onImported={() => void loadSongList({ silent: true })}
         onOnlyThis={(vid) => {
+          // WF-1: 모달이 곡을 분류에 담았을 수 있어 곡·분류 목록도 다시 읽는다
           void openSongById(vid);
+          void loadSongList({ silent: true });
         }}
       />
     </AppShell>

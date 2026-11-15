@@ -53,6 +53,8 @@ export function PlaylistImportModal({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PlaylistImportResultDto | null>(null);
   const [err, setErr] = useState<{ key: string; vars?: Record<string, string> } | null>(null);
+  // WF-1: 사용자가 분류 선택·이름을 직접 바꿨는지. 바꿨으면 바깥 클릭으로 닫지 않고, "이 곡만 열기"도 그 분류를 따른다
+  const [touched, setTouched] = useState(false);
 
   // S4 가져오기 모달 — 미리보기는 url별 seq, 가져오기는 busy 가드, 닫으면 둘 다 무효
   useEffect(() => {
@@ -62,6 +64,7 @@ export function PlaylistImportModal({
     setPreview(null);
     setResult(null);
     setErr(null);
+    setTouched(false);
     if (!url) {
       setLoading(false);
       return;
@@ -102,7 +105,51 @@ export function PlaylistImportModal({
     setResult(null);
     setErr(null);
     setLoading(false);
+    setTouched(false);
     onClose();
+  }
+
+  // WF-1: "이 곡만 열기" — 분류를 직접 골랐으면 곡을 계정에 넣고 그 분류에 담은 뒤 연다. 손대지 않았으면 예전처럼 열기만 한다
+  async function openOnlyThis(vid: string) {
+    if (busyRef.current) return;
+    if (!touched || !preview) {
+      close();
+      onOnlyThis?.(vid);
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setErr(null);
+    const my = pvSeq.current;
+    try {
+      const song = (await apiClient.songs.byVideo(vid)) ?? (await apiClient.songs.create({ videoId: vid }));
+      if (!song) throw new Error('song create failed');
+      let catId = categoryId;
+      if (choice === 'new') {
+        const name = categoryName.trim() || (preview.title || '').slice(0, 20);
+        const created = await apiClient.categories.create(name);
+        if (!created) throw new Error('category create failed');
+        catId = created.id;
+        if (my === pvSeq.current) {
+          // 뒤 단계가 실패해 다시 누를 때 같은 분류를 또 만들지 않게 기존 분류 선택으로 바꿔 둔다
+          setCategories((prev) => [...prev, created]);
+          setCategoryId(created.id);
+          setChoice('existing');
+        }
+      }
+      const ids = song.categoryIds || [];
+      if (catId && !ids.includes(catId)) {
+        await apiClient.songs.update(song.id, { categoryIds: [...ids, catId] });
+      }
+      if (my !== pvSeq.current) return;
+      close();
+      onOnlyThis?.(vid);
+    } catch (eObj) {
+      if (my === pvSeq.current) setErr(communityErrorKey(eObj));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -144,7 +191,8 @@ export function PlaylistImportModal({
       aria-modal="true"
       aria-labelledby="playlistModalTitle"
       onClick={(e) => {
-        if (e.target === e.currentTarget) close();
+        // WF-1: 입력을 바꿨거나 처리 중이면 바깥 클릭으로 닫지 않는다(취소 버튼으로만 닫힘)
+        if (e.target === e.currentTarget && !touched && !busy) close();
       }}
     >
       <form className={styles.sheetCard} onSubmit={(e) => void submit(e)}>
@@ -180,7 +228,7 @@ export function PlaylistImportModal({
                       name="playlistChoice"
                       value="existing"
                       checked={choice === 'existing'}
-                      onChange={() => setChoice('existing')}
+                      onChange={() => { setChoice('existing'); setTouched(true); }}
                     />
                     {t('playlist.toExisting')}
                   </label>
@@ -189,7 +237,7 @@ export function PlaylistImportModal({
                       id="playlistCatSelect"
                       className={styles.selectPill}
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
+                      onChange={(e) => { setCategoryId(e.target.value); setTouched(true); }}
                     >
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -210,7 +258,7 @@ export function PlaylistImportModal({
                     value="new"
                     disabled={noCatSlots}
                     checked={choice === 'new'}
-                    onChange={() => setChoice('new')}
+                    onChange={() => { setChoice('new'); setTouched(true); }}
                   />
                   {t('playlist.toNew')}
                 </label>
@@ -223,7 +271,7 @@ export function PlaylistImportModal({
                     placeholder={t('playlist.newName')}
                     maxLength={20}
                     value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
+                    onChange={(e) => { setCategoryName(e.target.value); setTouched(true); }}
                   />
                 ) : null}
                 {noCatSlots ? (
@@ -259,11 +307,8 @@ export function PlaylistImportModal({
               type="button"
               id="playlistOnlyThis"
               className="ghostBtn"
-              onClick={() => {
-                const vid = singleVideoId;
-                close();
-                onOnlyThis(vid);
-              }}
+              disabled={busy}
+              onClick={() => void openOnlyThis(singleVideoId)}
             >
               {t('playlist.onlyThis')}
             </button>
