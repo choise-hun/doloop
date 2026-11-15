@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WF 시안 — 플레이어 녹음 섹션</title>
+<style>
+  :root {
+    --bg: #F0EEEA; --surface: #f6f6f1; --surface2: #e1e0d6; --ink: #1d1d1f; --muted: #6b6a63; --line: #cfcec4;
+    --accent: #1d1d1f; --accent-ink: #f6f6f1; --orange: #e64d01; --good: #2f6b3a; --bad: #b3261e; --root-ink: #f6f6f1;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171716; --surface: #20201e; --surface2: #2b2a27; --ink: #ecece4; --muted: #9c9a92; --line: #3a3935;
+      --accent: #ecece4; --accent-ink: #171716; --orange: #ff6b2b; --good: #6fbf7e; --bad: #f2867c; --root-ink: #141413;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px 80px; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 40px 0 4px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 13px; margin: 20px 0 8px; color: var(--muted); font-weight: 400; }
+  p, li { color: var(--muted); margin: 4px 0; max-width: 78ch; }
+  p b, li b { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 12px; }
+
+  .states { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0;
+    background: var(--bg); border-bottom: 1px solid var(--line); margin: 12px 0 0; }
+  .states button { font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 9999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  .states button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  /* 실제 화면 왼쪽 열(1120px 화면에서 744px)과 전화 폭(390 − 여백 32) */
+  .frame { margin-bottom: 8px; }
+  .frame[data-v] { margin-top: 84px; } /* 팝오버가 설명 글을 가리지 않게 시안에서만 띄운 여백 */
+  .frame.wide { width: 744px; max-width: 100%; }
+  .frame.phone { width: 358px; max-width: 100%; }
+
+  .actions { display: grid; gap: 12px; align-items: stretch; }
+  .actions.split { grid-template-columns: minmax(0, 5fr) minmax(150px, 1fr); }
+  .actions.now { align-items: start; }
+  .phone .actions.split { grid-template-columns: minmax(0, 1fr); }
+  .card { position: relative; min-width: 0; background: var(--surface); border: 1px solid var(--line); padding: 16px;
+    display: flex; flex-direction: column; gap: 12px; }
+  .transport { display: grid; gap: 6px; align-items: stretch;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr); }
+  .transport.six { grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); }
+  .phone .transport.six { grid-template-columns: repeat(5, minmax(0,1fr)); }
+  .phone .transport.six .rec { grid-column: 1 / -1; min-height: 48px; }
+  .phone .transport.six.recBeforeSave .rec { order: 9; }
+  .tbtn { font: inherit; font-size: 18px; font-weight: 700; min-height: 76px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 0; cursor: pointer; white-space: nowrap; }
+  .tbtn.play { font-size: 32px; }
+  .tbtn.save { font-size: 16px; }
+  .phone .tbtn { font-size: 14px; }
+  .phone .tbtn.play { font-size: 26px; }
+  .rec { font-family: var(--mono); font-size: 15px; }
+  [data-state="recording"] .rec { background: var(--bad); border-color: var(--bad); color: var(--root-ink); }
+  .recLabel::before { content: "● 녹음"; }
+  [data-state="recording"] .recLabel::before { content: "■ 0:12"; }
+
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 18px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 0; min-width: 0; }
+  .phone .hint { display: none; }
+  .phone .foot { justify-content: flex-end; }
+
+  /* Drive 상태: 점 + 짧은 글자. 누르면 설명 팝오버 */
+  .drive { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .drive::before { content: ""; width: 8px; height: 8px; border-radius: 9999px; background: var(--good); }
+  .drive::after { content: "Drive 연동"; }
+  [data-state="nodrive"] .drive::before { background: var(--orange); }
+  [data-state="nodrive"] .drive::after { content: "Drive 미연결"; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* 팝오버: 박스 밖(위쪽)에 뜬다. 카드 높이를 바꾸지 않는다 */
+  .pop { display: none; position: absolute; right: 8px; bottom: calc(100% - 8px); z-index: 3; width: 264px; max-width: calc(100vw - 48px);
+    background: var(--surface); border: 1px solid var(--ink); padding: 10px 12px; font-size: 12px; color: var(--ink);
+    box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .pop::after { content: ""; position: absolute; right: 28px; bottom: -6px; width: 10px; height: 10px; background: var(--surface);
+    border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); transform: rotate(45deg); }
+  .pop p { color: var(--ink); margin: 0 0 8px; }
+  .pop p:last-child { margin-bottom: 0; }
+  .pop .x { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+  .pop .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .pop .pill { font: inherit; font-size: 12px; font-weight: 700; min-height: 32px; padding: 0 14px; border-radius: 9999px;
+    border: 1px solid var(--ink); background: var(--ink); color: var(--bg); cursor: pointer; }
+  .pop .ghost { font: inherit; font-size: 12px; min-height: 32px; padding: 0 12px; border-radius: 9999px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); cursor: pointer; }
+  .pop .fake-audio { height: 28px; background: var(--surface2); margin-bottom: 8px; display: flex; align-items: center; padding: 0 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .pop.err { border-color: var(--bad); }
+  .pop.err::after { border-color: var(--bad); }
+  [data-state="micerr"] .pop.mic, [data-state="nodrive"] .pop.nodrive, [data-state="take"] .pop.take { display: block; }
+
+  /* 지금 화면 재현(비교용) */
+  .nowLab { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .nowRec { font: inherit; font-family: var(--mono); font-weight: 700; min-height: 44px; background: var(--bg); border: 1px solid var(--line); color: var(--ink); opacity: .4; }
+  .nowMsg { font-size: 12px; color: var(--bad); margin: 0; }
+
+  table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; color: var(--ink); }
+  th { background: var(--surface); font-weight: 700; }
+  .rec-tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 9999px; background: var(--accent); color: var(--accent-ink); margin-left: 6px; }
+</style>
+</head>
+<body data-state="ok">
+<main>
+  <h1>WF 시안 — 플레이어 녹음 섹션 · 화면 폭</h1>
+  <p>2026-11-15 · 사용자 수정 목록 "플레이어 화면 녹음 섹션" 1~4번. 색은 화면 토큰 그대로(초록 <code>--good</code>, 주황 <code>--orange-vivid</code> — 주황은 점에만, 글자는 잉크색). 라이트/다크는 시스템 설정을 따른다.</p>
+
+  <div class="states" role="group" aria-label="상태 바꾸기">
+    <button data-s="ok" aria-pressed="true">기본 (Drive 연동)</button>
+    <button data-s="nodrive">Drive 미연결</button>
+    <button data-s="recording">녹음 중</button>
+    <button data-s="take">녹음 직후</button>
+    <button data-s="micerr">마이크 권한 오류</button>
+  </div>
+  <p>위 단추로 상태를 바꾸면 아래 세 안이 함께 바뀐다. 긴 안내는 전부 <b>상자 밖에 뜨는 작은 팝오버</b>로 나오고, 상자 높이는 어떤 상태에서도 변하지 않는다.</p>
+
+  <h2>0. 지금 화면 (비교용)</h2>
+  <p>두 상자가 <code>align-items: start</code>라 높이가 따로 논다. 녹음 상자는 제목 2줄 + Drive 표시 + 버튼 + 메시지 줄 + (미연결 때) 안내 배너가 좁은 칸에 세로로 쌓여 왼쪽보다 길어진다.</p>
+  <div class="frame wide">
+    <div class="actions split now">
+      <section class="card">
+        <div class="transport"><button class="tbtn">−5</button><button class="tbtn">⏮</button><button class="tbtn play">▶</button><button class="tbtn">+5</button><button class="tbtn save">저장</button></div>
+        <p class="hint">키보드: Space 재생 · 1~4 속도 · [ ] A·B · L 반복 · R 구간 처음 · M 녹음</p>
+      </section>
+      <section class="card">
+        <div class="nowLab"><span>녹음 · 오늘 연습 기록에 올라가요</span><span>Drive 연동됨</span></div>
+        <button class="nowRec">● 녹음</button>
+        <p class="nowMsg">마이크 권한이 필요해요. 노션 안에서 열었다면 브라우저에서 직접 여세요</p>
+      </section>
+    </div>
+  </div>
+
+  <h2>A안 — 상자 둘 유지, 버튼만 남김 <span class="rec-tag">1·2번</span></h2>
+  <p>두 상자의 위·아래 선을 맞추고(<code>stretch</code>), 녹음 버튼을 재생 버튼과 <b>같은 높이(76px)·같은 윗선</b>에 둔다. 제목 글은 없애고 Drive 상태만 키보드 안내 줄과 같은 줄에 둔다.</p>
+  <h3>데스크탑 (왼쪽 열 744px)</h3>
+  <div class="frame wide" data-v="A"></div>
+  <h3>전화 (390px)</h3>
+  <div class="frame phone" data-v="A"></div>
+
+  <h2>B안 — 한 줄로 합침, 녹음이 맨 오른쪽 <span class="rec-tag">3번</span></h2>
+  <p>상자 하나에 <code>−5 · ⏮ · ▶ · +5 · 저장 · ● 녹음</code>. 녹음 칸 폭은 지금 녹음 상자(약 150px)보다 좁은 약 100px. Drive 상태는 키보드 안내 줄 오른쪽 끝.</p>
+  <h3>데스크탑</h3>
+  <div class="frame wide" data-v="B"></div>
+  <h3>전화 — 여섯 칸은 좁아서 녹음만 둘째 줄로 내린다</h3>
+  <div class="frame phone" data-v="B"></div>
+
+  <h2>C안 — 한 줄로 합침, 저장이 맨 오른쪽 <span class="rec-tag">3번</span></h2>
+  <p>B안에서 저장과 녹음의 자리만 바꿨다: <code>−5 · ⏮ · ▶ · +5 · ● 녹음 · 저장</code>.</p>
+  <h3>데스크탑</h3>
+  <div class="frame wide" data-v="C"></div>
+  <h3>전화</h3>
+  <div class="frame phone" data-v="C"></div>
+
+  <h2>세 안 비교</h2>
+  <table>
+    <tr><th></th><th>A안 (둘 유지)</th><th>B안 (녹음 오른쪽 끝)</th><th>C안 (저장 오른쪽 끝)</th></tr>
+    <tr><td>재생 버튼 폭</td><td>지금과 같음</td><td colspan="2">칸이 하나 늘어 버튼마다 약 15% 좁아짐</td></tr>
+    <tr><td>녹음의 구분</td><td>상자로 분리 — 성격이 다른 기능임이 보임</td><td>끝에 있어 실수로 누를 일이 적음</td><td>재생 조작 바로 옆 — 연주 직전에 누르기 쉬움</td></tr>
+    <tr><td>저장 위치</td><td>지금과 같음(재생 줄 끝)</td><td>지금과 같은 다섯째 칸</td><td>줄의 맨 끝 = "마무리" 자리</td></tr>
+    <tr><td>코드 변경</td><td>가장 작음</td><td colspan="2">상자 하나를 없애므로 배치 검사(practice.spec)·정렬 그룹을 함께 고침</td></tr>
+  </table>
+
+  <h2>4. 데스크탑에서 화면이 작게 고정돼 보이는 이유</h2>
+  <ul>
+    <li><b>원인 1 — 폭 상한 1120px.</b> 플레이어 화면 틀 <code>.playerShell</code>이 <code>max-width: var(--container-max)</code>(1120px)이다. 창을 아무리 넓혀도 내용은 1120px에서 멈추고 양옆이 빈다. 플레이어용으로 만들어 둔 <code>--player-max: 1280px</code> 토큰은 정의만 있고 쓰이지 않는다.</li>
+    <li><b>원인 2 — 오른쪽 열 360px 고정.</b> <code>.ppMain</code>이 <code>1fr + 360px</code>이라 영상 폭은 최대 1120 − 360 − 16 = <b>744px</b>, 높이 약 418px로 묶인다. 27인치 모니터에서도, 13인치 노트북에서도 같은 744px이다.</li>
+    <li><b>원인 3 — 글자·버튼이 전부 px 고정.</b> 창 크기나 해상도에 따라 커지는 단위(vw·clamp)가 없다. 해상도가 높고 물리적으로 작은 화면(노트북의 "공간 넓게" 설정 등)에서는 같은 px이 실제로 더 작게 보인다.</li>
+    <li>브라우저 확대(⌘ +)로 키우면 1120px 상한도 같이 커져서 961px 미만 배치(한 열)로 바뀌어 버린다 — 지금은 "영상만 크게"가 불가능하다.</li>
+  </ul>
+  <table>
+    <tr><th>방안</th><th>내용</th><th>영향</th></tr>
+    <tr><td>가. 폭 상한 올리기 <span class="rec-tag">추천</span></td><td>플레이어 화면만 상한을 창 폭에 맞춰 올리고(예: 최대 1760px), 영상 높이가 창 높이를 넘지 않게 묶는다(영상 + 타임라인 + 재생 줄이 한 화면에 들어오는 선). 1440 창 → 영상 약 1030px, 1920 창 → 약 1380px</td><td>CSS 몇 줄 + 배치 검사 폭 추가. 다른 화면은 그대로</td></tr>
+    <tr><td>나. "크게 보기" 전환 버튼</td><td>누르면 오른쪽 열(구간·곡 목록)이 영상 아래로 내려가고 영상이 틀 전체 폭을 쓴다. 다시 누르면 복귀, 선택은 기기에 기억</td><td>버튼·상태·단축키 추가, 배치 2종 검사</td></tr>
+    <tr><td>다. 글자·버튼도 창에 맞춰 키우기</td><td><code>clamp()</code>로 글자·버튼 크기를 창 폭에 비례</td><td>모든 px 값을 건드려 위험이 크다. 가·나 뒤에도 작게 느껴질 때만</td></tr>
+  </table>
+</main>
+
+<script>
+  const HINT = '키보드: Space 재생 · 1~4 속도 · [ ] A·B · L 반복 · R 구간 처음 · M 녹음';
+  const POPS = `
+    <div class="pop err mic" role="alert"><button class="x" aria-label="닫기">×</button>
+      <p><b>마이크 권한이 필요해요.</b></p><p>브라우저 주소창의 자물쇠 → 마이크를 "허용"으로 바꾼 뒤 다시 눌러 주세요.</p></div>
+    <div class="pop nodrive"><button class="x" aria-label="닫기">×</button>
+      <p>Drive를 연결하지 않으면 가장 최근 연습 곡 1곡만 녹음을 보관해요.</p>
+      <div class="row"><button class="pill">Drive 연결</button></div></div>
+    <div class="pop take" role="status"><button class="x" aria-label="닫기">×</button>
+      <p>오늘 연습 기록에 올렸어요.</p><div class="fake-audio">▶ 0:00 / 0:42 ━━━━━━━━━</div>
+      <div class="row"><button class="ghost">파일 저장</button><button class="ghost">다시 올리기</button></div></div>`;
+  const B = (cls, txt) => `<button class="tbtn ${cls}">${txt}</button>`;
+  const base = B('', '−5') + B('', '⏮') + B('play', '▶') + B('', '+5');
+  const save = B('save', '저장');
+  const rec = `<button class="tbtn rec" title="녹음 · 오늘 연습 기록에 올라가요"><span class="recLabel"></span></button>`;
+  const drive = `<button class="drive" title="눌러서 설명 보기"></button>`;
+  const V = {
+    A: `<div class="actions split">
+          <section class="card"><div class="transport">${base}${save}</div><div class="foot"><p class="hint">${HINT}</p></div></section>
+          <section class="card">${POPS}${rec.replace('tbtn rec', 'tbtn rec" style="flex:1')}<div class="foot" style="justify-content:center">${drive}</div></section>
+        </div>`,
+    B: `<div class="actions"><section class="card">${POPS}<div class="transport six">${base}${save}${rec}</div>
+          <div class="foot"><p class="hint">${HINT}</p>${drive}</div></section></div>`,
+    C: `<div class="actions"><section class="card">${POPS.replaceAll('class="pop', 'style="right:120px" class="pop')}<div class="transport six recBeforeSave">${base}${rec}${save}</div>
+          <div class="foot"><p class="hint">${HINT}</p>${drive}</div></section></div>`,
+  };
+  document.querySelectorAll('[data-v]').forEach((el) => { el.innerHTML = V[el.dataset.v]; });
+  document.querySelectorAll('.frame.phone .pop').forEach((p) => { p.style.right = '8px'; });
+  document.querySelectorAll('.states button').forEach((b) => b.addEventListener('click', () => {
+    document.body.dataset.state = b.dataset.s;
+    document.querySelectorAll('.states button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+</script>
+</body>
+</html>
