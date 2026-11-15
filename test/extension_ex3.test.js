@@ -113,6 +113,8 @@ function panelEnv(href = `https://www.youtube.com/watch?v=${VID}`) {
       id: 'ext',
       sendMessage(m) {
         if (m.type === 'GET_SETTINGS') return Promise.resolve({ menuItem: true });
+        if (m.type === 'GET_PANEL_STATE') return Promise.resolve({ closed: false });
+        if (m.type === 'SET_PANEL_STATE') return Promise.resolve({ ok: true });
         return new Promise((resolve) => calls.push({ msg: m, resolve }));
       },
       onMessage: { addListener: (fn) => msgListeners.push(fn) },
