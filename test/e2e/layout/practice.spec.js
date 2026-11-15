@@ -353,10 +353,10 @@ test('T5 (UI-3): 시작/끝 라벨, 대기 드롭다운, 1120px 정렬 및 재�
   await expect(waitSel).toBeVisible();
   await expect(waitSel).toHaveValue('0');
 
-  // 3. 1120px 컨테이너 규격 확인 (playerShell 너비가 1120px 이하)
+  // 3. WF-2: 창이 낮으면(1280×800) 플레이어 틀은 기존 1120px을 유지한다(넓은 창은 WF2-W)
   const shell = page.locator('[data-shell-variant="player"]');
   const box = await shell.boundingBox();
-  expect(box.width).toBeLessThanOrEqual(1120);
+  expect(box.width).toBe(1120);
 
   // 4. 재생 버튼(#playBtn)도 보조 버튼(#backBtn)과 같은 0px 직각(UXR-1 D8)
   const playRadius = await page.locator('#playBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
@@ -463,6 +463,99 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
 
 
 
+// WF-2: 창이 크면 영상도 커진다(폭 상한 1760px, 높이는 창 안)
+for (const [w, h, minVideo] of [[1920, 1080, 1200], [1440, 900, 900], [2560, 1440, 1380]]) {
+  test(`WF2-W: ${w}×${h} 창에서 영상 폭 ≥ ${minVideo}px, 재생 줄까지 한 화면, 머리 메뉴·본문 좌우선 일치`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#seekRow').waitFor();
+    const r = await page.evaluate(() => {
+      const b = (sel) => document.querySelector(sel).getBoundingClientRect();
+      return { shell: b('[data-shell-variant="player"]'), nav: b('nav.site-nav'), video: b('#videoBox'), play: b('#ppPlayCard'), ctl: b('#ppCtl') };
+    });
+    expect(r.video.width).toBeGreaterThanOrEqual(minVideo);
+    expect(r.shell.width).toBeLessThanOrEqual(1760);
+    expect(r.play.bottom).toBeLessThanOrEqual(h);
+    expect(Math.abs(r.nav.left - r.video.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.nav.right - r.ctl.right)).toBeLessThanOrEqual(1);
+    expect(Math.round(r.ctl.width)).toBe(360); // 오른쪽 열은 그대로
+  });
+}
+
+// WF-2(C안): 녹음은 재생 줄 안(+5와 저장 사이). 전화 폭에서는 둘째 줄 전체
+for (const width of [1280, 1150, 768, 390]) {
+  test(`WF2-C: 녹음 버튼 위치 — 재생 줄 안 +5 · 녹음 · 저장 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#seekRow').waitFor();
+    await expect(page.locator('#ppRecCard')).toHaveCount(0);
+    const r = await page.evaluate(() => {
+      const b = (id) => { const x = document.getElementById(id).getBoundingClientRect(); return { top: x.top, bottom: x.bottom, left: x.left, right: x.right, width: x.width, height: x.height }; };
+      return { card: b('ppPlayCard'), back: b('backBtn'), fwd: b('fwdBtn'), rec: b('recBtn'), save: b('saveBtn'), inCard: document.getElementById('ppPlayCard').contains(document.getElementById('recBtn')) };
+    });
+    expect(r.inCard).toBe(true);
+    if (width > 600) {
+      expect(Math.abs(r.rec.top - r.fwd.top)).toBeLessThanOrEqual(1);
+      expect(Math.abs(r.rec.bottom - r.fwd.bottom)).toBeLessThanOrEqual(1);
+      expect(r.rec.left).toBeGreaterThanOrEqual(r.fwd.right);
+      expect(r.save.left).toBeGreaterThanOrEqual(r.rec.right); // 저장이 맨 오른쪽
+      expect(r.rec.width).toBeLessThan(150); // 예전 녹음 상자보다 좁다
+    } else {
+      expect(r.rec.top).toBeGreaterThanOrEqual(r.save.bottom); // 둘째 줄
+      expect(Math.abs(r.rec.left - r.back.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(r.rec.right - r.save.right)).toBeLessThanOrEqual(1);
+      expect(r.rec.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+}
+
+test('WF2-P1: 마이크 권한 오류는 상자 밖 팝오버로 뜨고 재생 상자 높이는 변하지 않는다, ×로 닫힌다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => {
+    const deny = () => Promise.reject(new DOMException('denied', 'NotAllowedError'));
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: deny } });
+  });
+  await mockApp(page, USER_DATA_SR);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  const cardBox = () => page.locator('#ppPlayCard').boundingBox();
+  const before = await cardBox();
+  await expect(page.locator('#recPop')).toBeHidden();
+  await page.locator('#recBtn').click();
+  const pop = page.locator('#recPop');
+  await expect(pop).toBeVisible();
+  await expect(page.locator('#recMsg')).toHaveText('마이크 권한이 필요해요. 브라우저 주소창에서 마이크를 허용해 주세요');
+  const after = await cardBox();
+  expect(after.height).toBe(before.height);
+  const popBox = await pop.boundingBox();
+  expect(popBox.y + popBox.height).toBeLessThanOrEqual(after.y + 1); // 상자 위쪽 바깥
+  expect(popBox.x).toBeGreaterThanOrEqual(0);
+  await page.locator('#recPopClose').click();
+  await expect(pop).toBeHidden();
+  await expect(page.locator('#recBtn')).toBeFocused();
+});
+
+test('WF2-P2: Drive 미연결은 주황 점 + 짧은 글자, 누르면 팝오버에 안내와 연결 버튼', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, ux3Mock());
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  const status = page.locator('#recDriveBanner');
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText('Drive 미연결');
+  await expect(page.locator('#recDriveBadge')).toBeHidden();
+  await expect(page.locator('#btnRecDriveConnect')).toBeHidden();
+  await expect(status).toHaveAttribute('aria-expanded', 'false');
+  await status.click();
+  await expect(status).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#recPop')).toContainText('Google Drive 미연결 시 가장 최근 연습 곡 1곡만 서버에 녹음할 수 있어요.');
+  await expect(page.locator('#btnRecDriveConnect')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#recPop')).toBeHidden();
+});
+
 // UXR-1 D8: 트랜스포트 5버튼은 같은 모양(단독 pill·반전 채움 없음) — 4개 폭
 for (const width of [1280, 1150, 768, 390]) {
   test(`UXR1-L: 트랜스포트 5버튼 top/bottom/height 일치·재생 버튼 동일 스타일 (${width}px)`, async ({ page }) => {
@@ -534,7 +627,7 @@ function ux3Mock({ categories = () => ({ categories: UX3_CATEGORIES }), songs, c
 }
 
 for (const width of [1280, 1150]) {
-  test(`UXR3-PL01: 데스크톱 2열 배치 — 영상/설정 윗선, 재생/녹음 윗선, 기록은 아래 (${width}px)`, async ({ page }) => {
+  test(`UXR3-PL01: 데스크톱 2열 배치 — 영상/설정 윗선, 재생 줄은 타임라인 아래, 기록은 아래 (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mockApp(page, ux3Mock());
     await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
@@ -543,21 +636,20 @@ for (const width of [1280, 1150]) {
       const b = (sel) => document.querySelector(sel).getBoundingClientRect();
       const ctl = document.getElementById('ppCtl');
       return {
-        video: b('#videoBox'), seek: b('#seekRow'), play: b('#ppPlayCard'), rec: b('#ppRecCard'),
+        video: b('#videoBox'), seek: b('#seekRow'), play: b('#ppPlayCard'),
         ctl: ctl.getBoundingClientRect(), folder: b('#ppFolderPanel'), record: b('#songRecord'),
         back: b('#backBtn'), recBtn: b('#recBtn'),
       };
     });
     expect(Math.abs(r.video.top - r.ctl.top)).toBeLessThanOrEqual(1);
-    expect(Math.abs(r.play.top - r.rec.top)).toBeLessThanOrEqual(1);
-    expect(r.play.left).toBeLessThan(r.rec.left); // 재생(왼) · 녹음(오)
+    expect(Math.abs(r.play.right - r.video.right)).toBeLessThanOrEqual(1); // WF-2: 재생 상자 하나가 영상 폭 전체
     expect(r.play.top).toBeGreaterThanOrEqual(r.seek.bottom - 1); // 타임라인 아래
-    expect(r.ctl.left).toBeGreaterThan(r.rec.right - 1); // 설정은 오른쪽 열
+    expect(r.ctl.left).toBeGreaterThan(r.play.right - 1); // 설정은 오른쪽 열
     expect(Math.abs(r.ctl.left - r.folder.left)).toBeLessThanOrEqual(1);
     expect(Math.abs(r.ctl.right - r.folder.right)).toBeLessThanOrEqual(1);
     expect(r.folder.top).toBeGreaterThanOrEqual(r.ctl.bottom - 1);
-    expect(r.record.top).toBeGreaterThanOrEqual(Math.max(r.rec.bottom, r.folder.bottom) - 1);
-    expect(r.recBtn.top).toBeGreaterThanOrEqual(r.rec.top);
+    expect(r.record.top).toBeGreaterThanOrEqual(Math.max(r.play.bottom, r.folder.bottom) - 1);
+    expect(r.recBtn.top).toBeGreaterThanOrEqual(r.play.top);
   });
 }
 
@@ -567,7 +659,7 @@ test('UXR3-PL02: 모바일 단일 열·DOM 순서·접힘, 960↔961에서 플�
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#ppFolderPanel').waitFor();
   const order = await page.evaluate(() => {
-    const ids = ['videoBox', 'seekRow', 'ppPlayCard', 'ppRecCard', 'ppCtl', 'ppFolderPanel', 'songRecord'];
+    const ids = ['videoBox', 'seekRow', 'ppPlayCard', 'ppCtl', 'ppFolderPanel', 'songRecord'];
     const tops = ids.map((i) => document.getElementById(i).getBoundingClientRect().top);
     return { tops, hScroll: document.documentElement.scrollWidth > window.innerWidth };
   });

@@ -174,6 +174,12 @@ export function PracticePage(): React.ReactElement {
   const [take, setTakeState] = useState<PendingTakeState | null>(null);
   const [uploadingTake, setUploadingTake] = useState(false);
   const [recMsg, setRecMsg] = useState<{ text: string; err: boolean }>({ text: '', err: false });
+  // WF-2: 녹음 팝오버. 메시지가 새로 오면 열리고, ×·Esc로 닫는다. recInfoOpen = Drive 상태 글자를 눌러 설명을 연 경우
+  const [recPopOpen, setRecPopOpen] = useState(false);
+  const [recInfoOpen, setRecInfoOpen] = useState(false);
+  useEffect(() => {
+    if (recMsg.text) setRecPopOpen(true);
+  }, [recMsg]);
   const [takeLimitModalOpen, setTakeLimitModalOpen] = useState(false);
   const [takeLimitCount, setTakeLimitCount] = useState<number>(2);
   const [busyDriveConnect, setBusyDriveConnect] = useState(false);
@@ -1167,8 +1173,35 @@ export function PracticePage(): React.ReactElement {
     setRecording(true);
     setRecElapsedSec(0);
     mr.start(1000);
-    setRecMsg({ text: t('practice.recRecording'), err: false });
+    setRecMsg({ text: '', err: false }); // WF-2: 녹음 중 표시는 버튼(■ 시간)이 맡는다
+    setRecPopOpen(false);
+    setRecInfoOpen(false);
   };
+
+  const recPopVisible = recPopOpen && Boolean(recMsg.text || (take && !recording) || recInfoOpen);
+  const closeRecPop = (refocus: boolean) => {
+    setRecPopOpen(false);
+    setRecInfoOpen(false);
+    setRecMsg({ text: '', err: false });
+    if (refocus) document.getElementById('recBtn')?.focus();
+  };
+  // 상태 글자(Drive 연동/미연결 · 방금 녹음)를 누르면 팝오버를 열고 닫는다
+  const toggleRecPop = (withInfo: boolean) => {
+    if (recPopVisible && recInfoOpen === withInfo) {
+      closeRecPop(false);
+      return;
+    }
+    setRecInfoOpen(withInfo);
+    setRecPopOpen(true);
+  };
+  useEffect(() => {
+    if (!recPopVisible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRecPop(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [recPopVisible]);
 
   const handleToggleRec = () => {
     if (mrRef.current) stopRecordingNow();
@@ -1882,8 +1915,78 @@ export function PracticePage(): React.ReactElement {
               id="ppPlayCard"
               className={`${styles.ppCard} ${styles.ppPlayCard}`}
               aria-label={t('practice.ariaPlayControls')}
-              data-align-group="practice-actions:top@961"
             >
+            {/* WF-2: 녹음 안내·오류·방금 녹음·Drive 설명은 상자 밖(위)에 뜨는 팝오버. 상자 높이는 바뀌지 않는다 */}
+            <div
+              id="recPop"
+              className={`${styles.ppRecPop} ${recMsg.err ? styles.ppRecPopErr : ''}`}
+              role="group"
+              aria-label={t('practice.secRecToday')}
+              hidden={!recPopVisible}
+              data-layout-ignore="G1: popover floats outside the card by design"
+            >
+              <button
+                type="button"
+                className={styles.ppRecPopClose}
+                id="recPopClose"
+                aria-label={t('practice.recPopClose')}
+                onClick={() => closeRecPop(true)}
+              >
+                ×
+              </button>
+              <p
+                className={`note pp-recmsg ${styles.ppRecMsg} ${recMsg.err ? `err ${styles.ppRecMsgErr}` : ''}`}
+                id="recMsg"
+                aria-live="polite"
+              >
+                {recMsg.text}
+              </p>
+              <SafeAudio
+                id="recPlay"
+                className={styles.ppRecAudio}
+                srcUrl={take ? take.url : null}
+                preload="metadata"
+                hidden={!take || recording}
+              />
+              <div className={`pp-recrow ${styles.ppRecRow}`} hidden={!take || recording}>
+                <a
+                  className={`pp-recact ${styles.ppRecAct}`}
+                  id="recSave"
+                  href={take && take.url.startsWith('blob:') ? take.url : undefined}
+                  download={
+                    take
+                      ? sanitizeDownloadName(take.date, take.time, take.song?.title || displayTitle, take.mime)
+                      : undefined
+                  }
+                >
+                  {t('practice.btnSaveFile')}
+                </a>
+                <button
+                  type="button"
+                  className={`pp-recact ${styles.ppRecAct}`}
+                  id="recRetry"
+                  hidden={!(take && !take.done && !uploadingTake && !recording)}
+                  onClick={() => void uploadTakeNow()}
+                >
+                  {t('practice.btnReupload')}
+                </button>
+              </div>
+              <div className={styles.ppRecPopInfo} hidden={!recInfoOpen}>
+                <p className={styles.ppRecPopNote}>
+                  {isDrive ? t('practice.driveUnlimitedActive') : t('practice.driveNotConnectedNotice')}
+                </p>
+                <button
+                  type="button"
+                  className={styles.ppDriveBtn}
+                  id="btnRecDriveConnect"
+                  hidden={!activeUid || isDrive}
+                  disabled={busyDriveConnect || recording || uploadingTake}
+                  onClick={handleConnectDriveFromPlayer}
+                >
+                  {t('practice.btnConnectDrive')}
+                </button>
+              </div>
+            </div>
             <div className={`pp-transport ${styles.ppTransport}`}>
               <button
                 type="button"
@@ -1925,6 +2028,20 @@ export function PracticePage(): React.ReactElement {
               >
                 +5
               </button>
+              {/* WF-2(C안): 녹음은 재생 줄 안, 저장 앞. 전화 폭(≤600px)에서는 둘째 줄 전체 */}
+              <button
+                type="button"
+                className={`pp-tbtn pp-rec ${styles.ppTbtn} ${styles.ppRecBtn}`}
+                id="recBtn"
+                data-align-group="transport:top,bottom,height@601"
+                aria-pressed={recording}
+                aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
+                title={t('practice.secRecToday')}
+                disabled={!recording && (!videoId || uploadingTake)}
+                onClick={handleToggleRec}
+              >
+                {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
+              </button>
               <button
                 type="button"
                 className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
@@ -1937,97 +2054,46 @@ export function PracticePage(): React.ReactElement {
                 {saveBtnLabel}
               </button>
             </div>
-            <p className={`note pp-hint ${styles.ppHint}`} id="kbdHint">
-              {t('practice.shortcutsHint')}
-            </p>
-            </section>
-            <section
-              id="ppRecCard"
-              className={`pp-group ${styles.ppCard} ${styles.ppRecCard}`}
-              aria-label={t('practice.secRecToday')}
-              data-align-group="practice-actions:top@961"
-            >
-              <div className={`pp-lab ${styles.ppLab}`}>
-                <span>{t('practice.secRecToday')}</span>
-                <span
-                  className={styles.ppDriveBadge}
+            <div className={styles.ppFoot}>
+              <p className={`note pp-hint ${styles.ppHint}`} id="kbdHint">
+                {t('practice.shortcutsHint')}
+              </p>
+              <span className={styles.ppFootStatus}>
+                <button
+                  type="button"
+                  className={styles.ppRecStatus}
+                  id="recTakeBtn"
+                  hidden={!take || recording}
+                  aria-expanded={recPopVisible}
+                  aria-controls="recPop"
+                  onClick={() => toggleRecPop(false)}
+                >
+                  {t('practice.recTakeReady')}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.ppRecStatus} ${styles.ppDriveOn}`}
                   id="recDriveBadge"
                   hidden={!activeUid || !isDrive}
-                  title={t('practice.driveUnlimitedActive')}
+                  aria-expanded={recPopVisible && recInfoOpen}
+                  aria-controls="recPop"
+                  onClick={() => toggleRecPop(true)}
                 >
-                  {t('practice.driveConnectedShort')}
-                </span>
-              </div>
-
-              <div className={`pp-recrow ${styles.ppRecRow}`}>
-                <button
-                  type="button"
-                  className={`pp-toggle pp-rec ${styles.ppToggle} ${styles.ppRecBtn}`}
-                  id="recBtn"
-                  aria-pressed={recording}
-                  aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
-                  disabled={!recording && (!videoId || uploadingTake)}
-                  onClick={handleToggleRec}
-                >
-                  {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
+                  {t('practice.driveStatusOn')}
                 </button>
                 <button
                   type="button"
-                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
-                  id="recRetry"
-                  hidden={!(take && !take.done && !uploadingTake && !recording)}
-                  onClick={() => void uploadTakeNow()}
+                  className={`pp-drive-banner ${styles.ppRecStatus} ${styles.ppDriveOff}`}
+                  id="recDriveBanner"
+                  hidden={!activeUid || isDrive}
+                  aria-expanded={recPopVisible && recInfoOpen}
+                  aria-controls="recPop"
+                  onClick={() => toggleRecPop(true)}
                 >
-                  {t('practice.btnReupload')}
+                  {t('practice.driveStatusOff')}
                 </button>
-                <a
-                  className={`pp-icon pp-recact ${styles.ppIcon} ${styles.ppRecAct}`}
-                  id="recSave"
-                  href={take && take.url.startsWith('blob:') ? take.url : undefined}
-                  download={
-                    take
-                      ? sanitizeDownloadName(take.date, take.time, take.song?.title || displayTitle, take.mime)
-                      : undefined
-                  }
-                  hidden={!take || recording}
-                >
-                  {t('practice.btnSaveFile')}
-                </a>
-              </div>
-              <SafeAudio
-                id="recPlay"
-                className={styles.ppRecAudio}
-                srcUrl={take ? take.url : null}
-                preload="metadata"
-                hidden={!take || recording}
-              />
-              <p
-                className={`note pp-recmsg ${styles.ppRecMsg} ${recMsg.err ? `err ${styles.ppRecMsgErr}` : ''}`}
-                id="recMsg"
-                aria-live="polite"
-              >
-                {recMsg.text}
-              </p>
-
-              {/* RN-D3: Google Drive 미연결 시 기본 연결 유도 배너 */}
-              <div
-                className={`pp-drive-banner ${styles.ppDriveBanner}`}
-                id="recDriveBanner"
-                hidden={!activeUid || isDrive}
-              >
-                <span id="recDriveBannerText">
-                  {t('practice.driveNotConnectedNotice')}
-                </span>
-                <button
-                  type="button"
-                  className={styles.ppDriveBtn}
-                  id="btnRecDriveConnect"
-                  disabled={busyDriveConnect || recording || uploadingTake}
-                  onClick={handleConnectDriveFromPlayer}
-                >
-                  {t('practice.btnConnectDrive')}
-                </button>
-              </div>
+              </span>
+            </div>
             </section>
           </div>
 

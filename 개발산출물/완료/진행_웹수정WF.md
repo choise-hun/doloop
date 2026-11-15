@@ -1,0 +1,58 @@
+# 진행 — 웹 수정 묶음 (WF)
+
+> **완료 2026-11-15** — 마지막 PR [#34](https://github.com/choise-hun/doloop/pull/34)(WF-2, CI 통과·머지 대기).
+
+> 2026-11-15 착수 / 시니어(Claude). 접두어 `WF-`. [문서 운영](../../docs/문서_운영.md)·[협업 §1.2](../협업_시니어주니어.md)를 따른다.
+
+## 1. 목표와 근거
+
+- 목표: 사용자가 모아 둔 웹 수정 목록(2026-11-15)과 BR-2 확인 중 발견 ①을 처리한다.
+- 근거: 사용자 수정 목록(아래 §2 원문 요약), [계획 §4](../../계획/상용_서비스_계획.md), 시안 [명세/WF_시안.html](../명세/WF_시안.html)
+- 승인 범위: 수정 목록 전체 + `practice.micPermissionNeeded`(ko/en/ja) 노션 언급 제거. 구현·커밋·push·PR까지. 머지와 운영 재배포는 사용자.
+- 하지 않는 것: `lib/features.ts`(커뮤니티 숨김), 웹 스토어 등록, OAuth 앱 게시(사람 작업 — 계획 §4), API·DB 계약 변경.
+
+## 2. 수정 목록과 배정
+
+| 목록 항목 | 처리 |
+| --- | --- |
+| 녹음 섹션 1 — 재생 상자와 높이 맞춤 | WF-2 |
+| 녹음 섹션 2 — 버튼만 남기고 글 최소화, 긴 안내는 팝오버 | WF-2 (시안 A·B·C 중 선택 대기) |
+| 녹음 섹션 3 — 한 줄 합침 / 저장·녹음 자리 바꿈 시안 | WF-1에서 시안 제공, 구현은 WF-2 |
+| 녹음 섹션 4 — 데스크탑 화면 폭 고정 원인 분석 | WF-1에서 분석(시안 §4, [결과/WF-1](../결과/WF-1.md) §3). 고치기는 방안 선택 뒤 WF-2 |
+| 재생목록 1 — "이 곡만 열기"가 분류 선택을 무시 | WF-1 |
+| 재생목록 2 — 입력 중 바깥 클릭으로 모달이 닫힘 | WF-1 |
+| TAB 악보 연습기 | 아이디어 — [계획 §4](../../계획/상용_서비스_계획.md)에만 기록 |
+| 다중 LLM 자동화 폐기 · libtalk 방식 차용 검토 | WF-1 — 진행 파일 `완료/` 이동, [결과/WF-0](../결과/WF-0_하네스차용검토.md) |
+| BR-2 ① 마이크 권한 문구 | WF-1 |
+
+## 3. 단계 표
+
+| Step | 담당 | 입력 | 결과 파일 | 완료 기준 | 상태 | effort |
+| --- | --- | --- | --- | --- | --- | --- |
+| WF-1 문구·재생목록 모달·시안·문서 | 시니어 원스톱(예상 diff 150줄 안팎, 명세 비용 ≥ 구현 비용) | 수정 목록, `PlaylistImportModal.tsx` | [결과/WF-1](../결과/WF-1.md), [결과/WF-0](../결과/WF-0_하네스차용검토.md), [WF_시안.html](../명세/WF_시안.html) | 빌드, `community.spec.js` WF-1 4건 + 가져오기 기존 3건 통과, PR CI 통과 | PR [#33](https://github.com/choise-hun/doloop/pull/33) (머지 `177b3ae`) | 중 |
+| WF-2 플레이어 녹음 섹션(C안)·화면 폭(가) | 시니어 직접 구현 → 주니어 4단계(전체 회귀·PR·CI·정리) | 사용자 선택(§4), WF_시안.html, [프론트 정렬규격](../프론트_정렬규격.md) §1 | [결과/WF-2](../결과/WF-2.md) | 정렬규격 순서 완료 + 전체 회귀·PR CI 통과 | **PR [#34](https://github.com/choise-hun/doloop/pull/34) CI 통과(머지 대기)** | 높음(시니어) / 낮음(주니어) |
+
+- 화면 폭 "나(크게 보기 전환 버튼)"는 사용자 결정으로 아이디어만 남기고 미뤘다(계획 §4). WF step으로 만들지 않으므로 **WF-2가 마지막 step**이다.
+- 마지막 step PR에서 이 파일을 `완료/`로 옮긴다.
+
+## 4. 사용자 결정 (2026-11-15)
+
+1. 녹음 섹션 배치 = **C안**(한 줄, 저장 맨 오른쪽)
+2. 화면 폭 = **가**(폭 상한 올리기)만 구현. **나**(크게 보기 전환)는 아이디어로 남기고 마지막으로 미룸
+3. 개발 방식 = 시니어 원스톱 구현 + 반복 테스트·PR 생성·CI 대기는 주니어(절충). `협업_시니어주니어.md` §1.2·`CLAUDE.md`에 반영
+4. 팝오버는 위쪽으로 띄웠다(스크린샷 검토 — [결과/WF-2](../결과/WF-2.md) §5)
+
+## 5. 실행 기록
+
+- WF-1 (2026-11-15): 브랜치 `fix/WF-1-playlist-mic`. PR [#33](https://github.com/choise-hun/doloop/pull/33). 명령·결과는 [결과/WF-1](../결과/WF-1.md) §4, 리뷰 P2 3건 반영은 §4-1. 첫 커밋 `ec32414` CI 통과(Kotlin test는 변경 없음으로 skipping). 리뷰 반영 커밋 `cf3b635`도 CI 통과(Docker build & smoke, E2E XSS & CSP, Test Node 22 pass / Kotlin skipping). Codex는 PR을 열 때만 자동 리뷰해 `cf3b635` 재리뷰는 없다.
+
+- WF-2 (2026-11-15): 브랜치 `feat/WF-2-rec-section`(main `177b3ae`에서 분기, PR #33 머지 뒤). 시니어 구현·표적 검증(배치 검사 + 녹음 e2e 554건, `npm test` 490건) 뒤 push(`c505514`). 주니어 4단계에서 전체 회귀(`npm run build` ✓ built in 848ms, `npm test` 490 passed / 0 failed, `npx playwright test` 861 passed) 확인 후 PR [#34](https://github.com/choise-hun/doloop/pull/34) 생성. CI [Run #43704313760](https://github.com/choise-hun/doloop/actions/runs/43704313760) 통과(5 successful, 1 skipped — `Kotlin test (JDK 21)` 백엔드 변경 없음으로 skipped). `chatgpt-codex-connector` 자동 리뷰 완료(`has_any_findings: false`, 라인 코멘트 0건). 상세 [결과/WF-2](../결과/WF-2.md) §4.
+
+## 6. 겪은 문제
+
+- `npm test`의 LA-1은 `frontend/src` 코드 줄의 한글을 막는다 — `data-layout-ignore` 사유도 영어로 쓴다. I0-6은 안 쓰는 문구 키를 막는다 — 화면에서 뺀 문구는 사전에서도 지운다.
+- 시안 스크린샷용 임시 스크립트는 저장소 밖(scratchpad)에 두면 `playwright`를 찾지 못한다 → 저장소 루트에 잠깐 복사해 실행하고 지웠다.
+
+## 7. 다음 세션 시작 지시
+
+WF-2가 마지막 step이므로 후속 WF 작업은 없다. PR [#34](https://github.com/choise-hun/doloop/pull/34) 사용자 머지 및 운영 Cloud Run 재배포(필요 시)만 남아 있다.

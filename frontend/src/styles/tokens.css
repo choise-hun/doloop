@@ -60,7 +60,7 @@
   /* 8. 레이아웃 정렬 규격 */
   --container-max: 1120px;
   --page-narrow-max: 840px;
-  --player-max: 1280px;
+  --player-max: 1760px; /* WF-2: 플레이어 화면 틀 폭 상한 */
   --header-height: 48px;
 }
 

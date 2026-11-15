@@ -68,11 +68,6 @@
   grid-column: 1;
   grid-row: 2;
   min-width: 0;
-  display: grid;
-  /* 재생 : 녹음 = 10 : 2 (12칸 기준). 녹음 카드는 버튼이 눌릴 만큼만 최소 폭을 둔다 */
-  grid-template-columns: minmax(0, 5fr) minmax(150px, 1fr);
-  gap: 12px;
-  align-items: start;
 }
 
 .ppSide {
@@ -94,9 +89,6 @@
   .ppSide {
     grid-column: 1;
     grid-row: auto;
-  }
-  .ppActions {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -452,25 +444,6 @@
   justify-content: center;
 }
 
-/* 녹음 및 Google Drive 기본 연결 안내 배너 */
-.ppDriveBanner {
-  /* 녹음 카드가 좁아(재생:녹음 = 10:2) 안내 문구 아래에 버튼을 한 줄로 둔다 */
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding: 6px 10px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  font-size: 12px;
-  color: var(--ink);
-}
-
-.ppDriveBanner[hidden] {
-  display: none;
-}
-
 .ppDriveBtn:disabled {
   opacity: 0.4;
   cursor: default;
@@ -490,10 +463,63 @@
   white-space: nowrap;
 }
 
-.ppDriveBadge {
-  font-size: 12px;
-  font-weight: 400;
+/* WF-2: 녹음 팝오버 — 재생 상자 위쪽 바깥에 뜬다(상자 높이를 바꾸지 않는다) */
+.ppPlayCard {
+  position: relative;
+}
+
+.ppRecPop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 40px 12px 12px;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-card);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.ppRecPop[hidden],
+.ppRecPop [hidden] {
+  display: none;
+}
+
+.ppRecPopErr {
+  border-color: var(--bad);
+}
+
+.ppRecPopClose {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  font: inherit;
+  font-size: 18px;
   color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.ppRecPopInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ppRecPopNote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
 }
 
 .ppRecRow {
@@ -503,9 +529,9 @@
 }
 
 .ppRecBtn {
-  flex: 1 1 120px;
-  min-width: 0;
   font-family: var(--font-mono);
+  font-size: 16px;
+  white-space: nowrap;
 }
 
 .ppRecBtn[aria-pressed="true"] {
@@ -514,11 +540,25 @@
   color: var(--root-ink);
 }
 
+.ppRecBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .ppRecAct {
-  padding: 0 12px;
+  font: inherit;
   font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  min-height: 44px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .ppRecAudio {
@@ -527,19 +567,79 @@
 }
 
 .ppRecMsg {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 13px;
+  color: var(--ink);
   margin: 0;
-  min-height: 16px;
+}
+
+.ppRecMsg:empty {
+  display: none;
 }
 
 .ppRecMsgErr {
   color: var(--bad);
 }
 
+/* 재생 줄 아래: 키보드 안내(왼쪽) + 녹음·Drive 상태(오른쪽) */
+.ppFoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 24px;
+}
+
+.ppFootStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+/* 상태 글자: 점 + 짧은 글자. 누르면 팝오버 */
+.ppRecStatus {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ppRecStatus[hidden] {
+  display: none;
+}
+
+.ppDriveOn::before,
+.ppDriveOff::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+}
+
+/* 주황은 점에만 쓴다(글자색 금지) */
+.ppDriveOff::before {
+  background: var(--orange-vivid);
+}
+
+.ppDriveOff {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .ppTransport {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  /* WF-2(C안): −5 · ⏮ · ▶ · +5 · 녹음 · 저장 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
 }
@@ -569,6 +669,18 @@
 @media (max-width: 600px) {
   .ppSaveBtn {
     font-size: 14px;
+  }
+  /* WF-2: 여섯 칸은 좁다 → 녹음만 둘째 줄 전체 폭으로 내린다 */
+  .ppTransport {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .ppRecBtn {
+    order: 1;
+    grid-column: 1 / -1;
+    min-height: 48px;
+  }
+  .ppHint {
+    display: none;
   }
 }
 

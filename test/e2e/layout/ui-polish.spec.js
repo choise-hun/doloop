@@ -58,21 +58,20 @@ test('UP-3: 로고와 HOME 글자 사이 간격은 24px 이상(1280px)', async (
   expect(gap).toBeGreaterThanOrEqual(24);
 });
 
+// WF-2(C안)로 녹음 상자가 없어졌다. 위치 검사는 layout/practice.spec.js WF2-C가 맡는다
 for (const width of [1280, 1150]) {
-  test(`UP-4: 플레이어 재생 카드 : 녹음 카드 ≈ 10 : 2, 같은 윗선 (${width}px)`, async ({ page }) => {
+  test(`UP-4: 플레이어 녹음 버튼은 재생 상자 안에 있고 넘치지 않는다 (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mockApp(page, { ...STATES.user, community: false });
     await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
-    await page.locator('#ppRecCard').waitFor();
+    await page.locator('#ppPlayCard').waitFor();
+    await expect(page.locator('#ppRecCard')).toHaveCount(0);
     const r = await page.evaluate(() => {
       const b = (s) => document.querySelector(s).getBoundingClientRect();
-      return { play: b('#ppPlayCard'), rec: b('#ppRecCard'), recBtn: b('#recBtn') };
+      return { play: b('#ppPlayCard'), recBtn: b('#recBtn') };
     });
-    expect(Math.abs(r.play.top - r.rec.top)).toBeLessThanOrEqual(1);
-    const ratio = r.play.width / r.rec.width;
-    expect(ratio).toBeGreaterThan(3.5); // 녹음 최소 폭(150px) 때문에 좁은 폭에서는 5보다 작을 수 있다
-    expect(ratio).toBeLessThanOrEqual(5.2);
-    expect(r.recBtn.right).toBeLessThanOrEqual(r.rec.right); // 녹음 버튼이 카드 밖으로 넘치지 않는다
+    expect(r.recBtn.left).toBeGreaterThanOrEqual(r.play.left);
+    expect(r.recBtn.right).toBeLessThanOrEqual(r.play.right);
   });
 }
 
