@@ -41,7 +41,7 @@
 
 ## 5. 실행 기록
 
-- WF-1 (2026-11-15): 브랜치 `fix/WF-1-playlist-mic`. PR [#33](https://github.com/choise-hun/doloop/pull/33). 명령·결과는 [결과/WF-1](결과/WF-1.md) §4, 리뷰 P2 3건 반영은 §4-1. 첫 커밋 `ec32414` CI 통과(Kotlin test는 변경 없음으로 skipping).
+- WF-1 (2026-11-15): 브랜치 `fix/WF-1-playlist-mic`. PR [#33](https://github.com/choise-hun/doloop/pull/33). 명령·결과는 [결과/WF-1](결과/WF-1.md) §4, 리뷰 P2 3건 반영은 §4-1. 첫 커밋 `ec32414` CI 통과(Kotlin test는 변경 없음으로 skipping). 리뷰 반영 커밋 `cf3b635`도 CI 통과(Docker build & smoke, E2E XSS & CSP, Test Node 22 pass / Kotlin skipping). Codex는 PR을 열 때만 자동 리뷰해 `cf3b635` 재리뷰는 없다.
 
 ## 6. 겪은 문제
 
