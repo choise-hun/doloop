@@ -22,6 +22,7 @@ import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categ
 import { playlistUrlFrom } from '../lib/community.mts';
 import { t, type I18nKey } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
+import { communityEnabled } from '../lib/features';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import styles from './HomePage.module.css';
 
@@ -965,6 +966,7 @@ export function HomePage(): React.ReactElement {
         </section>
       </div>
 
+      {communityEnabled() ? <>
       <section
         className={`card ${styles.communityBanner}`}
         id="homeCommunityBanner"
@@ -987,6 +989,7 @@ export function HomePage(): React.ReactElement {
       </section>
 
       <CurationRows variant="home" me={authState.me} />
+      </> : null}
 
       <PlaylistImportModal
         url={importModalUrl}

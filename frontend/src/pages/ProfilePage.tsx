@@ -9,6 +9,7 @@ import { PublicNameForm } from '../components/community/PublicNameForm';
 import { MySharesPanel } from '../components/community/MySharesPanel';
 import { MyEpisodeSharesPanel } from '../components/community/MyEpisodeSharesPanel';
 import formStyles from '../components/community/Community.module.css';
+import { communityEnabled } from '../lib/features';
 import styles from './ProfilePage.module.css';
 
 export function ProfilePage(): React.ReactElement {
@@ -224,7 +225,7 @@ export function ProfilePage(): React.ReactElement {
               </p>
             ) : null}
             {displayName ? <p id="profileDisplayName">{displayName}</p> : null}
-            {publicName ? (
+            {publicName && communityEnabled() ? (
               <p id="profilePublicName">
                 {t('community.nameLabel')}: {publicName}
               </p>
@@ -277,10 +278,11 @@ export function ProfilePage(): React.ReactElement {
             <p id="profileDisplayNameMsg" className={`msg ${visibleNameMsg?.key === 'profile.saved' ? 'ok' : 'err'}`}
               role="status" aria-live="polite">{visibleNameMsg ? t(visibleNameMsg.key) : ''}</p>
           </form>
-          <PublicNameForm key={identity} me={me} inputId="profilePublicNameInput" submitId="profilePublicNameSave"
+          {communityEnabled() ? <PublicNameForm key={identity} me={me} inputId="profilePublicNameInput" submitId="profilePublicNameSave"
             disabled={namesDisabled} acquireSave={acquireSave}
-            onSaved={name => { if (name === publicName) setRetry(n => n + 1); }} />
+            onSaved={name => { if (name === publicName) setRetry(n => n + 1); }} /> : null}
         </section>
+        {communityEnabled() ? <>
         <ShareConsentSection key={`consent:${identity}`} />
         <section id="profileSummary" className={styles.accountCard}
           data-align-group="profileCol:left; profileEdges:right" aria-labelledby="profileSummaryTitle">
@@ -306,6 +308,7 @@ export function ProfilePage(): React.ReactElement {
           </section>
           <MyEpisodeSharesPanel />
         </React.Fragment> : null}
+        </> : null}
       </> : null}
 
     </AppShell>

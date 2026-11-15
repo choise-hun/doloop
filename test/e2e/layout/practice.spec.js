@@ -186,20 +186,31 @@ test('T2: 프리셋 저장 및 병합 다이얼로그 호출', async ({ page }) 
   await page.locator('#setA').click();
   await page.locator('#setB').click();
 
+  // 브라우저 기본 입력창(prompt/confirm)은 더 쓰지 않는다 — 모달로 이름을 받는다
   const dialogTypes = [];
-  page.on('dialog', async (dialog) => {
-    dialogTypes.push(dialog.type());
-    if (dialog.type() === 'prompt') {
-      await dialog.accept('인트로');
-    } else if (dialog.type() === 'confirm') {
-      await dialog.accept();
-    }
-  });
+  page.on('dialog', (dialog) => { dialogTypes.push(dialog.type()); void dialog.dismiss(); });
 
   await page.locator('#btnSavePreset').click();
+  const modal = page.locator('#presetDialog');
+  await expect(modal).toBeVisible();
+  await expect(page.locator('#presetDialogInput')).toBeFocused();
+  await expect(page.locator('#presetDialogSave')).toBeDisabled(); // 빈 이름은 저장 불가
+
+  // Esc로 닫으면 PUT 없이 닫히고 저장 버튼으로 초점이 돌아온다
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await expect(page.locator('#btnSavePreset')).toBeFocused();
+  expect(putPayload).toBeNull();
+
+  await page.locator('#btnSavePreset').click();
+  await page.locator('#presetDialogInput').fill('인트로');
+  // 같은 이름이면 합쳐진다는 안내와 버튼 문구가 바뀐다
+  await expect(page.locator('#presetDialogNote')).toHaveText('같은 이름의 프리셋이 있어요. 저장하면 기존 구간에 합쳐집니다.');
+  await expect(page.locator('#presetDialogSave')).toHaveText('합쳐서 저장');
+  await page.locator('#presetDialogInput').press('Enter');
   await expect.poll(() => putPayload).not.toBeNull();
-  // 같은 이름이면 병합 확인(confirm)을 거쳐야 PUT이 나간다 — confirm 가드를 지우면 여기서 깨진다
-  expect(dialogTypes).toEqual(['prompt', 'confirm']);
+  await expect(modal).toHaveCount(0);
+  expect(dialogTypes).toEqual([]);
   expect(putPayload.name).toBe('인트로');
   expect(putPayload.merge).toBe(true);
 });

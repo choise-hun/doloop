@@ -1,7 +1,8 @@
 // frontend/src/App.tsx
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { communityEnabled } from './lib/features';
 import { onLangChange } from './lib/i18n.mts';
 import { HomePage } from './pages/HomePage';
 import { ChordsPage } from './pages/ChordsPage';
@@ -42,7 +43,7 @@ export function App(): React.ReactElement {
           <Route path="/note.html" element={<NoteDetailPage />} />
           <Route path="/settings.html" element={<SettingsPage />} />
           <Route path="/privacy.html" element={<PrivacyPage />} />
-          <Route path="/community.html" element={<CommunityPage />} />
+          <Route path="/community.html" element={communityEnabled() ? <CommunityPage /> : <Navigate to="/" replace />} />
           <Route path="/profile.html" element={<ProfilePage />} />
         </Routes>
       </BrowserRouter>

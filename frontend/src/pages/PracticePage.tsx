@@ -130,6 +130,7 @@ export function PracticePage(): React.ReactElement {
   const [presets, setPresets] = useState<SongPresetDto[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const presetReqSeqRef = useRef<number>(0);
+  const [presetDialogSongId, setPresetDialogSongId] = useState<string | null>(null);
 
   const barRef = useRef<HTMLDivElement | null>(null);
   const handleARef = useRef<HTMLDivElement | null>(null);
@@ -785,16 +786,22 @@ export function PracticePage(): React.ReactElement {
     };
   }, []);
 
-  const handleSavePreset = async () => {
+  // 프리셋 저장은 브라우저 입력창 대신 모달로 이름을 받는다. 열린 곡 id를 기억해 곡이 바뀌면 모달을 그리지 않는다
+  const handleSavePreset = () => {
     if (!song || pointA == null || pointB == null) return;
-    const name = window.prompt(t('practice.presetPrompt'))?.trim();
-    if (!name) return;
-    const existing = presets.find((p) => p.name === name);
-    let merge = true;
-    if (existing) {
-      const ok = window.confirm(t('practice.presetMergeConfirm'));
-      if (!ok) return;
-      merge = true;
+    setPresetDialogSongId(song.id);
+  };
+
+  const closePresetDialog = () => {
+    setPresetDialogSongId(null);
+    window.requestAnimationFrame(() => document.getElementById('btnSavePreset')?.focus());
+  };
+
+  /** 저장 성공이면 null, 실패면 모달에 보여 줄 문구. 같은 이름이면 기존 구간에 합친다(merge) */
+  const submitPreset = async (name: string): Promise<string | null> => {
+    if (!song || pointA == null || pointB == null) {
+      setPresetDialogSongId(null);
+      return null;
     }
     const token = ++presetReqSeqRef.current;
     try {
@@ -803,16 +810,19 @@ export function PracticePage(): React.ReactElement {
         a: pointA,
         b: pointB,
         rate,
-        merge,
+        merge: true,
       });
-      if (token !== presetReqSeqRef.current) return;
+      if (token !== presetReqSeqRef.current) return null;
       setPresets((prev) => {
         const idx = prev.findIndex((p) => p.name === name);
         return idx >= 0 ? [...prev.slice(0, idx), res.preset, ...prev.slice(idx + 1)] : [...prev, res.preset];
       });
       setSelectedPresetId(res.preset.id);
+      closePresetDialog();
+      return null;
     } catch (err: any) {
-      if (token === presetReqSeqRef.current) window.alert(err.message || 'Error');
+      if (token !== presetReqSeqRef.current) return null;
+      return err?.message || t('practice.presetSaveFailed');
     }
   };
 
@@ -2499,6 +2509,14 @@ export function PracticePage(): React.ReactElement {
         </div>
       </div>
 
+      {song && presetDialogSongId === song.id && pointA != null && pointB != null ? (
+        <PresetNameDialog
+          existingNames={presets.map((p) => p.name)}
+          onCancel={closePresetDialog}
+          onSubmit={submitPreset}
+        />
+      ) : null}
+
       <PlaylistImportModal
         url={importModalUrl}
         me={authState.me}
@@ -2509,6 +2527,121 @@ export function PracticePage(): React.ReactElement {
         }}
       />
     </AppShell>
+  );
+}
+
+const PRESET_DIALOG_FOCUSABLE = 'button:not(:disabled), input:not(:disabled)';
+
+/** 구간 프리셋 이름 입력 모달. 키 입력은 플레이어 단축키(Space·숫자 등)로 새지 않게 막는다 */
+function PresetNameDialog({
+  existingNames,
+  onCancel,
+  onSubmit,
+}: {
+  existingNames: string[];
+  onCancel: () => void;
+  onSubmit: (name: string) => Promise<string | null>;
+}): React.ReactElement {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const savingRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const trimmed = name.trim();
+  const isMerge = trimmed !== '' && existingNames.includes(trimmed);
+
+  const cancel = () => {
+    if (!savingRef.current) onCancel();
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trimmed || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setErr('');
+    const failure = await onSubmit(trimmed);
+    savingRef.current = false;
+    if (failure) {
+      setSaving(false);
+      setErr(failure);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+      return;
+    }
+    if (e.key !== 'Tab' || !dialogRef.current) return;
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(PRESET_DIALOG_FOCUSABLE);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div
+      ref={dialogRef}
+      className={styles.modalBackdrop}
+      id="presetDialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="presetDialogTitle"
+      onKeyDown={onKeyDown}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) cancel();
+      }}
+    >
+      <form className={styles.modalCard} noValidate onSubmit={(e) => void submit(e)}>
+        <h2 className={styles.modalTitle} id="presetDialogTitle">
+          {t('practice.presetSave')}
+        </h2>
+        <label className={styles.presetDialogLabel} htmlFor="presetDialogInput">
+          {t('practice.presetPrompt')}
+        </label>
+        <input
+          ref={inputRef}
+          id="presetDialogInput"
+          className="inpField"
+          type="text"
+          maxLength={60}
+          autoComplete="off"
+          value={name}
+          disabled={saving}
+          onChange={(e) => {
+            setName(e.target.value);
+            setErr('');
+          }}
+        />
+        <p className={styles.modalDesc} id="presetDialogNote" role="status" aria-live="polite">
+          {err ? <span className={styles.presetDialogErr}>{err}</span> : isMerge ? t('practice.presetMergeNote') : ''}
+        </p>
+        <div className={styles.presetDialogActions}>
+          <button type="button" className="ghostBtn" id="presetDialogCancel" disabled={saving} onClick={cancel}>
+            {t('practice.presetCancel')}
+          </button>
+          <button type="submit" className="pillBtn" id="presetDialogSave" disabled={saving || !trimmed}>
+            {isMerge ? t('practice.presetMergeSave') : t('practice.presetSaveBtn')}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

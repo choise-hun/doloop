@@ -39,6 +39,12 @@
   min-height: 16px;
 }
 
+/* 동기화 문구가 없을 때 빈 줄이 자리를 차지하면 제목이 위로 치우친다 → 높이만 0으로 두어 제목을 세로 가운데에 둔다
+   (aria-live 영역은 계속 렌더해 둔다) */
+.ppSync:empty {
+  min-height: 0;
+}
+
 .ppSyncErr {
   color: var(--bad);
 }
@@ -63,7 +69,8 @@
   grid-row: 2;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 재생 : 녹음 = 10 : 2 (12칸 기준). 녹음 카드는 버튼이 눌릴 만큼만 최소 폭을 둔다 */
+  grid-template-columns: minmax(0, 5fr) minmax(150px, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -251,6 +258,7 @@
   font-size: 12px;
   color: var(--muted);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
@@ -446,10 +454,11 @@
 
 /* 녹음 및 Google Drive 기본 연결 안내 배너 */
 .ppDriveBanner {
+  /* 녹음 카드가 좁아(재생:녹음 = 10:2) 안내 문구 아래에 버튼을 한 줄로 둔다 */
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 6px 10px;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -478,7 +487,7 @@
   background: var(--ink);
   color: var(--bg);
   cursor: pointer;
-  align-self: flex-start;
+  white-space: nowrap;
 }
 
 .ppDriveBadge {
@@ -541,18 +550,26 @@
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  min-height: 52px;
-  font-size: 16px;
+  min-height: 76px;
+  font-size: 18px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .ppPlayBtn {
-  font-size: 24px;
+  font-size: 32px;
 }
 
 .ppSaveBtn {
-  font-size: 14px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+/* 전화 폭: 다섯 칸이 좁아 저장 버튼 문구('곡 추가')가 꺾이지 않게 기존 크기로 둔다 */
+@media (max-width: 600px) {
+  .ppSaveBtn {
+    font-size: 14px;
+  }
 }
 
 .ppSaveDirty {
@@ -818,6 +835,22 @@
   flex-direction: column;
   gap: 8px;
   margin-top: 4px;
+}
+
+.presetDialogLabel {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.presetDialogErr {
+  color: var(--bad);
+}
+
+.presetDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .songRecord {
