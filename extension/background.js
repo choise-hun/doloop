@@ -288,6 +288,7 @@ export function createApi({ auth, fetchImpl, getSettings, timeoutMs = FETCH_TIME
 const MENU_LINK = 'redo-add-link';
 const MENU_PAGE = 'redo-add-page';
 const MENU_PANEL = 'redo-open-panel';
+export const PANEL_STATE_KEY = 'redo:panelClosed';
 
 /** 크롬 이벤트를 건다. 서비스 워커에서만 호출한다(테스트는 가짜 chromeApi로 부른다). */
 export function registerWithChrome(chromeApi) {
@@ -330,6 +331,7 @@ export function registerWithChrome(chromeApi) {
   chromeApi.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === MENU_PANEL) {
       if (!tab || typeof tab.id !== 'number') return;
+      storage.set({ [PANEL_STATE_KEY]: false }).catch(() => {});
       chromeApi.tabs.sendMessage(tab.id, { type: 'REDO_PANEL_OPEN' }).catch(() => {});
       return;
     }
@@ -368,6 +370,8 @@ export function registerWithChrome(chromeApi) {
     } else if (message.type === 'LOOKUP_SONG') work = api.lookupSong(message.videoId);
     else if (message.type === 'SAVE_PRACTICE') work = api.savePractice(message, sender.tab ? sender.tab.id : null);
     else if (message.type === 'GET_SETTINGS') work = getSettings().then((s) => ({ menuItem: s.menuItem }));
+    else if (message.type === 'GET_PANEL_STATE') work = storage.get(PANEL_STATE_KEY).then((d) => ({ closed: Boolean(d && d[PANEL_STATE_KEY]) }));
+    else if (message.type === 'SET_PANEL_STATE') work = storage.set({ [PANEL_STATE_KEY]: Boolean(message.closed) }).then(() => ({ ok: true }));
     else if (message.type === 'OPEN_OPTIONS') work = chromeApi.runtime.openOptionsPage().then(() => ({ ok: true }));
     else if (message.type === 'CHECK_CONNECTION' && fromExtensionPage) work = api.checkConnection();
     if (!work) return false;

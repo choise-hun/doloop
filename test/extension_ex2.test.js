@@ -210,8 +210,9 @@ function altKey(code, extra = {}) {
 }
 
 // A=2, B=5 지정 후 반복을 켠 패널
-function loopingEnv() {
+async function loopingEnv() {
   const env = fakePanelEnv();
+  await new Promise((r) => setTimeout(r, 0));
   env.video.currentTime = 2;
   env.btn('setA').listeners.click[0]();
   env.video.currentTime = 5;
@@ -236,7 +237,7 @@ test('TC-EX-10 루프 판정: t >= b이고 loopOn·!ad·!seeking·a/b 존재일 
   assert.equal(redoLoopAction({ loopOn: true, a: 3, b: null, t: 5.5, seeking: false, ad: false }), 'none');
 });
 
-test('TC-EX-10 100회: 가짜 video로 판정→되감기 100번 실행 시 매번 a로 돌아가고 loops === 100', () => {
+test('TC-EX-10 100회: 가짜 video로 판정→되감기 100번 실행 시 매번 a로 돌아가고 loops === 100', async () => {
   const { redoLoopAction } = loadPanelPure();
 
   // 순수 판정 루프 100회
@@ -256,6 +257,7 @@ test('TC-EX-10 100회: 가짜 video로 판정→되감기 100번 실행 시 매�
 
   // 패널 DOM·tick 통합: A=2.0, B=5.0 지정 후 rAF/timeupdate로 100회 되감기 + 광고·닫기·재오픈 검증
   const env = fakePanelEnv();
+  await new Promise((r) => setTimeout(r, 0));
   assert.ok(env.panel(), '재생 화면에서 패널이 생성된다');
   env.video.currentTime = 2;
   env.btn('setA').listeners.click[0]();
@@ -505,8 +507,9 @@ test('EX2-메뉴: 메뉴 3개 생성, redo-open-panel 클릭 시 REDO_PANEL_OPEN
   }
 });
 
-test('PR24-S1 광고 배속 복원: 광고가 끝난 직후 ratechange가 tick보다 먼저 와도 사용자 배속으로 되돌린다', () => {
+test('PR24-S1 광고 배속 복원: 광고가 끝난 직후 ratechange가 tick보다 먼저 와도 사용자 배속으로 되돌린다', async () => {
   const env = fakePanelEnv();
+  await new Promise((r) => setTimeout(r, 0));
   env.btn('preset1').listeners.click[0](); // 0.75
   assert.equal(env.video.playbackRate, 0.75);
 
@@ -529,8 +532,9 @@ test('PR24-S1 광고 배속 복원: 광고가 끝난 직후 ratechange가 tick�
   assert.equal(env.out('rate').textContent, '1.50x');
 });
 
-test('PR24-S2 같은 영상 재동기화: 광고 중 REDO_PANEL_OPEN이 와도 예약 배속을 광고 값으로 덮지 않는다', () => {
+test('PR24-S2 같은 영상 재동기화: 광고 중 REDO_PANEL_OPEN이 와도 예약 배속을 광고 값으로 덮지 않는다', async () => {
   const env = fakePanelEnv();
+  await new Promise((r) => setTimeout(r, 0));
   env.setAd(true);
   env.fireVideo('timeupdate');
   env.btn('preset1').listeners.click[0](); // 광고 중 0.75 예약
@@ -550,8 +554,8 @@ test('PR24-S2 같은 영상 재동기화: 광고 중 REDO_PANEL_OPEN이 와도 �
   assert.equal(env.out('rate').textContent, '1.00x');
 });
 
-test('EX2-ended: 반복 중 영상 끝이면 A로 돌아가 1회 늘고, 광고·반복 꺼짐에서는 그대로', () => {
-  const env = loopingEnv();
+test('EX2-ended: 반복 중 영상 끝이면 A로 돌아가 1회 늘고, 광고·반복 꺼짐에서는 그대로', async () => {
+  const env = await loopingEnv();
   let plays = 0;
   env.video.play = () => {
     plays += 1;
@@ -578,8 +582,8 @@ test('EX2-ended: 반복 중 영상 끝이면 A로 돌아가 1회 늘고, 광고�
   assert.equal(env.out('loops').textContent, '1회');
 });
 
-test('EX2-tick 가드: seeking 중 timeupdate는 되감지 않고, 같은 영상 재동기화로 리스너가 두 번 걸리지 않는다', () => {
-  const env = loopingEnv();
+test('EX2-tick 가드: seeking 중 timeupdate는 되감지 않고, 같은 영상 재동기화로 리스너가 두 번 걸리지 않는다', async () => {
+  const env = await loopingEnv();
 
   env.video.currentTime = 5.3;
   env.video.seeking = true;
@@ -598,8 +602,8 @@ test('EX2-tick 가드: seeking 중 timeupdate는 되감지 않고, 같은 영상
   assert.equal(env.out('loops').textContent, '1회', '재동기화 뒤에도 1번에 1회');
 });
 
-test('EX2-전환: 다른 영상으로 가면 A·B·반복·횟수가 비고, 재생 화면이 아니면 패널이 사라진다', () => {
-  const env = loopingEnv();
+test('EX2-전환: 다른 영상으로 가면 A·B·반복·횟수가 비고, 재생 화면이 아니면 패널이 사라진다', async () => {
+  const env = await loopingEnv();
   env.video.currentTime = 5.1;
   env.fireVideo('timeupdate');
   assert.equal(env.out('loops').textContent, '1회');
@@ -619,8 +623,9 @@ test('EX2-전환: 다른 영상으로 가면 A·B·반복·횟수가 비고, 재
   assert.equal(env.panel(), null);
 });
 
-test('EX2-단축키 연결: 입력창·조합 중에는 가로채지 않고, Alt 단축키는 기본 동작을 막고 버튼과 같은 행동을 한다', () => {
+test('EX2-단축키 연결: 입력창·조합 중에는 가로채지 않고, Alt 단축키는 기본 동작을 막고 버튼과 같은 행동을 한다', async () => {
   const env = fakePanelEnv();
+  await new Promise((r) => setTimeout(r, 0));
   env.video.currentTime = 7;
 
   const typing = altKey('BracketLeft', { composedPath: () => [{ tagName: 'INPUT', isContentEditable: false }] });

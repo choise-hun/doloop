@@ -188,6 +188,8 @@ function redoPanelInit() {
     pos: null,
     videoMissing: false,
     tempMsg: '',
+    rateChangedByPanel: false, // 패널(또는 저장 배속 적용)로 바꾼 배속인지. 연습 종료(영상 이동·닫기) 시 1.0으로 복원한다
+    panelStateReady: false, // 서비스 워커에서 마지막 열림/닫힘 상태를 읽기 전에는 패널을 먼저 띄우지 않는다
     // EX-3 저장 연결
     gen: 0, // 영상·계정이 바뀔 때마다 올린다. 그 전에 시작한 조회·추가·저장 응답은 버린다
     lookedUpFor: null, // 지금 세대에서 조회를 시작한 videoId
@@ -554,6 +556,7 @@ function redoPanelInit() {
       if (ad || state.wasAd) return;
       if (Math.abs(video.playbackRate - state.rate) > 0.001) {
         state.rate = redoClampRate(video.playbackRate);
+        state.rateChangedByPanel = false;
         render();
       }
     });
@@ -646,6 +649,15 @@ function redoPanelInit() {
     retryTimer = setTimeout(retry, REDO_VIDEO_RETRY_MS);
   }
 
+  function resetPanelRate() {
+    if (!state.rateChangedByPanel) return;
+    state.rateChangedByPanel = false;
+    state.rate = 1;
+    if (state.video && Math.abs(state.video.playbackRate - 1) > 0.001) {
+      state.video.playbackRate = 1;
+    }
+  }
+
   function handleAction(act) {
     if (act === 'collapse') {
       state.collapsed = !state.collapsed;
@@ -656,10 +668,12 @@ function redoPanelInit() {
       state.closed = true;
       state.loopOn = false;
       state.lastCountAt = null;
+      resetPanelRate();
       stopRaf();
       clearVideoRetry();
       clearTempStatus();
       removePanel();
+      redoPanelAsk({ type: 'SET_PANEL_STATE', closed: true });
       return;
     }
 
@@ -730,6 +744,7 @@ function redoPanelInit() {
         // 불러온 저장 배속은 [반복]을 켤 때 적용한다(광고 중이면 광고 뒤 tick이 적용)
         state.rate = state.pendingRate;
         state.pendingRate = null;
+        state.rateChangedByPanel = true;
         if (!ad) state.video.playbackRate = state.rate;
       }
       if (!ad && (state.video.currentTime < state.a || state.video.currentTime >= state.b)) {
@@ -775,6 +790,7 @@ function redoPanelInit() {
       return;
     }
     state.rate = nextRate;
+    state.rateChangedByPanel = true;
     if (!ad) state.video.playbackRate = state.rate;
     clearTempStatus();
     render();
@@ -936,8 +952,10 @@ function redoPanelInit() {
   }
 
   function sync() {
+    if (!state.panelStateReady) return;
     const id = redoWatchVideoId(location.href);
     if (!id) {
+      resetPanelRate();
       resetSongState();
       resetAccum();
       clearVideoRetry();
@@ -955,6 +973,7 @@ function redoPanelInit() {
 
     const fresh = id !== state.videoId;
     if (fresh) {
+      resetPanelRate();
       state.a = null;
       state.b = null;
       state.loopOn = false;
@@ -1015,7 +1034,9 @@ function redoPanelInit() {
   chrome.runtime.onMessage.addListener((message) => {
     if (!message) return;
     if (message.type === 'REDO_PANEL_OPEN') {
+      state.panelStateReady = true;
       state.closed = false;
+      redoPanelAsk({ type: 'SET_PANEL_STATE', closed: false });
       sync();
       return;
     }
@@ -1046,7 +1067,12 @@ function redoPanelInit() {
     }
   });
 
-  sync();
+  redoPanelAsk({ type: 'GET_PANEL_STATE' }).then((res) => {
+    if (state.panelStateReady) return;
+    state.panelStateReady = true;
+    state.closed = Boolean(res && res.closed);
+    sync();
+  });
 }
 
 if (typeof document !== 'undefined' && typeof chrome !== 'undefined' && chrome.runtime && !window.__redoPanelLoaded) {
