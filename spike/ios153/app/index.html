@@ -1,0 +1,153 @@
+<!doctype html>
+<!-- M1A-1 스파이크 전용(spike/M0-1-ios153). 앱 번들(capacitor://localhost) 시험 화면.
+     후보1: https 플레이어 페이지 iframe + postMessage 제어
+     C0: 지금 방식 그대로 직접 임베드(origin=capacitor://localhost) — 오류 153 재현 대조군
+     C2: 직접 임베드 + origin·widget_referrer=https://com.ulevelp.spike -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>M1A-1 iOS 153</title>
+<style>
+  body{font:15px -apple-system,system-ui,sans-serif;margin:0;padding:max(12px,env(safe-area-inset-top)) 12px 24px;background:#111;color:#eee}
+  h1{font-size:16px;margin:4px 0 8px}
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  button{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid #555;background:#222;color:#eee}
+  button.on{background:#c60;border-color:#c60}
+  input{font:inherit;padding:6px;width:100%;box-sizing:border-box;background:#000;color:#eee;border:1px solid #555;border-radius:6px}
+  #box{position:relative;width:100%;aspect-ratio:16/9;background:#000;margin:8px 0}
+  #box iframe,#box>div{position:absolute;inset:0;width:100%;height:100%;border:0}
+  #st{font:13px ui-monospace,monospace;white-space:pre;background:#000;padding:6px;border-radius:6px}
+  #log{font:12px ui-monospace,monospace;white-space:pre-wrap;max-height:200px;overflow:auto;background:#000;padding:6px;border-radius:6px;margin-top:6px}
+</style>
+</head>
+<body>
+<h1>M1A-1 · iOS 오류 153 보정 <small id="org"></small></h1>
+<label>플레이어 페이지 URL <input id="url" value="https://ulevelp-player-spike-d5ympfsmfq-du.a.run.app/"></label>
+<div class="row">
+  <button data-mode="c1">후보1 iframe</button>
+  <button data-mode="c1any">후보1 (target *)</button>
+  <button data-mode="c0">C0 직접(지금)</button>
+  <button data-mode="c2">C2 직접+https origin</button>
+</div>
+<div id="box"></div>
+<div class="row">
+  <button id="play">▶ 재생</button><button id="pause">❚❚ 정지</button>
+  <button id="setA">A 지정</button><button id="setB">B 지정</button><button id="loop">구간 반복</button>
+</div>
+<div class="row">
+  <button data-rate="0.75">0.75×</button><button data-rate="1">1×</button><button data-rate="1.5">1.5×</button>
+</div>
+<div id="st">대기</div>
+<div id="log"></div>
+<script>
+'use strict';
+var VIDEO = 'M7lc1UVf-VE';
+var box = document.getElementById('box'), stEl = document.getElementById('st'), logEl = document.getElementById('log');
+document.getElementById('org').textContent = location.origin;
+var S = { mode: null, time: 0, dur: 0, state: '-', rate: 1, a: null, b: null, loopOn: false, loops: 0, ready: false, lastSeekAt: 0 };
+var adapter = null, pollTimer = null, readyTimer = null;
+
+function log(m) { var t = new Date().toISOString().slice(11, 23); logEl.textContent = t + ' ' + m + '\n' + logEl.textContent; }
+function f(n) { return n == null ? '-' : Number(n).toFixed(2); }
+function render() {
+  stEl.textContent = 'mode ' + S.mode + '  ready ' + S.ready + '\n' +
+    'time ' + f(S.time) + ' / ' + f(S.dur) + '  state ' + S.state + '  rate ' + S.rate + '\n' +
+    'A ' + f(S.a) + '  B ' + f(S.b) + '  loop ' + (S.loopOn ? 'ON' : 'off') + '  반복 ' + S.loops + '회';
+}
+function onStatus(time, dur, state, rate) {
+  S.time = time; S.dur = dur; S.state = state; S.rate = rate;
+  // A-B 반복은 부모(앱)가 시각을 받아 seek 명령을 보낸다 — iframe 너머 왕복을 시험하는 핵심
+  if (S.loopOn && S.a != null && S.b != null && time >= S.b && Date.now() - S.lastSeekAt > 500) {
+    S.lastSeekAt = Date.now(); S.loops += 1; adapter.seek(S.a);
+    log('구간 끝 → A로 이동 (' + S.loops + '회)');
+  }
+  render();
+}
+
+function reset() {
+  clearInterval(pollTimer); clearTimeout(readyTimer);
+  box.innerHTML = ''; adapter = null;
+  S.ready = false; S.a = S.b = null; S.loopOn = false; S.loops = 0; S.time = 0; S.state = '-';
+  document.getElementById('loop').classList.remove('on');
+}
+
+// ---- 후보1: https 플레이어 페이지 iframe ----
+var playerOrigin = null;
+function startC1(any) {
+  var base = document.getElementById('url').value.trim();
+  var u = new URL(base); playerOrigin = u.origin;
+  u.searchParams.set('v', VIDEO); u.searchParams.set('parent', location.origin);
+  if (any) u.searchParams.set('any', '1');
+  var fr = document.createElement('iframe');
+  fr.src = u.toString(); fr.allow = 'autoplay; encrypted-media; picture-in-picture';
+  fr.onload = function () { log('iframe load 이벤트 (' + u.origin + ')'); };
+  box.appendChild(fr);
+  var post = function (cmd, value) { fr.contentWindow.postMessage({ type: 'cmd', cmd: cmd, value: value }, playerOrigin); };
+  adapter = { play: function () { post('play'); }, pause: function () { post('pause'); }, seek: function (t) { post('seek', t); }, rate: function (r) { post('rate', r); } };
+  readyTimer = setTimeout(function () { if (!S.ready) log('10초 안에 ready 없음 → iframe 차단(frame-ancestors) 또는 postMessage 전달 실패'); }, 10000);
+  log('후보1 시작: ' + u.toString());
+}
+window.addEventListener('message', function (e) {
+  if (!S.mode || S.mode.indexOf('c1') !== 0) return;
+  var d = e.data || {};
+  if (d.type === 'reject') { log('플레이어가 명령 거부: 받은 출처=' + d.got + ' (e.origin=' + e.origin + ')'); return; }
+  if (e.origin !== playerOrigin) return;
+  if (d.type === 'ready') { S.ready = true; log('ready (플레이어 출처 ' + d.origin + ', 배속 ' + JSON.stringify(d.rates) + ')'); }
+  else if (d.type === 'status') onStatus(d.time, d.duration, d.state, d.rate);
+  else if (d.type === 'error') log('YouTube onError code=' + d.code);
+  render();
+});
+
+// ---- C0·C2: 앱 번들에서 직접 임베드 ----
+function startDirect(httpsOrigin) {
+  var div = document.createElement('div'); div.id = 'yt'; box.appendChild(div);
+  var make = function () {
+    var vars = { playsinline: 1, rel: 0, origin: httpsOrigin ? 'https://com.ulevelp.spike' : location.origin };
+    if (httpsOrigin) vars.widget_referrer = 'https://com.ulevelp.spike';
+    var p = new YT.Player('yt', {
+      videoId: VIDEO, playerVars: vars,
+      events: {
+        onReady: function () {
+          S.ready = true; log('ready (origin=' + vars.origin + ')'); render();
+          pollTimer = setInterval(function () { onStatus(p.getCurrentTime(), p.getDuration(), p.getPlayerState(), p.getPlaybackRate()); }, 250);
+        },
+        onError: function (e) { log('YouTube onError code=' + e.data); },
+      },
+    });
+    adapter = { play: function () { p.playVideo(); }, pause: function () { p.pauseVideo(); }, seek: function (t) { p.seekTo(t, true); }, rate: function (r) { p.setPlaybackRate(r); } };
+    readyTimer = setTimeout(function () { if (!S.ready) log('10초 안에 onReady 없음 → API 메시지 출처 불일치 가능'); }, 10000);
+  };
+  if (window.YT && YT.Player) make();
+  else {
+    window.onYouTubeIframeAPIReady = make;
+    var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  }
+  log((httpsOrigin ? 'C2' : 'C0') + ' 시작');
+}
+
+document.querySelectorAll('[data-mode]').forEach(function (b) {
+  b.onclick = function () {
+    reset(); S.mode = b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    if (S.mode === 'c1') startC1(false); else if (S.mode === 'c1any') startC1(true);
+    else if (S.mode === 'c0') startDirect(false); else startDirect(true);
+    render();
+  };
+});
+document.getElementById('play').onclick = function () { adapter && adapter.play(); };
+document.getElementById('pause').onclick = function () { adapter && adapter.pause(); };
+document.getElementById('setA').onclick = function () { S.a = S.time; render(); };
+document.getElementById('setB').onclick = function () { S.b = S.time; render(); };
+document.getElementById('loop').onclick = function (e) {
+  if (S.a == null || S.b == null || S.b <= S.a) { log('A < B 로 먼저 지정'); return; }
+  S.loopOn = !S.loopOn; S.loops = 0; e.target.classList.toggle('on', S.loopOn);
+  if (S.loopOn) adapter.seek(S.a); render();
+};
+document.querySelectorAll('[data-rate]').forEach(function (b) {
+  b.onclick = function () { adapter && adapter.rate(Number(b.dataset.rate)); log('배속 요청 ' + b.dataset.rate); };
+});
+render();
+</script>
+</body>
+</html>
