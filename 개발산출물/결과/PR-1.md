@@ -1,6 +1,6 @@
 # PR-1 결과 — 재생 줄 순서·⏮ 아이콘·대기 시간 바 축소
 
-> 2026-11-15 / 시니어(Claude) 직접 구현 / 브랜치 `feat/PR-1-play-row`(main `835b932`에서 분기). 진행 파일: [진행_재생줄PR](../진행_재생줄PR.md).
+> 2026-11-15 / 시니어(Claude) 직접 구현 / 브랜치 `feat/PR-1-play-row`(main `835b932`에서 분기). 진행 파일: [진행_재생줄PR](../완료/진행_재생줄PR.md).
 > 근거: [결과/M0-0 §4](M0-0_모바일스파이크.md) 4~6, [계획 §4](../../계획/상용_서비스_계획.md). 전체 회귀·PR 생성·CI 대기는 주니어 4단계(§6).
 
 ## 1. 배치 약속
@@ -60,6 +60,16 @@
 - **CI 실패 원인(코드 무수정, 시니어 인계):**
   - 실패 테스트: `test/e2e/cm-ui.spec.js:433` `CUI-11 EpisodeReportDialog: 타인 게시물 신고 접수(201) 및 중복 신고(409) 처리` (`Expected: {"detail": "스팸성 테스트 게시물입니다", "reason": "spam"}`, `Received: null`).
   - 원인: `test/e2e/cm-ui.spec.js:470` `await reportModal.locator('button[type="submit"]').click()` 직후 네트워크 요청/응답 대기(`waitForResponse` 등) 없이 `472`행에서 즉시 `expect(reportBody).toEqual(...)`를 실행하여, CI 환경에서 라우트 콜백 실행 전에 `reportBody`가 `null`로 평가됨. PR-1 변경(`PracticePage.tsx`, `PracticePage.module.css`, `test/e2e/layout/practice.spec.js`)과 무관한 기존 E2E 테스트의 비결정적 대기 누락.
+
+### 시니어 CI 실패 수정 (2026-11-15)
+
+| 항목 | 결과 |
+| --- | --- |
+| 수정 | `test/e2e/cm-ui.spec.js` CUI-11: submit 클릭 **전에** 신고 POST(`/api/v1/community/episode-logs/{id}/reports`) `waitForResponse`를 걸고, 응답 201 확인 뒤 `reportBody`를 단언. 단언 내용은 그대로(완화·skip 없음). 커밋 `f25d902` |
+| `npx playwright test test/e2e/cm-ui.spec.js` | `61 passed (41.2s)` |
+| `npx playwright test test/e2e/cm-ui.spec.js -g "CUI-11" --repeat-each=20` | `20 passed (20.7s)` |
+| PR CI (`gh pr checks 37`, head `f25d902`) | **통과** — `E2E XSS & CSP (Playwright, spa)` pass 9m5s, `Test (Node 22)` pass, `Docker build & smoke test` pass, `Detect code changes` pass, `CI ok` pass, `Kotlin test` skipped(변경 없음) |
+| 리뷰 코멘트 | 라인 코멘트·리뷰 없음. Codex 요약(`13e194f`, findings 없음) 뒤 커밋은 문서·테스트 대기만 |
 
 ## 5. 스크린샷 검토 (재생 상자·반복 줄, 로그인 상태, 390·768·1150·1280 + 1280 다크)
 
