@@ -9,7 +9,10 @@
 
 .playerShell {
   width: 100%;
-  max-width: var(--container-max);
+  /* WF-2: 창이 넓으면 영상도 커진다. 상한은 --player-max, 그리고 영상(16:9)+타임라인+재생 줄이 창 높이 안에 들어오는 폭.
+     376px = 오른쪽 열 360 + 열 간격 16, 392px = 영상 밖 세로 요소(머리 메뉴·곡 제목·타임라인·재생 줄·여백, 실측 383 + 여유).
+     창이 낮아도 기존 폭(--container-max)보다 줄이지는 않는다 */
+  max-width: max(var(--container-max), min(var(--player-max), calc((100dvh - 392px) * 16 / 9 + 376px)));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -152,12 +155,17 @@
 
 .mainPlayer {
   width: 100%;
-  max-width: var(--container-max);
+  max-width: none;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+
+/* WF-2: 플레이어 화면은 머리 메뉴도 넓어진 틀 폭을 따른다 */
+.playerShell .siteNav {
+  max-width: none;
 }
 
 /* W-1: 좁은 폭(≤820px) 하단 탭 바 — 명세 개발산출물/명세/W-1_구현명세.md §1 */
