@@ -12,4 +12,6 @@ window.ULEVELP_CONFIG = {
   googleClientId: '175439281655-s2kavvppihv1npsims22mj24q23dcgol.apps.googleusercontent.com',
   // 공식 노션 템플릿 공개 URL (K3-1에서 사용)
   notionTemplateUrl: 'https://app.notion.com/p/4097a337e26f8167aa10eb435edb676e?source=copy_link',
+  // iOS 앱 YouTube 플레이어 전용 https 페이지(M1A-2). 앱 번들 조립(scripts/build-app-web.mjs)이 이 출처를 CSP frame-src에 더한다
+  playerEmbedUrl: 'https://ulevelp-d5ympfsmfq-du.a.run.app/player-embed.html',
 };
