@@ -467,7 +467,11 @@ test('CUI-11 EpisodeReportDialog: 타인 게시물 신고 접수(201) 및 중복
   // 사유 라디오 선택 및 상세 입력 후 제출
   await reportModal.locator('input[value="spam"]').check();
   await reportModal.locator('textarea').fill('스팸성 테스트 게시물입니다');
+  // 클릭 전에 대기를 걸어 두고, 모의 응답(=onReportEpisode 실행 완료)을 받은 뒤 본문을 단언한다
+  const reportResponse = page.waitForResponse((res) => res.request().method() === 'POST'
+    && /^\/api\/v1\/community\/episode-logs\/[^/]+\/reports$/.test(new URL(res.url()).pathname));
   await reportModal.locator('button[type="submit"]').click();
+  expect((await reportResponse).status()).toBe(201);
 
   expect(reportBody).toEqual({
     reason: 'spam',
