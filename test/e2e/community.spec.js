@@ -791,7 +791,11 @@ test('CMR2-11 storage 실패: sessionStorage 예외 시에도 모달·건너뛰�
 
   await page.addInitScript(() => {
     Storage.prototype.setItem = () => { throw new Error('storage disabled'); };
-    Storage.prototype.getItem = () => { throw new Error('storage disabled'); };
+    // 커뮤니티 화면 스위치(lib/features.ts)만 켜 둔다 — 나머지 저장소 읽기는 모두 실패
+    Storage.prototype.getItem = (k) => {
+      if (k === 'ulp-feature-community') return '1';
+      throw new Error('storage disabled');
+    };
   });
 
   await mockApp(page, { ...STATES.userData, me: NO_NAME_ME, routes: communityRoutes() });

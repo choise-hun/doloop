@@ -12,6 +12,7 @@ import { getLangChoice, onLangChange, setLang, t, type I18nKey, type LangChoice,
 import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
 import commStyles from '../components/community/Community.module.css';
+import { communityEnabled } from '../lib/features';
 import styles from './SettingsPage.module.css';
 
 // 노션 DB 링크를 그대로 붙여넣어도 DB ID만 꺼낸다. ID는 마지막 경로 끝에 있고 ?v= 뒤는 보기 ID라 보지 않는다.
@@ -726,8 +727,8 @@ export function SettingsPage(): React.ReactElement {
         </details>
       </section>
 
-      {/* 3-b. 커뮤니티 (M2-23 D5) */}
-      {signedIn ? (
+      {/* 3-b. 커뮤니티 (M2-23 D5) — 커뮤니티 숨김 중에는 그리지 않는다 */}
+      {signedIn && communityEnabled() ? (
         <section
           className={`set-sec ${styles.setSec} ${styles.serviceSection}`}
           data-align-group="col: left; secs: right"

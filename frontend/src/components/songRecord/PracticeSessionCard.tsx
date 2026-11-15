@@ -8,6 +8,7 @@ import { buildEpisodePracticeUrl } from '../../lib/episode.mts';
 import { segText, fmtSec } from '../../lib/community.mts';
 import { TakeItemRow } from './SongRecordParts';
 import { EpisodeShareDialog } from './EpisodeShareDialog';
+import { communityEnabled } from '../../lib/features';
 import { useEpisodeShares } from './useEpisodeShares';
 import { SafeLink } from '../common/SafeLink';
 import { t } from '../../lib/i18n.mts';
@@ -296,7 +297,7 @@ function OwnedPracticeSessionCard({
           <SafeLink className={`ghost mini ${styles.ghostMini}`} href={playHref}>
             {t('log.btnPractice')}
           </SafeLink>
-          {shareIcon}
+          {communityEnabled() ? shareIcon : null}
         </div>
       </div>
 

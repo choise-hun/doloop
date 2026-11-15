@@ -19,19 +19,23 @@ test('CM-UI 계약 1: 라우트 등록 전수 검증 (Main.kt, server.js, App.ts
 
   assert.ok(mainKt.includes('"community.html"'), 'Main.kt SPA_ENTRY_PAGES에 community.html 등록 필수');
   assert.ok(serverJs.includes("'/community.html'"), 'server.js SPA_PAGES에 /community.html 등록 필수');
+  // 2026-11-15 커뮤니티 숨김: 라우트는 남기고 communityEnabled() 스위치가 꺼져 있으면 홈으로 보낸다
   assert.ok(
-    appTsx.includes('<Route path="/community.html" element={<CommunityPage />} />'),
-    'App.tsx에 CommunityPage 라우트 등록 필수'
+    appTsx.includes('<Route path="/community.html" element={communityEnabled() ? <CommunityPage /> : <Navigate to="/" replace />} />'),
+    'App.tsx에 CommunityPage 라우트 등록 필수(숨김 스위치로 가림)'
   );
 });
 
-test('CM-UI 계약 2: AppShell에 COMMUNITY 내비게이션 6열 포함 검증', () => {
+test('CM-UI 계약 2: AppShell COMMUNITY 내비게이션 항목 유지 + 숨김 스위치로 거름', () => {
   const shellTsx = readText('frontend/src/components/layout/AppShell.tsx');
   const shellCss = readText('frontend/src/components/layout/AppShell.module.css');
 
   assert.ok(shellTsx.includes("key: 'community'"), 'AppShell MAIN_NAV에 community 항목 등록 필수');
   assert.ok(shellTsx.includes("labelKey: 'nav.community'"), 'nav.community 라벨 키 필수');
-  assert.ok(shellCss.includes('repeat(6,'), 'AppShell.module.css tabBar에 6열 그리드 필수');
+  // 2026-11-15 커뮤니티 숨김: 위 메뉴·탭 바 모두 같은 목록(navItems)을 쓰고, 탭 바 칸 수는 메뉴 수를 따른다
+  assert.ok(shellTsx.includes("item.key !== 'community' || communityEnabled()"), '커뮤니티 숨김 스위치 필터 필수');
+  assert.equal((shellTsx.match(/MAIN_NAV\.map\(/g) || []).length, 0, '위 메뉴·탭 바는 navItems로만 그린다');
+  assert.ok(shellCss.includes('grid-auto-columns: minmax(0, 1fr)'), 'tabBar는 메뉴 수만큼 같은 폭 칸');
 });
 
 test('CM-UI 순수 함수 1: countCodePoints (이모지 및 Unicode code point 계산)', async () => {

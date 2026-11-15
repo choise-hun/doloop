@@ -119,10 +119,18 @@ function supabaseStub(sessionUser) {
  * @param {Record<string,string>} [opts.local] localStorage 미리 넣기
  * @param {Array<[Function|RegExp|string, Function]>} [opts.routes] 화면 전용 추가 응답(가장 나중에 등록 → 먼저 매칭)
  * @param {'empty'|'pass'} [opts.unknownApi='empty'] 모르는 /api/v1/*: 'empty'면 {} 200, 'pass'면 실제 서버로
+ * @param {boolean} [opts.community=true] 커뮤니티 화면 스위치(frontend/src/lib/features.ts). 실제 기본값은 숨김이지만
+ *   기존 커뮤니티 회귀를 계속 돌리려고 테스트 기본은 켠다. 숨김 상태 검사는 false로 부른다
  */
 async function mockApp(page, opts = {}) {
   const auth = opts.auth || 'user';
   const me = { ...DEFAULT_ME, ...(opts.me || {}) };
+
+  if (opts.community !== false) {
+    await page.addInitScript(() => {
+      try { localStorage.setItem('ulp-feature-community', '1'); } catch { /* 저장 불가 환경 */ }
+    });
+  }
 
   if (opts.local) {
     await page.addInitScript((entries) => {

@@ -5,6 +5,7 @@ import { getTheme, setTheme, THEME_EVENT } from '../../lib/security';
 import { t, type I18nKey } from '../../lib/i18n.mts';
 import { BetaBadge } from '../common/BetaBadge';
 import { BrandLogo } from '../common/BrandLogo';
+import { communityEnabled } from '../../lib/features';
 
 export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy' | 'profile';
@@ -60,6 +61,8 @@ export function AppShell({
     };
   }, []);
 
+  // 커뮤니티 숨김 중이면 위 메뉴·하단 탭 바에서 함께 뺀다
+  const navItems = MAIN_NAV.filter((item) => item.key !== 'community' || communityEnabled());
   const signedInUser = authState.user;
   const navLabel = signedInUser ? auth.computeInitial(signedInUser, authState.me) : t('nav.login');
   const navAriaLabel = signedInUser
@@ -110,7 +113,7 @@ export function AppShell({
             <BrandLogo variant="wordmark" className={styles.navLogo} />
             <span className={styles.brandText}>{t('nav.home')}</span>
           </a>
-          {MAIN_NAV.map((item) =>
+          {navItems.map((item) =>
             item.href ? (
               <a
                 key={item.key}
@@ -166,7 +169,7 @@ export function AppShell({
       </nav>
       <main className={mainClass}>{children}</main>
       <nav ref={tabBarRef} className={styles.tabBar} aria-label={t('nav.ariaTabs')} data-tabbar="1">
-        {MAIN_NAV.map((item) =>
+        {navItems.map((item) =>
           item.href ? (
             <a
               key={item.key}

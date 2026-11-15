@@ -37,7 +37,7 @@
 .brandLink {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 28px;
   color: var(--ink);
   text-decoration: none;
   padding: 8px 2px;
@@ -181,7 +181,7 @@
   }
 
   .brandLink {
-    gap: 8px;
+    gap: 16px;
   }
 }
 
@@ -229,7 +229,9 @@
 
   .tabBar {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    /* 메뉴 수(커뮤니티 숨김 여부)에 따라 칸 수가 바뀌므로 같은 폭 칸을 자동으로 만든다 */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     position: fixed;
     left: 0;
     right: 0;

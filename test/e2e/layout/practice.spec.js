@@ -186,22 +186,65 @@ test('T2: 프리셋 저장 및 병합 다이얼로그 호출', async ({ page }) 
   await page.locator('#setA').click();
   await page.locator('#setB').click();
 
+  // 브라우저 기본 입력창(prompt/confirm)은 더 쓰지 않는다 — 모달로 이름을 받는다
   const dialogTypes = [];
-  page.on('dialog', async (dialog) => {
-    dialogTypes.push(dialog.type());
-    if (dialog.type() === 'prompt') {
-      await dialog.accept('인트로');
-    } else if (dialog.type() === 'confirm') {
-      await dialog.accept();
-    }
-  });
+  page.on('dialog', (dialog) => { dialogTypes.push(dialog.type()); void dialog.dismiss(); });
 
   await page.locator('#btnSavePreset').click();
+  const modal = page.locator('#presetDialog');
+  await expect(modal).toBeVisible();
+  await expect(page.locator('#presetDialogInput')).toBeFocused();
+  await expect(page.locator('#presetDialogSave')).toBeDisabled(); // 빈 이름은 저장 불가
+
+  // Esc로 닫으면 PUT 없이 닫히고 저장 버튼으로 초점이 돌아온다
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await expect(page.locator('#btnSavePreset')).toBeFocused();
+  expect(putPayload).toBeNull();
+
+  await page.locator('#btnSavePreset').click();
+  await page.locator('#presetDialogInput').fill('인트로');
+  // 같은 이름이면 합쳐진다는 안내와 버튼 문구가 바뀐다
+  await expect(page.locator('#presetDialogNote')).toHaveText('같은 이름의 프리셋이 있어요. 저장하면 기존 구간에 합쳐집니다.');
+  await expect(page.locator('#presetDialogSave')).toHaveText('합쳐서 저장');
+  await page.locator('#presetDialogInput').press('Enter');
   await expect.poll(() => putPayload).not.toBeNull();
-  // 같은 이름이면 병합 확인(confirm)을 거쳐야 PUT이 나간다 — confirm 가드를 지우면 여기서 깨진다
-  expect(dialogTypes).toEqual(['prompt', 'confirm']);
+  await expect(modal).toHaveCount(0);
+  expect(dialogTypes).toEqual([]);
   expect(putPayload.name).toBe('인트로');
   expect(putPayload.merge).toBe(true);
+});
+
+test('T2b: 프리셋 저장 응답을 기다리는 동안 초점이 모달 안에 남아 Space가 재생으로 새지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await mockApp(page, {
+    ...USER_DATA_SR,
+    routes: [...(USER_DATA_SR.routes || []), [(url) => url.pathname.includes('/presets'), async (route) => {
+      if (route.request().method() !== 'PUT') return route.fulfill({ json: { presets: [] } });
+      await gate;
+      const body = JSON.parse(route.request().postData() || '{}');
+      return route.fulfill({ json: { preset: { id: 'p-new', name: body.name, a: body.a, b: body.b, rate: 1, parts: [] } } });
+    }]],
+  });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#presetSection').waitFor();
+  await page.locator('#setA').click();
+  await page.locator('#setB').click();
+  await page.locator('#btnSavePreset').click();
+  await page.locator('#presetDialogInput').fill('벌스');
+  await page.locator('#presetDialogInput').press('Enter');
+  await expect(page.locator('#presetDialogSave')).toBeDisabled();
+  const inside = () => page.evaluate(() => document.getElementById('presetDialog').contains(document.activeElement));
+  expect(await inside()).toBe(true);
+  await page.keyboard.press('Tab');
+  expect(await inside()).toBe(true);
+  const label = await page.locator('#playBtn').getAttribute('aria-label');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#playBtn')).toHaveAttribute('aria-label', label);
+  release();
+  await expect(page.locator('#presetDialog')).toHaveCount(0);
 });
 
 test('T3: 세션 커버리지 게이지 바 및 아코디언 상세 목록', async ({ page }) => {
