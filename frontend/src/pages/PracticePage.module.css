@@ -385,7 +385,8 @@
 
 .ppLoopRow {
   display: grid;
-  grid-template-columns: 1fr 1.6fr 44px;
+  /* PR-1: 대기 시간 묶음은 168px 상한, 남는 폭은 반복 버튼이 가진다(세로 태블릿에서 바가 길어지던 문제) */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 168px) 44px;
   gap: 6px;
 }
 
@@ -638,7 +639,7 @@
 
 .ppTransport {
   display: grid;
-  /* WF-2(C안): −5 · ⏮ · ▶ · +5 · 녹음 · 저장 */
+  /* PR-1: ⏮ · −5 · ▶ · +5 · 녹음 · 저장 (WF-2 C안의 ⏮ 자리만 맨 왼쪽으로) */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
@@ -658,6 +659,12 @@
 
 .ppPlayBtn {
   font-size: 32px;
+}
+
+.ppStartBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ppSaveBtn {

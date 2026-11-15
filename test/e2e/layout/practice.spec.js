@@ -493,7 +493,7 @@ for (const width of [1280, 1150, 768, 390]) {
     await expect(page.locator('#ppRecCard')).toHaveCount(0);
     const r = await page.evaluate(() => {
       const b = (id) => { const x = document.getElementById(id).getBoundingClientRect(); return { top: x.top, bottom: x.bottom, left: x.left, right: x.right, width: x.width, height: x.height }; };
-      return { card: b('ppPlayCard'), back: b('backBtn'), fwd: b('fwdBtn'), rec: b('recBtn'), save: b('saveBtn'), inCard: document.getElementById('ppPlayCard').contains(document.getElementById('recBtn')) };
+      return { card: b('ppPlayCard'), start: b('startBtn'), fwd: b('fwdBtn'), rec: b('recBtn'), save: b('saveBtn'), inCard: document.getElementById('ppPlayCard').contains(document.getElementById('recBtn')) };
     });
     expect(r.inCard).toBe(true);
     if (width > 600) {
@@ -504,7 +504,7 @@ for (const width of [1280, 1150, 768, 390]) {
       expect(r.rec.width).toBeLessThan(150); // 예전 녹음 상자보다 좁다
     } else {
       expect(r.rec.top).toBeGreaterThanOrEqual(r.save.bottom); // 둘째 줄
-      expect(Math.abs(r.rec.left - r.back.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(r.rec.left - r.start.left)).toBeLessThanOrEqual(1); // PR-1: 첫 칸은 ⏮
       expect(Math.abs(r.rec.right - r.save.right)).toBeLessThanOrEqual(1);
       expect(r.rec.height).toBeGreaterThanOrEqual(44);
     }
@@ -588,6 +588,95 @@ for (const width of [1280, 1150, 768, 390]) {
     expect(after.radius).toBe(info.back.radius);
     expect(after.bg).toBe(info.back.bg);
     expect(after.h).toBe(info.heights[0]);
+  });
+}
+
+// PR-1: 재생 줄 순서 ⏮ 맨 왼쪽 + −5 · ▶ · +5, 대기 시간 묶음 상한·반복 버튼 확대 (결과/M0-0 §4 4~6)
+const PR1_WAIT_MAX = 168;
+for (const width of [1280, 1150, 768, 390]) {
+  test(`PR1-O: 재생 줄 순서 ⏮ · −5 · ▶ · +5 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#seekRow').waitFor();
+    const r = await page.evaluate(() => {
+      const b = (id) => document.getElementById(id).getBoundingClientRect();
+      const ids = ['startBtn', 'backBtn', 'playBtn', 'fwdBtn', 'recBtn', 'saveBtn'];
+      const row = document.getElementById('startBtn').parentElement;
+      const rowCs = getComputedStyle(row);
+      const rr = row.getBoundingClientRect();
+      return {
+        rects: Object.fromEntries(ids.map((i) => [i, b(i)])),
+        rowLeft: rr.left + parseFloat(rowCs.paddingLeft),
+        rowRight: rr.right - parseFloat(rowCs.paddingRight),
+        firstId: row.firstElementChild.id,
+      };
+    });
+    const { startBtn: s, backBtn: bk, playBtn: p, fwdBtn: f } = r.rects;
+    expect(r.firstId).toBe('startBtn'); // DOM 순서도 ⏮이 먼저(Tab 순서 = 보이는 순서)
+    expect(Math.abs(s.left - r.rowLeft)).toBeLessThanOrEqual(1); // ⏮ 맨 왼쪽
+    expect(bk.left).toBeGreaterThanOrEqual(s.right);
+    expect(p.left).toBeGreaterThanOrEqual(bk.right);
+    expect(f.left).toBeGreaterThanOrEqual(p.right);
+    expect(p.width).toBeGreaterThanOrEqual(bk.width - 1); // ▶가 가운데 묶음의 중심
+    if (width <= 600) {
+      // 전화 폭 5칸(⏮ −5 ▶ +5 저장): ▶가 줄 정가운데
+      const mid = (r.rowLeft + r.rowRight) / 2;
+      expect(Math.abs((p.left + p.right) / 2 - mid)).toBeLessThanOrEqual(1);
+    } else {
+      expect(r.rects.recBtn.left).toBeGreaterThanOrEqual(f.right);
+    }
+  });
+}
+
+test('PR1-I: 처음으로(#startBtn)는 글자 ⏮가 아니라 SVG 아이콘, 접근 이름 유지', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApp(page, USER_DATA_SR);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  const btn = page.locator('#startBtn');
+  await expect(btn).toHaveAttribute('aria-label', /\S/);
+  const info = await btn.evaluate((el) => {
+    const svg = el.querySelector('svg');
+    const r = svg && svg.getBoundingClientRect();
+    return { text: el.textContent.trim(), hasSvg: !!svg, hidden: svg && svg.getAttribute('aria-hidden'), w: r && r.width, h: r && r.height, fill: svg && getComputedStyle(svg).fill, color: getComputedStyle(el).color };
+  });
+  expect(info.text).toBe(''); // U+23EE 같은 글자 없음(모바일 컬러 이모지 방지)
+  expect(info.hasSvg).toBe(true);
+  expect(info.hidden).toBe('true');
+  expect(info.w).toBeGreaterThanOrEqual(18);
+  expect(info.h).toBeGreaterThanOrEqual(18);
+  expect(info.fill).toBe(info.color); // currentColor — 다크 모드·비활성도 글자색을 따른다
+});
+
+for (const width of [1280, 1150, 768, 390]) {
+  test(`PR1-W: 대기 시간 묶음 ≤ ${PR1_WAIT_MAX}px, 반복 버튼이 남는 폭을 가진다, 높이 일치 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await page.locator('#seekRow').waitFor();
+    const r = await page.evaluate(() => {
+      const b = (el) => el.getBoundingClientRect();
+      const sel = document.getElementById('waitSelect');
+      return {
+        loop: b(document.getElementById('loopBtn')),
+        wait: b(sel.parentElement),
+        sel: b(sel),
+        timer: b(document.getElementById('btnWaitTimer')),
+        clear: b(document.getElementById('clearBtn')),
+      };
+    });
+    expect(r.wait.width).toBeLessThanOrEqual(PR1_WAIT_MAX + 0.5);
+    expect(r.sel.width).toBeGreaterThanOrEqual(110); // '대기 없음' 등 선택지가 잘리지 않는 폭
+    expect(r.loop.width).toBeGreaterThanOrEqual(96); // 좁은 폭에서도 예전(약 104px)과 비슷
+    if (width > 600 && width <= 960) {
+      // 세로 태블릿: 반복 버튼이 대기 묶음의 2배 이상(예전엔 대기 바가 1.4배 더 길었다)
+      expect(r.loop.width).toBeGreaterThanOrEqual(r.wait.width * 2);
+    }
+    const hs = [r.loop, r.sel, r.timer, r.clear].map((x) => Math.round(x.height));
+    expect(new Set(hs).size, 'heights ' + hs).toBe(1);
+    const tops = [r.loop, r.sel, r.timer, r.clear].map((x) => Math.round(x.top));
+    expect(new Set(tops).size, 'tops ' + tops).toBe(1);
   });
 }
 
