@@ -1167,7 +1167,7 @@ export const JA: Record<I18nKey, string> = {
   'practice.driveConnectFailed': "Google Driveストレージの接続に失敗しました。",
   'practice.recNotSupported': "このブラウザは録音に対応していません",
   'practice.confirmDiscardUnsavedRec': "まだアカウントにアップロードしていない録音があります。破棄して新しく録音しますか？",
-  'practice.micPermissionNeeded': "マイク権限が必要です。Notion内で開いている場合はブラウザで直接開いてください",
+  'practice.micPermissionNeeded': "マイク権限が必要です。ブラウザのアドレスバーからマイクを許可してください",
   'practice.micOpenFailed': "マイクを開けませんでした",
   'practice.recRecording': "録音中",
   'practice.songsLoadFailed': "曲一覧を読み込めませんでした",

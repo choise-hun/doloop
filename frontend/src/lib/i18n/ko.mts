@@ -1183,7 +1183,7 @@ export const KO = {
   'practice.driveConnectFailed': "Google Drive 저장소 연결에 실패했어요.",
   'practice.recNotSupported': "이 브라우저는 녹음을 지원하지 않아요",
   'practice.confirmDiscardUnsavedRec': "아직 계정에 못 올린 녹음이 있어요. 버리고 새로 녹음할까요?",
-  'practice.micPermissionNeeded': "마이크 권한이 필요해요. 노션 안에서 열었다면 브라우저에서 직접 여세요",
+  'practice.micPermissionNeeded': "마이크 권한이 필요해요. 브라우저 주소창에서 마이크를 허용해 주세요",
   'practice.micOpenFailed': "마이크를 열지 못했어요",
   'practice.recRecording': "녹음 중",
   'practice.songsLoadFailed': "곡 목록을 불러오지 못했어요",

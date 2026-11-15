@@ -2522,8 +2522,10 @@ export function PracticePage(): React.ReactElement {
         me={authState.me}
         onClose={() => setImportModalUrl(null)}
         onImported={() => void loadSongList({ silent: true })}
-        onOnlyThis={(vid) => {
-          void openSongById(vid);
+        onOnlyThis={(vid, restore) => {
+          // WF-1: 모달이 곡을 분류에 담았을 수 있어 곡·분류 목록도 다시 읽는다. restore = 이 기기에 남아 있던 구간·배속·위치
+          void openSongById(vid, restore ? { params: restore } : undefined);
+          void loadSongList({ silent: true });
         }}
       />
     </AppShell>
