@@ -44,7 +44,22 @@
 | `npx playwright test test/e2e/practice-record.spec.js` | `14 passed` |
 | `npm test` | `pass 490, fail 0` |
 
-- 미실행: 전체 `npx playwright test`(주니어 4단계), 실기기(iOS·Android)에서 아이콘이 이모지로 안 그려지는지 사람 확인.
+- 미실행: 실기기(iOS·Android)에서 아이콘이 이모지로 안 그려지는지 사람 확인.
+
+### 주니어 4단계 전체 회귀·PR·CI (2026-11-15)
+
+| 항목 | 결과 |
+| --- | --- |
+| `npm run build` | `✓ built in 858ms` |
+| `npm test` | `pass 490, fail 0, suites 58` |
+| `npx playwright test` (로컬 전체) | `870 passed (12.1m)` |
+| PR | [#37](https://github.com/choise-hun/doloop/pull/37) (`feat/PR-1-play-row` → `main`, `13e194f`) |
+| 리뷰 코멘트 | `chatgpt-codex-connector[bot]` 코드 리뷰 완료 (`13e194f`, findings 없음) |
+| PR CI (`gh pr checks 37`) | **실패** (`CI/Test (Node 22)`·`CI/Docker build & smoke`·`CI/Detect code changes` 통과, `CI/Kotlin test` skipped, **`CI/E2E XSS & CSP (Playwright, spa)` 1 failed / 869 passed**, `CI/CI ok` 실패) |
+
+- **CI 실패 원인(코드 무수정, 시니어 인계):**
+  - 실패 테스트: `test/e2e/cm-ui.spec.js:433` `CUI-11 EpisodeReportDialog: 타인 게시물 신고 접수(201) 및 중복 신고(409) 처리` (`Expected: {"detail": "스팸성 테스트 게시물입니다", "reason": "spam"}`, `Received: null`).
+  - 원인: `test/e2e/cm-ui.spec.js:470` `await reportModal.locator('button[type="submit"]').click()` 직후 네트워크 요청/응답 대기(`waitForResponse` 등) 없이 `472`행에서 즉시 `expect(reportBody).toEqual(...)`를 실행하여, CI 환경에서 라우트 콜백 실행 전에 `reportBody`가 `null`로 평가됨. PR-1 변경(`PracticePage.tsx`, `PracticePage.module.css`, `test/e2e/layout/practice.spec.js`)과 무관한 기존 E2E 테스트의 비결정적 대기 누락.
 
 ## 5. 스크린샷 검토 (재생 상자·반복 줄, 로그인 상태, 390·768·1150·1280 + 1280 다크)
 

@@ -16,7 +16,7 @@
 
 | Step | 담당 | 입력 | 결과 파일 | 완료 기준 | 상태 | effort |
 | --- | --- | --- | --- | --- | --- | --- |
-| PR-1 재생 줄 순서·⏮ 아이콘·대기 바 축소 | 시니어 직접 구현 → 주니어 4단계(전체 회귀·PR·CI·정리) | 이 파일 §1, [프론트 정렬규격](프론트_정렬규격.md), `PracticePage.tsx`·`PracticePage.module.css` | [결과/PR-1](결과/PR-1.md) | 정렬규격 순서(배치 약속 → spec 실패 → 구현 → spec 통과 → 4개 폭 스크린샷) + 전체 회귀·PR CI 통과 | **시니어 구현·표적 검증 완료, push — 주니어 4단계 대기** | 중(시니어) / 낮음(주니어) |
+| PR-1 재생 줄 순서·⏮ 아이콘·대기 바 축소 | 시니어 직접 구현 → 주니어 4단계(전체 회귀·PR·CI·정리) | 이 파일 §1, [프론트 정렬규격](프론트_정렬규격.md), `PracticePage.tsx`·`PracticePage.module.css` | [결과/PR-1](결과/PR-1.md) | 정렬규격 순서(배치 약속 → spec 실패 → 구현 → spec 통과 → 4개 폭 스크린샷) + 전체 회귀·PR CI 통과 | **PR #37 생성·로컬 전체 회귀 통과 — CI `cm-ui.spec.js` CUI-11 실패로 시니어 확인 대기** | 중(시니어) / 낮음(주니어) |
 
 - PR-1이 마지막 step이다. 주니어 4단계 PR에서 이 파일을 `완료/`로 옮긴다.
 
@@ -29,10 +29,12 @@
 ## 4. 실행 기록
 
 - PR-1 (2026-11-15): 브랜치 `feat/PR-1-play-row`(main `835b932`에서 분기). spec 먼저 `7 failed` 확인 → 구현 → `practice.spec.js`+`ui-polish.spec.js` 68 passed, `practice-record.spec.js` 14 passed, `npm test` 490 passed. 4개 폭+다크 스크린샷 검토. 상세 [결과/PR-1](결과/PR-1.md) §4·§5. 남은 것: 주니어 4단계(전체 회귀·PR·CI·`완료/` 이동).
+- PR-1 주니어 4단계 (2026-11-15): 로컬 `npm run build` (`858ms`) → `npm test` (`490 passed`) → `npx playwright test` (`870 passed`) 전체 통과. PR [#37](https://github.com/choise-hun/doloop/pull/37) 생성(`13e194f`), Codex 리뷰 코멘트 확인(findings 없음). 단, CI `E2E XSS & CSP (Playwright, spa)`에서 `test/e2e/cm-ui.spec.js:433` `CUI-11` 1건 실패(869 passed). PR-1 코드 변경 없이 원인만 [결과/PR-1](결과/PR-1.md) §4에 기록하고 시니어에게 인계.
 
 ## 5. 겪은 문제
 
 - `sips --cropOffset`으로 전체 페이지 캡처를 자르면 위치가 어긋난다 → 요소 스크린샷(`locator.screenshot`)을 임시 spec으로 찍고 지웠다.
+- PR #37 CI에서 `test/e2e/cm-ui.spec.js:433` `CUI-11` 실패(`reportBody`가 `null`): `470`행 submit 클릭 직후 응답/요청 대기 없이 `472`행에서 즉시 `expect(reportBody)`를 검사하는 기존 테스트 레이스. 주니어 4단계 범위(코드 무수정)에 따라 수정하지 않고 원인만 기록.
 
 ## 6. 다음 세션 시작 지시
 
