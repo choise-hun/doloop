@@ -156,6 +156,7 @@
   flex: 1;
   min-width: 0;
   font: inherit;
+  font-size: 16px;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
@@ -219,6 +220,8 @@
 
 /* 우측 조작 패널 */
 .ppCtl {
+  container-type: inline-size;
+  container-name: practice-controls;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -385,13 +388,21 @@
 
 .ppLoopRow {
   display: grid;
-  /* PR-1: 대기 시간 묶음은 168px 상한, 남는 폭은 반복 버튼이 가진다(세로 태블릿에서 바가 길어지던 문제) */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 168px) 44px;
+  /* UXN-A: keep all four controls on one row; shrink only widths in narrow panels. */
+  grid-template-columns: clamp(64px, 25cqi, 138px) minmax(0, 1fr) clamp(44px, 15cqi, 84px) 44px;
+  grid-template-areas: "loop preset wait clear";
   gap: 6px;
 }
 
+.ppLoopRow > :global(#loopBtn) { grid-area: loop; }
+.ppLoopRow > :global(#presetSelect) { grid-area: preset; }
+.ppLoopRow > :global(#btnWaitTimer) { grid-area: wait; }
+.ppLoopRow > :global(#clearBtn) { grid-area: clear; }
+
 .ppToggle {
   font: inherit;
+  font-size: 14px;
+  height: 44px;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
@@ -410,25 +421,6 @@
 .ppToggle:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-.waitWrap {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-
-.waitSelect {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  padding: 0 8px;
 }
 
 .ppIcon {
@@ -985,32 +977,11 @@
   font-size: 14px;
 }
 
-/* UI-3: 프리셋 2행 카드, 대기 타이머, 드래그 핸들 */
-.presetSection {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.presetBadge {
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--muted);
-}
-
-.presetCard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-}
-
+/* UXN correction: preset actions directly follow the loop controls. */
 .presetSelect {
   width: 100%;
-  height: 38px;
+  height: 44px;
+  text-overflow: ellipsis;
   padding: 0 10px;
   border-radius: var(--radius-card);
   border: 1px solid var(--line);
@@ -1022,6 +993,7 @@
 }
 
 .presetActionRow {
+  margin-top: 4px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1030,16 +1002,17 @@
 }
 
 .presetBtn {
-  flex: 1;
-  min-height: 36px;
-  height: 36px;
-  padding: 0 12px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
   font-size: 13px;
   font-weight: 700;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-card);
-  background: var(--surface);
+  background: transparent;
   color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
   cursor: pointer;
   white-space: nowrap;
   display: inline-flex;
@@ -1053,19 +1026,17 @@
 }
 
 .presetDeleteBtn {
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  color: var(--bad);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
   font-size: 13px;
-  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
 }
 
 .btnWaitTimer {
@@ -1073,7 +1044,7 @@
   height: 44px;
   padding: 0 10px;
   border-radius: var(--radius-card);
-  font-size: 12px;
+  font-size: 14px;
   font-family: var(--font-mono);
   white-space: nowrap;
 }

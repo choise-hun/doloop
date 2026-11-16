@@ -7,11 +7,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
-        window?.makeKeyAndVisible()
-
+        // Reuse the window UIKit created from the scene storyboard.
+        window = window ?? windowScene.windows.first ?? UIWindow(windowScene: windowScene)
+        if !(window?.rootViewController is NavigationViewController) {
+            window?.rootViewController = NavigationViewController()
+        }
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+        window?.makeKeyAndVisible()
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

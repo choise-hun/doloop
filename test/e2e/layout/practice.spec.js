@@ -338,7 +338,7 @@ test('T4: 테이크 .ab-select 매핑 및 구간 완료 토글', async ({ page }
 });
 
 // UI-3 검증 테스트 (시작/끝 라벨, ✕ 가드, 프리셋 2행 카드, 재생 중심 필, 1120px 정렬)
-test('T5 (UI-3): 시작/끝 라벨, 대기 드롭다운, 1120px 정렬 및 재생 버튼 중심 필 검증', async ({ page }) => {
+test('T5 (UI-3): 시작/끝 라벨, 0/3초 버튼, 1120px 정렬 및 재생 버튼 중심 필 검증', async ({ page }) => {
   await mockApp(page, USER_DATA_SR);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
@@ -348,10 +348,9 @@ test('T5 (UI-3): 시작/끝 라벨, 대기 드롭다운, 1120px 정렬 및 재�
   await expect(page.locator('#setA small')).toHaveText('시작');
   await expect(page.locator('#setB small')).toHaveText('끝');
 
-  // 2. 대기 시간 드롭다운(#waitSelect) 렌더링 확인
-  const waitSel = page.locator('#waitSelect');
-  await expect(waitSel).toBeVisible();
-  await expect(waitSel).toHaveValue('0');
+  // UXN correction: the timer button is the only wait control.
+  await expect(page.locator('#waitSelect')).toHaveCount(0);
+  await expect(page.locator('#btnWaitTimer')).toHaveText('0s');
 
   // 3. WF-2: 창이 낮으면(1280×800) 플레이어 틀은 기존 1120px을 유지한다(넓은 창은 WF2-W)
   const shell = page.locator('[data-shell-variant="player"]');
@@ -432,6 +431,8 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
   await presetSelect.selectOption('preset-1');
   await expect(page.locator('#btnUpdatePreset')).toBeVisible();
   await expect(page.locator('#btnDeletePreset')).toBeVisible();
+  await expect(page.locator('#btnDeletePreset')).toHaveText('삭제');
+  await expect(page.locator('#btnSavePreset')).toHaveText('다른 이름 저장');
 
   // 360px 모바일 뷰포트에서 프리셋 액션 버튼 줄바꿈(flex-wrap) 및 가로 스크롤 없음 검증
   await page.setViewportSize({ width: 360, height: 740 });
@@ -592,7 +593,6 @@ for (const width of [1280, 1150, 768, 390]) {
 }
 
 // PR-1: 재생 줄 순서 ⏮ 맨 왼쪽 + −5 · ▶ · +5, 대기 시간 묶음 상한·반복 버튼 확대 (결과/M0-0 §4 4~6)
-const PR1_WAIT_MAX = 168;
 for (const width of [1280, 1150, 768, 390]) {
   test(`PR1-O: 재생 줄 순서 ⏮ · −5 · ▶ · +5 (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -649,36 +649,7 @@ test('PR1-I: 처음으로(#startBtn)는 글자 ⏮가 아니라 SVG 아이콘, �
   expect(info.fill).toBe(info.color); // currentColor — 다크 모드·비활성도 글자색을 따른다
 });
 
-for (const width of [1280, 1150, 768, 390]) {
-  test(`PR1-W: 대기 시간 묶음 ≤ ${PR1_WAIT_MAX}px, 반복 버튼이 남는 폭을 가진다, 높이 일치 (${width}px)`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await mockApp(page, USER_DATA_SR);
-    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
-    await page.locator('#seekRow').waitFor();
-    const r = await page.evaluate(() => {
-      const b = (el) => el.getBoundingClientRect();
-      const sel = document.getElementById('waitSelect');
-      return {
-        loop: b(document.getElementById('loopBtn')),
-        wait: b(sel.parentElement),
-        sel: b(sel),
-        timer: b(document.getElementById('btnWaitTimer')),
-        clear: b(document.getElementById('clearBtn')),
-      };
-    });
-    expect(r.wait.width).toBeLessThanOrEqual(PR1_WAIT_MAX + 0.5);
-    expect(r.sel.width).toBeGreaterThanOrEqual(110); // '대기 없음' 등 선택지가 잘리지 않는 폭
-    expect(r.loop.width).toBeGreaterThanOrEqual(96); // 좁은 폭에서도 예전(약 104px)과 비슷
-    if (width > 600 && width <= 960) {
-      // 세로 태블릿: 반복 버튼이 대기 묶음의 2배 이상(예전엔 대기 바가 1.4배 더 길었다)
-      expect(r.loop.width).toBeGreaterThanOrEqual(r.wait.width * 2);
-    }
-    const hs = [r.loop, r.sel, r.timer, r.clear].map((x) => Math.round(x.height));
-    expect(new Set(hs).size, 'heights ' + hs).toBe(1);
-    const tops = [r.loop, r.sel, r.timer, r.clear].map((x) => Math.round(x.top));
-    expect(new Set(tops).size, 'tops ' + tops).toBe(1);
-  });
-}
+// UXN-A's previous secondary wait/wrap expectations are superseded by UXN-AC below.
 
 // ---------- UXR-3: 연습 화면 재배치 + 선택 폴더 곡 목록 ----------
 const CAT_JAZZ = '00000000-0000-4000-8000-000000000301';
@@ -1063,4 +1034,120 @@ test('UXR3-PL10: guest / Drive 미연결 / 녹음 상태 가드', async ({ page 
   await expect(page.locator('#recBtn')).toBeDisabled();
   // 로그인 목록은 영상이 없어도 사용 가능
   await expect(page.locator('#folderList li button')).toHaveCount(3);
+});
+
+
+// UXN-Z: URL focus must not trigger iOS's small-input auto zoom.
+for (const width of [390, 768, 1150, 1280]) {
+  test(`UXN-Z ${width}: both video URL inputs use 16px without crowding the open button`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, STATES.guest);
+    await page.goto('/practice.html', { waitUntil: 'load' });
+    const input = page.locator('#urlInput');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveCSS('font-size', '16px');
+    for (const id of ['urlInput', 'urlInput2']) {
+      const size = await page.locator('#' + id).evaluate(element => ({
+        font: getComputedStyle(element).fontSize,
+        minHeight: parseFloat(getComputedStyle(element).minHeight),
+      }));
+      expect(size.font).toBe('16px');
+      expect(size.minHeight).toBeGreaterThanOrEqual(44);
+    }
+    const box = await input.boundingBox();
+    const open = await page.locator('#urlForm button').boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(open.x);
+    expect(open.x + open.width).toBeLessThanOrEqual(width);
+    if (process.env.LAYOUT_SHOTS) {
+      await input.scrollIntoViewIfNeeded();
+      await page.locator('#urlForm').screenshot({ path: `test-results/uxn-input/form-${width}.png` });
+    }
+    await page.locator('#libBtn').click();
+    const drawerInput = page.locator('#urlInput2');
+    await expect(drawerInput).toBeVisible();
+    await expect(drawerInput).toHaveCSS('font-size', '16px');
+    const drawer = await drawerInput.boundingBox();
+    const drawerOpen = await page.locator('#urlForm2 button').boundingBox();
+    expect(drawer.x + drawer.width).toBeLessThanOrEqual(drawerOpen.x);
+    expect(drawerOpen.x + drawerOpen.width).toBeLessThanOrEqual(width);
+    if (process.env.LAYOUT_SHOTS) {
+      await page.locator('#urlForm2').screenshot({ path: `test-results/uxn-input/drawer-${width}.png` });
+      if (width === 1280) {
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+        await page.locator('#urlForm2').screenshot({ path: 'test-results/uxn-input/drawer-dark.png' });
+      }
+    }
+  });
+}
+
+
+for (const width of [390, 768, 1150, 1280]) {
+  test(`UXN-AC ${width}: one control row, only 0/3s, save directly below loop`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, USER_DATA_SR);
+    await page.goto('/practice.html?v=jNQXAC9IVRw');
+    await expect(page.locator('#loopBtn')).toBeVisible();
+    await expect(page.locator('#waitSelect')).toHaveCount(0);
+    const rects = await page.evaluate(() => {
+      const ids = ['loopBtn','presetSelect','btnWaitTimer','clearBtn'];
+      const row = document.querySelector('.pp-looprow');
+      const save = document.getElementById('presetSection');
+      return {
+        items: ids.map(id => { const r=document.getElementById(id).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right}; }),
+        next: row.nextElementSibling === save,
+        saveY: save.getBoundingClientRect().y,
+        rowBottom: row.getBoundingClientRect().bottom,
+        rowRight: row.getBoundingClientRect().right,
+        saveSelects: save.querySelectorAll('select').length,
+      };
+    });
+    expect(rects.next, 'save actions must immediately follow the loop row').toBe(true);
+    expect(rects.saveSelects).toBe(0);
+    expect(rects.saveY - rects.rowBottom).toBeGreaterThanOrEqual(8);
+    expect(rects.saveY - rects.rowBottom).toBeLessThanOrEqual(16);
+    for (const item of rects.items) { expect(item.y).toBe(rects.items[0].y); expect(item.height).toBe(44); }
+    for(let i=1;i<rects.items.length;i++) expect(rects.items[i].x).toBeGreaterThanOrEqual(rects.items[i-1].right);
+    expect(rects.items[3].right).toBeLessThanOrEqual(rects.rowRight + 1);
+    expect(rects.items[1].width).toBeGreaterThanOrEqual(70);
+    const wait=page.locator('#btnWaitTimer');
+    for(let i=0;i<3;i++) {
+      await expect(wait).toHaveText('0s');await wait.click();await expect(wait).toHaveText('3s');
+      await expect(wait).toHaveAttribute('aria-pressed','true');await wait.click();await expect(wait).toHaveText('0s');
+    }
+    if(process.env.LAYOUT_SHOTS) {
+      const fs=require('node:fs');fs.mkdirSync('test-results/uxn-correction',{recursive:true});
+      await page.locator('#ppCtl').evaluate(el=>el.scrollIntoView({block:'center'}));
+      await page.locator('#ppCtl').screenshot({path:`test-results/uxn-correction/controls-${width}.png`});
+      if(width===1280) {await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.locator('#ppCtl').screenshot({path:'test-results/uxn-correction/controls-dark.png'});}
+    }
+  });
+}
+
+
+test('UXN-AC timer: three seconds only, cancellation never resumes playback', async ({ page }) => {
+  await mockApp(page, USER_DATA_SR);
+  await page.route(/https:\/\/(www\.)?youtube\.com\/.*/, route => route.fulfill({
+    contentType: 'application/javascript',
+    body: `window.__ytPlays=0;window.YT={PlayerState:{PLAYING:1,PAUSED:2},Player:function(el,opts){
+      const api={getCurrentTime:()=>20,getDuration:()=>100,getAvailablePlaybackRates:()=>[1],setPlaybackRate(){},seekTo(){},
+      playVideo(){window.__ytPlays++;opts.events.onStateChange({data:1})},pauseVideo(){opts.events.onStateChange({data:2})},destroy(){}};
+      queueMicrotask(()=>opts.events.onReady());return api;}};window.onYouTubeIframeAPIReady?.();`,
+  }));
+  await page.goto('/practice.html?v=jNQXAC9IVRw');
+  await expect(page.locator('#playBtn')).toBeEnabled();
+  await page.clock.install();
+  await page.locator('#playBtn').click();
+  await expect.poll(()=>page.evaluate(()=>window.__ytPlays)).toBe(1);
+  const wait=page.locator('#btnWaitTimer');
+  await wait.click();await expect(wait).toHaveText('3s');
+  await page.locator('#startBtn').click();await expect(wait).toHaveText('-3s');
+  await page.clock.runFor(1000);await expect(wait).toHaveText('-2s');
+  await wait.click();await expect(wait).toHaveText('0s');
+  await page.clock.runFor(4000);expect(await page.evaluate(()=>window.__ytPlays)).toBe(1);
+  await page.locator('#playBtn').click();
+  await expect.poll(()=>page.evaluate(()=>window.__ytPlays)).toBe(2);
+  await wait.click();await page.locator('#startBtn').click();await expect(wait).toHaveText('-3s');
+  await page.clock.runFor(2999);expect(await page.evaluate(()=>window.__ytPlays)).toBe(2);
+  await page.clock.runFor(1);await expect.poll(()=>page.evaluate(()=>window.__ytPlays)).toBe(3);
+  await expect(wait).toHaveText('3s');
 });

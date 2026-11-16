@@ -6,6 +6,8 @@ const config: CapacitorConfig = {
   appId: 'com.ulevelp.redo',
   appName: 'RE:DO',
   webDir: 'dist-app',
+  // UXN: retain user pinch zoom, including recovery after iOS input focus.
+  ios: { zoomEnabled: true },
 };
 
 export default config;

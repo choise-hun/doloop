@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React, { useEffect, useState } from 'react';
 import styles from './AppShell.module.css';
 import { useAuth, auth } from '../../lib/auth';
@@ -69,6 +70,17 @@ export function AppShell({
     ? t('nav.accountAria', { who: signedInUser.email || navLabel })
     : t('nav.loginAria');
   const embedded = auth.isEmbedded();
+  const login = authState.login;
+  const errorKeys: Record<string, I18nKey> = {
+    NATIVE_AUTH_CANCELLED: 'auth.nativeCancelled',
+    NATIVE_AUTH_CONFIG: 'auth.nativeConfig',
+    NATIVE_AUTH_OPEN_FAILED: 'auth.nativeOpenFailed',
+    NATIVE_AUTH_CALLBACK_INVALID: 'auth.nativeCallbackInvalid',
+    NATIVE_AUTH_EXCHANGE_FAILED: 'auth.nativeExchangeFailed',
+  };
+  const loginKey: I18nKey = login?.errorCode
+    ? errorKeys[login.errorCode] || 'auth.nativeExchangeFailed'
+    : 'auth.nativePending';
 
   const handleAuthClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (signedInUser) return;
@@ -78,7 +90,8 @@ export function AppShell({
     try {
       await auth.signIn();
     } catch {
-      window.location.href = 'settings.html#account';
+      // Native failures are already announced by nativeAuthStatus on this page.
+      if (!Capacitor.isNativePlatform()) window.location.href = 'settings.html#account';
     }
   };
 
@@ -167,7 +180,11 @@ export function AppShell({
           </a>
         </span>
       </nav>
-      <main className={mainClass}>{children}</main>
+      <main className={mainClass}>
+        {Capacitor.isNativePlatform() && <p id="nativeAuthStatus" className="hint" role="status" aria-live="polite"
+          hidden={!login || login.status === 'idle'}>{t(loginKey)}</p>}
+        {children}
+      </main>
       <nav ref={tabBarRef} className={styles.tabBar} aria-label={t('nav.ariaTabs')} data-tabbar="1">
         {navItems.map((item) =>
           item.href ? (

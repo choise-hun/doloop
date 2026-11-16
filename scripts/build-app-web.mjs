@@ -29,17 +29,31 @@ export function readConfigPlayerEmbedUrl(configSource) {
   return m[1];
 }
 
-export function addFrameSrcOrigin(html, origin) {
+function addCspOrigin(html, origin, directive) {
   const meta = /(<meta http-equiv="Content-Security-Policy" content=")([^"]*)(")/.exec(html);
   if (!meta) throw new Error('index.html에 CSP meta가 없다');
   const directives = meta[2].split(';').map((d) => d.trim());
-  const idx = directives.findIndex((d) => /^frame-src(\s|$)/.test(d));
-  if (idx < 0) throw new Error('index.html CSP에 frame-src 지시문이 없다');
+  const idx = directives.findIndex((d) => new RegExp(`^${directive}(\\s|$)`).test(d));
+  if (idx < 0) throw new Error(`index.html CSP에 ${directive} 지시문이 없다`);
   if (!directives[idx].split(/\s+/).includes(origin)) directives[idx] = `${directives[idx]} ${origin}`;
   return html.slice(0, meta.index) + meta[1] + directives.join('; ') + meta[3] + html.slice(meta.index + meta[0].length);
 }
 
-export function buildAppWeb({ distDir, publicDir, outDir, playerEmbedUrl }) {
+export function addFrameSrcOrigin(html, origin) {
+  return addCspOrigin(html, origin, 'frame-src');
+}
+
+const DEFAULT_API_ORIGIN = 'https://ulevelp-d5ympfsmfq-du.a.run.app';
+
+function requireApiOrigin(value) {
+  const url = requireHttpsUrl(String(value).trim(), 'apiBaseUrl');
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('apiBaseUrl: HTTPS Origin만 허용한다');
+  }
+  return url.origin;
+}
+
+export function buildAppWeb({ distDir, publicDir, outDir, playerEmbedUrl, apiBaseUrl = DEFAULT_API_ORIGIN }) {
   const distIndex = path.join(distDir, 'index.html');
   if (!fs.existsSync(distIndex)) throw new Error(`${distIndex} 없음 — 먼저 npm run build`);
 
@@ -47,11 +61,13 @@ export function buildAppWeb({ distDir, publicDir, outDir, playerEmbedUrl }) {
   const overrideUrl = playerEmbedUrl ? requireHttpsUrl(playerEmbedUrl, 'playerEmbedUrl') : null;
   const effectiveUrl = overrideUrl || requireHttpsUrl(readConfigPlayerEmbedUrl(configSource), 'config.js playerEmbedUrl');
 
+  const apiOrigin = requireApiOrigin(apiBaseUrl);
+  const appIndex = addCspOrigin(addFrameSrcOrigin(fs.readFileSync(distIndex, 'utf8'), effectiveUrl.origin), apiOrigin, 'connect-src');
+
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.cpSync(distDir, outDir, { recursive: true });
   fs.cpSync(publicDir, outDir, { recursive: true });
 
-  const appIndex = addFrameSrcOrigin(fs.readFileSync(distIndex, 'utf8'), effectiveUrl.origin);
   for (const page of APP_ENTRY_PAGES) fs.writeFileSync(path.join(outDir, page), appIndex);
 
   if (overrideUrl) {
@@ -60,7 +76,8 @@ export function buildAppWeb({ distDir, publicDir, outDir, playerEmbedUrl }) {
       `\nwindow.ULEVELP_CONFIG.playerEmbedUrl = ${JSON.stringify(overrideUrl.href)};\n`,
     );
   }
-  return { playerEmbedUrl: effectiveUrl.href, pages: APP_ENTRY_PAGES.length };
+  fs.appendFileSync(path.join(outDir, 'config.js'), `\nwindow.ULEVELP_CONFIG.apiBaseUrl = ${JSON.stringify(apiOrigin)};\n`);
+  return { apiBaseUrl: apiOrigin, playerEmbedUrl: effectiveUrl.href, pages: APP_ENTRY_PAGES.length };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -70,6 +87,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       distDir: path.join(root, 'dist'),
       publicDir: path.join(root, 'public'),
       outDir: path.join(root, 'dist-app'),
+      apiBaseUrl: process.env.APP_API_BASE_URL,
       playerEmbedUrl: process.env.APP_PLAYER_EMBED_URL || undefined,
     });
     console.log(`dist-app/ 조립 완료: 진입 페이지 ${result.pages}개, 플레이어 ${result.playerEmbedUrl}`);

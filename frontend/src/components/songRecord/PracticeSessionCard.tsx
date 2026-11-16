@@ -1,4 +1,5 @@
 // frontend/src/components/songRecord/PracticeSessionCard.tsx
+import { useNativeNavigationBlock } from '../../lib/nativeNavigation';
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './PracticeSessionCard.module.css';
 import { apiClient, type TakeDto } from '../../lib/apiClient';
@@ -47,6 +48,9 @@ function OwnedPracticeSessionCard({
 
   const [memoVal, setMemoVal] = useState(session.memo || '');
   const [savingMemo, setSavingMemo] = useState(false);
+  const [savedMemo, setSavedMemo] = useState(session.memo || '');
+  useNativeNavigationBlock(savingMemo || memoVal.trim() !== savedMemo);
+  useEffect(() => { setSavedMemo(session.memo || ''); }, [session.memo]);
   const [memoStatus, setMemoStatus] = useState('');
   const [partsOpen, setPartsOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -116,6 +120,7 @@ function OwnedPracticeSessionCard({
     try {
       await apiClient.sessions.updateMemo(session.sessionId, memoVal);
       if (!isCurrent()) return;
+      setSavedMemo(memoVal.trim());
       onMemoSaved?.(session.sessionId, memoVal.trim());
       setMemoStatus(t('log.statusSaved'));
       setTimeout(() => {

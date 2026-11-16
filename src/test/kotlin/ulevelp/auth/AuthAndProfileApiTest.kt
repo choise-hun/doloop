@@ -794,4 +794,72 @@ class AuthAndProfileApiTest {
             assertEquals(1L, ProfilesTable.selectAll().where { ProfilesTable.id eq userB }.count())
         }
     }
+    @Test
+    fun `M1A3 mobile JWT ownership holds in both directions with no cross-user writes`() = testApplication {
+        val origins = listOf("capacitor://localhost", "https://localhost")
+        application { module(dbConfig = dbConfig.copy(runMigrations = false), authConfig = authConfig, allowedOrigins = origins) }
+        val users = listOf(UUID.randomUUID(), UUID.randomUUID())
+        val songs = listOf(UUID.randomUUID(), UUID.randomUUID())
+        val sessions = listOf(UUID.randomUUID(), UUID.randomUUID())
+        val tokens = users.map { signJwt(sub = it.toString(), email = "$it@example.com") }
+        for (index in users.indices) {
+            val response = client.get("/api/v1/me") {
+                header(HttpHeaders.Authorization, "Bearer ${tokens[index]}")
+                header(HttpHeaders.Origin, origins[index])
+            }
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(origins[index], response.headers[HttpHeaders.AccessControlAllowOrigin])
+            assertEquals(users[index].toString(), Json.parseToJsonElement(response.bodyAsText()).jsonObject["id"]!!.jsonPrimitive.content)
+        }
+        transaction(db) {
+            for (index in users.indices) {
+                SongsTable.insert {
+                    it[id] = songs[index]; it[userId] = users[index]
+                    it[title] = "Owner $index"; it[videoId] = "dQw4w9WgXcQ"
+                }
+                SessionsTable.insert {
+                    it[id] = sessions[index]; it[userId] = users[index]; it[songId] = songs[index]
+                    it[date] = LocalDate.of(2026, 10, 30); it[seconds] = 60
+                }
+            }
+        }
+        for (index in users.indices) {
+            val other = 1 - index
+            val list = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index]) }
+            assertEquals(HttpStatusCode.OK, list.status)
+            val ids = Json.parseToJsonElement(list.bodyAsText()).jsonObject["songs"]!!.jsonArray.map { it.jsonObject["id"]!!.jsonPrimitive.content }
+            assertEquals(listOf(songs[index].toString()), ids)
+            val responses = listOf(
+                client.get("/api/v1/songs/${songs[other]}") { header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index]) },
+                client.patch("/api/v1/songs/${songs[other]}") { header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index]); contentType(ContentType.Application.Json); setBody("""{"title":"intrusion"}""") },
+                client.delete("/api/v1/songs/${songs[other]}") { header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index]) },
+                client.patch("/api/v1/sessions/${sessions[other]}") { header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index]); contentType(ContentType.Application.Json); setBody("""{"memo":"intrusion"}""") }
+            )
+            for (response in responses) {
+                assertEquals(HttpStatusCode.NotFound, response.status)
+                assertEquals(origins[index], response.headers[HttpHeaders.AccessControlAllowOrigin])
+                assertStandardError(response.bodyAsText(), 404, "NOT_FOUND")
+            }
+            val invalidProfile = client.patch("/api/v1/me") {
+                header(HttpHeaders.Authorization, "Bearer ${tokens[index]}"); header(HttpHeaders.Origin, origins[index])
+                contentType(ContentType.Application.Json); setBody("""{"displayName":false}""")
+            }
+            assertEquals(HttpStatusCode.BadRequest, invalidProfile.status)
+            assertEquals(origins[index], invalidProfile.headers[HttpHeaders.AccessControlAllowOrigin])
+            assertStandardError(invalidProfile.bodyAsText(), 400, "INVALID_INPUT")
+        }
+        transaction(db) {
+            for (index in users.indices) {
+                val song = SongsTable.selectAll().where { SongsTable.id eq songs[index] }.single()
+                assertEquals(users[index], song[SongsTable.userId])
+                assertEquals("Owner $index", song[SongsTable.title])
+                val session = SessionsTable.selectAll().where { SessionsTable.id eq sessions[index] }.single()
+                assertEquals(users[index], session[SessionsTable.userId])
+                assertEquals(60, session[SessionsTable.seconds])
+                assertEquals("", session[SessionsTable.memo])
+            }
+            assertEquals(0L, StorageTrashTable.selectAll().count())
+        }
+    }
+
 }
