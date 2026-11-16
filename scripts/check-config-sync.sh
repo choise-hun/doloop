@@ -46,6 +46,11 @@ done <<EOF
 $PAIRS
 EOF
 
+# 범용 규칙은 새 프로젝트 템플릿(~/config/project-template)에도 반영할지 본다(docs/문서_운영.md §5)
+if [ -f "$CONFIG/project-template/scripts/check-template-sync.sh" ]; then
+  echo "참고: 범용 규칙 차이는 bash $CONFIG/project-template/scripts/check-template-sync.sh \"$ROOT\" --values $CONFIG/ULevelP/template.env"
+fi
+
 if [ "$MODE" != "--copy" ]; then
   echo "차이 ${diffs}건"
   [ "$diffs" -eq 0 ]
