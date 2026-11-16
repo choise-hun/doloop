@@ -217,8 +217,8 @@ test('DS2-4 오늘 연습을 마친 칸', async ({ page }) => {
 });
 
 // RC-1(2026-11-15 사용자 결정): RECENT 구간 표시는 배지(주황 테두리·틴트) 없이 회색 글자다.
-// 헤더 링크는 다른 카드처럼 "… →" 문구, 본문의 중복 이어서 링크는 없애고 그 자리에 곡 메모 한 줄을 둔다.
-test('RC-1 RECENT 구간은 배지 없음·헤더 이어서 연습·본문 링크 없음', async ({ page }) => {
+// 헤더 링크와 메모 유지. 2026-11-16 사용자 승인으로 썸네일·제목에도 동일한 이동 링크를 제공한다.
+test('RC-1 RECENT 구간은 배지 없음·기존 헤더와 썸네일/제목 이동', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, STATES.userData);
   await page.goto('/index.html', { waitUntil: 'load' });
@@ -235,7 +235,10 @@ test('RC-1 RECENT 구간은 배지 없음·헤더 이어서 연습·본문 링�
   expect(seg.color).toBe(colors.muted);
 
   await expect(page.locator('#recentSongGo')).toHaveText('이어서 연습 →');
-  await expect(page.locator('#recentSongBody a')).toHaveCount(0);
+  await expect(page.locator('#recentSongBody a')).toHaveCount(2);
+  for (const id of ['recentSongThumbLink', 'recentSongTitle']) {
+    await expect(page.locator('#' + id)).toHaveAttribute('href', await page.locator('#recentSongGo').getAttribute('href'));
+  }
   // 메모가 빈 곡이면 메모 줄이 없다
   await expect(page.locator('#recentSongMemo')).toHaveCount(0);
 });
@@ -367,4 +370,59 @@ test('DS2-8 배너 링크 포커스와 빈 썸네일', async ({ page }) => {
 
   expect(songPlaceholderColor).toBe(colors.ink);
   expect(notePlaceholderColor).toBe(colors.ink);
+});
+
+// UXN: user-approved thumbnail/title navigation; preserve existing card identities.
+for (const width of [390, 768, 1150, 1280]) {
+  test(`UXN recent note ${width}px thumbnail/title/action share destination and action aligns right`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockApp(page, STATES.userData);
+    await page.goto('/index.html');
+    const title = page.locator('#recentNoteTitle');
+    const action = page.locator('#recentNoteLink');
+    const thumbnail = page.locator('#recentNoteThumbLink');
+    await expect(title).toHaveAttribute('href', `note.html?id=${STATES.userData.notes[0].id}`);
+    const href = await action.getAttribute('href');
+    await expect(thumbnail).toHaveAttribute('href', href);
+    await expect(title).toHaveAttribute('href', href);
+    await expect(action).toHaveText('이동');
+    const textColumn = await page.locator('#recentNoteBody > div').boundingBox();
+    const actionBox = await action.boundingBox();
+    expect(Math.abs(actionBox.x + actionBox.width - textColumn.x - textColumn.width)).toBeLessThanOrEqual(1);
+    if (width <= 768) expect(actionBox.height).toBeGreaterThanOrEqual(44);
+    for (const id of ['recentNoteThumbLink', 'recentNoteTitle', 'recentNoteLink']) {
+      const link = page.locator('#' + id);
+      if (id === 'recentNoteTitle') { await link.focus(); await page.keyboard.press('Enter'); }
+      else await link.click();
+      await expect(page).toHaveURL(new RegExp('/note\\.html\\?id=' + STATES.userData.notes[0].id + '$'));
+      await page.goBack();
+      await expect(page.locator('#recentNoteBody')).toBeVisible();
+    }
+  });
+}
+
+for (const [name, state, videoId] of [['user', STATES.userData, STATES.userData.songs[0].videoId], ['local', STATES.guestLocal, 'jNQXAC9IVRw']]) {
+  test(`UXN recent song ${name} thumbnail/title preserve resume query`, async ({ page }) => {
+    await mockApp(page, state);
+    await page.goto('/index.html');
+    const href = await page.locator('#recentSongGo').getAttribute('href');
+    for (const id of ['recentSongThumbLink', 'recentSongTitle']) await expect(page.locator('#' + id)).toHaveAttribute('href', href);
+    const query = new URL(href, 'https://example.test').searchParams;
+    expect(Object.fromEntries(query)).toEqual({ v: videoId, t: '30', a: '12', b: '48', r: '0.75' });
+    await page.locator('#recentSongTitle').focus(); await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(new RegExp('/practice\\.html\\?'));
+    expect(new URL(page.url()).search).toBe(new URL(href, 'https://example.test').search);
+    await page.goBack();
+    await page.locator('#recentSongThumbLink').click();
+    await expect(page).toHaveURL(new RegExp('/practice\\.html\\?'));
+    expect(new URL(page.url()).search).toBe(new URL(href, 'https://example.test').search);
+  });
+}
+
+test('UXN empty recent cards keep their existing empty-state destinations', async ({ page }) => {
+  await mockApp(page, STATES.guest); await page.goto('/index.html');
+  await expect(page.locator('#recentSongEmpty')).toBeVisible();
+  await expect(page.locator('#recentNoteEmpty')).toBeVisible();
+  await expect(page.locator('#recentSongThumbLink, #recentSongTitle, #recentNoteThumbLink, #recentNoteTitle, #recentNoteLink')).toHaveCount(0);
+  await expect(page.locator('#recentNoteEmpty a')).toHaveAttribute('href', 'notes.html');
 });

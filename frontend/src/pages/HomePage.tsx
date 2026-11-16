@@ -631,21 +631,29 @@ export function HomePage(): React.ReactElement {
           </div>
           {recentSong ? (
             <div className={styles.recentBody} id="recentSongBody">
-              <img
-                id="recentSongThumb"
-                className={styles.recentThumb}
-                data-align-group="songBody:top"
-                src={thumb(recentSong.videoId)}
-                alt=""
-              />
+              <SafeLink
+                href={buildPracticeResumeHref(recentSong)}
+                className={styles.cardThumbLink}
+                id="recentSongThumbLink"
+                aria-label={recentSong.title}
+              >
+                <img
+                  id="recentSongThumb"
+                  className={styles.recentThumb}
+                  data-align-group="songBody:top"
+                  src={thumb(recentSong.videoId)}
+                  alt=""
+                />
+              </SafeLink>
               <div className={styles.recentInfo} data-align-group="songBody:top; songText:left">
-                <p
-                  className={styles.recentSongTitle}
+                <SafeLink
+                  href={buildPracticeResumeHref(recentSong)}
+                  className={`${styles.recentSongTitle} ${styles.cardTitleLink}`}
                   id="recentSongTitle"
                   data-layout-ignore="G3: 최근 곡 제목은 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                 >
                   {recentSong.title}
-                </p>
+                </SafeLink>
                 <p className={styles.recentSegment} id="recentSongSegment" data-align-group="songText:left">
                   {formatRecentSongSegment(recentSong)}
                 </p>
@@ -811,20 +819,28 @@ export function HomePage(): React.ReactElement {
             </div>
             {recentNote ? (
               <div className={styles.noteBox} id="recentNoteBody">
-                <img
-                  className={styles.noteThumb}
-                  data-align-group="noteBody:top"
-                  src={thumb(recentNote.videoId)}
-                  alt=""
-                />
+                <SafeLink
+                  href={`note.html?id=${encodeURIComponent(recentNote.id)}`}
+                  className={styles.cardThumbLink}
+                  id="recentNoteThumbLink"
+                  aria-label={recentNote.title || t('home.noTitle')}
+                >
+                  <img
+                    className={styles.noteThumb}
+                    data-align-group="noteBody:top"
+                    src={thumb(recentNote.videoId)}
+                    alt=""
+                  />
+                </SafeLink>
                 <div className={styles.noteBoxBody} data-align-group="noteBody:top; noteText:left">
-                  <p
-                    className={styles.noteBoxTitle}
+                  <SafeLink
+                    href={`note.html?id=${encodeURIComponent(recentNote.id)}`}
+                    className={`${styles.noteBoxTitle} ${styles.cardTitleLink}`}
                     id="recentNoteTitle"
                     data-layout-ignore="G3: 최근 노트 제목은 한 줄 말줄임(카드 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
                   >
                     {recentNote.title || t('home.noTitle')}
-                  </p>
+                  </SafeLink>
                   <p
                     className={styles.noteBoxSummary}
                     id="recentNoteHeadline"
@@ -832,12 +848,12 @@ export function HomePage(): React.ReactElement {
                   >
                     {recentNote.headline || recentNote.channel || t('home.defaultNoteHeadline')}
                   </p>
-                  <div className={styles.noteBoxFoot}>
+                  <div className={`${styles.noteBoxFoot} ${styles.noteBoxFootEnd}`} data-align-group="noteAction:right">
                     <SafeLink
                       href={`note.html?id=${encodeURIComponent(recentNote.id)}`}
-                      className={styles.widgetLink}
+                      className={`${styles.widgetLink} ${styles.noteMoveLink}`}
                       id="recentNoteLink"
-                      data-align-group="noteText:left"
+                      data-align-group="noteAction:right"
                     >
                       {t('home.btnConfirmNote')}
                     </SafeLink>

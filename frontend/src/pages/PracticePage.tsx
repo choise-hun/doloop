@@ -14,6 +14,7 @@ import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import { t } from '../lib/i18n.mts';
 import styles from './PracticePage.module.css';
+import { blockNativeNavigation, useNativeNavigationBlock } from '../lib/nativeNavigation';
 
 export const RATES: ReadonlyArray<number> = [0.25, 0.5, 0.75, 1];
 export const AUTOSAVE_MS = 30000;
@@ -184,6 +185,8 @@ export function PracticePage(): React.ReactElement {
   const [takeLimitModalOpen, setTakeLimitModalOpen] = useState(false);
   const [takeLimitCount, setTakeLimitCount] = useState<number>(2);
   const [busyDriveConnect, setBusyDriveConnect] = useState(false);
+  useNativeNavigationBlock(recording || uploadingTake || Boolean(take && !take.done) || libOpen || takeLimitModalOpen || presetDialogSongId !== null);
+
   const [srReloadKey, setSrReloadKey] = useState(0);
 
   // 내부 가변 참조 (인터벌·콜백 최신 상태 유지)
@@ -239,6 +242,8 @@ export function PracticePage(): React.ReactElement {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recStartedAtRef = useRef(0);
+  const recRequestRef = useRef(0);
+  const recNavigationReleaseRef = useRef<(() => void) | null>(null);
   const recMetaRef = useRef<{
     videoId: string;
     song: SongDto | null;
@@ -459,7 +464,7 @@ export function PracticePage(): React.ReactElement {
       countdownTimerRef.current = null;
     }
     // 50ms 감시 타이머·단축키는 마운트 시점 클로저라 상태 대신 stRef로 읽는다
-    const curWait = stRef.current.waitLeadSec || (stRef.current.waitTimerOn ? 10 : 0);
+    const curWait = stRef.current.waitLeadSec > 0 || stRef.current.waitTimerOn ? 3 : 0;
     if (!curWait || curWait <= 0) {
       seekGuardUntilRef.current = Date.now() + 400;
       try {
@@ -1098,12 +1103,23 @@ export function PracticePage(): React.ReactElement {
       return;
     }
 
+    if (recNavigationReleaseRef.current) return;
+    const request = ++recRequestRef.current;
+    const requestUid = auth.getUser()?.id || null;
+    const requestVideo = stRef.current.videoId;
+    const releaseLock = blockNativeNavigation();
+    const releaseNavigation = () => {
+      releaseLock();
+      if (recNavigationReleaseRef.current === releaseNavigation) recNavigationReleaseRef.current = null;
+    };
+    recNavigationReleaseRef.current = releaseNavigation;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch (e: any) {
+      releaseNavigation();
       setRecMsg({
         text:
           e && e.name === 'NotAllowedError'
@@ -1114,13 +1130,26 @@ export function PracticePage(): React.ReactElement {
       return;
     }
 
+    if (request !== recRequestRef.current || requestUid !== (auth.getUser()?.id || null) || requestVideo !== stRef.current.videoId) {
+      stream.getTracks().forEach(track => track.stop());
+      releaseNavigation();
+      return;
+    }
     const supportedMime =
       REC_TYPES.find((t) => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t)) ||
       '';
-    const mr = new MediaRecorder(stream, {
-      audioBitsPerSecond: 128000,
-      ...(supportedMime ? { mimeType: supportedMime } : {}),
-    });
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(stream, {
+        audioBitsPerSecond: 128000,
+        ...(supportedMime ? { mimeType: supportedMime } : {}),
+      });
+    } catch (error) {
+      stream.getTracks().forEach(track => track.stop());
+      releaseNavigation();
+      setRecMsg({ text: t('practice.micOpenFailed'), err: true });
+      return;
+    }
 
     chunksRef.current = [];
     streamRef.current = stream;
@@ -1152,7 +1181,7 @@ export function PracticePage(): React.ReactElement {
 
       const meta = recMetaRef.current;
       recMetaRef.current = null;
-      if (!meta) return;
+      if (!meta) { releaseNavigation(); return; }
 
       if (takeRef.current?.url) {
         try {
@@ -1173,13 +1202,24 @@ export function PracticePage(): React.ReactElement {
       takeRef.current = createdTake;
       setTakeState(createdTake);
       void uploadTakeNow({ targetTake: createdTake });
+      releaseNavigation();
     };
 
     mrRef.current = mr;
     recStartedAtRef.current = Date.now();
     setRecording(true);
     setRecElapsedSec(0);
-    mr.start(1000);
+    try { mr.start(1000); }
+    catch (error) {
+      stream.getTracks().forEach(track => track.stop());
+      mrRef.current = null;
+      streamRef.current = null;
+      recMetaRef.current = null;
+      setRecording(false);
+      releaseNavigation();
+      setRecMsg({ text: t('practice.micOpenFailed'), err: true });
+      return;
+    }
     setRecMsg({ text: '', err: false }); // WF-2: 녹음 중 표시는 버튼(■ 시간)이 맡는다
     setRecPopOpen(false);
     setRecInfoOpen(false);
@@ -1487,6 +1527,8 @@ export function PracticePage(): React.ReactElement {
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('keydown', onKeyDown);
+      recRequestRef.current++;
+      recNavigationReleaseRef.current?.();
       stopRecordingNow();
       if (takeRef.current?.url) {
         try {
@@ -2219,91 +2261,10 @@ export function PracticePage(): React.ReactElement {
                 >
                   {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
                 </button>
-                <div className={styles.waitWrap}>
-                  <select
-                    id="waitSelect"
-                    data-align-group="looprow:top,bottom,height"
-                    className={styles.waitSelect}
-                    value={waitLeadSec}
-                    onChange={(e) => {
-                      const sec = Number(e.target.value);
-                      setWaitLeadSec(sec);
-                      setWaitTimerOn(sec > 0);
-                      stRef.current.waitLeadSec = sec;
-                      stRef.current.waitTimerOn = sec > 0;
-                      if (countdownTimerRef.current) {
-                        window.clearInterval(countdownTimerRef.current);
-                        countdownTimerRef.current = null;
-                        setCountdownSec(null);
-                      }
-                    }}
-                    aria-label={t('practice.secLoopLead')}
-                  >
-                    <option value={0}>{t('practice.waitLeadNone')}</option>
-                    <option value={3}>{t('practice.waitLeadSec', { sec: 3 })}</option>
-                    <option value={5}>{t('practice.waitLeadSec', { sec: 5 })}</option>
-                    <option value={10}>{t('practice.waitLeadSec', { sec: 10 })}</option>
-                  </select>
-                  <button
-                    type="button"
-                    className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
-                    id="btnWaitTimer"
-                    data-align-group="looprow:top,bottom,height"
-                    aria-pressed={waitLeadSec > 0 || waitTimerOn}
-                    aria-label={
-                      countdownSec != null
-                        ? `-${countdownSec}s`
-                        : waitLeadSec > 0
-                          ? t('practice.waitLeadSec', { sec: waitLeadSec })
-                          : t('practice.waitLeadNone')
-                    }
-                    onClick={() => {
-                      const next = waitLeadSec > 0 ? 0 : 3;
-                      setWaitLeadSec(next);
-                      setWaitTimerOn(next > 0);
-                      stRef.current.waitLeadSec = next;
-                      stRef.current.waitTimerOn = next > 0;
-                      if (countdownTimerRef.current) {
-                        window.clearInterval(countdownTimerRef.current);
-                        countdownTimerRef.current = null;
-                        setCountdownSec(null);
-                      }
-                    }}
-                  >
-                    {countdownSec != null
-                      ? `-${countdownSec}s`
-                      : waitLeadSec > 0
-                        ? `${waitLeadSec}s`
-                        : t('practice.waitTimer')}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className={`pp-icon ${styles.ppIcon}`}
-                  id="clearBtn"
-                  data-align-group="looprow:top,bottom,height"
-                  aria-label={t('practice.ariaClearLoop')}
-                  onClick={handleClearLoop}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className={`pp-group ${styles.ppGroup} ${styles.presetSection}`} id="presetSection">
-              <div className={`pp-lab ${styles.ppLab}`}>
-                <span>{t('practice.presetSelect')}</span>
-                {selectedPresetId && (
-                  <span className={styles.presetBadge}>
-                    {presets.find((p) => p.id === selectedPresetId)?.completed ? '✓ ' : ''}
-                    {formatPlayerTime(pointA)}–{formatPlayerTime(pointB)}
-                  </span>
-                )}
-              </div>
-              <div className={styles.presetCard}>
                 <select
                   id="presetSelect"
                   className={styles.presetSelect}
+                  data-align-group="looprow:top,bottom,height"
                   value={selectedPresetId}
                   onChange={(e) => handleSelectPreset(e.target.value)}
                   aria-label={t('practice.presetSelect')}
@@ -2315,7 +2276,51 @@ export function PracticePage(): React.ReactElement {
                     </option>
                   ))}
                 </select>
-                <div className={styles.presetActionRow}>
+
+                <button
+                  type="button"
+                  className={`pp-toggle ${styles.ppToggle} ${styles.btnWaitTimer}`}
+                  id="btnWaitTimer"
+                  data-align-group="looprow:top,bottom,height"
+                  aria-pressed={waitLeadSec > 0 || waitTimerOn}
+                  aria-label={
+                    countdownSec != null
+                      ? `-${countdownSec}s`
+                      : waitLeadSec > 0
+                        ? t('practice.waitLeadSec', { sec: waitLeadSec })
+                        : t('practice.waitLeadNone')
+                  }
+                  onClick={() => {
+                    const next = waitLeadSec > 0 ? 0 : 3;
+                    setWaitLeadSec(next);
+                    setWaitTimerOn(next > 0);
+                    stRef.current.waitLeadSec = next;
+                    stRef.current.waitTimerOn = next > 0;
+                    if (countdownTimerRef.current) {
+                      window.clearInterval(countdownTimerRef.current);
+                      countdownTimerRef.current = null;
+                      setCountdownSec(null);
+                    }
+                  }}
+                >
+                  {countdownSec != null
+                    ? `-${countdownSec}s`
+                    : waitLeadSec > 0
+                      ? `${waitLeadSec}s`
+                      : t('practice.waitTimer')}
+                </button>
+                <button
+                  type="button"
+                  className={`pp-icon ${styles.ppIcon}`}
+                  id="clearBtn"
+                  data-align-group="looprow:top,bottom,height"
+                  aria-label={t('practice.ariaClearLoop')}
+                  onClick={handleClearLoop}
+                >
+                  ✕
+                </button>
+              </div>
+                <div className={styles.presetActionRow} id="presetSection">
                   {selectedPresetId ? (
                     <>
                       <button
@@ -2334,7 +2339,7 @@ export function PracticePage(): React.ReactElement {
                         disabled={pointA == null || pointB == null}
                         onClick={handleSavePreset}
                       >
-                        {t('practice.presetSave')}
+                        {t('practice.presetSaveAs')}
                       </button>
                       <button
                         type="button"
@@ -2343,7 +2348,7 @@ export function PracticePage(): React.ReactElement {
                         onClick={handleDeletePreset}
                         aria-label={t('practice.presetDeleteConfirm')}
                       >
-                        ✕
+                        {t('practice.presetDelete')}
                       </button>
                     </>
                   ) : (
@@ -2358,7 +2363,6 @@ export function PracticePage(): React.ReactElement {
                     </button>
                   )}
                 </div>
-              </div>
             </div>
             </section>
             <section

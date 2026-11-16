@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+body{font:16px system-ui;margin:30px 24px}button,a,input{display:inline-block;min-height:44px;min-width:70px;margin:4px;padding:4px}#dialog{position:fixed;inset:20%;background:#eee;border:1px solid black;padding:20px}#dialog[hidden]{display:none}#seek{width:70%}
+</style></head><body>
+<h1 id="page">Loading</h1><p id="state" role="status">Loading</p><p id="visit">Starting</p><p id="trace">No action</p><p id="auth" role="status">Auth starting</p>
+<a href="settings.html">Go settings</a><a href="log.html">Go log</a><a href="practice.html?v=test&amp;t=17&amp;a=12&amp;b=48&amp;r=0.75">Go practice</a>
+<div><button id="recording">Lock recording</button><button id="upload">Lock upload</button><button id="take">Lock take</button><button id="note">Lock note</button><button id="unlock">Unlock</button><button id="modal">Open modal</button></div>
+<div id="dialog" hidden role="dialog" aria-modal="true"><p>Modal open</p><button id="close">Close modal</button></div>
+<a href="input-probe.html">Go input probe</a>
+<div><button id="push">SPA push</button><button id="replace">SPA replace</button><input id="edit" aria-label="Draft"><input id="seek" aria-label="Seek" type="range"></div>
+<div><button id="login">Login</button><button id="logout">Logout</button><button id="hold">Hold A profile</button><button id="release">Release A profile</button><button id="userB">Switch B</button><button id="refresh">Refresh token</button><button id="expire">Expire token</button><button id="reset">Reset fixture</button></div>
+<script type="module" src="native-fixture.js"></script></body></html>

@@ -1002,3 +1002,41 @@
     gap: 12px;
   }
 }
+
+/* 홈 최근 카드: 기존 목적지로 이동하는 명시적 링크 */
+.cardThumbLink {
+  display: block;
+  width: fit-content;
+  color: var(--ink);
+}
+
+.cardTitleLink {
+  display: block;
+  min-width: 0;
+  min-height: 24px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cardTitleLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.noteBoxFootEnd {
+  justify-content: flex-end;
+}
+
+.noteMoveLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 44px;
+  min-height: 24px;
+}
+
+@media (max-width: 820px) {
+  .noteMoveLink {
+    min-height: 44px;
+  }
+}

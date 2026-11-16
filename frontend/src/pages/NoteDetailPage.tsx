@@ -1,4 +1,5 @@
 // frontend/src/pages/NoteDetailPage.tsx
+import { useNativeNavigationBlock } from '../lib/nativeNavigation';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeLink } from '../components/common/SafeLink';
@@ -50,6 +51,8 @@ export function NoteDetailPage(): React.ReactElement {
   const [loadingMsg, setLoadingMsg] = useState<string>(t('note.loading'));
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editMemo, setEditMemo] = useState<string>('');
+  useNativeNavigationBlock(Boolean(note && (editMemo.trim() !== (note.memo || '') ||
+    [...editTags].sort().join('\0') !== [...(note.tags || [])].sort().join('\0'))));
   const [editMsg, setEditMsg] = useState<{ text: string; kind: '' | 'ok' | 'err' }>({ text: '', kind: '' });
 
   const detailReqSeqRef = useRef(0);

@@ -7,6 +7,9 @@ import './lib/apiClient';
 import './lib/drive';
 import { migrateLegacyStorageOnce } from './lib/security';
 import { App } from './App';
+import { initNativeNavigation } from './lib/nativeNavigation';
+
+initNativeNavigation();
 
 migrateLegacyStorageOnce();
 
