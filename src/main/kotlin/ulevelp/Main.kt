@@ -270,9 +270,14 @@ fun Application.module(
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Accept)
+        allowHeader(HttpHeaders.AcceptLanguage)
+        exposeHeader(HttpHeaders.ContentDisposition)
         allowCredentials = true
 
-        for (origin in allowedOrigins) {
+        // M1A-3: 앱 로컬 출처는 사용자 승인 예외이며 전체 문자열이 일치해야 한다.
+        val mobileOrigins = allowedOrigins.filter { it == "capacitor://localhost" || it == "https://localhost" }.toSet()
+        allowOrigins { it in mobileOrigins }
+        for (origin in allowedOrigins.filterNot { it in mobileOrigins }) {
             runCatching {
                 val uri = URI(origin)
                 val scheme = uri.scheme?.lowercase() ?: return@runCatching

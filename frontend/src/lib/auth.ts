@@ -1,6 +1,9 @@
 // frontend/src/lib/auth.ts
-import { syncLangFromProfile, t, type LocaleCode } from './i18n.mts';
+import { syncLangFromProfile, t, getLang, type LocaleCode } from './i18n.mts';
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { resolveApiUrl } from './apiUrl';
+import { createNativeAuth, type NativeLoginState } from './nativeAuth';
 import type { SupabaseClientLike, SupabaseSessionLike, SupabaseUserLike } from '../vite-env';
 
 export interface KeySummaryDto {
@@ -72,6 +75,7 @@ export interface ProfilePatchInput {
 }
 
 export interface AuthState {
+  login?: NativeLoginState;
   configured: boolean;
   session: SupabaseSessionLike | null;
   user: SupabaseUserLike | null;
@@ -89,7 +93,7 @@ function createAuthModule() {
   const cfg = win.ULEVELP_CONFIG || {};
   const supabaseUrl = String(cfg.supabaseUrl || '').trim().replace(/\/+$/, '');
   const supabaseAnonKey = String(cfg.supabaseAnonKey || '').trim();
-  const apiBaseUrl = String(cfg.apiBaseUrl || '').trim().replace(/\/+$/, '');
+  const native = Capacitor.isNativePlatform();
 
   let client: SupabaseClientLike | null = null;
   if (win.supabase && typeof win.supabase.createClient === 'function' && supabaseUrl && supabaseAnonKey) {
@@ -99,7 +103,7 @@ function createAuthModule() {
         flowType: 'pkce',
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: !native,
       },
     });
   }
@@ -112,6 +116,17 @@ function createAuthModule() {
   let profileSeq = 0;
   let profilePatchQueue: Promise<void> = Promise.resolve();
   const listeners = new Set<(state: AuthState) => void>();
+  const nativeAuth = native && client ? createNativeAuth({
+    client, supabaseUrl,
+    changed: () => { queueMicrotask(notify); },
+    authenticated: (session) => {
+      // Only the current coordinator attempt can publish after serialized cleanup.
+      signingOut = false;
+      acceptSession(session);
+      notify();
+      void fetchMe();
+    },
+  }) : null;
 
   function isConfigured(): boolean {
     return !!client;
@@ -169,6 +184,7 @@ function createAuthModule() {
 
   function getSnapshot(): AuthState {
     return {
+      login: nativeAuth?.getState(),
       configured: isConfigured(),
       session: currentSession,
       user: currentSession ? currentSession.user : null,
@@ -215,30 +231,38 @@ function createAuthModule() {
   }
 
   async function getAccessToken(): Promise<string> {
-    if (!client || signingOut) return '';
+    if (!client || signingOut || nativeAuth?.blocksSession()) return '';
     const generation = authGeneration;
     try {
       const { data } = await client.auth.getSession();
-      if (generation !== authGeneration) return '';
+      if (generation !== authGeneration || signingOut || nativeAuth?.blocksSession()) return '';
       acceptSession(data?.session || null);
       return currentSession?.access_token || '';
     } catch {
-      return generation === authGeneration ? currentSession?.access_token || '' : '';
+      return generation === authGeneration && !signingOut && !nativeAuth?.blocksSession() ? currentSession?.access_token || '' : '';
     }
   }
 
   async function requestApi<T = any>(path: string, opts?: RequestInit, isCurrent?: () => boolean): Promise<T> {
     const options = opts || {};
+    const generation = authGeneration, uid = currentSession?.user?.id ?? null;
+    const valid = () => generation === authGeneration && uid === (currentSession?.user?.id ?? null);
     const token = await getAccessToken();
+    if (!valid()) throw obsoleteRequest();
     if (isCurrent && !isCurrent()) throw obsoleteRequest();
-    const headers: Record<string, string> = Object.assign({}, (options.headers as Record<string, string>) || {});
-    if (token) headers.Authorization = 'Bearer ' + token;
-    if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+    const headers: Record<string, string> = {};
+    new Headers(options.headers).forEach((value, key) => { headers[key] = value; });
+    if (token) { delete headers.authorization; headers.Authorization = 'Bearer ' + token; }
+    if (options.body && typeof options.body === 'string' && !headers['content-type']) {
       headers['Content-Type'] = 'application/json; charset=utf-8';
     }
-    const url = (apiBaseUrl || '') + path;
-    const res = await fetch(url, Object.assign({}, options, { headers }));
+    if (!Object.keys(headers).some(key => key.toLowerCase() === 'accept-language')) headers['Accept-Language'] = getLang();
+    const url = resolveApiUrl(path);
+    let res: Response;
+    try { res = await fetch(url, Object.assign({}, options, { headers })); }
+    catch (error) { if (!valid()) throw obsoleteRequest(); throw error; }
     const data = res.status === 204 ? null : await res.json().catch(() => null);
+    if (!valid()) throw obsoleteRequest();
     if (!res.ok) {
       const msg = (data && (data.message || data.error)) || t('auth.reqFailedStatus', { status: res.status });
       const err: ApiClientError = new Error(msg);
@@ -301,6 +325,20 @@ function createAuthModule() {
     if (!client) {
       throw new Error(t('auth.supabaseConfigReq'));
     }
+    if (nativeAuth) {
+      if (currentSession) return;
+      try { await nativeAuth.signIn(); }
+      catch (error) {
+        const code = error instanceof Error && 'code' in error ? error.code : '';
+        const message = code === 'NATIVE_AUTH_CANCELLED' ? t('auth.nativeCancelled')
+          : code === 'NATIVE_AUTH_CONFIG' ? t('auth.nativeConfig')
+          : code === 'NATIVE_AUTH_OPEN_FAILED' ? t('auth.nativeOpenFailed')
+          : code === 'NATIVE_AUTH_CALLBACK_INVALID' ? t('auth.nativeCallbackInvalid')
+          : t('auth.nativeExchangeFailed');
+        throw Object.assign(new Error(message), { code });
+      }
+      return;
+    }
     const target = stripHash(redirectTo);
     const { error } = await client.auth.signInWithOAuth({
       provider: 'google',
@@ -321,7 +359,9 @@ function createAuthModule() {
     lastFetchedUid = null;
     const generation = authGeneration;
     notify();
-    if (client) {
+    if (nativeAuth) {
+      await nativeAuth.cancel();
+    } else if (client) {
       try {
         await client.auth.signOut({ scope: 'local' });
       } catch {
@@ -397,6 +437,7 @@ function createAuthModule() {
       return;
     }
     client.auth.onAuthStateChange((event, session) => {
+      if (nativeAuth?.blocksSession() || (nativeAuth && signingOut)) return;
       const prevUid = currentSession && currentSession.user ? currentSession.user.id : null;
       const nextUid = session && session.user ? session.user.id : null;
       if (session) signingOut = false;
@@ -430,6 +471,7 @@ function createAuthModule() {
       }
     });
     try {
+      if (nativeAuth) await nativeAuth.ready;
       await getAccessToken();
       notify();
       if (currentSession) {

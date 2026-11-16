@@ -4,12 +4,12 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const ts=require('typescript');
-const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve}};
+const defer=()=>{let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j});return {promise,resolve,reject}};
 const tick=()=>new Promise(r=>setImmediate(r));
 async function setup(holdInitial=false){
  let session={user:{id:'A'},access_token:'token-A'},change;
  const cache=new Map(),requests=[],langs=[],events=[];
- const ctx={exports:{},require:name=>name==='react'?{}:{syncLangFromProfile:x=>langs.push(x),t:x=>x},localStorage:{setItem:(k,v)=>cache.set(k,v),removeItem:k=>cache.delete(k)},window:{ULEVELP_CONFIG:{supabaseUrl:'https://test',supabaseAnonKey:'test'},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{session}}),onAuthStateChange:fn=>{change=fn},signOut:async()=>{session=null;change('SIGNED_OUT',null)}}})}},fetch:async(url,opts)=>{const d=defer();requests.push({url,opts,d});return d.promise}};
+ const ctx={Headers,exports:{},require:name=>name==='react'?{}:name==='@capacitor/core'?{Capacitor:{isNativePlatform:()=>false}}:name==='./nativeAuth'?{}:name==='./apiUrl'?{resolveApiUrl:p=>p}:{syncLangFromProfile:x=>langs.push(x),t:x=>x,getLang:()=> 'ko'},localStorage:{setItem:(k,v)=>cache.set(k,v),removeItem:k=>cache.delete(k)},window:{ULEVELP_CONFIG:{supabaseUrl:'https://test',supabaseAnonKey:'test'},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{session}}),onAuthStateChange:fn=>{change=fn},signOut:async()=>{session=null;change('SIGNED_OUT',null)}}})}},fetch:async(url,opts)=>{const d=defer();requests.push({url,opts,d});return d.promise}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('frontend/src/lib/auth.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,ctx);
  const auth=ctx.exports.auth;
  const profile=(id,locale='ko')=>({id,displayName:id,locale,keys:{notion:{hint:id}}});
@@ -111,4 +111,14 @@ test('account change releases the new session queue and discards queued previous
  h.reply(h.requests.shift(),'B');assert.equal((await current).value.id,'B');
  h.reply(old,'A');assert.equal((await first).error.name,'AbortError');assert.equal((await queued).error.name,'AbortError');
  assert.equal(h.requests.length,0);assert.equal(h.auth.getMe().id,'B');
+});
+
+
+test('M1A3 JSON API preserves Headers locale and discards a late network failure',async()=>{
+ const h=await setup();
+ let req=h.auth.apiFetch('/api/v1/me',{headers:new Headers({'Accept-Language':'en'})});
+ await tick();const first=h.requests.shift();assert.equal(first.opts.headers['accept-language'],'en');h.reply(first,'A');await req;
+ const stale=h.auth.apiFetch('/api/v1/me').then(value=>({value}),error=>({error}));
+ await tick();const old=h.requests.shift();await h.auth.signOut();old.d.reject(new TypeError('network disconnected'));
+ assert.equal((await stale).error.name,'AbortError');assert.equal(h.requests.length,0);
 });

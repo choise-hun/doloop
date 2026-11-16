@@ -69,8 +69,11 @@ export interface SupabaseClientLike {
     ) => { data?: { subscription?: { unsubscribe: () => void } } };
     signInWithOAuth: (params: {
       provider: 'google';
-      options: { redirectTo: string };
-    }) => Promise<{ data?: unknown; error?: Error | null }>;
+      options: { redirectTo: string; skipBrowserRedirect?: boolean };
+    }) => Promise<{ data?: { provider: 'google'; url: string | null; flowId: string | null }; error?: Error | null }>;
+    exchangeCodeForSession: (code: string, options?: { flowId?: string }) => Promise<{
+      data?: { session: SupabaseSessionLike | null; user: SupabaseUserLike | null }; error?: Error | null;
+    }>;
     signOut: (opts: { scope: 'local' }) => Promise<{ error?: Error | null }>;
   };
 }

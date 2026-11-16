@@ -1,5 +1,6 @@
 // frontend/src/lib/apiClient.ts
-import { t } from './i18n.mts';
+import { t, getLang } from './i18n.mts';
+import { resolveApiUrl } from './apiUrl';
 import { auth, ApiClientError, KeySummaryDto, MeProfile, ProfilePatchInput } from './auth';
 
 export interface SongDto {
@@ -661,6 +662,19 @@ function getAuthRef() {
   return win.ULAuth || auth;
 }
 
+function captureSession(A: typeof auth): () => void {
+  const uid = A.getSession()?.user?.id;
+  const generation = typeof A.getSessionGeneration === 'function' ? A.getSessionGeneration() : null;
+  return () => {
+    if (uid !== A.getSession()?.user?.id ||
+        generation !== (typeof A.getSessionGeneration === 'function' ? A.getSessionGeneration() : null)) {
+      const error = new Error('Request is no longer current');
+      error.name = 'AbortError';
+      throw error;
+    }
+  };
+}
+
 let migrating = false;
 
 function isLoggedIn(): boolean {
@@ -857,19 +871,23 @@ function saveProgress(
   if (options.keepalive === true) {
     const sess = A.getSession();
     const token = sess ? sess.access_token : '';
-    const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
-    const apiBaseUrl = (win.ULEVELP_CONFIG && win.ULEVELP_CONFIG.apiBaseUrl) || '';
-    const url = (apiBaseUrl ? String(apiBaseUrl).replace(/\/+$/, '') : '') + '/api/v1/practice/save';
+    if (!token) return Promise.reject(Object.assign(new Error(t('api.loginReq')), { status: 401, code: 'NOT_LOGGED_IN' }));
+    const current = captureSession(A);
+    let url: string;
+    try { url = resolveApiUrl('/api/v1/practice/save'); }
+    catch (error) { return Promise.reject(error); }
     return fetch(url, {
       method: 'POST',
       keepalive: true,
       headers: {
         Authorization: 'Bearer ' + token,
+        'Accept-Language': getLang(),
         'Content-Type': 'application/json; charset=utf-8',
       },
       body: jsonBody,
     }).then(async (res) => {
       const data = res.status === 204 ? null : await res.json().catch(() => null);
+      current();
       if (!res.ok) {
         const msg = (data && (data.message || data.error)) || t('api.reqFailedStatus', { status: res.status });
         const err: ApiClientError = new Error(msg);
@@ -879,7 +897,7 @@ function saveProgress(
         throw err;
       }
       return data as SaveProgressResponse;
-    });
+    }).catch(error => { current(); throw error; });
   }
 
   return A.apiFetch('/api/v1/practice/save', {
@@ -1227,14 +1245,17 @@ async function runLocalMigration(): Promise<LocalMigrationResult> {
 async function exportZip(includeAudio?: boolean): Promise<{ blob: Blob; filename: string }> {
   requireLogin();
   const A = getAuthRef();
-  const sess = A && typeof A.getSession === 'function' ? A.getSession() : null;
-  const token = sess && sess.access_token ? sess.access_token : '';
+  const current = captureSession(A);
+  const token = await A.getAccessToken();
+  current();
   const qs = '?includeAudio=' + (includeAudio !== false);
-  const res = await fetch('/api/v1/export/zip' + qs, {
+  const res = await fetch(resolveApiUrl('/api/v1/export/zip' + qs), {
     headers: {
       Authorization: 'Bearer ' + token,
+      'Accept-Language': getLang(),
     },
-  });
+  }).catch(error => { current(); throw error; });
+  current();
   if (!res.ok) {
     let errData: any = {};
     try {
@@ -1242,6 +1263,7 @@ async function exportZip(includeAudio?: boolean): Promise<{ blob: Blob; filename
     } catch {
       /* ignore */
     }
+    current();
     const msg = (errData && (errData.message || errData.error)) || t('api.exportFailedStatus', { status: res.status });
     const err: ApiClientError = new Error(msg);
     err.status = res.status;
@@ -1255,7 +1277,8 @@ async function exportZip(includeAudio?: boolean): Promise<{ blob: Blob; filename
   if (match && match[1]) {
     filename = match[1];
   }
-  const blob = await res.blob();
+  const blob = await res.blob().catch(error => { current(); throw error; });
+  current();
   return { blob, filename };
 }
 
@@ -1604,20 +1627,19 @@ async function registerDriveTake(meta: DriveTakeRegisterMeta): Promise<TakeDto> 
 async function downloadTakeBlob(takeId: string): Promise<Blob> {
   requireLogin();
   const A = getAuthRef();
+  const current = captureSession(A);
   const token =
     A && typeof A.getAccessToken === 'function'
       ? await A.getAccessToken()
       : (A && typeof A.getSession === 'function' && A.getSession()?.access_token) || '';
-  const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
-  const apiBase =
-    win.ULEVELP_CONFIG && win.ULEVELP_CONFIG.apiBaseUrl
-      ? String(win.ULEVELP_CONFIG.apiBaseUrl).replace(/\/$/, '')
-      : '';
-  const res = await fetch(apiBase + '/api/v1/takes/' + encodeURIComponent(takeId) + '/download', {
+  current();
+  const res = await fetch(resolveApiUrl('/api/v1/takes/' + encodeURIComponent(takeId) + '/download'), {
     headers: {
       Authorization: 'Bearer ' + token,
+      'Accept-Language': getLang(),
     },
-  });
+  }).catch(error => { current(); throw error; });
+  current();
   if (!res.ok) {
     let errData: any = {};
     try {
@@ -1625,13 +1647,16 @@ async function downloadTakeBlob(takeId: string): Promise<Blob> {
     } catch {
       /* ignore */
     }
+    current();
     const msg = (errData && (errData.message || errData.error)) || t('api.downloadFailedStatus', { status: res.status });
     const err: ApiClientError = new Error(msg);
     err.status = res.status;
     err.code = (errData && errData.code) || 'DOWNLOAD_ERROR';
     throw err;
   }
-  return await res.blob();
+  const blob = await res.blob().catch(error => { current(); throw error; });
+  current();
+  return blob;
 }
 
 async function migrateTakeToDrive(takeId: string, driveFileId: string): Promise<TakeDto> {

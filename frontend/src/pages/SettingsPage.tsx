@@ -452,6 +452,7 @@ export function SettingsPage(): React.ReactElement {
             className="pillBtn"
             type="button"
             id="btnLogin"
+            disabled={Boolean(authState.login && ['opening', 'waiting', 'exchanging'].includes(authState.login.status))}
             hidden={embedded}
             onClick={async () => {
               setAccMsg({ text: '', kind: '' });
