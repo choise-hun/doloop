@@ -165,6 +165,8 @@ body {
   font-size: 14px;
   line-height: 1.55;
   padding-block: 20px 56px;
+  /* M1A-2: 앱(노치·상태 표시줄) 위 여백. 브라우저에서는 env()가 0이라 20px 그대로 */
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }

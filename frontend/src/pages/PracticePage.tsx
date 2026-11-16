@@ -10,6 +10,7 @@ import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
+import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
 import { t } from '../lib/i18n.mts';
 import styles from './PracticePage.module.css';
@@ -518,7 +519,9 @@ export function PracticePage(): React.ReactElement {
 
   const createOrCuePlayer = (id: string, startSec: number) => {
     const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
-    if (!ytReadyRef.current || !win.YT || typeof win.YT.Player !== 'function') {
+    // M1A-2: iOS 앱은 원격 플레이어(ytBridge)라 YT 스크립트 준비를 기다리지 않는다
+    const remote = shouldUseRemotePlayer();
+    if (!remote && (!ytReadyRef.current || !win.YT || typeof win.YT.Player !== 'function')) {
       pendingLoadRef.current = { id, start: startSec };
       return;
     }
@@ -530,69 +533,73 @@ export function PracticePage(): React.ReactElement {
         /* fallback to new player */
       }
     }
+    // 두 분기(직접 임베드·원격)가 같은 이벤트 객체를 쓴다
+    const events = {
+      onReady() {
+        stRef.current.ready = true;
+        setReady(true);
+        applyPlayerRate(stRef.current.rate);
+        updateRateAvailability();
+        if (startSec > 0 && playerRef.current?.seekTo) {
+          playerRef.current.seekTo(startSec, true);
+        }
+        const dur = (playerRef.current?.getDuration && playerRef.current.getDuration()) || 0;
+        stRef.current.duration = dur;
+        setDuration(dur);
+      },
+      onStateChange(e: any) {
+        const S = win.YT?.PlayerState || { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3 };
+        const wasPlaying = stRef.current.playing;
+        const nowPlaying = e.data === S.PLAYING || e.data === S.BUFFERING;
+        stRef.current.playing = nowPlaying;
+        setPlaying(nowPlaying);
+        if (e.data === S.PLAYING) {
+          applyPlayerRate(stRef.current.rate);
+          const dur = (playerRef.current?.getDuration && playerRef.current.getDuration()) || stRef.current.duration;
+          stRef.current.duration = dur;
+          setDuration(dur);
+          updateRateAvailability();
+        }
+        if (e.data === S.ENDED && stRef.current.loopOn && stRef.current.a != null) {
+          jumpToLoopStart();
+          stRef.current.loops += 1;
+          unsavedLoopsRef.current += 1;
+          setLoops(stRef.current.loops);
+          playerRef.current?.playVideo?.();
+        }
+        if (wasPlaying && e.data === S.PAUSED) {
+          scheduleAutoSave(1500);
+        }
+      },
+      onPlaybackRateChange(e: any) {
+        const nextR = Number(e.data);
+        if (Number.isFinite(nextR) && Math.abs(nextR - stRef.current.rate) > 0.001) {
+          stRef.current.rate = nextR;
+          setRateState(nextR);
+          markDirty({ rate: nextR });
+        }
+      },
+      onError() {
+        setSyncMsg({
+          text: t('practice.embedBlocked'),
+          err: true,
+        });
+      },
+    };
     try {
-      playerRef.current = new win.YT.Player('player', {
-        videoId: id,
-        playerVars: {
-          playsinline: 1,
-          rel: 0,
-          modestbranding: 1,
-          start: Math.floor(startSec || 0),
-          origin: window.location.origin,
-        },
-        events: {
-          onReady() {
-            stRef.current.ready = true;
-            setReady(true);
-            applyPlayerRate(stRef.current.rate);
-            updateRateAvailability();
-            if (startSec > 0 && playerRef.current?.seekTo) {
-              playerRef.current.seekTo(startSec, true);
-            }
-            const dur = (playerRef.current?.getDuration && playerRef.current.getDuration()) || 0;
-            stRef.current.duration = dur;
-            setDuration(dur);
-          },
-          onStateChange(e: any) {
-            const S = win.YT?.PlayerState || { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3 };
-            const wasPlaying = stRef.current.playing;
-            const nowPlaying = e.data === S.PLAYING || e.data === S.BUFFERING;
-            stRef.current.playing = nowPlaying;
-            setPlaying(nowPlaying);
-            if (e.data === S.PLAYING) {
-              applyPlayerRate(stRef.current.rate);
-              const dur = (playerRef.current?.getDuration && playerRef.current.getDuration()) || stRef.current.duration;
-              stRef.current.duration = dur;
-              setDuration(dur);
-              updateRateAvailability();
-            }
-            if (e.data === S.ENDED && stRef.current.loopOn && stRef.current.a != null) {
-              jumpToLoopStart();
-              stRef.current.loops += 1;
-              unsavedLoopsRef.current += 1;
-              setLoops(stRef.current.loops);
-              playerRef.current?.playVideo?.();
-            }
-            if (wasPlaying && e.data === S.PAUSED) {
-              scheduleAutoSave(1500);
-            }
-          },
-          onPlaybackRateChange(e: any) {
-            const nextR = Number(e.data);
-            if (Number.isFinite(nextR) && Math.abs(nextR - stRef.current.rate) > 0.001) {
-              stRef.current.rate = nextR;
-              setRateState(nextR);
-              markDirty({ rate: nextR });
-            }
-          },
-          onError() {
-            setSyncMsg({
-              text: t('practice.embedBlocked'),
-              err: true,
-            });
-          },
-        },
-      });
+      playerRef.current = remote
+        ? createRemotePlayer('player', { videoId: id, startSeconds: startSec, events })
+        : new win.YT.Player('player', {
+            videoId: id,
+            playerVars: {
+              playsinline: 1,
+              rel: 0,
+              modestbranding: 1,
+              start: Math.floor(startSec || 0),
+              origin: window.location.origin,
+            },
+            events,
+          });
     } catch {
       setSyncMsg({ text: t('practice.ytInitFailed'), err: true });
     }
@@ -1315,31 +1322,34 @@ export function PracticePage(): React.ReactElement {
     document.title = t('practice.documentTitle');
     const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
 
-    const prevReady = win.onYouTubeIframeAPIReady;
-    win.onYouTubeIframeAPIReady = () => {
-      ytReadyRef.current = true;
-      if (typeof prevReady === 'function') prevReady();
-      if (pendingLoadRef.current) {
-        const p = pendingLoadRef.current;
-        pendingLoadRef.current = null;
-        createOrCuePlayer(p.id, p.start);
-      }
-    };
-
-    if (win.YT && typeof win.YT.Player === 'function') {
-      ytReadyRef.current = true;
-    } else if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-      const s = document.createElement('script');
-      s.src = 'https://www.youtube.com/iframe_api';
-      s.onload = () => {
-        if (!ytReadyRef.current && win.YT && typeof win.YT.Player === 'function') {
-          win.onYouTubeIframeAPIReady();
+    // M1A-2: 원격 플레이어(iOS 앱)는 iframe_api를 넣지 않는다. 첫 영상은 createOrCuePlayer 원격 분기로 바로 간다
+    if (!shouldUseRemotePlayer()) {
+      const prevReady = win.onYouTubeIframeAPIReady;
+      win.onYouTubeIframeAPIReady = () => {
+        ytReadyRef.current = true;
+        if (typeof prevReady === 'function') prevReady();
+        if (pendingLoadRef.current) {
+          const p = pendingLoadRef.current;
+          pendingLoadRef.current = null;
+          createOrCuePlayer(p.id, p.start);
         }
       };
-      s.onerror = () => {
-        setSyncMsg({ text: t('practice.ytLoadFailed'), err: true });
-      };
-      document.head.appendChild(s);
+
+      if (win.YT && typeof win.YT.Player === 'function') {
+        ytReadyRef.current = true;
+      } else if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const s = document.createElement('script');
+        s.src = 'https://www.youtube.com/iframe_api';
+        s.onload = () => {
+          if (!ytReadyRef.current && win.YT && typeof win.YT.Player === 'function') {
+            win.onYouTubeIframeAPIReady();
+          }
+        };
+        s.onerror = () => {
+          setSyncMsg({ text: t('practice.ytLoadFailed'), err: true });
+        };
+        document.head.appendChild(s);
+      }
     }
 
     const q = new URLSearchParams(window.location.search);

@@ -130,6 +130,13 @@ private val SPA_ENTRY_PAGES = setOf(
     "profile.html"
 )
 
+// M1A-2: iOS 앱(capacitor://localhost)이 iframe으로 넣는 YouTube 플레이어 전용 페이지. 이 한 경로만 앱 출처의 iframe을 허용한다.
+internal const val PLAYER_EMBED_PAGE = "player-embed.html"
+internal const val PLAYER_EMBED_CSP =
+    "default-src 'none'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; " +
+        "frame-src https://www.youtube.com; style-src 'unsafe-inline'; img-src https://i.ytimg.com; " +
+        "frame-ancestors capacitor://localhost https://localhost; base-uri 'none'; object-src 'none'; form-action 'none'"
+
 fun main(args: Array<String>) {
     val jobIdArg = args.indexOf("--analyze-job").takeIf { it >= 0 && it + 1 < args.size }?.let { args[it + 1] }
         ?: System.getenv("ANALYZE_JOB_ID")?.takeIf { it.isNotBlank() }
@@ -331,7 +338,10 @@ fun Application.module(
 
     intercept(ApplicationCallPipeline.Plugins) {
         call.response.headers.append("X-Content-Type-Options", "nosniff")
-        call.response.headers.append("X-Frame-Options", "DENY")
+        // M1A-2: 플레이어 전용 페이지 한 경로만 XFO를 빼고 CSP frame-ancestors로 앱 출처를 허용한다(정적 서빙에서 붙임)
+        if (call.request.path() != "/$PLAYER_EMBED_PAGE") {
+            call.response.headers.append("X-Frame-Options", "DENY")
+        }
     }
 
     val canonicalPublicRoot = publicDir.canonicalFile
@@ -432,7 +442,10 @@ fun Application.module(
                     HttpHeaders.CacheControl,
                     if (ext == "html") "no-cache" else "public, max-age=300"
                 )
-                if (ext == "html") {
+                if (relPath == PLAYER_EMBED_PAGE) {
+                    call.response.headers.append("Content-Security-Policy", PLAYER_EMBED_CSP)
+                    call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
+                } else if (ext == "html") {
                     call.response.headers.append("Content-Security-Policy", "frame-ancestors 'none'")
                 }
 

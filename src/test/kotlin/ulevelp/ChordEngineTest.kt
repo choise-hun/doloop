@@ -313,6 +313,50 @@ class ChordEngineTest {
         assertTrue(headRes.bodyAsBytes().isEmpty())
     }
 
+    private fun playerEmbedPublicDir(): java.io.File {
+        val dir = spaPublicDir()
+        java.io.File(dir, "player-embed.html").writeText("<!doctype html><html><body><div id=\"player\"></div></body></html>")
+        java.io.File(dir, "player-embed.js").writeText("'use strict';")
+        return dir
+    }
+
+    @Test
+    fun `M1A2-Z4 player-embed_html만 앱 출처 iframe 허용 CSP와 Referrer-Policy, X-Frame-Options 없음`() = testApplication {
+        application { module(publicDir = playerEmbedPublicDir(), dbConfig = null, authConfig = null) }
+        for (res in listOf(client.get("/player-embed.html"), client.head("/player-embed.html"))) {
+            assertEquals(HttpStatusCode.OK, res.status)
+            assertNull(res.headers["X-Frame-Options"])
+            assertEquals(PLAYER_EMBED_CSP, res.headers["Content-Security-Policy"])
+            assertEquals(listOf(PLAYER_EMBED_CSP), res.headers.getAll("Content-Security-Policy"))
+            assertTrue(PLAYER_EMBED_CSP.contains("frame-ancestors capacitor://localhost https://localhost;"))
+            assertEquals("strict-origin-when-cross-origin", res.headers["Referrer-Policy"])
+            assertEquals("nosniff", res.headers["X-Content-Type-Options"])
+            assertEquals("no-cache", res.headers["Cache-Control"])
+        }
+    }
+
+    @Test
+    fun `M1A2-Z5 player-embed 외 경로는 X-Frame-Options DENY와 frame-ancestors none 유지`() = testApplication {
+        application { module(publicDir = playerEmbedPublicDir(), dbConfig = null, authConfig = null) }
+        for (path in listOf("/", "/index.html", "/practice.html")) {
+            val res = client.get(path)
+            assertEquals(HttpStatusCode.OK, res.status, path)
+            assertEquals("DENY", res.headers["X-Frame-Options"], path)
+            assertEquals("frame-ancestors 'none'", res.headers["Content-Security-Policy"], path)
+            assertNull(res.headers["Referrer-Policy"], path)
+        }
+        val js = client.get("/player-embed.js")
+        assertEquals(HttpStatusCode.OK, js.status)
+        assertEquals("DENY", js.headers["X-Frame-Options"])
+        assertNull(js.headers["Content-Security-Policy"])
+        val health = client.get("/api/health")
+        assertEquals("DENY", health.headers["X-Frame-Options"])
+        assertNull(health.headers["Content-Security-Policy"])
+        // 경로 변형은 예외에 들어가지 않는다
+        val variant = client.get("/player-embed.html/")
+        assertEquals("DENY", variant.headers["X-Frame-Options"])
+    }
+
     private fun spaPublicDir(withSpa: Boolean = true): java.io.File {
         val dir = kotlin.io.path.createTempDirectory("ulp-public").toFile()
         java.io.File(dir, "config.js").writeText("window.ULEVELP_CONFIG = {};")

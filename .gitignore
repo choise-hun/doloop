@@ -19,3 +19,4 @@ DESIGN.md
 test-results/
 dist/
 playwright-report/
+dist-app/
