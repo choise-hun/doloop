@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RE:DO — 반복·프리셋 버튼 배치 4안</title>
+<style data-source="frontend/src/styles/tokens.css">
+/* frontend/src/styles/tokens.css */
+/* 디자인 규칙(docs/rules/frontend-design.md) 요약:
+ * 1. 바탕은 순백(#FFFFFF)을 절대 쓰지 않고 웜 뉴트럴(#F0EEEA, 표면 #F6F6F1)을 기본값으로 쓴다.
+ * 2. 파란색은 기존 링크·지판 근음 점에만 남기고 새 화면에는 쓰지 않는다. 선택된 탭·칩·주 CTA 버튼은 가장 어두운 명도(#1D1D1F)로 만든다.
+ * 3. 주황색(#E64D01, 다크 #FF6B2B)은 유일한 포인트 색이다. 지금 칠 음·스트릭·프레임 바 같은 표시와 테두리에만 쓰고 글자색으로 쓰지 않는다.
+ * 4. 컨트롤(버튼·탭·토글·단일행 인풋)과 기존 화면의 칩·배지는 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
+ */
+:root {
+  /* 1. 기본 배경·표면·글자·선 (순백 #FFFFFF 금지) */
+  --bg: #F0EEEA;
+  --surface: #f6f6f1;
+  --surface2: #e1e0d6;
+  --ink: #1d1d1f;
+  --ink-navy: #191265;
+  --muted: #6b6a63;
+  --line: #cfcec4;
+
+  /* 2. 주 컨트롤 강조 (가장 어두운 명도) */
+  --accent: #1d1d1f;
+  --accent-ink: #f6f6f1;
+
+  /* 3. 파랑 (기존 링크·지판 전용, 새 화면에는 쓰지 않는다) */
+  --blue-vivid: #1f3fc3;
+  --blue-deep: #0b369a;
+  --accent-text: #1f3fc3;
+  --link: #1f3fc3;
+  --root: #1f3fc3;
+  --root-ink: #f6f6f1;
+  --guide: #c9cfee;
+  --guide-ink: #191265;
+  --other: #e1e0d6;
+  --other-line: #a3a196;
+
+  /* 4. 포인트 주황 (표시·테두리 전용, 글자색 금지) */
+  --orange-vivid: #e64d01;
+  --orange-terra: #e64d01;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #e64d01;
+  --moved: #e64d01;
+
+  /* 5. 지판 및 상태 색상 */
+  --wood: #e6e5dc;
+  --wood-line: #a9a79b;
+  --string: #8c8a80;
+  --good: #2f6b3a;
+  --bad: #b3261e;
+  --scrim: rgb(0 0 0 / 0.45);
+  --media-bg: #000000;
+
+  /* 6. 타이포그래피 */
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Archivo", "Noto Sans KR", system-ui, sans-serif;
+
+  /* 7. 형태 (중간 곡률 3~16px 전면 금지) */
+  --radius-pill: 9999px;
+  --radius-card: 0px;
+
+  /* 8. 레이아웃 정렬 규격 */
+  --container-max: 1120px;
+  --page-narrow-max: 840px;
+  --player-max: 1760px; /* WF-2: 플레이어 화면 틀 폭 상한 */
+  --header-height: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171716;
+    --surface: #20201e;
+    --surface2: #2b2a27;
+    --ink: #ecece4;
+    --ink-navy: #e2e5fb;
+    --muted: #9c9a92;
+    --line: #3a3935;
+    --accent: #ecece4;
+    --accent-ink: #171716;
+    --blue-vivid: #5c74f0;
+    --blue-deep: #3b52c4;
+    --accent-text: #9aa8f5;
+    --link: #9aa8f5;
+    --root: #5c74f0;
+    --root-ink: #141413;
+    --guide: #2f3770;
+    --guide-ink: #e2e5fb;
+    --other: #2e2d2a;
+    --other-line: #8c8a80;
+    --orange-vivid: #ff6b2b;
+    --orange-terra: #ff6b2b;
+    --now: #f3d3bf;
+    --now-ink: #1d1d1f;
+    --now-ring: #ff6b2b;
+    --moved: #ff6b2b;
+    --wood: #1e1e1c;
+    --wood-line: #55534d;
+    --string: #8c8a80;
+    --good: #6fbf7e;
+    --bad: #f2867c;
+    --scrim: rgb(0 0 0 / 0.6);
+    --media-bg: #000000;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171716;
+  --surface: #20201e;
+  --surface2: #2b2a27;
+  --ink: #ecece4;
+  --ink-navy: #e2e5fb;
+  --muted: #9c9a92;
+  --line: #3a3935;
+  --accent: #ecece4;
+  --accent-ink: #171716;
+  --blue-vivid: #5c74f0;
+  --blue-deep: #3b52c4;
+  --accent-text: #9aa8f5;
+  --link: #9aa8f5;
+  --root: #5c74f0;
+  --root-ink: #141413;
+  --guide: #2f3770;
+  --guide-ink: #e2e5fb;
+  --other: #2e2d2a;
+  --other-line: #8c8a80;
+  --orange-vivid: #ff6b2b;
+  --orange-terra: #ff6b2b;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #ff6b2b;
+  --moved: #ff6b2b;
+  --wood: #1e1e1c;
+  --wood-line: #55534d;
+  --string: #8c8a80;
+  --good: #6fbf7e;
+  --bad: #f2867c;
+  --scrim: rgb(0 0 0 / 0.6);
+  --media-bg: #000000;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root:lang(ja) {
+  --font-body: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', sans-serif;
+  line-break: strict;
+  word-break: normal;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding-block: 20px 56px;
+  /* M1A-2: 앱(노치·상태 표시줄) 위 여백. 브라우저에서는 env()가 0이라 20px 그대로 */
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* 공통 필 버튼 (docs/rules/frontend-design.md §3: 높이 48px/52px, 글자 약 35%, 좌우 패딩 높이의 0.45~0.75배, 곡률 9999px) */
+.pillBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pillBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ghostBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ghostBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 공통 직각 카드·패널 (docs/rules/frontend-design.md §2: 곡률 0px) */
+.cardBox,
+.panelBox {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.inpField {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 0 22px;
+  min-height: 48px;
+  width: 100%;
+  min-width: 0;
+}
+
+textarea.inpField {
+  border-radius: var(--radius-card);
+  padding: 14px 18px;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.msg {
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 20px;
+  margin: 0;
+}
+.msg.err {
+  color: var(--bad);
+}
+.msg.ok {
+  color: var(--good);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+
+</style>
+<style>
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.6}
+main{max-width:1120px;margin:auto;padding:32px 16px 64px}h1{font-family:var(--font-display);font-size:32px;line-height:1.2;margin:12px 0 16px}h2{font-size:24px;margin:0}p{margin:8px 0}button,select,input{font:inherit;color:var(--ink)}button,select{height:44px;line-height:1.3;min-height:44px;border:1px solid var(--line);background:var(--bg);padding:8px 12px;cursor:pointer}button:hover,select:hover{border-color:var(--ink)}button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}button:disabled{opacity:.4;cursor:default}[hidden]{display:none!important}.muted{color:var(--muted)}.eyebrow{font-weight:700;letter-spacing:.08em}.toolbar{display:flex;flex-wrap:wrap;gap:12px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);align-items:end}.toolbar label{display:grid;gap:4px;font-size:13px}.toolbar button{align-self:end}.toolbar select{max-width:100%}.decision{margin-top:24px}.candidate{margin:24px 0;border:1px solid var(--line);background:var(--surface);padding:24px}.candidate header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}.badge{font-size:12px;border:1px solid var(--now-ring);padding:2px 8px}.candidate>p{color:var(--muted);max-width:75ch}.stage{margin-top:20px;overflow:hidden}.sample{width:min(var(--preview-width,620px),100%);border:1px solid var(--line);padding:16px;background:var(--bg);container-type:inline-size;container-name:control}.sample-title{display:flex;justify-content:space-between;gap:8px;margin-bottom:12px;font-weight:700}.points{font-family:var(--font-mono);font-size:13px;color:var(--muted)}.row{display:flex;gap:6px;align-items:stretch;min-width:0}.loop{flex:0 0 92px;white-space:nowrap;font-weight:700}.loop[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}.preset{min-width:0;flex:1;width:100%;text-overflow:ellipsis;padding-right:8px}.wait{flex:0 0 56px;font-family:var(--font-mono);font-weight:700;padding-inline:6px}.clear{flex:0 0 44px;width:44px;padding-inline:0;font-size:18px}.save-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px}.text-action{padding:0;min-height:44px;border:0;background:transparent;text-decoration:underline;text-underline-offset:4px;font-size:13px;font-weight:700}.text-action:hover{color:var(--ink)}.restore{margin-left:auto;color:var(--muted)}.feedback{min-height:24px;font-size:13px;color:var(--muted);margin:8px 0 0}.a .main-row{display:grid;grid-template-columns:92px minmax(0,1fr) 56px 44px;gap:6px;grid-template-areas:'loop preset wait clear'}.a .loop{grid-area:loop}.a .preset{grid-area:preset}.a .wait{grid-area:wait}.a .clear{grid-area:clear}.b .main-row{justify-content:space-between}.b .tools{display:flex;gap:6px;flex:0 0 106px}.b .preset-row{margin-top:12px;display:flex;gap:8px}.b .preset{min-height:44px}.c .preset-row{display:flex;gap:8px}.c .main-row{margin-top:12px}.c .spacer{flex:1}.d .main-row{display:grid;gap:6px;grid-template-columns:92px minmax(0,1fr)}.d .lower-row{display:flex;gap:6px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.d .lower-row>span{flex:1;font-size:13px;color:var(--muted)}.notes{border-top:1px solid var(--line);padding-top:16px}.notes li{margin:8px 0}.key{font-family:var(--font-mono);font-weight:700}.compare{font-size:13px}.result{padding:16px;border:1px solid var(--line);margin-top:24px}.choose[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+@media(max-width:520px){main{padding:24px 12px 48px}h1{font-size:24px}.candidate{padding:16px 12px}.sample{padding:12px}.candidate h2{font-size:18px}.toolbar{gap:8px}.toolbar label{flex:1 1 140px}.toolbar select{width:100%}}
+/* A 수정 시안: 버튼 가로 비중만 기존의 1.5배. 높이·글자는 원본 유지. B/C/D는 비교 원본 유지. */
+.a .main-row{grid-template-columns:clamp(64px,25cqi,138px) minmax(0,1fr) clamp(44px,15cqi,84px) 44px;align-items:center}
+.a .loop,.a .wait{height:44px;min-height:44px;font-size:14px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">RE:DO / 배치 검토</div>
+<h1>A 균형 배치 · 반복과 대기의 가로 비중 확대</h1>
+<p>A안을 유지하고 반복·대기 버튼의 가로 비중을 늘린 수정 시안입니다. B/C/D는 이전 크기의 비교 원본입니다. 패널 폭·긴 이름·기존 선택 상태를 바꾸고, 반복·대기·초기화를 직접 눌러 비교하세요.</p>
+<p class="muted">시안 전용입니다. 제품 화면·서버·실제 프리셋은 변경하지 않습니다. ‘×’는 구간 초기화이며, 프리셋 삭제와 분리했습니다.</p>
+<section class="toolbar" aria-label="비교 조건">
+<label>패널 폭<select id="width"><option value="320">좁은 패널 · 320px</option><option value="390">중간 패널 · 390px</option><option value="620" selected>넓은 패널 · 620px</option></select></label>
+<label>선택 상태<select id="selection"><option value="saved" selected>기존 프리셋 선택</option><option value="new">선택 없음 / 새 구간</option></select></label>
+<label>이름 길이<select id="nameLength"><option value="short">짧은 이름</option><option value="long">긴 이름</option></select></label>
+
+<button id="theme" type="button">라이트로 보기</button><button id="resetExamples" type="button">예시 초기화</button>
+</section>
+<p class="compare">공통 동작: 반복 ON/OFF · 대기 버튼 클릭 시 0s ↔ 3s · 구간 초기화 · 기존 프리셋 변경/다른 이름 저장/삭제의 구분.</p>
+<div id="candidates"></div>
+<section class="result" aria-live="polite"><strong id="choice">A 균형 배치 확정 · 사용자 지적 반영 정정</strong><p class="muted">사용자 선택은 A 균형 배치입니다. 반복 너비 138px, 대기 너비 84px로 가로 비중만 늘렸습니다. 높이 44px·글자 14px는 원래대로 유지합니다. 2026-11-17 사용자 지적에 따라 대기0/3만·한 줄·저장 바로 아래로 정정합니다. 선택 버튼은 검토 표시만 하며 구현을 시작하지 않습니다.</p></section>
+<section class="notes"><h2>선택 전에 확인할 점</h2><ul><li>A 반복 버튼은 너비 92→138px, 대기 버튼은 56→84px로 가로 비중만 1.5배 늘렸습니다. 높이 44px·글자 14px는 유지합니다. B/C/D는 원본 크기입니다.</li><li>A안은 좁은 패널에서도 네 컨트롤을 같은 줄에 유지합니다. 반복·대기의 가로 폭만 줄이고, 높이44px·글자14px·초기화44px는 유지합니다. 저장 동작은 바로 아래에 둡니다.</li><li>기존 프리셋을 고르면 ‘변경 저장 / 다른 이름 저장 / 삭제’, 선택이 없으면 ‘구간 프리셋 저장’을 표시합니다.</li><li>사용자 확정: 별도 대기 선택창과5/10초를 제거하고0s↔3s 버튼 하나만 사용합니다.</li><li>정정 검증: 별도 대기 선택창 없음·한 줄 유지·저장 바로 아래·0/3초 실제 조작을 제품에서 확인합니다.</li></ul></section>
+</main>
+<script>
+const variants=[
+{id:'a',title:'A · 균형 한 줄 / 가로 비중 조정',tag:'선택안 · 수정 검토',description:'반복 너비 138px · 대기 너비 84px · 높이 44px/글자 14px 유지. 반복 | 프리셋 | 대기 | 초기화 순서를 유지하며, 좁아도 프리셋은 같은 줄에 유지합니다.'},
+{id:'b',title:'B · 두 줄 고정',tag:'좁은 패널에 안정적',description:'첫 줄은 반복·대기·초기화, 둘째 줄은 프리셋입니다. 폭이 바뀌어도 기능 위치와 줄 구성이 같습니다.'},
+{id:'c',title:'C · 프리셋 먼저',tag:'저장한 구간 중심',description:'프리셋 선택을 첫 줄에 크게 두고, 반복·대기·초기화를 아래에 모았습니다. 프리셋을 자주 바꿀 때 유리합니다.'},
+{id:'d',title:'D · 선택과 보조 기능 분리',tag:'정보 구분 중심',description:'반복·프리셋을 첫 줄에 두고, 대기·초기화는 얇은 구분선 아래에 모았습니다. 두 종류의 기능을 분명히 나눕니다.'}
+];
+const root=document.getElementById('candidates');
+const loop='<button type="button" class="loop" aria-pressed="true">반복 중</button>';
+const preset='<select class="preset" aria-label="구간 프리셋 선택"><option value="">프리셋 선택</option><option value="verse" selected>후렴 · 17:16–18:05</option><option value="intro">도입 · 00:10–00:35</option></select>';
+const wait='<button type="button" class="wait" aria-label="반복 전 대기 시간">0s</button>';
+const clear='<button type="button" class="clear" aria-label="구간 초기화">×</button>';
+const save='<div class="save-row"><button type="button" class="text-action update">변경 저장</button><button type="button" class="text-action saveas">다른 이름 저장</button><button type="button" class="text-action delete">프리셋 삭제</button><button type="button" class="text-action save-new" hidden>구간 프리셋 저장</button><button type="button" class="text-action restore">구간 복원</button></div>';
+for(const v of variants){
+ let controls='';
+ if(v.id==='a')controls='<div class="main-row">'+loop+preset+wait+clear+'</div>';
+ if(v.id==='b')controls='<div class="row main-row">'+loop+'<div class="tools">'+wait+clear+'</div></div><div class="preset-row">'+preset+'</div>';
+ if(v.id==='c')controls='<div class="preset-row">'+preset+'</div><div class="row main-row">'+loop+'<span class="spacer"></span>'+wait+clear+'</div>';
+ if(v.id==='d')controls='<div class="main-row">'+loop+preset+'</div><div class="lower-row"><span>반복 전 대기</span>'+wait+clear+'</div>';
+ const card=document.createElement('article');card.className='candidate';card.id='candidate-'+v.id;
+ card.innerHTML='<header><h2>'+v.title+'</h2><span class="badge">'+v.tag+'</span></header><p>'+v.description+'</p><div class="stage"><section class="sample '+v.id+'" aria-label="'+v.title+' 조작 예시"><div class="sample-title"><span>구간 반복</span><span class="points">17:16 → 18:05</span></div>'+controls+save+'<p class="feedback" role="status">저장한 프리셋을 선택한 상태입니다.</p></section></div><p class="decision"><button type="button" class="choose" aria-pressed="false">'+v.title.split(' · ')[0]+'안 검토 선택</button></p>';
+ root.appendChild(card);
+ const sample=card.querySelector('.sample'),feedback=sample.querySelector('.feedback');
+ sample.querySelector('.loop').addEventListener('click',e=>{const active=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',String(active));e.currentTarget.textContent=active?'반복 중':'반복';feedback.textContent=active?'지정한 A–B 구간을 반복합니다.':'반복을 껐습니다.'});
+ sample.querySelector('.wait').addEventListener('click',e=>{const next=Number(e.currentTarget.dataset.seconds)>0?0:3;e.currentTarget.dataset.seconds=String(next);e.currentTarget.textContent=next+'s';feedback.textContent=next?'반복 전 3초 대기 · 진행 중 카운트다운은 취소 후 새 값 적용':'반복 전 대기 없음 · 진행 중 카운트다운 취소'});
+ sample.querySelector('.clear').addEventListener('click',()=>{sample.querySelector('.points').textContent='A — → B —';sample.querySelector('.loop').disabled=true;feedback.textContent='구간만 초기화했습니다. 저장한 프리셋은 삭제하지 않았습니다.'});
+ sample.querySelector('.restore').addEventListener('click',()=>{sample.querySelector('.points').textContent='17:16 → 18:05';sample.querySelector('.loop').disabled=false;feedback.textContent='구간을 복원했습니다.'});
+ sample.querySelector('.preset').addEventListener('change',e=>setSaved(sample,Boolean(e.currentTarget.value)));
+ for(const action of ['update','saveas','delete','save-new'])sample.querySelector('.'+action).addEventListener('click',()=>{if(action==='delete'){sample.querySelector('.preset').value='';setSaved(sample,false)}feedback.textContent=({update:'선택한 프리셋에 현재 구간을 저장하는 동작입니다.',saveas:'기존 프리셋은 보존하고 새 이름으로 저장하는 동작입니다.',delete:'프리셋 삭제 동작 예시입니다. × 구간 초기화와 구별합니다.','save-new':'새 구간 프리셋 저장 동작 예시입니다.'})[action]+' 실제 저장/삭제는 하지 않습니다.'});
+ card.querySelector('.choose').addEventListener('click',()=>{document.querySelectorAll('.choose').forEach(x=>x.setAttribute('aria-pressed','false'));card.querySelector('.choose').setAttribute('aria-pressed','true');document.getElementById('choice').textContent=v.title+'을 검토 대상으로 선택했습니다. 제품 적용은 별도 검토 후 진행합니다.'});
+}
+function setSaved(sample,saved){for(const cls of ['update','saveas','delete'])sample.querySelector('.'+cls).hidden=!saved;sample.querySelector('.save-new').hidden=saved;sample.querySelector('.feedback').textContent=saved?'저장한 프리셋을 선택한 상태입니다.':'프리셋 선택 없음 · 새 구간으로 저장할 수 있습니다.'}
+function syncConditions(){
+ const width=document.getElementById('width').value;document.documentElement.style.setProperty('--preview-width',width+'px');
+ const saved=document.getElementById('selection').value==='saved',long=document.getElementById('nameLength').value==='long',seconds='0';
+ document.querySelectorAll('.sample').forEach(sample=>{const select=sample.querySelector('.preset');select.options[1].textContent=long?'후렴 반복 연습 — 17:16–18:05 / 느린 배속으로 길게 저장한 프리셋 이름':'후렴 · 17:16–18:05';select.value=saved?'verse':'';setSaved(sample,saved);sample.querySelector('.wait').dataset.seconds=seconds;sample.querySelector('.wait').textContent=seconds+'s'});
+}
+for(const id of ['width','selection','nameLength'])document.getElementById(id).addEventListener('change',syncConditions);
+document.getElementById('theme').addEventListener('click',e=>{const dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'light';e.currentTarget.textContent=dark?'라이트로 보기':'다크로 보기'});
+document.getElementById('resetExamples').addEventListener('click',()=>{document.querySelectorAll('.sample').forEach(sample=>{sample.querySelector('.loop').setAttribute('aria-pressed','true');sample.querySelector('.loop').textContent='반복 중';sample.querySelector('.loop').disabled=false;sample.querySelector('.points').textContent='17:16 → 18:05'});syncConditions()});
+syncConditions();
+</script></body></html>

@@ -1,0 +1,300 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iOS 입력 확대 수정 비교</title><style>/* frontend/src/styles/tokens.css */
+/* 디자인 규칙(docs/rules/frontend-design.md) 요약:
+ * 1. 바탕은 순백(#FFFFFF)을 절대 쓰지 않고 웜 뉴트럴(#F0EEEA, 표면 #F6F6F1)을 기본값으로 쓴다.
+ * 2. 파란색은 기존 링크·지판 근음 점에만 남기고 새 화면에는 쓰지 않는다. 선택된 탭·칩·주 CTA 버튼은 가장 어두운 명도(#1D1D1F)로 만든다.
+ * 3. 주황색(#E64D01, 다크 #FF6B2B)은 유일한 포인트 색이다. 지금 칠 음·스트릭·프레임 바 같은 표시와 테두리에만 쓰고 글자색으로 쓰지 않는다.
+ * 4. 컨트롤(버튼·탭·토글·단일행 인풋)과 기존 화면의 칩·배지는 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
+ */
+:root {
+  /* 1. 기본 배경·표면·글자·선 (순백 #FFFFFF 금지) */
+  --bg: #F0EEEA;
+  --surface: #f6f6f1;
+  --surface2: #e1e0d6;
+  --ink: #1d1d1f;
+  --ink-navy: #191265;
+  --muted: #6b6a63;
+  --line: #cfcec4;
+
+  /* 2. 주 컨트롤 강조 (가장 어두운 명도) */
+  --accent: #1d1d1f;
+  --accent-ink: #f6f6f1;
+
+  /* 3. 파랑 (기존 링크·지판 전용, 새 화면에는 쓰지 않는다) */
+  --blue-vivid: #1f3fc3;
+  --blue-deep: #0b369a;
+  --accent-text: #1f3fc3;
+  --link: #1f3fc3;
+  --root: #1f3fc3;
+  --root-ink: #f6f6f1;
+  --guide: #c9cfee;
+  --guide-ink: #191265;
+  --other: #e1e0d6;
+  --other-line: #a3a196;
+
+  /* 4. 포인트 주황 (표시·테두리 전용, 글자색 금지) */
+  --orange-vivid: #e64d01;
+  --orange-terra: #e64d01;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #e64d01;
+  --moved: #e64d01;
+
+  /* 5. 지판 및 상태 색상 */
+  --wood: #e6e5dc;
+  --wood-line: #a9a79b;
+  --string: #8c8a80;
+  --good: #2f6b3a;
+  --bad: #b3261e;
+  --scrim: rgb(0 0 0 / 0.45);
+  --media-bg: #000000;
+
+  /* 6. 타이포그래피 */
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Archivo", "Noto Sans KR", system-ui, sans-serif;
+
+  /* 7. 형태 (중간 곡률 3~16px 전면 금지) */
+  --radius-pill: 9999px;
+  --radius-card: 0px;
+
+  /* 8. 레이아웃 정렬 규격 */
+  --container-max: 1120px;
+  --page-narrow-max: 840px;
+  --player-max: 1760px; /* WF-2: 플레이어 화면 틀 폭 상한 */
+  --header-height: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171716;
+    --surface: #20201e;
+    --surface2: #2b2a27;
+    --ink: #ecece4;
+    --ink-navy: #e2e5fb;
+    --muted: #9c9a92;
+    --line: #3a3935;
+    --accent: #ecece4;
+    --accent-ink: #171716;
+    --blue-vivid: #5c74f0;
+    --blue-deep: #3b52c4;
+    --accent-text: #9aa8f5;
+    --link: #9aa8f5;
+    --root: #5c74f0;
+    --root-ink: #141413;
+    --guide: #2f3770;
+    --guide-ink: #e2e5fb;
+    --other: #2e2d2a;
+    --other-line: #8c8a80;
+    --orange-vivid: #ff6b2b;
+    --orange-terra: #ff6b2b;
+    --now: #f3d3bf;
+    --now-ink: #1d1d1f;
+    --now-ring: #ff6b2b;
+    --moved: #ff6b2b;
+    --wood: #1e1e1c;
+    --wood-line: #55534d;
+    --string: #8c8a80;
+    --good: #6fbf7e;
+    --bad: #f2867c;
+    --scrim: rgb(0 0 0 / 0.6);
+    --media-bg: #000000;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171716;
+  --surface: #20201e;
+  --surface2: #2b2a27;
+  --ink: #ecece4;
+  --ink-navy: #e2e5fb;
+  --muted: #9c9a92;
+  --line: #3a3935;
+  --accent: #ecece4;
+  --accent-ink: #171716;
+  --blue-vivid: #5c74f0;
+  --blue-deep: #3b52c4;
+  --accent-text: #9aa8f5;
+  --link: #9aa8f5;
+  --root: #5c74f0;
+  --root-ink: #141413;
+  --guide: #2f3770;
+  --guide-ink: #e2e5fb;
+  --other: #2e2d2a;
+  --other-line: #8c8a80;
+  --orange-vivid: #ff6b2b;
+  --orange-terra: #ff6b2b;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #ff6b2b;
+  --moved: #ff6b2b;
+  --wood: #1e1e1c;
+  --wood-line: #55534d;
+  --string: #8c8a80;
+  --good: #6fbf7e;
+  --bad: #f2867c;
+  --scrim: rgb(0 0 0 / 0.6);
+  --media-bg: #000000;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root:lang(ja) {
+  --font-body: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Archivo', 'Noto Sans JP', 'Noto Sans KR', sans-serif;
+  line-break: strict;
+  word-break: normal;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding-block: 20px 56px;
+  /* M1A-2: 앱(노치·상태 표시줄) 위 여백. 브라우저에서는 env()가 0이라 20px 그대로 */
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* 공통 필 버튼 (docs/rules/frontend-design.md §3: 높이 48px/52px, 글자 약 35%, 좌우 패딩 높이의 0.45~0.75배, 곡률 9999px) */
+.pillBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pillBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ghostBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ghostBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 공통 직각 카드·패널 (docs/rules/frontend-design.md §2: 곡률 0px) */
+.cardBox,
+.panelBox {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.inpField {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 0 22px;
+  min-height: 48px;
+  width: 100%;
+  min-width: 0;
+}
+
+textarea.inpField {
+  border-radius: var(--radius-card);
+  padding: 14px 18px;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.msg {
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 20px;
+  margin: 0;
+}
+.msg.err {
+  color: var(--bad);
+}
+.msg.ok {
+  color: var(--good);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+
+main{max-width:960px;margin:auto}h1{font-size:24px}h2{font-size:18px}section{border:1px solid var(--line);padding:20px;margin-block:20px;background:var(--surface)}.example{max-width:390px;border:1px solid var(--line);padding:16px;background:var(--bg)}form{display:flex;gap:8px;margin-block:12px}input{flex:1;min-width:0;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-pill);padding:10px 18px;min-height:44px}.fixed input{font-size:16px}p{margin-block:8px}button{cursor:pointer} .note{color:var(--muted)}
+</style></head><body><main><h1>iOS 입력 후 화면 확대 문제</h1><p>배치·입력창 높이·버튼은 유지하고, URL 입력 글자만 14 → 16px로 보정합니다.</p><button class="ghostBtn" id="theme">라이트/다크 전환</button>
+<section><h2>현재 · 14px 비교 기준</h2><div class="example"><b>영상 추가</b><form><input type="url" placeholder="https://youtu.be/…" aria-label="기존 14px URL"><button class="pillBtn" type="button">열기</button></form><p class="note">작은 입력 글자 → iOS 자동 확대 가능. 현재 앱은 핀치 복원도 제한됨.</p></div></section>
+<section><h2>A · 입력 16px + 핀치 허용 (추천)</h2><div class="example fixed"><b>영상 추가</b><form><input type="url" placeholder="https://youtu.be/…" aria-label="A안 16px URL"><button class="pillBtn" type="button">열기</button></form></div><p>빈 플레이어·곡 목록 서랍의 URL 입력을 모두 16px로. 입력 자동 확대의 원인을 줄이고, 사용자가 확대했을 때 두 손가락으로 되돌릴 수 있도록 iOS native 핀치를 허용합니다.</p><p class="note">영상 iframe 자체 제스처는 외부 플레이어 동작을 따릅니다.</p></section>
+<section><h2>B · 입력 16px만 보정</h2><div class="example fixed"><b>영상 추가</b><form><input type="url" placeholder="https://youtu.be/…" aria-label="B안 16px URL"><button class="pillBtn" type="button">열기</button></form></div><p>동일한 두 URL 입력만 16px로. 앱의 핀치 제한은 현재대로 유지합니다. 다른 작은 입력에서 발생하는 확대나 수동 확대 복원은 해결 범위에 포함되지 않습니다.</p></section>
+<p class="note">시안에서는 글자/배치를 비교합니다. 실제 앱의 키보드 자동 확대·핀치·스와이프 충돌은 선택 후 iPhone native 테스트로 확인합니다. 최대 배율 고정, blur 시 강제 확대 초기화는 사용하지 않습니다.</p></main><script>document.querySelector('#theme').onclick=()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'};document.querySelectorAll('form').forEach(f=>f.onsubmit=e=>e.preventDefault());</script></body></html>
