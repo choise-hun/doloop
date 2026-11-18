@@ -357,11 +357,144 @@ test('T5 (UI-3): 시작/끝 라벨, 0/3초 버튼, 1120px 정렬 및 재생 버�
   const box = await shell.boundingBox();
   expect(box.width).toBe(1120);
 
-  // 4. 재생 버튼(#playBtn)도 보조 버튼(#backBtn)과 같은 0px 직각(UXR-1 D8)
+  // 4. 재생 버튼(#playBtn)도 보조 버튼(#backBtn)과 같은 3px 블록(UXR-1 D8 같은 모양 유지 + DS2-3 블록 3px)
   const playRadius = await page.locator('#playBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
-  expect(playRadius).toBe('0px'); // UXR-1 D8: 단독 pill 제거, 5버튼 동일 모양
+  expect(playRadius).toBe('3px'); // UXR-1 D8: 단독 pill 제거, 5버튼 동일 모양
   const backRadius = await page.locator('#backBtn').evaluate((el) => window.getComputedStyle(el).borderRadius);
-  expect(backRadius).toBe('0px');
+  expect(backRadius).toBe('3px');
+});
+
+// DS2-3: 토큰을 실제 계산값으로 해석한다(라이트·다크 공통 비교).
+async function ds23Tokens(page) {
+  return page.evaluate(() => {
+    const read = (prop, val) => {
+      const el = document.createElement('span');
+      el.style[prop] = val;
+      document.body.appendChild(el);
+      const out = window.getComputedStyle(el)[prop];
+      el.remove();
+      return out;
+    };
+    return {
+      fill2: read('color', 'var(--fill2)'),
+      seamHairline: read('color', 'var(--seam-hairline)'),
+      reliefBottomMid: read('color', 'var(--relief-bottom-mid)'),
+      accent: read('backgroundColor', 'var(--accent)'),
+    };
+  });
+}
+const ds23Box = (el) => {
+  const s = window.getComputedStyle(el);
+  return {
+    left: s.borderLeftWidth, leftColor: s.borderLeftColor, top: s.borderTopWidth, topColor: s.borderTopColor,
+    radius: s.borderTopLeftRadius, shadow: s.boxShadow, bgImage: s.backgroundImage, bg: s.backgroundColor,
+    border: s.borderTopStyle,
+  };
+};
+
+test('DS23-P1 스파인 카드: 재생·구간·폴더·곡 기록 fill2 12px, 머리 막대·영상 제외 (1280)', async ({ page }) => {
+  await mockApp(page, USER_DATA_SR);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  await page.locator('#songRecord .panel:visible').first().waitFor();
+  const tk = await ds23Tokens(page);
+  for (const sel of ['#ppPlayCard', '#ppCtl', '#ppFolderPanel', '#songRecord .panel:visible']) {
+    const b = await page.locator(sel).first().evaluate(ds23Box);
+    expect(b.left, sel).toBe('12px');
+    expect(b.leftColor, sel).toBe(tk.fill2);
+    expect(b.top, sel).toBe('1px');
+    expect(b.topColor, sel).toBe(tk.seamHairline);
+    expect(b.radius, sel).toBe('3px');
+    expect(b.shadow, sel).toContain(tk.reliefBottomMid);
+  }
+  const head = await page.locator('header.pp-head').evaluate(ds23Box);
+  expect(head.radius).toBe('3px');
+  expect(head.left).toBe('1px');
+  expect(head.leftColor).toBe(tk.seamHairline);
+  const video = await page.locator('#videoBox').evaluate(ds23Box);
+  expect(video.radius).toBe('0px');
+  expect(video.left).toBe('1px');
+});
+
+test('DS23-P2 영상 있음: 필 0개, 트랜스포트·보조 버튼 3px, 속도 세그먼트 (1280)', async ({ page }) => {
+  await mockApp(page, USER_DATA_SR);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  await page.locator('#songRecord .panel:visible').first().waitFor();
+  const tk = await ds23Tokens(page);
+  expect(await page.locator('header.pp-head').evaluate((el) => {
+    const wrap = el.parentElement;
+    return [...wrap.querySelectorAll('a, button')].filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && window.getComputedStyle(b).borderTopLeftRadius === '9999px';
+    }).map((b) => b.id || b.textContent.trim().slice(0, 20));
+  })).toEqual([]);
+  for (const sel of ['#playBtn', '#backBtn', '#recBtn', '#saveBtn', '#loopBtn', '#songCatBtn', '#libBtn', '#folderToggle', '#clearBtn', '#btnWaitTimer']) {
+    expect(await page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius), sel).toBe('3px');
+  }
+  // 공용 .ghostBtn을 덮은 보조 버튼: 줄눈 테두리 + cream 배경(필·먹색 테두리 잔존 금지)
+  const cat = await page.locator('#songCatBtn').evaluate(ds23Box);
+  expect(cat.topColor).toBe(tk.seamHairline);
+  // 프리셋 텍스트 버튼은 배경·테두리 없음 유지(주의 3)
+  const presetBtns = page.locator('#ppCtl button[class*="presetBtn"], #ppCtl button[class*="presetDeleteBtn"]');
+  expect(await presetBtns.count()).toBeGreaterThan(0);
+  for (const b of await presetBtns.all()) {
+    const st = await b.evaluate(ds23Box);
+    expect(st.bg).toBe('rgba(0, 0, 0, 0)');
+    expect(st.border).toBe('none');
+  }
+  const rates = page.locator('#rates');
+  expect(await rates.evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  for (const b of await rates.locator('button').all()) {
+    expect(await b.evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('0px');
+  }
+  expect(await rates.locator('button[aria-pressed="true"]').first().evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe(tk.accent);
+});
+
+test('DS23-P3 영상 없음: #urlForm 열기만 필, 서랍 열기는 3px, 입력 16px, 시간 T4 (1280)', async ({ page }) => {
+  await mockApp(page, STATES.guest);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/practice.html', { waitUntil: 'load' });
+  await page.locator('#urlForm').waitFor();
+  const submit = page.locator('#urlForm button[type="submit"]');
+  expect(await submit.evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('9999px');
+  expect(await page.locator('header.pp-head').evaluate((el) => [...el.parentElement.querySelectorAll('a, button')].filter((b) => {
+    const r = b.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && window.getComputedStyle(b).borderTopLeftRadius === '9999px';
+  }).length)).toBe(1);
+  const input = await page.locator('#urlInput').evaluate((el) => ({ r: window.getComputedStyle(el).borderTopLeftRadius, f: window.getComputedStyle(el).fontSize }));
+  expect(input).toEqual({ r: '3px', f: '16px' });
+  await page.locator('#libBtn').click();
+  await expect(page.locator('#lib')).toBeVisible();
+  expect(await page.locator('#urlForm2 button[type="submit"]').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  const input2 = await page.locator('#urlInput2').evaluate((el) => ({ r: window.getComputedStyle(el).borderTopLeftRadius, f: window.getComputedStyle(el).fontSize }));
+  expect(input2).toEqual({ r: '3px', f: '16px' });
+  expect(await page.locator('#lib').evaluate((el) => [...el.querySelectorAll('a, button')].filter((b) => {
+    const r = b.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && window.getComputedStyle(b).borderTopLeftRadius === '9999px';
+  }).length)).toBe(0);
+  const tNow = await page.locator('#tNow').evaluate((el) => {
+    const s = window.getComputedStyle(el);
+    return { family: s.fontFamily, spacing: s.letterSpacing, weight: s.fontWeight, transform: s.textTransform };
+  });
+  expect(tNow.family.toLowerCase()).toMatch(/mono/);
+  expect(tNow.spacing).toBe('0.96px');
+  expect(tNow.weight).toBe('500');
+  expect(tNow.transform).toBe('uppercase');
+});
+
+test('DS23-P4 다크: 스파인 fill2 다크 값·릴리프 그라데이션 (1280)', async ({ page }) => {
+  await mockApp(page, USER_DATA_SR);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const ctl = await page.locator('#ppCtl').evaluate(ds23Box);
+  expect(ctl.leftColor).toBe('rgb(212, 178, 106)');
+  const play = await page.locator('#ppPlayCard').evaluate(ds23Box);
+  expect(play.bgImage).toContain('linear-gradient');
 });
 
 test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검증', async ({ page }) => {
