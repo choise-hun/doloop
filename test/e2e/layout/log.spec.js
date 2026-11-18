@@ -3,7 +3,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
-const { mockApp, STATES } = require('../support/mock-app');
+const { mockApp, STATES, FIXTURES } = require('../support/mock-app');
 
 layoutSuite({
   name: 'log',
@@ -47,4 +47,91 @@ test('UI-1 T5 1120px 레이아웃 검증: LogPage 메인 컨테이너 최대 너
   expect(Math.abs(box.width - 1120)).toBeLessThanOrEqual(1);
 });
 
+// DS2-3: TRAILS 4:6 전환 — 스파인 fill1·세그먼트 3px 틀·종이+밑줄 선택·필은 상태마다 1개 이하
+async function lgTokens(page) {
+  return page.evaluate(() => {
+    const read = (prop, val) => {
+      const el = document.createElement('span');
+      el.style[prop] = val;
+      document.body.appendChild(el);
+      const out = window.getComputedStyle(el)[prop];
+      el.remove();
+      return out;
+    };
+    return { fill1: read('color', 'var(--fill1)'), paper: read('backgroundColor', 'var(--paper)'), inkStrong: read('color', 'var(--ink-strong)') };
+  });
+}
+const lgBox = (el) => {
+  const s = window.getComputedStyle(el);
+  return { left: s.borderLeftWidth, leftColor: s.borderLeftColor, radius: s.borderTopLeftRadius, bg: s.backgroundColor, sh: s.boxShadow, font: s.fontSize };
+};
+async function lgPills(page, scope) {
+  return page.locator(scope).evaluate((root) => [...root.querySelectorAll('a, button')].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && window.getComputedStyle(el).borderTopLeftRadius === '9999px';
+  }).map((el) => el.id || el.textContent.trim().slice(0, 20)));
+}
+// #calGrid의 가장 가까운 스파인 카드 조상
+const lgCardOf = (el) => {
+  let n = el.parentElement;
+  while (n && parseFloat(window.getComputedStyle(n).borderLeftWidth) <= 1) n = n.parentElement;
+  const s = window.getComputedStyle(n);
+  return { left: s.borderLeftWidth, leftColor: s.borderLeftColor, radius: s.borderTopLeftRadius };
+};
 
+test('DS23-L1 요약·달력 스파인 fill1, 탭 세그먼트, 달력 칸 3px, 필 0개 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.userData);
+  await page.goto('/log.html', { waitUntil: 'load' });
+  await page.locator('#calGrid').waitFor();
+  const tk = await lgTokens(page);
+  const cards = page.locator('#pane-log .summary-card');
+  await expect(cards).toHaveCount(2);
+  for (const c of await cards.all()) {
+    const b = await c.evaluate(lgBox);
+    expect(b.left).toBe('12px');
+    expect(b.leftColor).toBe(tk.fill1);
+    expect(b.radius).toBe('3px');
+  }
+  const cal = await page.locator('#calGrid').evaluate(lgCardOf);
+  expect(cal).toEqual({ left: '12px', leftColor: tk.fill1, radius: '3px' });
+  expect(await page.locator('#logTabs').evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  for (const id of ['#tab-log', '#tab-songs']) {
+    expect(await page.locator(id).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('0px');
+  }
+  const sel = await page.locator('#logTabs [aria-selected="true"]').evaluate(lgBox);
+  expect(sel.bg).toBe(tk.paper);
+  expect(sel.sh).toContain(tk.inkStrong);
+  expect(await page.locator('#calGrid button').first().evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  expect(await lgPills(page, '.log-page')).toEqual([]);
+});
+
+test('DS23-L2 곡 필터 세그먼트·곡 상세 필 1개·공용 버튼/메모 3px (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.userData);
+  await page.goto('/log.html#songs', { waitUntil: 'load' });
+  await page.locator('#songFilters').waitFor();
+  expect(await page.locator('#songFilters').evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  for (const b of await page.locator('#songFilters button').all()) {
+    expect(await b.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('0px');
+  }
+  const song = FIXTURES.longSongs(5)[0];
+  await page.goto(`/log.html?song=${encodeURIComponent(song.id)}`, { waitUntil: 'load' });
+  await page.locator('#detailResume').waitFor();
+  expect(await page.locator('#detailResume').evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('9999px');
+  expect(await lgPills(page, '.log-page')).toEqual(['detailResume']);
+  for (const id of ['#btnDeleteSong', '#btnSaveSongMemo', '#detailMemo']) {
+    expect(await page.locator(id).evaluate((el) => getComputedStyle(el).borderTopLeftRadius), id).toBe('3px');
+  }
+  expect(await page.locator('#detailMemo').evaluate((el) => getComputedStyle(el).fontSize)).toBe('16px');
+});
+
+test('DS23-L3 다크: 요약 스파인 fill1 다크 값·선택 탭 종이 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.userData);
+  await page.goto('/log.html', { waitUntil: 'load' });
+  await page.locator('#calGrid').waitFor();
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  expect(await page.locator('#pane-log .summary-card').first().evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 107, 43)');
+  expect(await page.locator('#logTabs [aria-selected="true"]').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(36, 36, 34)');
+});

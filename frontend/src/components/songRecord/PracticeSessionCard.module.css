@@ -1,8 +1,8 @@
 /* frontend/src/components/songRecord/PracticeSessionCard.module.css */
 .card {
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card, 0);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -205,8 +205,8 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card, 0);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
 }
 
 .partItem {
@@ -328,4 +328,10 @@
   font-size: 12px;
   color: var(--ink);
   margin: 0;
+}
+
+/* DS2-3 D13: 공용 textarea.inpField를 TSX 변경 없이 3px로(명시도 0,2,0 > textarea.inpField 0,1,1). 글자 16px 유지 */
+.sessionMemo :global(.inpField) {
+  border-radius: var(--radius-block);
+  border-color: var(--seam-hairline);
 }
