@@ -1,0 +1,2302 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RE:DO · 홈 UI 융합 시안 (4:6 + RE:DO 라이트 수정 반영 · 2:8 / 3:7 / 4:6 / 5:5)</title>
+<!--
+  RE:DO (ULeveLP) 홈 UI 융합 시안 페이지 (제품 코드 아님).
+  - 참조 1 (첨부): 동네한권 디자인 규칙(Arne Vodder 색·아치·85:10:5, 마쓰야 긴자 파사드 리벳 격자, 하라 켄야 T1~T6 · H2~H3 · 3D 스파인 블록 · 스케일 룰러)
+  - 참조 2 (현재): RE:DO (frontend/src/styles/tokens.css, HomePage.tsx, docs/rules/frontend-design.md)
+  - 2차 수정 반영:
+    1) BETTER CHORDS "이어서" 강조 색을 BETTER 섹션 박스(--section-spine)와 일치
+    2) RE:DO 라이트 표면·화이트 따뜻함 ~20% 제거(더 차갑고 푸른 미네랄 톤)
+    3) 과도한 필 제거 -> 사각형 버튼 + 글자 버튼(전체 노트 → 스타일)으로 정리 (주 CTA 1개만 필)
+    4) 취향 코드 진행 순서: 합산 | 레퍼런스 | 분석 (기본 합산)
+    5) "# 랜덤으로 보여주기" -> "랜덤" 글자 버튼으로 압축
+    6) LEARN <-> PLAYER 순서 교체 및 PLAYER 강조 3안 비교 가능
+    7) COMMUNITY 닫힌 기능으로 제외
+  - 외부 네트워크 의존 없음, 단일 HTML 파일로 동작.
+-->
+<style>
+  :root {
+    /* RE:DO 라이트 (따뜻함 ~20% 제거: 더 차갑고 푸른 미네랄 뉴트럴) */
+    --bg: #ECEEF0;
+    --surface: #F1F4F7;
+    --surface2: #DCE0E5;
+    --surface3: #C7CCD3;
+    --line: #C7CCD3;
+    --ink: #1D1D1F;
+    --ink-strong: #1D1D1F;
+    --muted: #61656C;
+    --accent: #1D1D1F;
+    --accent-ink: #F1F4F7;
+    --orange-vivid: #E64D01;
+    --now-ring: #E64D01;
+    --now-tint: #E6ECF2;
+    --link: #1F3FC3;
+
+    /* 첨부 동네한권 조형·채움 토큰 (쿨 라이트에 맞춘 채움 조합) */
+    --fill1: #E64D01;
+    --fill2: #7F93A8;
+    --fill3: #8BA1A8;
+    --cream: #EDF0F3;
+    --paper: #F1F4F7;
+
+    /* 파사드·릴리프 파생 토큰 (color-mix in oklab) */
+    --panel-frosted: color-mix(in oklab, var(--paper) 58%, var(--bg));
+    --panel-lit: color-mix(in oklab, var(--paper) 84%, var(--cream));
+    --seam-hairline: color-mix(in oklab, var(--ink-strong) 14%, var(--bg));
+    --seam-highlight: color-mix(in oklab, var(--paper) 75%, transparent);
+    --rivet-base: color-mix(in oklab, var(--ink-strong) 34%, var(--surface3));
+    --rivet-shine: color-mix(in oklab, var(--paper) 90%, var(--bg));
+    --relief-side-dark: color-mix(in oklab, var(--ink-strong) 26%, var(--surface3));
+    --relief-bottom-mid: color-mix(in oklab, var(--ink-strong) 15%, var(--surface2));
+    --shadow-ambient: rgba(24, 28, 36, 0.11);
+    --shadow-cast: rgba(24, 28, 36, 0.19);
+    --shadow-deep: rgba(18, 22, 28, 0.27);
+
+    /* 형태 토큰 */
+    --r-card: 0px;
+    --r-block: 3px;
+    --r-pill: 9999px;
+    --r-arch: 23px 23px 6px 6px;
+
+    /* 타이포그래피 */
+    --font-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --font-display: "Archivo", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* 색·룩 프리셋 전환 (RE:DO 다크 및 동네한권 3룩은 원안 유지) */
+  body[data-look="redo-dark"] {
+    --bg: #171716;
+    --surface: #20201E;
+    --surface2: #2B2A27;
+    --surface3: #3A3935;
+    --line: #3A3935;
+    --ink: #ECECE4;
+    --ink-strong: #ECECE4;
+    --muted: #9C9A92;
+    --accent: #ECECE4;
+    --accent-ink: #171716;
+    --orange-vivid: #FF6B2B;
+    --now-ring: #FF6B2B;
+    --now-tint: #4A2D1F;
+    --link: #9AA8F5;
+    --fill1: #FF6B2B;
+    --fill2: #D4B26A;
+    --fill3: #6C7D72;
+    --cream: #20201E;
+    --paper: #242422;
+    --shadow-ambient: rgba(0, 0, 0, 0.35);
+    --shadow-cast: rgba(0, 0, 0, 0.50);
+    --shadow-deep: rgba(0, 0, 0, 0.65);
+  }
+  body[data-look="warm"] {
+    --bg: #E1E1DE;
+    --surface: #EFF1F1;
+    --surface2: #D0CEC8;
+    --surface3: #BFBCB5;
+    --line: #BFBCB5;
+    --ink: #1D1D1F;
+    --ink-strong: #2E333F;
+    --muted: #6B6B66;
+    --accent: #2E333F;
+    --accent-ink: #EFF1F1;
+    --orange-vivid: #E64D01;
+    --now-ring: #E9C970;
+    --now-tint: #EFEFE7;
+    --fill1: #E9C970;
+    --fill2: #EDC9A9;
+    --fill3: #B3BFB5;
+    --cream: #EFEFE7;
+    --paper: #EFF1F1;
+  }
+  body[data-look="toffee"] {
+    --bg: #E4E2DB;
+    --surface: #EEEFED;
+    --surface2: #D5CFC4;
+    --surface3: #C2BBAD;
+    --line: #C2BBAD;
+    --ink: #1D1D1F;
+    --ink-strong: #332A27;
+    --muted: #6B675E;
+    --accent: #332A27;
+    --accent-ink: #EEEFED;
+    --orange-vivid: #C88A56;
+    --now-ring: #C88A56;
+    --now-tint: #EAE1D5;
+    --fill1: #6E5140;
+    --fill2: #C88A56;
+    --fill3: #7E8C7D;
+    --cream: #EEEFED;
+    --paper: #EEEFED;
+  }
+  body[data-look="oxford"] {
+    --bg: #CDCDCB;
+    --surface: #E6E6E4;
+    --surface2: #BDBDBA;
+    --surface3: #A8A8A5;
+    --line: #A8A8A5;
+    --ink: #1D1D1F;
+    --ink-strong: #002147;
+    --muted: #5C5C5A;
+    --accent: #002147;
+    --accent-ink: #E6E6E4;
+    --orange-vivid: #35557F;
+    --now-ring: #35557F;
+    --now-tint: #DCE2EA;
+    --fill1: #35557F;
+    --fill2: #D2B48C;
+    --fill3: #7A93AC;
+    --cream: #E9E9E6;
+    --paper: #E6E6E4;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    transition: background 0.22s ease, color 0.22s ease;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ink-strong); outline-offset: 2px; }
+
+  /* ---------- 시안 문서 상단 쉘 ---------- */
+  header.page {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 24px 18px 10px;
+  }
+  header.page h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .how {
+    background: var(--cream);
+    border-radius: 3px;
+    padding: 14px 18px;
+    border-left: 4px solid var(--ink-strong);
+    border-top: 1px solid var(--seam-hairline);
+    border-right: 1px solid var(--seam-hairline);
+    border-bottom: 1px solid var(--seam-hairline);
+    font-size: 13.5px;
+  }
+  main.shell-doc {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 18px 64px;
+  }
+
+  /* ---------- 상단 컨트롤 바 (과도한 필 제거 -> 사각 세그먼트 버튼) ---------- */
+  .controls-bar {
+    margin-top: 18px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    box-shadow: 0 6px 20px var(--shadow-ambient);
+  }
+  .ctrl-group-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 8px;
+    text-transform: uppercase;
+  }
+  .toolbar-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .rect-btn {
+    border: 1px solid var(--surface3);
+    background: var(--cream);
+    color: var(--ink);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-size: 12.5px;
+    font-weight: 700;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .rect-btn:hover:not(:disabled) {
+    border-color: var(--ink-strong);
+  }
+  .rect-btn[aria-pressed="true"],
+  .rect-btn[aria-selected="true"] {
+    background: var(--ink-strong);
+    color: var(--accent-ink);
+    border-color: var(--ink-strong);
+  }
+
+  /* 스테이지 래퍼 */
+  .hero-stage {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 1080px) {
+    .hero-stage { grid-template-columns: 1fr; }
+  }
+
+  .stage-viewport-wrap {
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px;
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  /* 프리뷰 디바이스 컨테이너: desktop(980px) / mobile(390px) */
+  .preview-frame {
+    position: relative;
+    width: 100%;
+    max-width: 980px;
+    min-height: 700px;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    box-shadow: 0 18px 46px var(--shadow-deep);
+    overflow: hidden;
+    transition: max-width 0.25s ease, border-radius 0.25s ease, background 0.25s ease;
+  }
+  .preview-frame[data-viewport="mobile"] {
+    max-width: 390px;
+    height: 780px;
+    min-height: 780px;
+    border-radius: 38px;
+    border: 8px solid var(--ink-strong);
+    display: flex;
+    flex-direction: column;
+  }
+  .preview-frame[data-viewport="mobile"] .app-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-bottom: 72px;
+  }
+
+  /* ---------- 첨부 파사드 질감·그리드·리벳 레이어 ---------- */
+  .facade-backdrop {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .grain-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    mix-blend-mode: multiply;
+    transition: opacity 0.25s ease;
+  }
+  .facade-grid-lines {
+    position: absolute;
+    inset: 58px 16px 24px 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    border-top: 1px solid var(--seam-hairline);
+    border-left: 1px solid var(--seam-hairline);
+  }
+  .facade-bay {
+    position: relative;
+    border-right: 1px solid var(--seam-hairline);
+    border-bottom: 1px solid var(--seam-hairline);
+    box-shadow: inset 1px 1px 0 var(--seam-highlight);
+  }
+  .rivet {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--rivet-shine), var(--rivet-base));
+    box-shadow: 0 1px 1px var(--shadow-ambient);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .rivet.tl { top: 6px; left: 6px; }
+  .rivet.tr { top: 6px; right: 6px; }
+  .rivet.bl { bottom: 6px; left: 6px; }
+  .rivet.br { bottom: 6px; right: 6px; }
+
+  /* T6: 가장자리 잘린 장식 워터마크 (5:5 전용) */
+  .edge-crop-glyph {
+    position: absolute;
+    right: -18px;
+    top: 88px;
+    font-family: var(--font-display);
+    font-size: 148px;
+    font-weight: 900;
+    line-height: 0.85;
+    letter-spacing: -0.05em;
+    color: color-mix(in oklab, var(--ink-strong) 5%, transparent);
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .preview-frame[data-ratio="2-8"] .facade-backdrop { opacity: 0; }
+  .preview-frame[data-ratio="3-7"] .facade-backdrop { opacity: 0.45; }
+  .preview-frame[data-ratio="4-6"] .facade-backdrop { opacity: 0.82; }
+  .preview-frame[data-ratio="4-6"] .rivet { opacity: 0.75; }
+  .preview-frame[data-ratio="4-6"] .grain-overlay { opacity: 0.25; }
+  .preview-frame[data-ratio="5-5"] {
+    background: radial-gradient(circle at 50% 34%, var(--panel-lit) 0%, var(--panel-frosted) 62%, var(--bg) 100%);
+  }
+  .preview-frame[data-ratio="5-5"] .facade-backdrop { opacity: 1; }
+  .preview-frame[data-ratio="5-5"] .rivet { opacity: 1; }
+  .preview-frame[data-ratio="5-5"] .grain-overlay { opacity: 0.38; }
+  .preview-frame[data-ratio="5-5"] .edge-crop-glyph { opacity: 1; }
+
+  /* ---------- 앱 내부 스크롤 콘텐츠 ---------- */
+  .app-scroll {
+    position: relative;
+    z-index: 2;
+    padding: 16px 24px 36px;
+  }
+  .preview-frame[data-viewport="mobile"] .app-scroll {
+    padding: 14px 16px 84px;
+  }
+
+  /* 상단 내비게이션 (6번: PLAYER를 HOME 바로 옆으로 이동 + 강조 3안) */
+  .site-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  .nav-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--ink);
+    background: none;
+    border: 0;
+    padding: 4px 0;
+    font-weight: 800;
+  }
+  .nav-logo {
+    height: 14px;
+    width: auto;
+    display: block;
+  }
+  .nav-item {
+    background: none;
+    border: 0;
+    padding: 5px 4px;
+    font-weight: 800;
+    color: var(--ink);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .nav-item[aria-current="page"] {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+  }
+  .beta-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 1px 5px;
+    border: 1px solid var(--ink);
+    margin-left: 2px;
+  }
+  .preview-frame[data-viewport="mobile"] .nav-desktop-only {
+    display: none;
+  }
+
+  /* PLAYER 강조 방식 3가지 (6번) */
+  .nav-player-emph {
+    transition: all 0.18s ease;
+  }
+  .nav-player-emph .play-glyph {
+    font-size: 10px;
+    line-height: 1;
+    color: var(--fill1);
+  }
+  /* A안: ▶ 아이콘 + 사각 테두리 프레임 + 하단 2px 포인트 선 */
+  .preview-frame[data-player-emph="frame"] .nav-player-emph {
+    padding: 4px 10px;
+    background: var(--paper);
+    border: 1px solid var(--ink-strong);
+    border-bottom: 2px solid var(--fill1);
+    border-radius: 3px;
+  }
+  /* B안: 좌측 3px 포인트 스파인 + 옅은 틴트 면 */
+  .preview-frame[data-player-emph="spine"] .nav-player-emph {
+    padding: 4px 10px;
+    background: color-mix(in oklab, var(--fill2) 22%, var(--paper));
+    border: 1px solid var(--seam-hairline);
+    box-shadow: inset 3px 0 0 var(--fill1);
+    border-radius: 2px;
+  }
+  /* C안: 진한 ink-strong 반전 사각 버튼 */
+  .preview-frame[data-player-emph="solid"] .nav-player-emph {
+    padding: 5px 11px;
+    background: var(--ink-strong);
+    color: var(--accent-ink);
+    border: 1px solid var(--ink-strong);
+    border-radius: 3px;
+  }
+  .preview-frame[data-player-emph="solid"] .nav-player-emph .play-glyph {
+    color: var(--fill1);
+  }
+
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .site-nav {
+    border-bottom-color: var(--seam-hairline);
+    font-family: var(--font-body);
+    font-weight: 700;
+  }
+
+  /* ---------- 히어로 구역 (3번: 필 최소화 -> 사각 URL 바 + 글자 예시 링크) ---------- */
+  .hero-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .preview-frame:is([data-ratio="3-7"], [data-ratio="4-6"], [data-ratio="5-5"]) .hero-zone {
+    margin-bottom: 24px;
+  }
+  .preview-frame[data-ratio="5-5"] .hero-zone {
+    align-items: stretch;
+    margin-bottom: 16px;
+  }
+
+  .hero-wordmark-wrap {
+    width: min(350px, 76%);
+    margin: 10px 0 14px;
+    color: var(--ink);
+    transition: all 0.22s ease;
+  }
+  .preview-frame[data-viewport="mobile"] .hero-wordmark-wrap {
+    width: min(250px, 70%);
+  }
+  .preview-frame[data-ratio="5-5"] .hero-wordmark-wrap {
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 4px 0 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--seam-hairline);
+  }
+  .wordmark-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .preview-frame[data-ratio="5-5"] .wordmark-svg {
+    width: 180px;
+    flex: none;
+  }
+  .hero-gauge-meta {
+    display: none;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: right;
+  }
+  .preview-frame[data-ratio="5-5"] .hero-gauge-meta {
+    display: block;
+  }
+
+  .home-rule {
+    width: 100%;
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 0;
+  }
+  .preview-frame[data-ratio="5-5"] .home-rule { display: none; }
+
+  .tagline {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    margin: 14px 0 12px;
+    color: var(--muted);
+  }
+  .preview-frame[data-ratio="5-5"] .tagline {
+    margin: 0 0 10px;
+  }
+
+  /* 3번: URL 입력 창은 단정한 사각형 바 + 내부 예시 액션은 글자 버튼 */
+  .go-form {
+    width: min(620px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .preview-frame[data-ratio="5-5"] .go-form {
+    width: 100%;
+  }
+  .url-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 0px;
+    padding: 4px 12px 4px 14px;
+    min-height: 46px;
+    transition: all 0.2s ease;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .url-input-row {
+    border-color: var(--seam-hairline);
+    border-radius: 3px;
+    box-shadow: 0 6px 16px var(--shadow-ambient), inset 0 1px 0 var(--seam-highlight);
+  }
+  .url-input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+    color: var(--ink);
+    outline: none;
+  }
+  .url-input::placeholder { color: var(--muted); }
+
+  /* 글자 버튼 공통 (3번, 5번: 전체 노트 → 같은 깔끔한 텍스트 링크 스타일) */
+  .text-btn {
+    border: 0;
+    background: transparent;
+    padding: 4px 2px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .text-btn:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .text-btn.muted {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .sample-links-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    font-size: 12px;
+  }
+  .preview-frame[data-ratio="5-5"] .sample-links-row {
+    justify-content: flex-start;
+  }
+  .link-sep {
+    color: var(--surface3);
+    user-select: none;
+  }
+
+  /* URL 미리보기 (#go-pick): 화면당 주 행동 1개만 필(▶ 바로 연습), 보조는 사각형/글자 */
+  .go-pick {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .go-pick {
+    border-radius: var(--r-block);
+    border-color: var(--seam-hairline);
+    box-shadow: 3px 4px 0 var(--relief-bottom-mid), 8px 12px 20px var(--shadow-ambient);
+  }
+  .go-pick-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .go-thumb {
+    width: 96px;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--line);
+    flex: none;
+  }
+  .go-acts {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  /* 화면의 유일한 대표 필 CTA */
+  .primary-pill {
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: 9999px;
+    border: 1px solid var(--ink-strong);
+    background: var(--ink-strong);
+    color: var(--accent-ink);
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .primary-pill {
+    background: var(--fill1);
+    color: #F7F9FB;
+    border-color: var(--seam-hairline);
+  }
+  /* 보조 버튼: 필 대신 단정한 사각형 */
+  .rect-ghost-btn {
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 0px;
+    border: 1px solid var(--line);
+    background: var(--cream);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .rect-ghost-btn {
+    border-radius: 3px;
+    border-color: var(--seam-hairline);
+  }
+
+  /* ---------- 5:5 전용 수평 스케일 룰러 + 중앙 + 기점 축 ---------- */
+  .spatial-ruler-axis {
+    display: none;
+    position: relative;
+    height: 46px;
+    margin: 18px 0 22px;
+    align-items: center;
+  }
+  .preview-frame[data-ratio="5-5"] .spatial-ruler-axis {
+    display: flex;
+  }
+  .ruler-track {
+    position: relative;
+    width: 100%;
+    height: 32px;
+    background: linear-gradient(180deg, var(--surface2) 0%, var(--cream) 32%, var(--paper) 100%);
+    border-top: 1px solid var(--surface3);
+    border-bottom: 1px solid var(--seam-hairline);
+    box-shadow: inset 0 2px 4px var(--shadow-ambient), 0 1px 0 var(--seam-highlight);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 10px 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .ruler-ticks {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 0;
+    height: 12px;
+    background-image: repeating-linear-gradient(90deg, var(--ink-strong) 0px, var(--ink-strong) 1px, transparent 1px, transparent 6px);
+    opacity: 0.42;
+  }
+  .ruler-ticks-major {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 0;
+    height: 18px;
+    background-image: repeating-linear-gradient(90deg, var(--ink-strong) 0px, var(--ink-strong) 1.5px, transparent 1.5px, transparent 30px);
+    opacity: 0.68;
+  }
+  .origin-plinth {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 112px;
+    height: 44px;
+    padding: 0 12px;
+    background: var(--ink-strong);
+    color: var(--paper);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 4px 6px 0 var(--relief-side-dark), 10px 14px 20px var(--shadow-cast);
+  }
+  .origin-plus { font-family: var(--font-mono); font-size: 15px; font-weight: 700; }
+  .origin-txt { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+
+  /* ---------- 위젯 & 프레임 공통 카드 변형 시스템 ---------- */
+  .top-widgets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .split-frames {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .preview-frame[data-viewport="mobile"] .top-widgets,
+  .preview-frame[data-viewport="mobile"] .split-frames,
+  .preview-frame[data-viewport="mobile"] .better-cols,
+  .preview-frame[data-viewport="mobile"] .prog-grid {
+    grid-template-columns: 1fr;
+  }
+  .preview-frame:is([data-ratio="2-8"], [data-ratio="3-7"], [data-ratio="4-6"], [data-ratio="5-5"]) .top-widgets {
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  /* 1번: 섹션별 스파인 색 변수를 정의해 내부 강조(이어서)와 일치 */
+  .fusion-card {
+    --section-spine: var(--now-ring);
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0px;
+    display: flex;
+    min-width: 0;
+    transition: all 0.25s ease;
+  }
+  .card-spine {
+    width: 0px;
+    flex: none;
+    position: relative;
+    overflow: hidden;
+    transition: width 0.22s ease;
+  }
+  .spine-arch {
+    position: absolute;
+    top: 12px;
+    left: 3px;
+    right: 3px;
+    height: 22px;
+    border-radius: var(--r-arch);
+    background: var(--paper);
+    opacity: 0;
+    box-shadow: inset 0 2px 3px var(--shadow-ambient);
+    transition: opacity 0.2s ease;
+  }
+  .card-inner {
+    flex: 1;
+    min-width: 0;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* 2:8 */
+  .preview-frame[data-ratio="2-8"] .fusion-card.tone-1 { --section-spine: var(--now-ring); border-top: 3px solid var(--section-spine); }
+  .preview-frame[data-ratio="2-8"] .fusion-card.tone-2 { --section-spine: var(--ink); border-top: 3px solid var(--section-spine); }
+  .preview-frame[data-ratio="2-8"] .fusion-card.tone-3 { --section-spine: var(--now-ring); border-top: 3px solid var(--section-spine); }
+  .preview-frame[data-ratio="2-8"] .fusion-card.tone-4 { --section-spine: var(--ink); border-top: 3px solid var(--section-spine); }
+
+  /* 3:7 */
+  .preview-frame[data-ratio="3-7"] .fusion-card {
+    border-color: var(--seam-hairline);
+    background: var(--panel-frosted);
+  }
+  .preview-frame[data-ratio="3-7"] .card-spine { width: 8px; border-right: 1px solid var(--seam-hairline); background: var(--section-spine); }
+  .preview-frame[data-ratio="3-7"] .fusion-card.tone-1 { --section-spine: var(--now-ring); }
+  .preview-frame[data-ratio="3-7"] .fusion-card.tone-2 { --section-spine: var(--ink-strong); }
+  .preview-frame[data-ratio="3-7"] .fusion-card.tone-3 { --section-spine: var(--fill2); }
+  .preview-frame[data-ratio="3-7"] .fusion-card.tone-4 { --section-spine: var(--fill3); }
+
+  /* 4:6 */
+  .preview-frame[data-ratio="4-6"] .fusion-card {
+    background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--r-block);
+    box-shadow:
+      2px 2px 0 var(--surface2),
+      4px 5px 0 var(--relief-bottom-mid),
+      10px 14px 22px var(--shadow-ambient),
+      inset 0 1px 0 var(--seam-highlight);
+  }
+  .preview-frame[data-ratio="4-6"] .card-spine { width: 12px; border-right: 1px solid var(--seam-hairline); background: var(--section-spine); }
+  .preview-frame[data-ratio="4-6"] .spine-arch { opacity: 0.72; }
+  .preview-frame[data-ratio="4-6"] .fusion-card.tone-1 { --section-spine: var(--fill1); }
+  .preview-frame[data-ratio="4-6"] .fusion-card.tone-2 { --section-spine: var(--fill2); }
+  .preview-frame[data-ratio="4-6"] .fusion-card.tone-3 { --section-spine: var(--fill3); }
+  .preview-frame[data-ratio="4-6"] .fusion-card.tone-4 { --section-spine: var(--fill2); }
+
+  /* 5:5 */
+  .preview-frame[data-ratio="5-5"] .fusion-card {
+    background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--r-block);
+    box-shadow:
+      1px 1px 0 var(--surface2),
+      2px 2px 0 var(--surface2),
+      3px 3px 0 var(--surface3),
+      4px 4px 0 var(--surface3),
+      5px 6px 0 var(--relief-bottom-mid),
+      6px 8px 0 var(--relief-side-dark),
+      12px 18px 26px var(--shadow-cast),
+      inset 0 1px 0 var(--seam-highlight);
+  }
+  .preview-frame[data-ratio="5-5"] .fusion-card.stacked::after {
+    content: "";
+    position: absolute;
+    right: -7px;
+    bottom: -8px;
+    left: 8px;
+    top: 8px;
+    background: var(--cream);
+    border: 1px solid var(--surface3);
+    border-radius: var(--r-block);
+    z-index: -1;
+    box-shadow: 3px 4px 0 var(--relief-side-dark), 10px 14px 20px var(--shadow-ambient);
+  }
+  .preview-frame[data-ratio="5-5"] .card-spine {
+    width: 16px;
+    border-right: 1px solid var(--seam-hairline);
+    background: var(--section-spine);
+    box-shadow: inset 2px 0 3px rgba(255,255,255,0.32), inset -2px 0 4px rgba(0,0,0,0.08);
+  }
+  .preview-frame[data-ratio="5-5"] .spine-arch { opacity: 0.9; }
+  .preview-frame[data-ratio="5-5"] .fusion-card.tone-1 { --section-spine: var(--fill1); }
+  .preview-frame[data-ratio="5-5"] .fusion-card.tone-2 { --section-spine: var(--fill2); }
+  .preview-frame[data-ratio="5-5"] .fusion-card.tone-3 { --section-spine: var(--fill3); }
+  .preview-frame[data-ratio="5-5"] .fusion-card.tone-4 { --section-spine: var(--fill1); }
+
+  /* ---------- 타이포그래피 위계 (T1~T4) ---------- */
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .card-head {
+    border-bottom-color: var(--seam-hairline);
+  }
+  .card-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .gauge-code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .card-h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 22px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .preview-frame:is([data-ratio="3-7"], [data-ratio="4-6"], [data-ratio="5-5"]) .card-h2 {
+    font-family: var(--font-body);
+    font-size: 24px;
+    font-weight: 300;
+    letter-spacing: -0.025em;
+  }
+
+  .stack-cycle-btn {
+    display: none;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid var(--ink-strong);
+    background: var(--ink-strong);
+    color: var(--paper);
+  }
+  .preview-frame[data-ratio="5-5"] .stack-cycle-btn {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* ---------- WEEKLY 스트릭 ---------- */
+  .streak-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .streak-cell {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    padding: 8px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.15s ease;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .streak-cell {
+    border-radius: 3px;
+    border-color: var(--seam-hairline);
+    background: var(--panel-frosted);
+  }
+  .streak-cell.done {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--bg);
+  }
+  .preview-frame:is([data-ratio="3-7"], [data-ratio="4-6"], [data-ratio="5-5"]) .streak-cell.done {
+    background: color-mix(in oklab, var(--fill3) 34%, var(--paper));
+    border-color: var(--ink-strong);
+    color: var(--ink);
+  }
+  .streak-cell.today {
+    border-color: var(--now-ring);
+    box-shadow: inset 0 0 0 1px var(--now-ring);
+  }
+  .dow-txt { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; opacity: 0.78; }
+  .day-num { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+
+  .streak-bar {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .streak-bar {
+    background: var(--cream);
+    border-color: var(--seam-hairline);
+    border-radius: 3px;
+  }
+  .streak-dots { display: inline-flex; gap: 6px; }
+  .streak-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 1px solid var(--ink-strong);
+    background: transparent;
+  }
+  .streak-dot.on { background: var(--fill1); border-color: var(--fill1); }
+
+  /* ---------- RECENT & 분류 바로가기 (3번: 사각 셀) ---------- */
+  .recent-body {
+    display: grid;
+    grid-template-columns: 116px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+  .thumb-box {
+    width: 116px;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background: var(--surface2);
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .thumb-box {
+    border-radius: 5px 9px 9px 5px;
+    border-color: var(--seam-hairline);
+  }
+  .recent-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .recent-seg { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 4px; }
+  .recent-memo { font-size: 12.5px; color: var(--ink); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .genre-wrap { position: relative; margin-top: auto; }
+  .genre-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 6px;
+  }
+  .genre-cell {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    min-height: 36px;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink);
+    border-radius: 0px;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .genre-cell {
+    border-radius: 3px;
+    border-color: var(--seam-hairline);
+    background: var(--panel-frosted);
+  }
+  .genre-cell.add { border-style: dashed; color: var(--muted); }
+  .genre-pop {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    width: 240px;
+    background: var(--paper);
+    border: 1px solid var(--ink-strong);
+    padding: 12px;
+    z-index: 12;
+    box-shadow: 0 10px 24px var(--shadow-cast);
+    border-radius: 3px;
+  }
+
+  /* ---------- BETTER / VAULT ---------- */
+  .better-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    flex: 1;
+  }
+  .sub-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .sub-col-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .sub-col-title {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .frame-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+    flex: 1;
+  }
+  .frame-list li {
+    border-bottom: 1px solid var(--line);
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .frame-list,
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .frame-list li {
+    border-color: var(--seam-hairline);
+  }
+  .list-row-btn {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    padding: 9px 4px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 38px;
+  }
+  /* 1번: BETTER CHORDS 이어서 항목 강조 색 = 해당 섹션 박스 스파인 색(--section-spine) */
+  .list-row-btn.cur {
+    box-shadow: inset 4px 0 0 var(--section-spine);
+    background: color-mix(in oklab, var(--section-spine) 12%, transparent);
+    padding-left: 10px;
+  }
+  .row-t {
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row-m {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .list-row-btn.cur .row-m { color: var(--ink); font-weight: 700; }
+
+  /* 3번: 섹션 하단 이동 버튼은 모든 비율에서 사각형 유지 (필 금지) */
+  .section-btn {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--seam-hairline);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 0px;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .section-btn {
+    border-radius: 3px;
+    background: var(--cream);
+  }
+  .section-btn:hover {
+    border-color: var(--ink-strong);
+  }
+  /* 6번: BETTER 안에서도 플레이어 버튼에 약한 강조 옵션 연동 */
+  .section-btn.player-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: inset 3px 0 0 var(--section-spine);
+  }
+
+  /* VAULT 노트 & 코드 진행 (3번·4번·5번 반영) */
+  .note-box {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .note-box {
+    background: var(--panel-frosted);
+    border-color: var(--seam-hairline);
+    border-radius: 3px;
+  }
+
+  /* 3번·4번: 필 3개 대신 단정한 사각 세그먼트 탭 (합산 | 레퍼런스 | 분석) */
+  .scope-row {
+    display: inline-flex;
+    border: 1px solid var(--seam-hairline);
+    background: var(--bg);
+    border-radius: 0px;
+    overflow: hidden;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .scope-row {
+    border-radius: 3px;
+  }
+  .scope-btn {
+    border: 0;
+    border-right: 1px solid var(--seam-hairline);
+    background: transparent;
+    color: var(--muted);
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  .scope-btn:last-child { border-right: 0; }
+  .scope-btn[aria-selected="true"] {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: inset 0 -2px 0 var(--ink-strong);
+  }
+
+  .prog-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .prog-card {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .preview-frame:is([data-ratio="4-6"], [data-ratio="5-5"]) .prog-card {
+    background: var(--panel-frosted);
+    border-color: var(--seam-hairline);
+    border-radius: 3px;
+  }
+  .prog-chords {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    word-break: keep-all;
+  }
+  .prog-acts-text {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 6px;
+    border-top: 1px solid var(--seam-hairline);
+  }
+
+  /* 모바일 하단 탭 바 (6번: HOME · PLAYER · LEARN · CHORDS · NOTES, COMMUNITY 제외) */
+  .mobile-tabbar {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 56px;
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    z-index: 15;
+    justify-content: space-around;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .preview-frame[data-viewport="mobile"] .mobile-tabbar {
+    display: flex;
+  }
+  .mobile-tabbar button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    height: 100%;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .mobile-tabbar .active {
+    color: var(--ink);
+    box-shadow: inset 0 2px 0 var(--ink-strong);
+  }
+  .mobile-tabbar .tab-player-emph {
+    color: var(--ink);
+  }
+
+  /* 슬라이드 인 상세 페이지 */
+  .slide-overlay-page {
+    position: absolute;
+    inset: 0;
+    background: var(--cream);
+    z-index: 25;
+    padding: 20px 22px;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    overflow-y: auto;
+  }
+  .slide-overlay-page.open { transform: translateX(0); }
+
+  /* ---------- 우측 현재 비율 분석 패널 ---------- */
+  .inspector-panel {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px;
+    box-shadow: 0 8px 24px var(--shadow-ambient);
+  }
+  .inspector-panel h2 { font-size: 16px; margin: 0 0 6px; }
+  .ratio-meter {
+    display: flex;
+    height: 10px;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--seam-hairline);
+    margin: 10px 0 12px;
+  }
+  .meter-attached { background: var(--fill1); transition: width 0.25s ease; }
+  .meter-current { background: var(--ink-strong); transition: width 0.25s ease; }
+  .note-dl { margin: 10px 0 0; font-size: 13px; }
+  .note-dl dt { font-weight: 700; color: var(--ink-strong); margin-top: 10px; }
+  .note-dl dd { margin: 3px 0 0; color: var(--ink); }
+
+  /* ---------- 하단 4종 비율 비교 섹션 (.cands) & 명세 표 (#spec) ---------- */
+  section.element { margin-top: 36px; }
+  section.element > h2 { font-size: 18px; margin: 0 0 6px; }
+  .cands {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .cand {
+    background: var(--paper);
+    border: 2px solid var(--line);
+    border-radius: 3px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s ease;
+  }
+  .cand.active-cand {
+    border-color: var(--ink-strong);
+    box-shadow: 0 10px 24px var(--shadow-ambient);
+  }
+  .cand h3 { margin: 0; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .ratio-badge {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--ink);
+  }
+  .cand.active-cand .ratio-badge {
+    background: var(--ink-strong);
+    color: var(--accent-ink);
+  }
+  .mini-svg-wrap {
+    border: 1px solid var(--seam-hairline);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .cand-pick-btn {
+    margin-top: auto;
+    width: 100%;
+    min-height: 38px;
+    border-radius: 3px;
+    border: 1px solid var(--ink-strong);
+    background: var(--cream);
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .cand.active-cand .cand-pick-btn {
+    background: var(--ink-strong);
+    color: var(--accent-ink);
+  }
+
+  #spec {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px 20px;
+    margin-top: 32px;
+  }
+  .tblwrap { overflow-x: auto; }
+  #spec table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  #spec th, #spec td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  #spec th { background: var(--surface2); font-weight: 700; }
+</style>
+</head>
+<body data-look="redo-light">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="architectural-grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="3" stitchTiles="stitch" result="noise" />
+      <feColorMatrix type="saturate" values="0" in="noise" result="mono" />
+      <feComponentTransfer in="mono">
+        <feFuncA type="linear" slope="0.08" />
+      </feComponentTransfer>
+    </filter>
+  </defs>
+</svg>
+
+<header class="page">
+  <h1>RE:DO · 홈 UI 융합 시안 (4:6 + RE:DO 라이트 수정 반영)</h1>
+  <div class="how">
+    <b>수정 반영 요약:</b> ① <code>BETTER CHORDS</code> "이어서" 항목 색을 섹션 박스 스파인 색(<code>--section-spine</code>)과 일치 · ② <code>RE:DO 라이트</code> 면 화이트를 따뜻함 -20% 쿨 미네랄 톤(<code>#F1F4F7</code> / <code>#ECEEF0</code>)으로 보정 · ③ 과도한 필 제거(사각형·글자 버튼 정리, 주 행동 1개만 필) · ④ 취향 코드 진행 순서 <code>합산 → 레퍼런스 → 분석</code> · ⑤ <code>랜덤</code> 글자 버튼 압축 · ⑥ <code>PLAYER ↔ LEARN</code> 교체 및 강조 3안 비교 · ⑦ <code>COMMUNITY</code> 비노출.
+  </div>
+</header>
+
+<main class="shell-doc">
+  <!-- 상단 컨트롤 바 -->
+  <section class="controls-bar" aria-label="시안 전환 컨트롤">
+    <div>
+      <p class="ctrl-group-title">1. 참조 비율 (기본 4:6)</p>
+      <div class="toolbar-group" role="tablist" aria-label="융합 비율" id="ratio-tabs">
+        <button type="button" class="rect-btn" role="tab" aria-selected="false" data-ratio-btn="2-8">2:8 (첨부 20%)</button>
+        <button type="button" class="rect-btn" role="tab" aria-selected="false" data-ratio-btn="3-7">3:7 (첨부 30%)</button>
+        <button type="button" class="rect-btn" role="tab" aria-selected="true" data-ratio-btn="4-6">4:6 (첨부 40%)</button>
+        <button type="button" class="rect-btn" role="tab" aria-selected="false" data-ratio-btn="5-5">5:5 (첨부 50%)</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="ctrl-group-title">2. 화면 폭</p>
+      <div class="toolbar-group" id="viewport-controls">
+        <button type="button" class="rect-btn" aria-pressed="true" data-vp-btn="desktop">데스크톱 (980px)</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-vp-btn="mobile">모바일 (390×780)</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="ctrl-group-title">3. 색·룩 토큰 프리셋</p>
+      <div class="toolbar-group" id="look-controls">
+        <button type="button" class="rect-btn" aria-pressed="true" data-look-btn="redo-light">RE:DO 라이트 (쿨 -20%)</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-look-btn="redo-dark">RE:DO 다크</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-look-btn="warm">warm</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-look-btn="toffee">toffee</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-look-btn="oxford">oxford</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="ctrl-group-title">4. PLAYER 메뉴 강조 방식 (6번)</p>
+      <div class="toolbar-group" id="player-emph-controls">
+        <button type="button" class="rect-btn" aria-pressed="true" data-emph-btn="frame">A. ▶ + 프레임 밑줄</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-emph-btn="spine">B. 좌측 스파인 틴트</button>
+        <button type="button" class="rect-btn" aria-pressed="false" data-emph-btn="solid">C. 먹색 반전</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 1. 풀스케일 인터랙티브 스테이지 ==================== -->
+  <section class="hero-stage" aria-label="홈 UI 인터랙티브 스테이지">
+    <div class="stage-viewport-wrap">
+      <div class="preview-frame" id="stage-frame" data-ratio="4-6" data-viewport="desktop" data-player-emph="frame">
+        <div class="facade-backdrop">
+          <div class="facade-grid-lines" id="facade-grid"></div>
+        </div>
+        <svg class="grain-overlay" width="100%" height="100%" aria-hidden="true">
+          <rect width="100%" height="100%" filter="url(#architectural-grain)" />
+        </svg>
+        <div class="edge-crop-glyph" aria-hidden="true">RE</div>
+
+        <div class="app-scroll">
+          <!-- 6번: PLAYER가 HOME 바로 옆으로 이동 & 강조 / 7번: COMMUNITY 제거 -->
+          <nav class="site-nav" aria-label="사이트 메뉴">
+            <div class="nav-main">
+              <button type="button" class="brand-link" aria-current="page" data-slide-reset>
+                <svg class="nav-logo" viewBox="0 0 416 100" fill="currentColor" fill-rule="evenodd" aria-label="RE:DO">
+                  <path d="M0 0H50C70 0 82 13 82 30C82 44 74 53 63 57L84 100H55L37 62H26V100H0Z M26 24H48C54 24 57 27 57 32C57 36 54 38 48 38H26Z" />
+                  <path transform="translate(96 0)" d="M0 0H70V24H26V38H70V62H26V76H70V100H0Z" />
+                  <rect x="178" y="14" width="24" height="24" />
+                  <rect x="178" y="62" width="24" height="24" />
+                  <path transform="translate(214 0)" d="M0 0H40A50 50 0 0 1 40 100H0Z M26 24H40A26 26 0 0 1 40 76H26Z" />
+                  <path transform="translate(316 0)" d="M50 0A50 50 0 0 1 50 100A50 50 0 0 1 50 0Z M50 24A26 26 0 0 0 50 76A26 26 0 0 0 50 24Z" />
+                </svg>
+                <span>⌂ HOME</span>
+              </button>
+              <button type="button" class="nav-item nav-desktop-only nav-player-emph" data-open-slide="practice">
+                <span class="play-glyph" aria-hidden="true">▶</span>
+                <span>PLAYER</span>
+              </button>
+              <button type="button" class="nav-item nav-desktop-only" data-open-slide="chords">LEARN</button>
+              <button type="button" class="nav-item nav-desktop-only" data-open-slide="log">TRAILS</button>
+              <button type="button" class="nav-item nav-desktop-only" data-open-slide="progressions">CHORDS</button>
+              <button type="button" class="nav-item nav-desktop-only" data-open-slide="note">NOTES<span class="beta-badge">BETA</span></button>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <button type="button" class="nav-item">SETTING</button>
+              <button type="button" class="nav-item">SH</button>
+            </div>
+          </nav>
+
+          <!-- 히어로 구역 -->
+          <section class="hero-zone" aria-label="유튜브 바로 연습">
+            <div class="hero-wordmark-wrap">
+              <svg class="wordmark-svg" viewBox="0 0 416 100" fill="currentColor" fill-rule="evenodd" aria-label="RE:DO">
+                <path d="M0 0H50C70 0 82 13 82 30C82 44 74 53 63 57L84 100H55L37 62H26V100H0Z M26 24H48C54 24 57 27 57 32C57 36 54 38 48 38H26Z" />
+                <path transform="translate(96 0)" d="M0 0H70V24H26V38H70V62H26V76H70V100H0Z" />
+                <rect x="178" y="14" width="24" height="24" />
+                <rect x="178" y="62" width="24" height="24" />
+                <path transform="translate(214 0)" d="M0 0H40A50 50 0 0 1 40 100H0Z M26 24H40A26 26 0 0 1 40 76H26Z" />
+                <path transform="translate(316 0)" d="M50 0A50 50 0 0 1 50 100A50 50 0 0 1 50 0Z M50 24A26 26 0 0 0 50 76A26 26 0 0 0 50 24Z" />
+              </svg>
+              <div class="hero-gauge-meta">
+                COCKPIT · 390/980PX<br>
+                LOOP STATION · 0.85× READY
+              </div>
+            </div>
+            <hr class="home-rule">
+            <p class="tagline">DIVE INTO SOUND</p>
+
+            <form class="go-form" id="go-form">
+              <div class="url-input-row">
+                <input type="url" class="url-input" id="url-input" placeholder="유튜브 링크를 붙여넣으세요" aria-label="유튜브 링크">
+                <button type="button" class="text-btn" id="btn-sample-url">예시 넣기 →</button>
+              </div>
+              <div class="sample-links-row">
+                <button type="button" class="text-btn muted" data-preset-url="https://youtu.be/autumn-leaves" data-preset-title="Autumn Leaves · Bill Evans Trio Voicing">예시: Autumn Leaves</button>
+                <span class="link-sep" aria-hidden="true">·</span>
+                <button type="button" class="text-btn muted" data-preset-url="https://youtu.be/neosoul-251" data-preset-title="Neo-Soul 2-5-1 Guitar Comping">예시: Neo-Soul 2-5-1</button>
+                <span class="link-sep" aria-hidden="true">·</span>
+                <button type="button" class="text-btn muted" id="btn-clear-url">비우기</button>
+              </div>
+              <div class="go-pick" id="go-pick" hidden>
+                <div class="go-pick-left">
+                  <svg class="go-thumb" viewBox="0 0 160 90" aria-hidden="true">
+                    <rect width="160" height="90" fill="var(--surface2)" />
+                    <circle cx="80" cy="45" r="22" fill="var(--fill1)" opacity="0.85" />
+                    <polygon points="74,35 94,45 74,55" fill="var(--paper)" />
+                  </svg>
+                  <div style="min-width:0">
+                    <div id="picked-title" style="font-size:13.5px;font-weight:700">Autumn Leaves · Bill Evans Trio Voicing</div>
+                    <div style="font-family:var(--font-mono);font-size: 12px;color:var(--muted)">YOUTUBE · READY TO LOOP</div>
+                  </div>
+                </div>
+                <div class="go-acts">
+                  <button type="button" class="primary-pill" data-open-slide="practice">▶ 바로 연습</button>
+                  <button type="button" class="rect-ghost-btn" data-open-slide="note">노트 만들기</button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <!-- 5:5 전용 수평 스케일 룰러 -->
+          <div class="spatial-ruler-axis" aria-hidden="true">
+            <div class="ruler-track">
+              <div class="ruler-ticks"></div>
+              <div class="ruler-ticks-major"></div>
+              <span>PRACTICE · 00:00</span>
+              <span>A–B LOOP</span>
+              <span>VAULT · 04:20</span>
+            </div>
+            <div class="origin-plinth">
+              <span class="origin-plus">+</span>
+              <span class="origin-txt">TODAY</span>
+            </div>
+          </div>
+
+          <!-- 상단 연속성 위젯 (WEEKLY + RECENT) -->
+          <section class="top-widgets" aria-label="연습 연속성 대시보드">
+            <article class="fusion-card tone-1">
+              <div class="card-spine"><div class="spine-arch"></div></div>
+              <div class="card-inner">
+                <div class="card-head">
+                  <div class="card-title-group">
+                    <span class="gauge-code">WEEK 46 · STREAK TRACKER</span>
+                    <h2 class="card-h2">WEEKLY</h2>
+                  </div>
+                  <button type="button" class="text-btn" data-open-slide="log">기록 보기 →</button>
+                </div>
+                <div class="streak-grid" id="streak-grid"></div>
+                <div class="streak-bar">
+                  <span id="streak-text">작심삼일 도전하기 · 연속 2일째 (2/3)</span>
+                  <span class="streak-dots" id="streak-dots" aria-hidden="true">
+                    <i class="streak-dot on"></i>
+                    <i class="streak-dot on"></i>
+                    <i class="streak-dot"></i>
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            <article class="fusion-card tone-2">
+              <div class="card-spine"><div class="spine-arch"></div></div>
+              <div class="card-inner">
+                <div class="card-head">
+                  <div class="card-title-group">
+                    <span class="gauge-code">LAST SESSION · 0.85× LOOP</span>
+                    <h2 class="card-h2">RECENT</h2>
+                  </div>
+                  <button type="button" class="text-btn" data-open-slide="practice">이어서 연습 →</button>
+                </div>
+                <div class="recent-body">
+                  <svg class="thumb-box" viewBox="0 0 160 90" aria-hidden="true">
+                    <rect width="160" height="90" fill="var(--surface2)" />
+                    <rect x="0" y="64" width="160" height="26" fill="var(--fill2)" opacity="0.45" />
+                    <path d="M18 48 Q45 18 78 44 T142 36" fill="none" stroke="var(--ink-strong)" stroke-width="3" />
+                    <circle cx="78" cy="44" r="5" fill="var(--fill1)" />
+                  </svg>
+                  <div style="min-width:0">
+                    <p class="recent-title">Just Friends — Comping &amp; Guide Tones</p>
+                    <p class="recent-seg">0:42 ~ 1:18 · 0.85×</p>
+                    <p class="recent-memo">3마디 Am7→D9 가이드 톤 3도·7도 연결 집중</p>
+                  </div>
+                </div>
+                <div class="genre-wrap">
+                  <div class="genre-row" id="genre-row">
+                    <button type="button" class="genre-cell" data-open-slide="practice">Jazz</button>
+                    <button type="button" class="genre-cell" data-open-slide="practice">2-5-1</button>
+                    <button type="button" class="genre-cell" data-open-slide="practice">Neo-Soul</button>
+                    <button type="button" class="genre-cell add" id="btn-cat-pop" aria-expanded="false">+</button>
+                  </div>
+                  <div class="genre-pop" id="cat-pop" hidden>
+                    <div style="font-family:var(--font-mono);font-size: 12px;font-weight:700;color:var(--muted);margin-bottom:8px">분류 · 홈에 보일 것 · 순서</div>
+                    <div style="display:flex;gap:4px;margin-bottom:8px">
+                      <input type="text" id="new-cat-input" placeholder="새 분류 이름" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;padding:4px 8px;font-size:12px;background:var(--bg)">
+                      <button type="button" id="btn-add-cat" style="border:1px solid var(--ink-strong);border-radius:3px;padding:0 10px;font-size:12px;font-weight:700;background:transparent">추가</button>
+                    </div>
+                    <div style="font-size:12px;color:var(--muted)">Jazz, 2-5-1, Neo-Soul 표시 중</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <!-- 하단 분할 대시보드 (BETTER | VAULT) -->
+          <div class="split-frames">
+            <!-- BETTER (1번: 이어서 강조 색 = 섹션 박스 스파인 색) -->
+            <section class="fusion-card tone-3 stacked">
+              <div class="card-spine"><div class="spine-arch"></div></div>
+              <div class="card-inner">
+                <div class="card-head">
+                  <div class="card-title-group">
+                    <span class="gauge-code">PRACTICE HUB · 7 MODES</span>
+                    <h2 class="card-h2">BETTER</h2>
+                  </div>
+                  <span style="font-size:12.5px;font-weight:700;color:var(--muted)">연습실</span>
+                </div>
+                <div class="better-cols">
+                  <div class="sub-col">
+                    <div class="sub-col-head">
+                      <h3 class="sub-col-title">CHORDS · 7가지 연습 모드</h3>
+                    </div>
+                    <ul class="frame-list" id="modes-list">
+                      <li><button type="button" class="list-row-btn" data-mode="1"><span class="row-t">1 · 스케일 연습</span><span class="row-m"></span></button></li>
+                      <li><button type="button" class="list-row-btn cur" data-mode="2"><span class="row-t">2 · 코드톤 지도</span><span class="row-m">이어서</span></button></li>
+                      <li><button type="button" class="list-row-btn" data-mode="3"><span class="row-t">3 · 보이싱 매트릭스</span><span class="row-m"></span></button></li>
+                      <li><button type="button" class="list-row-btn" data-mode="4"><span class="row-t">4 · 탑노트 5도권</span><span class="row-m"></span></button></li>
+                      <li><button type="button" class="list-row-btn" data-mode="5"><span class="row-t">5 · 코드 재해석</span><span class="row-m"></span></button></li>
+                    </ul>
+                    <button type="button" class="section-btn" data-open-slide="chords">코드 연습실</button>
+                  </div>
+
+                  <div class="sub-col">
+                    <div class="sub-col-head">
+                      <h3 class="sub-col-title">PLAYER · 내 연습 곡</h3>
+                      <button type="button" class="stack-cycle-btn" id="btn-cycle-songs" title="다음 곡 묶음 보기">+3곡 전환 ↻</button>
+                    </div>
+                    <ul class="frame-list" id="songs-list"></ul>
+                    <button type="button" class="section-btn player-btn" data-open-slide="practice">▶ 플레이어</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- VAULT (4번: 합산 레퍼런스 분석 / 5번: 랜덤 글자 버튼) -->
+            <section class="fusion-card tone-4 stacked">
+              <div class="card-spine"><div class="spine-arch"></div></div>
+              <div class="card-inner">
+                <div class="card-head">
+                  <div class="card-title-group">
+                    <span class="gauge-code">STUDY ARCHIVE · NOTES &amp; HARMONY</span>
+                    <h2 class="card-h2">VAULT</h2>
+                  </div>
+                  <span style="font-size:12.5px;font-weight:700;color:var(--muted)">학습</span>
+                </div>
+
+                <div>
+                  <div class="sub-col-head" style="margin-bottom:8px">
+                    <h3 class="sub-col-title">최근 공부한 내용</h3>
+                    <button type="button" class="text-btn" data-open-slide="note">전체 노트 →</button>
+                  </div>
+                  <div class="note-box">
+                    <svg class="thumb-box" style="width:108px" viewBox="0 0 160 90" aria-hidden="true">
+                      <rect width="160" height="90" fill="var(--surface2)" />
+                      <rect x="14" y="18" width="52" height="54" fill="var(--fill3)" opacity="0.8" />
+                      <line x1="78" y1="26" x2="144" y2="26" stroke="var(--ink-strong)" stroke-width="3" />
+                      <line x1="78" y1="42" x2="132" y2="42" stroke="var(--muted)" stroke-width="2" />
+                      <line x1="78" y1="56" x2="118" y2="56" stroke="var(--muted)" stroke-width="2" />
+                    </svg>
+                    <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+                      <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Bill Evans Drop-2 보이싱 해부</div>
+                      <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">3·7음 생략 없는 루트리스 폼 정리</div>
+                      <div style="margin-top:auto;display:flex;justify-content:flex-end">
+                        <button type="button" class="text-btn" data-open-slide="note">이동 →</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="sub-col-head" style="margin-bottom:8px">
+                    <h3 class="sub-col-title">취향 코드 진행 꺼내보기</h3>
+                    <button type="button" class="text-btn" data-open-slide="progressions">코드 진행 모음 →</button>
+                  </div>
+                  <div class="scope-row" role="tablist" aria-label="진행 범위" id="prog-scope-row" style="margin-bottom:10px">
+                    <button type="button" class="scope-btn" role="tab" aria-selected="true" data-scope="all">합산</button>
+                    <button type="button" class="scope-btn" role="tab" aria-selected="false" data-scope="reference">레퍼런스</button>
+                    <button type="button" class="scope-btn" role="tab" aria-selected="false" data-scope="analysis">분석</button>
+                  </div>
+                  <div class="prog-grid">
+                    <div class="prog-card">
+                      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size: 12px">
+                        <strong id="prog-kind">MAJOR 2-5-1</strong>
+                        <span id="prog-key" style="color:var(--muted)">KEY C</span>
+                      </div>
+                      <div class="prog-chords" id="prog-chords">Dm9 → G13 → Cmaj9</div>
+                      <div style="font-size:11.5px;color:var(--muted)" id="prog-sub">Autumn Leaves 인트로 · 출처: 합산</div>
+                      <div class="prog-acts-text">
+                        <button type="button" class="text-btn" id="btn-rand-prog">랜덤 ↻</button>
+                        <button type="button" class="text-btn" data-open-slide="chords">연주하기 →</button>
+                      </div>
+                    </div>
+                    <div class="prog-card">
+                      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size: 12px">
+                        <strong>취향</strong>
+                        <span style="color:var(--muted)">진행 14개</span>
+                      </div>
+                      <div class="prog-chords">II–V–I (Minor/Major)</div>
+                      <div style="font-size:11.5px;color:var(--muted)">자주 나오는 진행 · 6번<br>많이 쓴 키: F Major</div>
+                      <div class="prog-acts-text">
+                        <button type="button" class="text-btn" data-open-slide="progressions">취향 통계 보기 →</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <!-- 7번: COMMUNITY 배너·큐레이션 선반 비노출 -->
+        </div>
+
+        <!-- 모바일 하단 탭 바 (6번: PLAYER를 HOME 바로 다음으로 이동 + 강조) -->
+        <nav class="mobile-tabbar" aria-label="모바일 하단 메뉴">
+          <button type="button" class="active" data-slide-reset>HOME</button>
+          <button type="button" class="tab-player-emph" data-open-slide="practice">▶ PLAYER</button>
+          <button type="button" data-open-slide="chords">LEARN</button>
+          <button type="button" data-open-slide="progressions">CHORDS</button>
+          <button type="button" data-open-slide="note">NOTES</button>
+        </nav>
+
+        <!-- 슬라이드 전환 상세 페이지 -->
+        <div class="slide-overlay-page" id="slide-page" aria-hidden="true">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--seam-hairline);margin-bottom:18px">
+            <button type="button" id="btn-slide-back" style="border:0;background:none;font-size:24px;font-weight:700;padding:4px 8px">‹</button>
+            <span id="slide-badge" style="font-family:var(--font-mono);font-size: 12px;letter-spacing:0.08em;color:var(--muted)">DESTINATION PREVIEW</span>
+          </div>
+          <h3 id="slide-title" style="font-size:24px;font-weight:300;margin:0 0 6px">연습 플레이어</h3>
+          <p id="slide-desc" style="font-size:13.5px;color:var(--muted);margin:0 0 18px">홈에서 선택한 항목이 이 화면으로 연결됩니다.</p>
+          <div style="background:var(--paper);border:1px solid var(--seam-hairline);border-radius:3px;padding:18px;box-shadow:4px 6px 0 var(--relief-bottom-mid)">
+            <div style="font-family:var(--font-mono);font-size: 12px;letter-spacing:0.08em;color:var(--muted);margin-bottom:8px">ACTIVE CONTEXT</div>
+            <div id="slide-body" style="font-size:14px;line-height:1.6"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측 현재 선택 비율 상세 해설 패널 -->
+    <aside class="inspector-panel" aria-live="polite">
+      <div style="font-family:var(--font-mono);font-size: 12px;font-weight:700;letter-spacing:0.08em;color:var(--muted)">FUSION RATIO INSPECTOR</div>
+      <h2 id="insp-title">4:6 · 스튜디오 릴리프 &amp; 창 안의 색</h2>
+      <div class="ratio-meter" aria-hidden="true">
+        <div class="meter-attached" id="meter-attached" style="width:40%"></div>
+        <div class="meter-current" id="meter-current" style="width:60%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size: 12px;color:var(--muted)">
+        <span id="insp-left-pct">첨부 디자인 40%</span>
+        <span id="insp-right-pct">현재 RE:DO 60%</span>
+      </div>
+
+      <dl class="note-dl" id="insp-dl"></dl>
+    </aside>
+  </section>
+
+  <!-- ==================== 2. 4종 비율 나란히 비교 (.cands) ==================== -->
+  <section class="element" aria-label="4종 비율 비교">
+    <h2>비율별 조형 비교 — 2:8 · 3:7 · 4:6 · 5:5</h2>
+    <p style="font-size:13.5px;color:var(--muted);margin:4px 0 12px">
+      2번(쿨 라이트 팔레트 보정)은 <code>RE:DO 라이트</code>에 적용했고, 1·3·4·5·6·7번 수정사항은 4개 비율 모두에 일관되게 반영했습니다.
+    </p>
+
+    <div class="cands" id="cands-grid">
+      <article class="cand" data-cand="2-8">
+        <h3><span>2:8 · 타이포·여백 보정</span><span class="ratio-badge">20 : 80</span></h3>
+        <div class="mini-svg-wrap">
+          <svg viewBox="0 0 280 150" width="100%" height="150">
+            <rect width="280" height="150" fill="var(--bg)" />
+            <rect x="65" y="10" width="150" height="16" fill="var(--paper)" stroke="var(--line)" />
+            <rect x="16" y="38" width="120" height="46" fill="var(--surface)" stroke="var(--line)" />
+            <rect x="16" y="38" width="120" height="3" fill="var(--now-ring)" />
+            <rect x="144" y="38" width="120" height="46" fill="var(--surface)" stroke="var(--line)" />
+            <rect x="144" y="38" width="120" height="3" fill="var(--ink)" />
+            <rect x="16" y="92" width="120" height="46" fill="var(--surface)" stroke="var(--line)" />
+            <rect x="16" y="92" width="120" height="3" fill="var(--now-ring)" />
+            <rect x="144" y="92" width="120" height="46" fill="var(--surface)" stroke="var(--line)" />
+            <rect x="144" y="92" width="120" height="3" fill="var(--ink)" />
+          </svg>
+        </div>
+        <dl class="note-dl">
+          <dt>조형 특징</dt><dd>직각(`0px`) 사각 버튼·텍스트 링크 정리 + T4 계기판 분리.</dd>
+        </dl>
+        <button type="button" class="cand-pick-btn" data-jump-ratio="2-8">스테이지에서 2:8 보기 ↑</button>
+      </article>
+
+      <article class="cand" data-cand="3-7">
+        <h3><span>3:7 · 파사드 줄눈 &amp; 스파인 축</span><span class="ratio-badge">30 : 70</span></h3>
+        <div class="mini-svg-wrap">
+          <svg viewBox="0 0 280 150" width="100%" height="150">
+            <rect width="280" height="150" fill="var(--bg)" />
+            <line x1="70" y1="0" x2="70" y2="150" stroke="var(--seam-hairline)" />
+            <line x1="140" y1="0" x2="140" y2="150" stroke="var(--seam-hairline)" />
+            <line x1="210" y1="0" x2="210" y2="150" stroke="var(--seam-hairline)" />
+            <rect x="65" y="10" width="150" height="16" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="38" width="120" height="46" fill="var(--panel-frosted)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="38" width="7" height="46" fill="var(--now-ring)" />
+            <rect x="144" y="38" width="120" height="46" fill="var(--panel-frosted)" stroke="var(--seam-hairline)" />
+            <rect x="144" y="38" width="7" height="46" fill="var(--ink-strong)" />
+            <rect x="16" y="92" width="120" height="46" fill="var(--panel-frosted)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="92" width="7" height="46" fill="var(--fill2)" />
+            <rect x="144" y="92" width="120" height="46" fill="var(--panel-frosted)" stroke="var(--seam-hairline)" />
+            <rect x="144" y="92" width="7" height="46" fill="var(--fill3)" />
+          </svg>
+        </div>
+        <dl class="note-dl">
+          <dt>조형 특징</dt><dd>8px 좌측 스파인과 CHORDS 이어서 색 일치 + T1 가벼운 제목.</dd>
+        </dl>
+        <button type="button" class="cand-pick-btn" data-jump-ratio="3-7">스테이지에서 3:7 보기 ↑</button>
+      </article>
+
+      <article class="cand active-cand" data-cand="4-6">
+        <h3><span>4:6 · 스튜디오 릴리프 &amp; 창 안의 색</span><span class="ratio-badge">40 : 60 (현재)</span></h3>
+        <div class="mini-svg-wrap">
+          <svg viewBox="0 0 280 150" width="100%" height="150">
+            <rect width="280" height="150" fill="var(--bg)" />
+            <g stroke="var(--seam-hairline)">
+              <line x1="70" y1="0" x2="70" y2="150" /><line x1="140" y1="0" x2="140" y2="150" /><line x1="210" y1="0" x2="210" y2="150" />
+              <line x1="0" y1="50" x2="280" y2="50" /><line x1="0" y1="100" x2="280" y2="100" />
+            </g>
+            <rect x="65" y="10" width="150" height="16" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="19" y="41" width="118" height="44" rx="2" fill="var(--relief-bottom-mid)" />
+            <rect x="16" y="38" width="118" height="44" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="38" width="10" height="44" fill="var(--fill1)" />
+            <rect x="147" y="41" width="118" height="44" rx="2" fill="var(--relief-bottom-mid)" />
+            <rect x="144" y="38" width="118" height="44" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="144" y="38" width="10" height="44" fill="var(--fill2)" />
+            <rect x="19" y="96" width="118" height="44" rx="2" fill="var(--relief-bottom-mid)" />
+            <rect x="16" y="92" width="118" height="44" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="92" width="10" height="44" fill="var(--fill3)" />
+          </svg>
+        </div>
+        <dl class="note-dl">
+          <dt>조형 특징</dt><dd>쿨 미네랄 화이트 + 리벳 격자 + 12px 스파인·3D 릴리프 + 최소 필.</dd>
+        </dl>
+        <button type="button" class="cand-pick-btn" data-jump-ratio="4-6">스테이지에서 4:6 보기 ↑</button>
+      </article>
+
+      <article class="cand" data-cand="5-5">
+        <h3><span>5:5 · 공간 파사드·룰러 × 연습 콕핏</span><span class="ratio-badge">50 : 50</span></h3>
+        <div class="mini-svg-wrap">
+          <svg viewBox="0 0 280 150" width="100%" height="150">
+            <rect width="280" height="150" fill="var(--panel-frosted)" />
+            <g stroke="var(--seam-hairline)">
+              <line x1="70" y1="0" x2="70" y2="150" /><line x1="140" y1="0" x2="140" y2="150" /><line x1="210" y1="0" x2="210" y2="150" />
+            </g>
+            <rect x="16" y="10" width="248" height="15" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="34" width="248" height="14" fill="var(--cream)" stroke="var(--surface3)" />
+            <rect x="112" y="30" width="56" height="22" rx="2" fill="var(--ink-strong)" />
+            <rect x="22" y="66" width="114" height="68" rx="2" fill="var(--relief-side-dark)" />
+            <rect x="16" y="60" width="114" height="68" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="16" y="60" width="13" height="68" fill="var(--fill1)" />
+            <rect x="154" y="68" width="112" height="66" rx="2" fill="var(--cream)" stroke="var(--surface3)" />
+            <rect x="148" y="60" width="114" height="68" rx="2" fill="var(--paper)" stroke="var(--seam-hairline)" />
+            <rect x="148" y="60" width="13" height="68" fill="var(--fill3)" />
+          </svg>
+        </div>
+        <dl class="note-dl">
+          <dt>조형 특징</dt><dd>수평 스케일 룰러 + 16px 스파인·적층 슬래브 + 좌측 정렬 콕핏.</dd>
+        </dl>
+        <button type="button" class="cand-pick-btn" data-jump-ratio="5-5">스테이지에서 5:5 보기 ↑</button>
+      </article>
+    </div>
+  </section>
+
+  <!-- ==================== 3. 수정사항 1~7 반영 명세 표 ==================== -->
+  <section id="spec" aria-label="수정사항 반영 명세">
+    <h2 style="font-size:18px;margin:0 0 6px">요청 수정사항 1~7 반영 내역</h2>
+    <div class="tblwrap">
+      <table>
+        <thead>
+          <tr>
+            <th>번호</th>
+            <th>수정 항목</th>
+            <th>변경 전</th>
+            <th>변경 후 (시안 반영)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>1</b></td>
+            <td><code>BETTER CHORDS</code> 이어서 색</td>
+            <td>노란색/주황 <code>--fill1</code> 고정이라 <code>BETTER</code> 스파인 색과 불일치</td>
+            <td>카드별 <code>--section-spine</code> 변수를 두어 <b><code>BETTER</code> 스파인 색(<code>--fill3</code> 등)과 "이어서" 강조 색을 100% 일치</b></td>
+          </tr>
+          <tr>
+            <td><b>2</b></td>
+            <td>컨텐츠 면 화이트 쿨톤(-20%)</td>
+            <td><code>--bg: #F0EEEA</code>, <code>--surface: #F6F6F1</code> (황색·웜기)</td>
+            <td><b><code>RE:DO 라이트</code> 전용 보정:</b> <code>--bg: #ECEEF0</code>, <code>--paper/surface: #F1F4F7</code>, <code>--cream: #EDF0F3</code>, <code>--surface2: #DCE0E5</code>, <code>--muted: #61656C</code></td>
+          </tr>
+          <tr>
+            <td><b>3</b></td>
+            <td>필 버튼 최소화 (사각/글자 정리)</td>
+            <td>URL 바·예시 칩·섹션 버튼·범위 탭·코드 카드 액션 등 다수가 필</td>
+            <td>URL 바·보조 버튼(<code>노트 만들기</code>)·<code>코드 연습실</code>·<code>플레이어</code>·범위 세그먼트는 <b>사각형(0/3px)</b>, 이동/보조 액션은 <b>글자 버튼</b>, 대표 <code>▶ 바로 연습</code> 1개만 필</td>
+          </tr>
+          <tr>
+            <td><b>4</b></td>
+            <td>취향 코드 진행 순서</td>
+            <td>레퍼런스 | 분석 | 합산</td>
+            <td><b>합산 | 레퍼런스 | 분석</b> (기본 선택: <code>합산</code>)</td>
+          </tr>
+          <tr>
+            <td><b>5</b></td>
+            <td>랜덤 버튼 압축 및 타입 변경</td>
+            <td><code># 랜덤으로 보여주기</code> 필 버튼</td>
+            <td><b><code>랜덤 ↻</code></b> 텍스트 버튼으로 압축 (<code>연주하기 →</code>·<code>전체 노트 →</code>와 같은 글자 버튼 톤)</td>
+          </tr>
+          <tr>
+            <td><b>6</b></td>
+            <td><code>LEARN ↔ PLAYER</code> &amp; 강조</td>
+            <td><code>HOME · LEARN · PLAYER</code> 순서, 강조 없음</td>
+            <td>상단 메뉴 &amp; 모바일 탭 바 모두 <b><code>HOME · PLAYER · LEARN</code></b> 순서로 교체, 상단 컨트롤에서 <b>강조 3안(▶+프레임 / 스파인 / 먹색)</b> 즉시 비교 가능</td>
+          </tr>
+          <tr>
+            <td><b>7</b></td>
+            <td><code>COMMUNITY</code> 비노출</td>
+            <td>상단 메뉴·<code>WHAT YOU DO?</code> 배너·큐레이션 선반 표시</td>
+            <td>닫힌 기능으로 간주해 상단 메뉴·모바일 탭·홈 본문에서 모두 제외</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const facadeGrid = document.getElementById('facade-grid');
+  for (let i = 0; i < 16; i++) {
+    const bay = document.createElement('div');
+    bay.className = 'facade-bay';
+    bay.innerHTML = '<span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>';
+    facadeGrid.appendChild(bay);
+  }
+
+  const RATIO_META = {
+    '2-8': {
+      title: '2:8 · 타이포·여백 미세 정련형',
+      attachedPct: 20, currentPct: 80,
+      notes: [
+        ['핵심 컨셉', '직각(0px) 카드와 상단 3px 바를 유지한 채, 쿨 미네랄 화이트·T4 계기판 분리·사각/글자 버튼 규칙을 적용한 정갈한 기본안.'],
+        ['1·3·6번 적용', 'BETTER 이어서 색 = 상단 바 색, 섹션·범위 버튼은 직각, PLAYER는 HOME 바로 옆에서 강조.']
+      ]
+    },
+    '3-7': {
+      title: '3:7 · 파사드 줄눈 & 스파인 축 전환형',
+      attachedPct: 30, currentPct: 70,
+      notes: [
+        ['핵심 컨셉', '8px 좌측 스파인 + 미세 세로 줄눈 + T1 24px 300 Light 제목으로 평면 카드에 숨통을 틔운 안.'],
+        ['1·3·6번 적용', 'BETTER 이어서 색이 좌측 스파인과 일치하며, 필 버튼 없이 사각+텍스트 위계만 남김.']
+      ]
+    },
+    '4-6': {
+      title: '4:6 · 스튜디오 릴리프 & 창 안의 색 (기본 선택)',
+      attachedPct: 40, currentPct: 60,
+      notes: [
+        ['핵심 컨셉', '쿨 미네랄 화이트(#F1F4F7) + 4×4 파사드 리벳 격자 + 12px 스파인·아치 슬릿·2겹 릴리프로 RE:DO 대시보드에 촉각적 깊이를 더한 추천안.'],
+        ['수정사항 반영', 'BETTER 이어서 색(--fill3) 통일, URL/범위/섹션 사각 정리, 랜덤·연주하기 글자 버튼, 합산 우선, PLAYER 1순위 강조, COMMUNITY 제거.']
+      ]
+    },
+    '5-5': {
+      title: '5:5 · 공간 파사드·룰러 × 연습 콕핏',
+      attachedPct: 50, currentPct: 50,
+      notes: [
+        ['핵심 컨셉', '수평 스케일 룰러 + 단일 + TODAY 기점 + 16px 스파인 6겹 돌출 블록 + +3곡 적층 슬래브까지 결합한 아틀리에형.'],
+        ['수정사항 반영', '전체 기능·룰러 구조를 유지하면서 1·3·4·5·6·7번 수정안을 동일하게 반영.']
+      ]
+    }
+  };
+
+  const WEEK_DAYS = [
+    { dow: 'Mo', num: '12', done: true, today: false },
+    { dow: 'Tu', num: '13', done: true, today: false },
+    { dow: 'We', num: '14', done: false, today: false },
+    { dow: 'Th', num: '15', done: true, today: false },
+    { dow: 'Fr', num: '16', done: true, today: true },
+    { dow: 'Sa', num: '17', done: false, today: false },
+    { dow: 'Su', num: '18', done: false, today: false },
+  ];
+
+  const SONG_PAGES = [
+    [
+      { title: 'Autumn Leaves', meta: '연습 중 · 0.85× · 11/16' },
+      { title: 'Stella By Starlight', meta: '익히는 중 · 0.75× · 11/14' },
+      { title: 'Blue Bossa', meta: '완주 · 1.0× · 11/11' },
+      { title: 'All The Things You Are', meta: '구간 반복 · 0.8× · 11/09' }
+    ],
+    [
+      { title: 'Misty (Chord Melody)', meta: '연습 중 · 0.7× · 11/06' },
+      { title: 'Isn’t She Lovely', meta: '카피 중 · 0.9× · 11/04' },
+      { title: 'Just The Two Of Us', meta: '완주 · 1.0× · 11/01' },
+      { title: 'Someday My Prince Will Come', meta: '예약 · 0.8× · 10/29' }
+    ]
+  ];
+  let songPageIdx = 0;
+
+  const PROGRESSIONS = {
+    all: [
+      { kind: 'MAJOR 2-5-1', key: 'KEY C', chords: 'Dm9 → G13 → Cmaj9', sub: 'Autumn Leaves 인트로 · 출처: 합산' },
+      { kind: 'TRITONE SUB', key: 'KEY G', chords: 'Am11 → Ab13(#11) → Gmaj9', sub: '내 노트 #09 · 출처: 합산' },
+      { kind: 'TURNAROUND', key: 'KEY Bb', chords: 'Bbmaj7 → G7alt → Cm9 → F13', sub: '리듬 체인지 A파트 · 출처: 합산' }
+    ],
+    reference: [
+      { kind: 'MAJOR 2-5-1', key: 'KEY C', chords: 'Dm9 → G13 → Cmaj9', sub: 'Autumn Leaves 인트로 · 출처: 레퍼런스' },
+      { kind: 'MINOR 2-5-1', key: 'KEY Am', chords: 'Bm7b5 → E7(b9) → Am9', sub: 'Blue Bossa 브리지 · 출처: 레퍼런스' },
+      { kind: 'BACKDOOR', key: 'KEY F', chords: 'Bbmaj7 → Bbm6 → Fmaj7', sub: '재즈 엔딩 케이던스 · 출처: 레퍼런스' }
+    ],
+    analysis: [
+      { kind: 'DROP-2 VOICING', key: 'KEY Eb', chords: 'Fm9 → Bb13(sus4) → Ebmaj9', sub: '내 노트 #14 · 출처: 분석' },
+      { kind: 'TRITONE SUB', key: 'KEY G', chords: 'Am11 → Ab13(#11) → Gmaj9', sub: '내 노트 #09 · 출처: 분석' }
+    ]
+  };
+  let curScope = 'all';
+  let curProgIdx = 0;
+
+  const stageFrame = document.getElementById('stage-frame');
+
+  function setRatio(ratio) {
+    stageFrame.setAttribute('data-ratio', ratio);
+    document.querySelectorAll('#ratio-tabs [data-ratio-btn]').forEach(btn => {
+      btn.setAttribute('aria-selected', String(btn.getAttribute('data-ratio-btn') === ratio));
+    });
+    document.querySelectorAll('#cands-grid .cand').forEach(c => {
+      c.classList.toggle('active-cand', c.getAttribute('data-cand') === ratio);
+    });
+    const meta = RATIO_META[ratio];
+    document.getElementById('insp-title').textContent = meta.title;
+    document.getElementById('meter-attached').style.width = meta.attachedPct + '%';
+    document.getElementById('meter-current').style.width = meta.currentPct + '%';
+    document.getElementById('insp-left-pct').textContent = `첨부 디자인 ${meta.attachedPct}%`;
+    document.getElementById('insp-right-pct').textContent = `현재 RE:DO ${meta.currentPct}%`;
+    document.getElementById('insp-dl').innerHTML = meta.notes.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  }
+
+  document.querySelectorAll('#ratio-tabs [data-ratio-btn]').forEach(btn => {
+    btn.addEventListener('click', () => setRatio(btn.getAttribute('data-ratio-btn')));
+  });
+  document.querySelectorAll('[data-jump-ratio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setRatio(btn.getAttribute('data-jump-ratio'));
+      document.querySelector('.controls-bar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('#viewport-controls [data-vp-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      stageFrame.setAttribute('data-viewport', btn.getAttribute('data-vp-btn'));
+      document.querySelectorAll('#viewport-controls [data-vp-btn]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    });
+  });
+
+  document.querySelectorAll('#look-controls [data-look-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.body.setAttribute('data-look', btn.getAttribute('data-look-btn'));
+      document.querySelectorAll('#look-controls [data-look-btn]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    });
+  });
+
+  document.querySelectorAll('#player-emph-controls [data-emph-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      stageFrame.setAttribute('data-player-emph', btn.getAttribute('data-emph-btn'));
+      document.querySelectorAll('#player-emph-controls [data-emph-btn]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    });
+  });
+
+  function renderStreak() {
+    const grid = document.getElementById('streak-grid');
+    grid.innerHTML = WEEK_DAYS.map((d, i) => `
+      <button type="button" class="streak-cell ${d.done ? 'done' : ''} ${d.today ? 'today' : ''}" data-day-idx="${i}" aria-pressed="${d.done}">
+        <span class="dow-txt">${d.dow}</span>
+        <span class="day-num">${d.num}</span>
+      </button>
+    `).join('');
+    grid.querySelectorAll('[data-day-idx]').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = Number(el.getAttribute('data-day-idx'));
+        WEEK_DAYS[idx].done = !WEEK_DAYS[idx].done;
+        renderStreak();
+      });
+    });
+    const count = WEEK_DAYS.filter(d => d.done).length;
+    const step = Math.min(3, count % 4 || (count > 0 ? 3 : 0));
+    document.getElementById('streak-text').textContent = count === 0
+      ? '작심삼일 도전하기 · 오늘 첫 연습을 시작해 보세요'
+      : `작심삼일 도전하기 · 이번 주 ${count}일 연습 (${step}/3)`;
+    const dots = document.getElementById('streak-dots').children;
+    for (let i = 0; i < 3; i++) dots[i].classList.toggle('on', i < step);
+  }
+  renderStreak();
+
+  const urlInput = document.getElementById('url-input');
+  const goPick = document.getElementById('go-pick');
+  const pickedTitle = document.getElementById('picked-title');
+  function showPicked(url, title) {
+    urlInput.value = url;
+    pickedTitle.textContent = title || '선택한 유튜브 연습 영상';
+    goPick.hidden = false;
+  }
+  document.getElementById('btn-sample-url').addEventListener('click', () => {
+    showPicked('https://youtu.be/autumn-leaves', 'Autumn Leaves · Bill Evans Trio Voicing');
+  });
+  document.querySelectorAll('[data-preset-url]').forEach(btn => {
+    btn.addEventListener('click', () => showPicked(btn.getAttribute('data-preset-url'), btn.getAttribute('data-preset-title')));
+  });
+  document.getElementById('btn-clear-url').addEventListener('click', () => {
+    urlInput.value = '';
+    goPick.hidden = true;
+  });
+  urlInput.addEventListener('input', () => {
+    if (urlInput.value.trim().length > 6) {
+      pickedTitle.textContent = '입력한 유튜브 링크 · 연습 준비 완료';
+      goPick.hidden = false;
+    } else {
+      goPick.hidden = true;
+    }
+  });
+
+  const catPop = document.getElementById('cat-pop');
+  const btnCatPop = document.getElementById('btn-cat-pop');
+  btnCatPop.addEventListener('click', () => {
+    const next = catPop.hidden;
+    catPop.hidden = !next;
+    btnCatPop.setAttribute('aria-expanded', String(next));
+  });
+  document.getElementById('btn-add-cat').addEventListener('click', () => {
+    const inp = document.getElementById('new-cat-input');
+    const name = inp.value.trim();
+    if (!name) return;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'genre-cell';
+    chip.textContent = name;
+    chip.addEventListener('click', () => openSlide('practice'));
+    document.getElementById('genre-row').insertBefore(chip, btnCatPop);
+    inp.value = '';
+    catPop.hidden = true;
+    btnCatPop.setAttribute('aria-expanded', 'false');
+  });
+
+  document.querySelectorAll('#modes-list .list-row-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#modes-list .list-row-btn').forEach(b => {
+        b.classList.remove('cur');
+        b.querySelector('.row-m').textContent = '';
+      });
+      btn.classList.add('cur');
+      btn.querySelector('.row-m').textContent = '이어서';
+    });
+  });
+
+  function renderSongs() {
+    const list = SONG_PAGES[songPageIdx % SONG_PAGES.length];
+    const ul = document.getElementById('songs-list');
+    ul.innerHTML = list.map(s => `
+      <li>
+        <button type="button" class="list-row-btn" data-song-open="${s.title}">
+          <span class="row-t">${s.title}</span>
+          <span class="row-m">${s.meta}</span>
+        </button>
+      </li>
+    `).join('');
+    ul.querySelectorAll('[data-song-open]').forEach(b => {
+      b.addEventListener('click', () => openSlide('practice', b.getAttribute('data-song-open')));
+    });
+  }
+  renderSongs();
+  document.getElementById('btn-cycle-songs').addEventListener('click', () => {
+    songPageIdx++;
+    renderSongs();
+  });
+
+  function renderProgression() {
+    const pool = PROGRESSIONS[curScope];
+    const item = pool[curProgIdx % pool.length];
+    document.getElementById('prog-kind').textContent = item.kind;
+    document.getElementById('prog-key').textContent = item.key;
+    document.getElementById('prog-chords').textContent = item.chords;
+    document.getElementById('prog-sub').textContent = item.sub;
+  }
+  document.querySelectorAll('#prog-scope-row [data-scope]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      curScope = btn.getAttribute('data-scope');
+      curProgIdx = 0;
+      document.querySelectorAll('#prog-scope-row [data-scope]').forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+      renderProgression();
+    });
+  });
+  document.getElementById('btn-rand-prog').addEventListener('click', () => {
+    curProgIdx++;
+    renderProgression();
+  });
+
+  const slidePage = document.getElementById('slide-page');
+  const SLIDE_COPY = {
+    practice: { badge: 'PLAYER · PRACTICE', title: '구간 반복 연습 플레이어', desc: '홈에서 고른 곡·구간·배속(0.85×) 상태로 즉시 연습을 이어갑니다.', body: '현재 선택 곡: <b>Just Friends — Comping & Guide Tones</b><br>루프 구간: 0:42 ~ 1:18 · 배속: 0.85× · A-B 파형 타임라인 준비됨.' },
+    note: { badge: 'NOTES · AI HARMONY', title: '학습 노트 상세 (VAULT)', desc: '영상 화성 분석·보이싱 표·코드 진행 수집을 확인하는 화면입니다.', body: '노트: <b>Bill Evans Drop-2 보이싱 해부</b><br>추출된 진행: Dm9 → G13 → Cmaj9 (CHORDS 연습실로 수집됨).' },
+    chords: { badge: 'CHORDS · WORKBENCH', title: '코드 연습실 (7가지 모드)', desc: '스케일, 코드톤 지도, 보이싱 매트릭스, 2-5-1 탐색으로 연결됩니다.', body: '활성 모드: <b>2 · 코드톤 지도 (이어서)</b><br>지판·건반 동기화 및 아르페지오 루프가 대기 중입니다.' },
+    log: { badge: 'TRAILS · ACTIVITY', title: '연습 기록 · 주간 스트릭', desc: '일별 연습 이력과 작심삼일 연속 달성 현황을 모아 봅니다.', body: '이번 주 연습 기록과 곡별 누적 시간, 최근 메모를 한 화면에서 확인합니다.' },
+    progressions: { badge: 'CHORDS · PROGRESSION VAULT', title: '취향 코드 진행 모음', desc: '합산 · 레퍼런스 · 분석 진행의 겹치는 패턴과 자주 쓰는 키를 봅니다.', body: '현재 범위: <b>합산 / 레퍼런스 / 분석</b><br>자주 나온 패턴: II–V–I (6회) · 주요 키: F Major.' }
+  };
+
+  function openSlide(key, customTitle) {
+    const info = SLIDE_COPY[key] || SLIDE_COPY.practice;
+    document.getElementById('slide-badge').textContent = info.badge;
+    document.getElementById('slide-title').textContent = customTitle ? `${customTitle}` : info.title;
+    document.getElementById('slide-desc').textContent = info.desc;
+    document.getElementById('slide-body').innerHTML = info.body;
+    slidePage.classList.add('open');
+    slidePage.setAttribute('aria-hidden', 'false');
+  }
+
+  document.querySelectorAll('[data-open-slide]').forEach(btn => {
+    btn.addEventListener('click', () => openSlide(btn.getAttribute('data-open-slide')));
+  });
+  document.getElementById('btn-slide-back').addEventListener('click', () => {
+    slidePage.classList.remove('open');
+    slidePage.setAttribute('aria-hidden', 'true');
+  });
+  document.querySelectorAll('[data-slide-reset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      slidePage.classList.remove('open');
+      slidePage.setAttribute('aria-hidden', 'true');
+    });
+  });
+
+  // 초기 선택: 4:6
+  setRatio('4-6');
+</script>
+</body>
+</html>
