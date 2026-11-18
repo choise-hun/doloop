@@ -172,7 +172,7 @@ test('DR-7: 정의하지 않은 CSS 변수를 쓰지 않는다', () => {
 const DS2_COLOR_TOKENS = [
   '--paper', '--cream', '--surface3', '--ink-strong', '--fill1', '--fill2', '--fill3',
   '--section-spine', '--panel-frosted', '--seam-hairline', '--seam-highlight',
-  '--relief-bottom-mid', '--shadow-ambient',
+  '--relief-bottom-mid', '--shadow-ambient', '--streak-done',
 ];
 
 function blockBody(src, startIdx) {
@@ -225,4 +225,16 @@ test('DR-8: 다크 두 블록의 토큰이 같고 DS2 색 토큰이 세 블록 �
     if (!manualDark.has(name)) missing.push('수동 다크 → ' + name);
   }
   assert.deepEqual(missing, [], 'DS2 색 토큰은 세 블록에 모두 넣는다');
+});
+
+// G5b(layout-check.js parseColor)는 rgb()·color(srgb)만 읽는다. oklab·oklch·lab·lch 색은 검사에서 빠지므로 쓰지 않는다.
+// 불투명 혼합은 tokens.css의 미리 계산한 hex 토큰, 반투명은 color-mix(in srgb, var(--토큰) N%, transparent)를 쓴다.
+test('DR-9: CSS에서 oklab·oklch·lab·lch 색 공간을 쓰지 않는다', () => {
+  const bad = [];
+  for (const { rel, src } of cssFiles) {
+    for (const m of src.matchAll(/\bin\s+(?:oklab|oklch|lab|lch)\b|\b(?:oklab|oklch|lab|lch)\(/gi)) {
+      bad.push(rel + ' → ' + m[0]);
+    }
+  }
+  assert.deepEqual(bad, [], 'G5b가 읽지 못하는 색 공간. hex 파생 토큰이나 color-mix(in srgb, …)로 바꾼다');
 });

@@ -7,7 +7,7 @@
 
 ## 1. 색
 
-- 색은 `tokens.css`의 변수로만 쓴다. 화면 CSS에 hex·`rgb()` 값을 직접 적지 않는다. 반투명이 필요하면 `color-mix(in oklab, var(--토큰) N%, transparent)` 또는 `tokens.css`에 명시한 파생 토큰을 쓴다(E2E `G5b` 오탐 방지).
+- 색은 `tokens.css`의 변수로만 쓴다. 화면 CSS에 hex·`rgb()` 값을 직접 적지 않는다. 불투명한 두 색을 섞을 때는 `tokens.css`에 미리 계산한 hex 파생 토큰(세 블록 모두)을 쓰고, 반투명은 `color-mix(in srgb, var(--토큰) N%, transparent)`로 쓴다. `oklab`·`oklch`·`lab()`·`lch()`는 E2E `G5b`가 읽지 못해 검사에서 빠지므로 쓰지 않는다(`DR-9`).
 - 순백(`#fff`, `#ffffff`)은 쓰지 않는다. 라이트 기본 표면은 따뜻함을 20% 낮춘 쿨 미네랄 뉴트럴을 쓴다: 바탕 `--bg`(`#ECEEF0`), 카드·패널 표면 `--surface` / `--paper` (`#F1F4F7`), 보조 표면 `--cream` (`#EDF0F3`), 한 단계 눌린 면 `--surface2` (`#DCE0E5`), 선 `--line` / `--surface3` (`#C7CCD3`), 프로스티드 면 `--panel-frosted`, 줄눈 `--seam-hairline`, 하이라이트 `--seam-highlight`, 릴리프 두께면 `--relief-bottom-mid`.
 - 강조는 색을 더하지 않고 명도와 굵기로 만든다. 글의 위계는 `--ink` (`#1D1D1F`, 본문)와 `--muted` (`#61656C`, 보조), 글자 크기·굵기로 구분한다.
 - `--surface2` 면 위의 글자는 `--ink`를 쓴다. `--muted`는 대비 부족으로 쓰지 않는다.
@@ -78,6 +78,7 @@
 | 허용 곡률(`--radius-pill`, `--radius-block`, `--radius-card`, `50%`), 순백, 토큰 밖 색 | `test/design_rules.test.js` (`npm test`, `frontend/src`의 모든 CSS) 및 페이지별 `r*_*.test.js` | 실패 |
 | 글자 크기 단계(12px 이상), 11px 이하 허용 표, `font:` 축약 크기 | `test/design_rules.test.js` `DR-6` | 실패 |
 | `tokens.css`에 정의하지 않은 CSS 변수 | `test/design_rules.test.js` `DR-7` | 실패 |
+| `oklab`·`oklch`·`lab`·`lch` 색 공간(G5b가 못 읽는 색) | `test/design_rules.test.js` `DR-9` | 실패 |
 | 금지 색·팔레트 밖 색(계산값) | 정렬 규격 G5a·G5b (`test/e2e/support/layout-check.js`) | 실패·경고 |
 | 터치 크기 | 정렬 규격 G7a·G7b | 실패·경고 |
 | 주 행동 1개 필, H2 창 안의 색, 3px 블록·스파인 일관성, 다크 대비 | 스크린샷 질문 Q1·Q4·Q7·Q8·Q9 (정렬 규격 §6) | 사람·모델 검토 |
