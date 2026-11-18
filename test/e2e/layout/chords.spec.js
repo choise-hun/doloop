@@ -186,9 +186,10 @@ test('DS23-C3 재해석·찾기·진행 패널마다 필 1개, .btn 사각 (1280
   for (const tab of ['reint', 'tf', 'prog']) {
     await page.locator(`#tab-${tab}`).click();
     await expect(page.locator(`#pane-${tab}`)).toBeVisible();
-    // 찾기 탭의 재생(#a-vplay)은 검색 결과 패널에 나온다 → 검색 전 0개, 검색 후 1개
+    // 찾기 탭은 진입 시 자동 검색(runTfSearch, 20ms 뒤 결과)한다 → 검색 전 상태는 타이밍 경합이라 단언하지 않는다.
+    // 자동 검색 결과의 재생(#a-vplay)이 보인 뒤, 다시 검색해도 필은 #a-vplay 1개
     if (tab === 'tf') {
-      expect(await chPills(page, '#pane-tf'), 'tf 검색 전').toEqual([]);
+      await expect(page.locator('#a-vplay')).toBeVisible();
       await page.locator('#a-go').click();
       await expect(page.locator('#a-vplay')).toBeVisible();
     }
