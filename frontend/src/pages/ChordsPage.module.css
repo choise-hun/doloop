@@ -14,9 +14,11 @@
 }
 
 .pageTitle {
+  font-family: var(--font-body);
   font-size: 24px;
+  font-weight: 300;
+  letter-spacing: -0.025em;
   margin: 0;
-  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
@@ -25,9 +27,14 @@
   margin-left: auto;
   font-size: 13px;
   padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  border-radius: var(--radius-block);
+  border: 1px solid var(--seam-hairline);
+  background: var(--cream);
   color: var(--ink);
+}
+
+.practiceLink:hover {
+  border-color: var(--ink);
 }
 
 .subText {
@@ -45,11 +52,11 @@
 .tab {
   min-height: 44px;
   font: inherit;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  border: 1px solid var(--seam-hairline);
+  background: var(--cream);
   color: var(--ink);
   padding: 8px 16px;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   cursor: pointer;
 }
 
@@ -76,23 +83,34 @@
 .keyboardSequence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 768px) { .keyboardSequence { grid-template-columns: 1fr; } }
 
+/* DS2-3 D9: 넓은 탭 선택 = 종이 + 2px 먹색 밑줄(홈 범위 세그먼트와 같은 값) */
 .tab[aria-selected="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--paper);
+  border-color: var(--ink-strong);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink-strong);
   font-weight: 700;
 }
 
 .pane {
+  /* DS2-3 D3: 화면 스파인 색 = LEARN fill3 */
+  --section-spine: var(--fill3);
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -134,8 +152,8 @@
   font: inherit;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 7px 12px;
   min-width: 0;
   width: 100%;
@@ -162,7 +180,7 @@
   flex-wrap: wrap;
 }
 
-.btn,
+/* DS2-3 D12: 패널마다 대표 행동 .playbtn 1개만 먹색 필, .btn은 사각 보조 버튼 */
 .playbtn {
   font: inherit;
   font-weight: 700;
@@ -172,6 +190,27 @@
   border-radius: var(--radius-pill);
   padding: 9px 20px;
   cursor: pointer;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 700;
+  background: var(--cream);
+  color: var(--ink);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  padding: 9px 20px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* 폼 그리드 안 재생 버튼: 칸을 채우지 않고 입력칸 아랫선에 맞춤(FT-3-chords, 재해석 탭) */
@@ -189,8 +228,8 @@
   font: inherit;
   background: transparent;
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 8px 16px;
   cursor: pointer;
 }
@@ -228,11 +267,11 @@
 .chip {
   font: inherit;
   font-size: 13px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--seam-hairline);
   background: var(--bg);
   color: var(--ink);
   padding: 5px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-block);
   cursor: pointer;
   display: inline-flex;
   flex-direction: column;
@@ -269,8 +308,8 @@
   line-height: 1.3;
   min-height: 44px;
   padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   background: var(--bg);
   color: var(--ink);
   cursor: pointer;
@@ -338,9 +377,9 @@
 
 .cell {
   margin: 0;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: var(--panel-frosted);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 8px 8px 6px;
   display: flex;
   flex-direction: column;
@@ -360,7 +399,7 @@
   text-align: center;
   color: var(--muted);
   border: 1px dashed var(--line);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
 }
 
 .seq {
@@ -378,9 +417,10 @@
 
 .scTitle {
   margin: 0;
+  font-family: var(--font-body);
   font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 300;
+  letter-spacing: -0.025em;
   text-align: center;
 }
 
@@ -432,7 +472,7 @@
 }
 
 /* 5도권 단계 버튼 — public/styles.css .step 이식(FT-3-chords) */
-.ccStep { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: var(--radius-pill); padding: 5px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.25; min-width: 0; }
+.ccStep { font: inherit; border: 1px solid var(--seam-hairline); background: var(--bg); color: var(--ink); border-radius: var(--radius-block); padding: 5px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.25; min-width: 0; }
 .ccStep b { font-size: 12px; }
 .ccStep span { font-size: 11px; color: var(--muted); }
 .ccStepCur { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
@@ -462,9 +502,9 @@
   margin: 0;
   font: inherit;
   color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: var(--panel-frosted);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -503,9 +543,9 @@
   align-items: center;
   min-width: 38px;
   padding: 3px 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--panel-frosted);
   line-height: 1.2;
 }
 :global(.scn b) { font-family: var(--font-mono); font-size: 13px; }
@@ -517,8 +557,9 @@
 :global(.seqn) {
   font-family: var(--font-mono);
   font-size: 11px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--panel-frosted);
   padding: 2px 6px;
   color: var(--muted);
   display: inline-flex;

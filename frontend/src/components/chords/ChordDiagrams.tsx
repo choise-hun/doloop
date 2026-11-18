@@ -304,7 +304,8 @@ export function FretboardSvg({
   const xL = L + (showOpen ? 26 : 0);
   const width = xL + (to - first + 1) * W + 10;
   const height = T + GAP * 5 + 30;
-  const xOf = (f: number) => (f === 0 ? L + 10 : xL + (f - first + 0.5) * W);
+  // 개방현 점은 줄 시작(L)~너트(xL) 칸 가운데(DS23-C5)
+  const xOf = (f: number) => (f === 0 ? (L + xL) / 2 : xL + (f - first + 0.5) * W);
   const yOf = (s: number) => T + (5 - s) * GAP;
 
   const fretLines: number[] = [];
@@ -457,7 +458,8 @@ export function NeckSvg({
   const W = (VW - xL - R) / Math.max(1, hi - first + 1);
   const H = T + GAP * (n - 1) + 40;
   const fx = (x: number) => (flip ? VW - x : x);
-  const xOf = (f: number) => fx(f === 0 ? L + OW / 2 - 2 : xL + (f - first + 0.5) * W);
+  // 개방현 점은 줄 시작(L)~너트(xL) 칸 가운데(DS23-C5)
+  const xOf = (f: number) => fx(f === 0 ? L + OW / 2 : xL + (f - first + 0.5) * W);
   const lineX = (f: number) => (f < first ? L : xL + (f - first + 1) * W);
   const yOf = (s: number) => T + (n - 1 - s) * GAP;
   const mid = T + (GAP * (n - 1)) / 2;
