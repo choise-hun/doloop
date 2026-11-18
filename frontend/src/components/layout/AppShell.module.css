@@ -30,7 +30,7 @@
   min-height: var(--header-height);
   margin: 0 auto;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--seam-hairline);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 14px;
@@ -97,6 +97,36 @@
   white-space: nowrap;
 }
 
+/* DS2-1 A안: PLAYER는 ▶ + 1px 먹색 프레임 + 2px 주황 밑선(블록 3px). 밑선과 글자 밑줄이 겹치지 않게 밑줄은 끈다.
+   display를 정하므로 ≤820px의 .navMainItem(display: none)보다 앞에 둔다 */
+.navPlayer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--paper);
+  border: 1px solid var(--ink-strong);
+  border-bottom: 2px solid var(--fill1);
+  border-radius: var(--radius-block);
+}
+
+.navPlayer::before,
+.tabPlayer::before {
+  content: "▶";
+  content: "▶" / "";
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.navPlayer:hover,
+.navPlayer[aria-current="page"] {
+  text-decoration: none;
+}
+
+.navPlayer[aria-current="page"] {
+  background: var(--surface2);
+}
+
 .siteFoot {
   width: 100%;
   max-width: var(--container-max);
@@ -104,7 +134,7 @@
   display: flex;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--seam-hairline);
 }
 
 .themeGroup {
@@ -112,7 +142,7 @@
   padding: 3px;
   gap: 2px;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--seam-hairline);
   border-radius: var(--radius-card);
 }
 
@@ -191,6 +221,20 @@
   .brandLink {
     gap: 16px;
   }
+
+  .navPlayer {
+    padding: 2px 6px;
+    gap: 3px;
+  }
+}
+
+/* DS2-1: 961~963px(비로그인)은 기본 간격 + PLAYER 프레임으로 약 3px이 모자란다(사용자 결정 2026-11-18).
+   1000px까지 PLAYER 프레임만 821~960px과 같은 값으로 줄이고 다른 메뉴 간격은 그대로 둔다 */
+@media (min-width: 961px) and (max-width: 1000px) {
+  .navPlayer {
+    padding: 2px 6px;
+    gap: 3px;
+  }
 }
 
 /* DS-3: 비로그인 821~840px은 간격을 다 줄여도 약 20px이 모자란다.
@@ -248,7 +292,7 @@
     padding: 0 max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
       max(8px, env(safe-area-inset-left, 0px));
     background: var(--bg);
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--seam-hairline);
     font-family: var(--font-display);
     font-weight: 800;
     font-size: 12px;
@@ -268,6 +312,14 @@
     font-size: 12px;
     line-height: 1.2;
     padding: 4px 2px;
+  }
+
+  .tabPlayer {
+    color: var(--ink);
+  }
+
+  .tabPlayer::before {
+    margin-right: 4px;
   }
 
   .tabItem[aria-current="page"] {
