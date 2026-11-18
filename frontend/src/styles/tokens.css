@@ -1,23 +1,24 @@
 /* frontend/src/styles/tokens.css */
-/* 디자인 규칙(docs/rules/frontend-design.md) 요약:
- * 1. 바탕은 순백(#FFFFFF)을 절대 쓰지 않고 웜 뉴트럴(#F0EEEA, 표면 #F6F6F1)을 기본값으로 쓴다.
- * 2. 파란색은 기존 링크·지판 근음 점에만 남기고 새 화면에는 쓰지 않는다. 선택된 탭·칩·주 CTA 버튼은 가장 어두운 명도(#1D1D1F)로 만든다.
- * 3. 주황색(#E64D01, 다크 #FF6B2B)은 유일한 포인트 색이다. 지금 칠 음·스트릭·프레임 바 같은 표시와 테두리에만 쓰고 글자색으로 쓰지 않는다.
- * 4. 컨트롤(버튼·탭·토글·단일행 인풋)과 기존 화면의 칩·배지는 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
+/* 디자인 규칙(docs/rules/frontend-design.md, 2026-11-18 개정) 요약:
+ * 1. 순백(#FFFFFF)은 쓰지 않는다. 라이트는 쿨 미네랄 뉴트럴(바탕 #ECEEF0, 표면 #F1F4F7)이 기본이다.
+ * 2. 메뉴·탭 바·프레임은 무채색(--bg·--surface·--cream·--seam-hairline). 유채색 --fill1~3은 스파인·표지·지판·대표 주 행동 1개에만 쓴다.
+ * 3. 주황(#E64D01, 다크 #FF6B2B)은 표시·테두리·대표 버튼 채움에만 쓰고 글자색으로 쓰지 않는다. 파랑은 기존 링크·지판 근음 전용이다.
+ * 4. 곡률은 필(9999px)·블록(3px)·직각(0px) 세 형태 토큰과 원형 점 50%만 쓴다. 그 밖의 직접 수치는 금지한다.
+ * 5. 색 토큰을 추가하면 라이트 :root와 다크 두 블록에 모두 넣는다(design_rules DR-8). 파생 색은 미리 계산한 hex로 둔다.
  */
 :root {
   /* 1. 기본 배경·표면·글자·선 (순백 #FFFFFF 금지) */
-  --bg: #F0EEEA;
-  --surface: #f6f6f1;
-  --surface2: #e1e0d6;
+  --bg: #ECEEF0;
+  --surface: #F1F4F7;
+  --surface2: #DCE0E5;
   --ink: #1d1d1f;
   --ink-navy: #191265;
-  --muted: #6b6a63;
-  --line: #cfcec4;
+  --muted: #61656C;
+  --line: #C7CCD3;
 
   /* 2. 주 컨트롤 강조 (가장 어두운 명도) */
   --accent: #1d1d1f;
-  --accent-ink: #f6f6f1;
+  --accent-ink: #F1F4F7;
 
   /* 3. 파랑 (기존 링크·지판 전용, 새 화면에는 쓰지 않는다) */
   --blue-vivid: #1f3fc3;
@@ -25,7 +26,7 @@
   --accent-text: #1f3fc3;
   --link: #1f3fc3;
   --root: #1f3fc3;
-  --root-ink: #f6f6f1;
+  --root-ink: #F1F4F7;
   --guide: #c9cfee;
   --guide-ink: #191265;
   --other: #e1e0d6;
@@ -53,8 +54,9 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-display: "Archivo", "Noto Sans KR", system-ui, sans-serif;
 
-  /* 7. 형태 (중간 곡률 3~16px 전면 금지) */
+  /* 7. 형태 (필·블록 3px·직각만, 그 밖 직접 수치 금지) */
   --radius-pill: 9999px;
+  --radius-block: 3px;
   --radius-card: 0px;
 
   /* 8. 레이아웃 정렬 규격 */
@@ -62,6 +64,21 @@
   --page-narrow-max: 840px;
   --player-max: 1760px; /* WF-2: 플레이어 화면 틀 폭 상한 */
   --header-height: 48px;
+
+  /* 9. DS2 표면·조형 색·줄눈·릴리프 (파생 색은 oklab 산식을 미리 계산한 hex) */
+  --paper: #F1F4F7;
+  --cream: #EDF0F3;
+  --surface3: #C7CCD3;
+  --ink-strong: #1D1D1F;
+  --fill1: #E64D01;
+  --fill2: #7F93A8;
+  --fill3: #8BA1A8;
+  --section-spine: var(--fill1);
+  --panel-frosted: #EFF1F4;
+  --seam-hairline: #CBCDCF;
+  --seam-highlight: #F1F4F7BF;
+  --relief-bottom-mid: #BCBFC4;
+  --shadow-ambient: rgba(24, 28, 36, 0.11);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -98,6 +115,19 @@
     --bad: #f2867c;
     --scrim: rgb(0 0 0 / 0.6);
     --media-bg: #000000;
+    --paper: #242422;
+    --cream: #20201E;
+    --surface3: #3A3935;
+    --ink-strong: #ECECE4;
+    --fill1: #FF6B2B;
+    --fill2: #D4B26A;
+    --fill3: #6C7D72;
+    --section-spine: var(--fill1);
+    --panel-frosted: #1E1E1D;
+    --seam-hairline: #30302E;
+    --seam-highlight: #242422BF;
+    --relief-bottom-mid: #444340;
+    --shadow-ambient: rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
 }
@@ -135,6 +165,19 @@
   --bad: #f2867c;
   --scrim: rgb(0 0 0 / 0.6);
   --media-bg: #000000;
+  --paper: #242422;
+  --cream: #20201E;
+  --surface3: #3A3935;
+  --ink-strong: #ECECE4;
+  --fill1: #FF6B2B;
+  --fill2: #D4B26A;
+  --fill3: #6C7D72;
+  --section-spine: var(--fill1);
+  --panel-frosted: #1E1E1D;
+  --seam-hairline: #30302E;
+  --seam-highlight: #242422BF;
+  --relief-bottom-mid: #444340;
+  --shadow-ambient: rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
 

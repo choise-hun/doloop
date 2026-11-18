@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { ALLOWED_RADIUS } = require('./support/design_allow');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
@@ -157,7 +158,7 @@ test('R1-H4: apiClient.ts의 listLocalSongs 최신순 정렬 검증', () => {
 
 test('R1-H5: HomePage.module.css 순백(#ffffff/#fff) 0건 및 중간 곡률 0건', () => {
   const files = ['frontend/src/pages/HomePage.module.css'];
-  const allowedRadius = new Set(['0', '0px', '50%', '9999px', 'var(--radius-pill)', 'var(--radius-card)']);
+  const allowedRadius = ALLOWED_RADIUS;
 
   for (const file of files) {
     const rawCss = readText(file).replace(/\/\*[\s\S]*?\*\//g, '');
