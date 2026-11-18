@@ -85,7 +85,7 @@ test('UIUX-R T1 홈 분할 대시보드 검증: splitFrames 그리드 16px 간�
   const horizontalGap = vaultBox.x - (betterBox.x + betterBox.width);
   expect(Math.abs(horizontalGap - 16)).toBeLessThanOrEqual(1);
 
-  // 개별 프레임 카드의 테두리(border) 독립 분리 검증 (DS-2: 상단 3px 바, 나머지 세 변 1px)
+  // 개별 프레임 카드의 테두리 독립 분리 검증 (DS2-2: 왼쪽 12px 스파인, 나머지 세 변 1px)
   const betterSides = await better.evaluate((el) => {
     const s = window.getComputedStyle(el);
     return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
@@ -94,8 +94,8 @@ test('UIUX-R T1 홈 분할 대시보드 검증: splitFrames 그리드 16px 간�
     const s = window.getComputedStyle(el);
     return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
   });
-  expect(betterSides).toEqual(['3px', '1px', '1px', '1px']);
-  expect(vaultSides).toEqual(['3px', '1px', '1px', '1px']);
+  expect(betterSides).toEqual(['1px', '1px', '1px', '12px']);
+  expect(vaultSides).toEqual(['1px', '1px', '1px', '12px']);
 });
 
 async function resolveTokenColors(page) {
@@ -116,35 +116,69 @@ async function resolveTokenColors(page) {
       muted: readColor('color', 'var(--muted)'),
       accent: readColor('backgroundColor', 'var(--accent)'),
       accentInk: readColor('color', 'var(--accent-ink)'),
-      tint: readColor('backgroundColor', 'color-mix(in srgb, var(--now-ring) 12%, transparent)'),
+      fill1: readColor('color', 'var(--fill1)'),
+      fill2: readColor('color', 'var(--fill2)'),
+      fill3: readColor('color', 'var(--fill3)'),
+      seamHairline: readColor('color', 'var(--seam-hairline)'),
+      panelFrosted: readColor('backgroundColor', 'var(--panel-frosted)'),
+      streakDone: readColor('backgroundColor', 'var(--streak-done)'),
+      paper: readColor('backgroundColor', 'var(--paper)'),
+      reliefBottomMid: readColor('color', 'var(--relief-bottom-mid)'),
+      fill3Tint: readColor('backgroundColor', 'color-mix(in srgb, var(--fill3) 12%, transparent)'),
     };
   });
 }
 
-test('DS2-1 프레임 바 4곳의 색', async ({ page }) => {
+// DS2-2(2026-11-19 승인): 상단 3px 바 → 왼쪽 12px 스파인 + 3px 블록 + 릴리프. 스파인 색은 카드마다 다르다(명세 D3)
+const rgbOf = (c) => (c.match(/\d+(?:\.\d+)?/g) || []).slice(0, 3).map(Number).join(',');
+
+test('DS22-1 스파인·블록 (1280)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, STATES.guest);
   await page.goto('/index.html', { waitUntil: 'load' });
   await page.locator('#weeklyStreakCard').waitFor();
 
   const colors = await resolveTokenColors(page);
-  const readBorder = (sel) =>
-    page.locator(sel).evaluate((el) => {
-      const s = window.getComputedStyle(el);
-      return { topW: s.borderTopWidth, topC: s.borderTopColor, leftC: s.borderLeftColor };
-    });
-
-  for (const [sel, expectedTop] of [
-    ['#weeklyStreakCard', colors.nowRing],
-    ['#betterFrame', colors.nowRing],
-    ['#recentSongCard', colors.ink],
-    ['#vaultFrame', colors.ink],
+  for (const [sel, spine] of [
+    ['#weeklyStreakCard', colors.fill1],
+    ['#recentSongCard', colors.fill2],
+    ['#betterFrame', colors.fill3],
+    ['#vaultFrame', colors.fill2],
   ]) {
-    const b = await readBorder(sel);
-    expect(b.topW, `${sel} borderTopWidth`).toBe('3px');
-    expect(b.topC, `${sel} borderTopColor`).toBe(expectedTop);
-    expect(b.leftC, `${sel} borderLeftColor`).toBe(colors.line);
+    const b = await page.locator(sel).evaluate((el) => {
+      const s = window.getComputedStyle(el);
+      return {
+        leftW: s.borderLeftWidth, leftC: s.borderLeftColor,
+        topW: s.borderTopWidth, topC: s.borderTopColor,
+        radius: s.borderTopLeftRadius, shadow: s.boxShadow,
+      };
+    });
+    expect(b.leftW, `${sel} borderLeftWidth`).toBe('12px');
+    expect(b.leftC, `${sel} borderLeftColor`).toBe(spine);
+    expect(b.topW, `${sel} borderTopWidth`).toBe('1px');
+    expect(b.topC, `${sel} borderTopColor`).toBe(colors.seamHairline);
+    expect(b.radius, `${sel} radius`).toBe('3px');
+    const shadowRgbs = (b.shadow.match(/rgba?\([^)]*\)|color\([^)]*\)/g) || []).map(rgbOf);
+    expect(shadowRgbs, `${sel} box-shadow 릴리프`).toContain(rgbOf(colors.reliefBottomMid));
   }
+});
+
+test('DS22-2 범위 세그먼트 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#progScope').waitFor();
+
+  const colors = await resolveTokenColors(page);
+  const btns = page.locator('#progScope button');
+  expect(await btns.evaluateAll((els) => els.map((el) => el.dataset.scope))).toEqual(['all', 'reference', 'analysis']);
+  await expect(btns).toHaveText(['합산', '레퍼런스', '분석']);
+  expect(await btns.evaluateAll((els) => els.map((el) => el.getAttribute('aria-pressed')))).toEqual(['true', 'false', 'false']);
+  await expect(page.locator('#progArchKey')).toHaveText('진행 10개');
+  await expect(page.locator('#progTasteLink')).toHaveAttribute('href', 'progressions.html?scope=all#progTaste');
+  expect(await page.locator('#progScope').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  expect(await btns.evaluateAll((els) => els.map((el) => window.getComputedStyle(el).borderTopLeftRadius))).toEqual(['0px', '0px', '0px']);
+  expect(await page.locator('#progScope [data-scope="all"]').evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe(colors.paper);
 });
 
 test('DS2-2 카드 제목', async ({ page }) => {
@@ -157,7 +191,7 @@ test('DS2-2 카드 제목', async ({ page }) => {
   await expect(page.locator('#recentSongCard h2')).toHaveText('RECENT');
 });
 
-test('DS2-3 오늘 칸', async ({ page }) => {
+test('DS22-3 오늘 칸', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, STATES.guest);
   await page.goto('/index.html', { waitUntil: 'load' });
@@ -182,13 +216,14 @@ test('DS2-3 오늘 칸', async ({ page }) => {
     };
   });
 
+  // 오늘 칸은 테두리(--now-ring)로만 구별하고 배경은 다른 칸과 같은 --panel-frosted
   expect(todayStyle.topC).toBe(colors.nowRing);
-  expect(todayStyle.bg).toBe(colors.tint);
-  expect(todayStyle.bg).not.toBe(nonTodayBg);
+  expect(todayStyle.bg).toBe(colors.panelFrosted);
+  expect(nonTodayBg).toBe(colors.panelFrosted);
   expect(todayStyle.dowC).toBe(colors.ink);
 });
 
-test('DS2-4 오늘 연습을 마친 칸', async ({ page }) => {
+test('DS22-4 오늘 연습을 마친 칸', async ({ page }) => {
   const todayLocal = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, {
@@ -211,9 +246,9 @@ test('DS2-4 오늘 연습을 마친 칸', async ({ page }) => {
     };
   });
 
-  expect(style.bg).toBe(colors.ink);
+  expect(style.bg).toBe(colors.streakDone);
   expect(style.topC).toBe(colors.nowRing);
-  expect(style.dowC).toBe(colors.surface2);
+  expect(style.dowC).toBe(colors.ink);
 });
 
 // RC-1(2026-11-15 사용자 결정): RECENT 구간 표시는 배지(주황 테두리·틴트) 없이 회색 글자다.
@@ -257,7 +292,7 @@ test('RC-1 RECENT 곡 메모는 한 줄 말줄임으로 보인다', async ({ pag
   expect(m.ov).toBe('ellipsis');
 });
 
-test('DS2-6 이어서 줄', async ({ page }) => {
+test('DS22-5 이어서 줄', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, { ...STATES.guest, local: { 'ulp:tab': 'reint' } });
   await page.goto('/index.html', { waitUntil: 'load' });
@@ -267,9 +302,13 @@ test('DS2-6 이어서 줄', async ({ page }) => {
   const curItem = page.locator('#modes li.cur');
   await expect(curItem).toHaveCount(1);
 
-  const curShadow = await curItem.evaluate((el) => window.getComputedStyle(el).boxShadow);
-  expect(curShadow).toContain('inset');
-  expect(curShadow).toContain(colors.nowRing);
+  const cur = await curItem.evaluate((el) => {
+    const s = window.getComputedStyle(el);
+    return { shadow: s.boxShadow, bg: s.backgroundColor };
+  });
+  expect(cur.shadow).toContain('inset');
+  expect(cur.shadow).toContain(colors.fill3);
+  expect(cur.bg).toBe(colors.fill3Tint);
 
   const curPadLeft = await curItem.locator('a').evaluate((el) => window.getComputedStyle(el).paddingLeft);
   expect(curPadLeft).toBe('10px');
@@ -425,4 +464,61 @@ test('UXN empty recent cards keep their existing empty-state destinations', asyn
   await expect(page.locator('#recentNoteEmpty')).toBeVisible();
   await expect(page.locator('#recentSongThumbLink, #recentSongTitle, #recentNoteThumbLink, #recentNoteTitle, #recentNoteLink')).toHaveCount(0);
   await expect(page.locator('#recentNoteEmpty a')).toHaveAttribute('href', 'notes.html');
+});
+
+test('DS22-6 버튼 3단계 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#goUrl').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await expect(page.locator('#goPick')).toBeVisible();
+
+  // 대표 주 행동 필은 #goPlay 하나다(히어로 폼 #go와 카드 4개 안)
+  const pills = await page
+    .locator('#go a, #go button, #weeklyStreakCard a, #weeklyStreakCard button, #recentSongCard a, #recentSongCard button, #betterFrame a, #betterFrame button, #vaultFrame a, #vaultFrame button')
+    .evaluateAll((els) => els.filter((el) => window.getComputedStyle(el).borderTopLeftRadius === '9999px').map((el) => el.id || el.textContent.trim()));
+  expect(pills).toEqual(['goPlay']);
+
+  for (const id of ['goUrl', 'goNote', 'betterChordsBtn', 'betterPlayerBtn']) {
+    expect(await page.locator('#' + id).evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius), id).toBe('3px');
+  }
+  const rand = await page.locator('#btnRandRef').evaluate((el) => {
+    const s = window.getComputedStyle(el);
+    return { topW: s.borderTopWidth, bg: s.backgroundColor };
+  });
+  expect(rand.topW).toBe('0px');
+  expect(rand.bg).toBe('rgba(0, 0, 0, 0)');
+  await expect(page.locator('#btnRandRef')).toHaveText('랜덤 ↻');
+  await expect(page.locator('#progRefPlay')).toHaveText('연주하기 →');
+  // iOS 확대 방지 16px는 유지한다(UXN)
+  expect(await page.locator('#goUrl').evaluate((el) => window.getComputedStyle(el).fontSize)).toBe('16px');
+});
+
+test('DS22-7 터치 (390)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#progScope').waitFor();
+
+  for (const sel of ['#btnRandRef', '#progRefPlay', '#progTasteLink']) {
+    const box = await page.locator(sel).boundingBox();
+    expect(box, sel).not.toBeNull();
+    expect(box.height, sel + ' 높이').toBeGreaterThanOrEqual(44);
+  }
+  const scopeHeights = await page.locator('#progScope button').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+  expect(scopeHeights).toHaveLength(3);
+  for (const h of scopeHeights) expect(h).toBeGreaterThanOrEqual(44);
+});
+
+test('DS22-8 다크 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#weeklyStreakCard').waitFor();
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+
+  const leftC = (sel) => page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderLeftColor);
+  expect(await leftC('#weeklyStreakCard')).toBe('rgb(255, 107, 43)');
+  expect(await leftC('#vaultFrame')).toBe('rgb(212, 178, 106)');
+  expect(await page.locator('#progScope [data-scope="all"]').evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(36, 36, 34)');
 });

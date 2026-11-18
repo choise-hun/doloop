@@ -29,9 +29,9 @@ import styles from './HomePage.module.css';
 // 홈 "취향 코드 진행 꺼내보기"(CH-6): 서버 진행 목록(없으면 기본 시드) + 범위 토글. 노트 화성 읽기·`편곡` 태그 규칙은 없앴다(설계 §8)
 const PROG_SEEDS: ProgressionDto[] = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_ARCHIVE_PROGRESSIONS].map(seedToDto);
 const PROG_SCOPES: ReadonlyArray<readonly [ProgressionScope, I18nKey]> = [
+  ['all', 'home.scopeAll'],
   ['reference', 'home.scopeReference'],
   ['analysis', 'home.scopeAnalysis'],
-  ['all', 'home.scopeAll'],
 ];
 
 // 최근 곡 위젯 아래 분류 바로가기 `ㅁ ㅁ ㅁ +`. +는 분류 추가·이름·삭제·홈 표시·순서 팝업 (서버 저장)
@@ -353,7 +353,7 @@ export function HomePage(): React.ReactElement {
   const [recentNote, setRecentNote] = useState<NoteSummaryDto | null>(null);
   const [progAll, setProgAll] = useState<ProgressionDto[]>(PROG_SEEDS);
   const [progSeeded, setProgSeeded] = useState<boolean>(true);
-  const [progScope, setProgScope] = useState<ProgressionScope>('reference');
+  const [progScope, setProgScope] = useState<ProgressionScope>('all');
   const [progPickId, setProgPickId] = useState<string | null>(null);
 
   const reqSeqRef = useRef(0);
@@ -518,7 +518,7 @@ export function HomePage(): React.ReactElement {
 
         <form className={`go ${styles.goForm}`} id="go" onSubmit={handleGoSubmit}>
           <input
-            className="inpField"
+            className={`inpField ${styles.goUrl}`}
             id="goUrl"
             ref={goUrlRef}
             type="url"
@@ -545,7 +545,7 @@ export function HomePage(): React.ReactElement {
                 {t('home.btnPracticeNow')}
               </SafeLink>
               <SafeLink
-                className="ghostBtn"
+                className={`ghostBtn ${styles.goGhost}`}
                 id="goNote"
                 href={
                   pickedVideoId
@@ -560,7 +560,7 @@ export function HomePage(): React.ReactElement {
           {pickedPlaylistUrl ? (
             <button
               type="button"
-              className="ghostBtn"
+              className={`ghostBtn ${styles.goGhost}`}
               id="goImport"
               onClick={() => setImportModalUrl(pickedPlaylistUrl)}
             >
@@ -575,7 +575,7 @@ export function HomePage(): React.ReactElement {
 
       {/* 상단 연속성 위젯: WEEKLY(Mo~Su)·작심삼일 + RECENT */}
       <section className={styles.topWidgets} aria-label={t('home.ariaDashboard')}>
-        <div className={`${styles.widgetCard} ${styles.barAccent}`} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
+        <div className={`${styles.widgetCard} ${styles.toneFill1}`} id="weeklyStreakCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>WEEKLY</h2>
             <SafeLink href="log.html" className={styles.widgetLink}>
@@ -616,7 +616,7 @@ export function HomePage(): React.ReactElement {
           </SafeLink>
         </div>
 
-        <div className={`${styles.widgetCard} ${styles.barInk}`} id="recentSongCard" data-align-group="top1:top,bottom@821">
+        <div className={`${styles.widgetCard} ${styles.toneFill2}`} id="recentSongCard" data-align-group="top1:top,bottom@821">
           <div className={styles.widgetHead}>
             <h2 className={styles.widgetTitle}>{t('home.titleRecentSong')}</h2>
             {recentSong && (
@@ -689,7 +689,7 @@ export function HomePage(): React.ReactElement {
       {/* 하단 메인 분할 대시보드: 좌측 BETTER (연습실) | 우측 VAULT (학습) */}
       <div className={`frames ${styles.splitFrames}`}>
         <section
-          className={`frame ${styles.frame} ${styles.barAccent}`}
+          className={`frame ${styles.frame} ${styles.toneFill3}`}
           id="betterFrame"
           aria-labelledby="fBetter"
           data-align-group="frames:top,bottom@821"
@@ -800,7 +800,7 @@ export function HomePage(): React.ReactElement {
         </section>
 
         <section
-          className={`frame ${styles.frame} ${styles.barInk}`}
+          className={`frame ${styles.frame} ${styles.toneFill2}`}
           id="vaultFrame"
           aria-labelledby="fVault"
           data-align-group="frames:top,bottom@821"
