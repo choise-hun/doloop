@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { ALLOWED_RADIUS } = require('./support/design_allow');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
@@ -37,7 +38,7 @@ test('R1-S3: R1-2 신규 CSS Modules 3종 — 순백(#ffffff/#fff) 0건 및 중�
     'frontend/src/pages/NotesPage.module.css',
     'frontend/src/pages/NoteDetailPage.module.css',
   ];
-  const allowedRadius = new Set(['0', '0px', '50%', '9999px', 'var(--radius-pill)', 'var(--radius-card)']);
+  const allowedRadius = ALLOWED_RADIUS;
 
   for (const file of cssFiles) {
     const src = readText(file).replace(/\/\*[\s\S]*?\*\//g, '');

@@ -28,10 +28,8 @@ const cssFiles = walkCss(CSS_ROOT)
   }))
   .sort((a, b) => a.rel.localeCompare(b.rel));
 
-const ALLOWED_RADIUS = new Set([
-  '0', '0px', '50%', '9999px',
-  'var(--radius-pill)', 'var(--radius-card)', 'var(--radius-card, 0)',
-]);
+// 허용 곡률은 test/support/design_allow.js 한 곳에서 관리한다(페이지별 r*_*.test.js와 공유).
+const { ALLOWED_RADIUS } = require('./support/design_allow');
 
 // 토큰 밖 색은 0이다(DS-1). 새 예외를 이 표에 추가하지 않는다.
 const KNOWN_RAW_COLORS = {};
@@ -47,7 +45,7 @@ test('DR-1: 검사 대상 CSS가 실제로 수집된다', () => {
   assert.ok(cssFiles.some((f) => f.rel === TOKENS), TOKENS + '가 대상에 없음');
 });
 
-test('DR-2: 모든 CSS에서 곡률은 필(9999px)·직각(0)·원(50%)만 쓴다', () => {
+test('DR-2: 모든 CSS에서 곡률은 필(9999px)·블록(3px 토큰)·직각(0)·원(50%)만 쓴다', () => {
   const bad = [];
   for (const { rel, src } of cssFiles) {
     for (const m of src.matchAll(/border(?:-[a-z]+){0,2}-radius\s*:\s*([^;!}]+)/gi)) {
@@ -168,4 +166,63 @@ test('DR-7: 정의하지 않은 CSS 변수를 쓰지 않는다', () => {
   for (const name of RUNTIME_VARS) {
     assert.ok(scripts.includes("setProperty('" + name + "'"), 'RUNTIME_VARS의 ' + name + '를 넣는 코드(setProperty)가 없음');
   }
+});
+
+// 다크 값은 OS 다크(prefers-color-scheme)와 수동 다크([data-theme="dark"]) 두 블록에 같은 값으로 둔다.
+const DS2_COLOR_TOKENS = [
+  '--paper', '--cream', '--surface3', '--ink-strong', '--fill1', '--fill2', '--fill3',
+  '--section-spine', '--panel-frosted', '--seam-hairline', '--seam-highlight',
+  '--relief-bottom-mid', '--shadow-ambient',
+];
+
+function blockBody(src, startIdx) {
+  const open = src.indexOf('{', startIdx);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error('닫는 괄호를 찾지 못함: ' + startIdx);
+}
+
+function varMap(body) {
+  const map = new Map();
+  for (const m of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) map.set(m[1], m[2].trim());
+  return map;
+}
+
+test('DR-8: 다크 두 블록의 토큰이 같고 DS2 색 토큰이 세 블록 모두에 있다', () => {
+  const tokens = cssFiles.find((f) => f.rel === TOKENS);
+  assert.ok(tokens, TOKENS + '가 대상에 없음');
+  const src = tokens.src;
+
+  const lightIdx = src.search(/(^|\n):root\s*\{/);
+  const mediaIdx = src.indexOf('@media (prefers-color-scheme: dark)');
+  const manualIdx = src.indexOf(':root[data-theme="dark"]');
+  assert.ok(lightIdx >= 0 && mediaIdx >= 0 && manualIdx >= 0, '라이트·OS 다크·수동 다크 블록을 모두 찾아야 함');
+
+  const mediaBody = blockBody(src, mediaIdx);
+  const innerIdx = mediaBody.indexOf(':root:not([data-theme="light"])');
+  assert.ok(innerIdx >= 0, 'OS 다크 블록 안의 :root:not([data-theme="light"])를 찾아야 함');
+
+  const light = varMap(blockBody(src, lightIdx));
+  const osDark = varMap(blockBody(mediaBody, innerIdx));
+  const manualDark = varMap(blockBody(src, manualIdx));
+
+  assert.deepEqual(
+    Object.fromEntries([...osDark].sort()),
+    Object.fromEntries([...manualDark].sort()),
+    'OS 다크와 수동 다크 블록의 토큰 이름·값이 달라졌다. 두 블록을 같이 고친다',
+  );
+
+  const missing = [];
+  for (const name of DS2_COLOR_TOKENS) {
+    if (!light.has(name)) missing.push(':root → ' + name);
+    if (!osDark.has(name)) missing.push('OS 다크 → ' + name);
+    if (!manualDark.has(name)) missing.push('수동 다크 → ' + name);
+  }
+  assert.deepEqual(missing, [], 'DS2 색 토큰은 세 블록에 모두 넣는다');
 });

@@ -31,7 +31,7 @@ test('UP-2: 좁은 폭 탭 바는 커뮤니티를 뺀 5칸이 같은 폭으로 �
   await mockApp(page, { ...STATES.guest, community: false });
   await page.goto('/privacy.html', { waitUntil: 'load' });
   const bar = page.locator('nav[data-tabbar="1"]');
-  await expect(bar.locator('a, span')).toHaveText(['LEARN', 'PLAYER', 'TRAILS', 'CHORDS', 'NOTES']);
+  await expect(bar.locator('a, span')).toHaveText(['PLAYER', 'LEARN', 'TRAILS', 'CHORDS', 'NOTES']);
   const m = await bar.evaluate((el) => {
     const cs = getComputedStyle(el);
     const items = [...el.querySelectorAll(':scope > a, :scope > span')].map((e) => e.getBoundingClientRect());

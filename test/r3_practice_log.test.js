@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { ALLOWED_RADIUS } = require('./support/design_allow');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
@@ -94,7 +95,7 @@ test('R3-P10: PracticePage.module.css, LogPage.module.css 순백 0건, 중간 �
     'frontend/src/pages/PracticePage.module.css',
     'frontend/src/pages/LogPage.module.css',
   ];
-  const allowedRadius = new Set(['0', '0px', '50%', '9999px', 'var(--radius-pill)', 'var(--radius-card)']);
+  const allowedRadius = ALLOWED_RADIUS;
 
   for (const rel of cssFiles) {
     const text = readText(rel).replace(/\/\*[\s\S]*?\*\//g, '');

@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { ALLOWED_RADIUS } = require('./support/design_allow');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -28,7 +29,10 @@ const REQUIRED_TOKENS = [
   '--orange-vivid', '--orange-terra', '--now', '--now-ink', '--now-ring', '--moved',
   '--wood', '--wood-line', '--string', '--good', '--bad',
   '--font-body', '--font-mono', '--font-display',
-  '--radius-pill', '--radius-card',
+  '--radius-pill', '--radius-block', '--radius-card',
+  '--paper', '--cream', '--surface3', '--ink-strong', '--fill1', '--fill2', '--fill3',
+  '--section-spine', '--panel-frosted', '--seam-hairline', '--seam-highlight',
+  '--relief-bottom-mid', '--shadow-ambient',
   '--container-max', '--page-narrow-max', '--player-max', '--header-height',
 ];
 
@@ -41,7 +45,9 @@ test('R0-T1: tokens.css 필수 디자인 토큰 존재 및 순백(#ffffff/#fff) 
     assert.ok(rootTokens.has(token), 'tokens.css 누락 토큰: ' + token);
   }
 
-  assert.equal(rootTokens.get('--bg').toUpperCase(), '#F0EEEA');
+  assert.equal(rootTokens.get('--bg').toUpperCase(), '#ECEEF0');
+  assert.equal(rootTokens.get('--surface').toUpperCase(), '#F1F4F7');
+  assert.equal(rootTokens.get('--radius-block'), '3px');
   assert.equal(rootTokens.get('--radius-pill'), '9999px');
   assert.equal(rootTokens.get('--radius-card'), '0px');
   assert.equal(rootTokens.get('--container-max'), '1120px');
@@ -57,7 +63,7 @@ test('R0-T2: DESIGN.md 곡률 규칙 — CSS 파일에서 중간 곡률(3px/4px/
     'frontend/src/styles/tokens.css',
     'frontend/src/components/layout/AppShell.module.css',
   ];
-  const allowedRadius = new Set(['0', '0px', '50%', '9999px', 'var(--radius-pill)', 'var(--radius-card)']);
+  const allowedRadius = ALLOWED_RADIUS;
 
   for (const file of cssFiles) {
     const src = readText(file).replace(/\/\*[\s\S]*?\*\//g, '');

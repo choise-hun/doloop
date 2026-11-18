@@ -12,9 +12,10 @@ export type AppShellVariant = 'default' | 'narrow' | 'player';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy' | 'profile';
 
 // 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
+// DS2-1: PLAYER가 첫 기능 메뉴다(▶ 프레임 강조는 AppShell.module.css .navPlayer·.tabPlayer)
 const MAIN_NAV: Array<{ key: ActiveNavKey; labelKey: I18nKey; href: string | null }> = [
-  { key: 'learn', labelKey: 'nav.learn', href: 'chords.html' },
   { key: 'play', labelKey: 'nav.play', href: 'practice.html' },
+  { key: 'learn', labelKey: 'nav.learn', href: 'chords.html' },
   { key: 'trails', labelKey: 'nav.trails', href: 'log.html' },
   { key: 'community', labelKey: 'nav.community', href: 'community.html' },
   { key: 'chords', labelKey: 'nav.chords', href: 'progressions.html' },
@@ -131,8 +132,9 @@ export function AppShell({
               <a
                 key={item.key}
                 href={item.href}
-                className={`${styles.navItem} ${styles.navMainItem}`}
+                className={`${styles.navItem} ${styles.navMainItem}${item.key === 'play' ? ` ${styles.navPlayer}` : ''}`}
                 aria-current={activeNav === item.key ? 'page' : undefined}
+                data-align-group={item.key === 'play' ? 'navRow:center-y@821' : undefined}
               >
                 {item.key === 'notes' ? (
                   <>
@@ -191,7 +193,7 @@ export function AppShell({
             <a
               key={item.key}
               href={item.href}
-              className={styles.tabItem}
+              className={item.key === 'play' ? `${styles.tabItem} ${styles.tabPlayer}` : styles.tabItem}
               data-align-group="tabs:top,bottom,height"
               aria-current={activeNav === item.key ? 'page' : undefined}
             >

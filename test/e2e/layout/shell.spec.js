@@ -3,8 +3,9 @@
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('../support/mock-app');
 
-const TAB_LABELS = ['LEARN', 'PLAYER', 'TRAILS', 'COMMUNITY', 'CHORDS', 'NOTES'];
-const TAB_HREFS = ['chords.html', 'practice.html', 'log.html', 'community.html', 'progressions.html', 'notes.html'];
+// DS2-1: PLAYER가 LEARN보다 앞(명세 개발산출물/명세/DS2-1_구현명세.md D1)
+const TAB_LABELS = ['PLAYER', 'LEARN', 'TRAILS', 'COMMUNITY', 'CHORDS', 'NOTES'];
+const TAB_HREFS = ['practice.html', 'chords.html', 'log.html', 'community.html', 'progressions.html', 'notes.html'];
 
 async function open(page, path, width) {
   await page.setViewportSize({ width, height: 800 });
@@ -135,7 +136,7 @@ async function openNav(page, stateName, width) {
   return top;
 }
 
-const DS3_WIDTHS = [320, 360, 390, 768, 820, 821, 830, 840, 860, 880, 881, 900, 960, 961, 1150, 1280];
+const DS3_WIDTHS = [320, 360, 390, 768, 820, 821, 830, 840, 860, 880, 881, 900, 960, 961, 1000, 1001, 1150, 1280];
 for (const stateName of ['guest', 'user']) {
   for (const width of DS3_WIDTHS) {
     test(`DS3-N1 ${stateName} ${width}px 위 메뉴 한 줄`, async ({ page }) => {
@@ -182,3 +183,95 @@ for (const width of [390, 768, 1280]) {
     }
   });
 }
+
+// DS2-1: PLAYER 1순위·A안 강조(▶ + 1px 프레임 + 2px 주황 밑선) — 명세 개발산출물/명세/DS2-1_구현명세.md §5·§6
+// 접근 이름은 Chromium 접근성 트리(CDP)에서 읽는다. Playwright 1.51의 getByRole 이름 계산은
+// `content: "▶" / ""`의 대체 텍스트를 지원하지 않아 `▶" / " PLAYER`로 잘못 읽는다(2026-11-18 확인)
+async function axName(page, selector) {
+  const client = await page.context().newCDPSession(page);
+  const { root } = await client.send('DOM.getDocument', { depth: -1 });
+  const { nodeId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+  const { nodes } = await client.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+  await client.detach();
+  return nodes[0] && nodes[0].name ? nodes[0].name.value : null;
+}
+
+function playerStyle(loc) {
+  return loc.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const before = getComputedStyle(el, '::before');
+    return {
+      topWidth: cs.borderTopWidth,
+      bottomWidth: cs.borderBottomWidth,
+      bottomColor: cs.borderBottomColor,
+      radius: cs.borderTopLeftRadius,
+      background: cs.backgroundColor,
+      color: cs.color,
+      decoration: cs.textDecorationLine,
+      before: before.content,
+    };
+  });
+}
+
+for (const width of [1150, 1280]) {
+  test(`DS21-N1 ${width}px 위 메뉴 순서·PLAYER A안`, async ({ page }) => {
+    await open(page, '/privacy.html', width);
+    const navMain = page.locator('nav.site-nav > span').first();
+    const hrefs = await navMain.locator('a').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    expect(hrefs).toEqual(['./', ...TAB_HREFS]);
+
+    const player = navMain.locator('a[href="practice.html"]');
+    await expect(player).toBeVisible();
+    const st = await playerStyle(player);
+    expect(st.topWidth).toBe('1px');
+    expect(st.bottomWidth).toBe('2px');
+    expect(st.bottomColor).toBe('rgb(230, 77, 1)');
+    expect(st.radius).toBe('3px');
+    expect(st.before).toContain('▶');
+    await expect(player).not.toHaveAttribute('style', /./);
+    expect(await axName(page, 'nav.site-nav a[href="practice.html"]'), '▶가 접근 이름에 섞이면 안 된다').toBe('PLAYER');
+  });
+}
+
+for (const width of [390, 768]) {
+  test(`DS21-N2 ${width}px 탭 바 첫 칸 ▶PLAYER`, async ({ page }) => {
+    await open(page, '/privacy.html', width);
+    const first = page.locator('nav[data-tabbar="1"] > a').first();
+    await expect(first).toHaveAttribute('href', 'practice.html');
+    await expect(first).not.toHaveAttribute('aria-current', 'page');
+    const st = await playerStyle(first);
+    expect(st.color, 'PLAYER 탭은 현재가 아니어도 --ink').toBe('rgb(29, 29, 31)');
+    expect(st.before).toContain('▶');
+    expect(await axName(page, 'nav[data-tabbar="1"] a[href="practice.html"]'), '▶가 접근 이름에 섞이면 안 된다').toBe('PLAYER');
+  });
+}
+
+test('DS21-N3 1280px 플레이어 화면에서 PLAYER 현재 표시', async ({ page }) => {
+  await open(page, '/practice.html', 1280);
+  const top = page.locator('nav.site-nav');
+  const player = top.locator('a[href="practice.html"]');
+  await expect(player).toHaveAttribute('aria-current', 'page');
+  await expect(top.locator('[aria-current="page"]')).toHaveCount(1);
+  const st = await playerStyle(player);
+  expect(st.decoration, '밑줄과 주황 밑선이 겹치면 안 된다').toBe('none');
+  expect(st.background).toBe('rgb(220, 224, 229)');
+  await player.hover();
+  expect((await playerStyle(player)).decoration).toBe('none');
+});
+
+test('DS21-N4 1280px 다크에서 바탕·PLAYER 색', async ({ page }) => {
+  await open(page, '/privacy.html', 1280);
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(bodyBg).toBe('rgb(23, 23, 22)');
+  const st = await playerStyle(page.locator('nav.site-nav a[href="practice.html"]'));
+  expect(st.bottomColor).toBe('rgb(255, 107, 43)');
+  expect(st.background).toBe('rgb(36, 36, 34)');
+});
+
+test('DS21-T1 1280px 라이트 바탕은 쿨 미네랄', async ({ page }) => {
+  await open(page, '/privacy.html', 1280);
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+  const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(bodyBg).toBe('rgb(236, 238, 240)');
+});
