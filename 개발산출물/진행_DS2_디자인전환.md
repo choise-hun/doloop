@@ -3,7 +3,7 @@
 - **목표:** 확정 시안(`4:6` + 쿨 라이트 -20% + `▶ PLAYER` A안 + `12px` 계기판)을 토큰·가드·AppShell부터 모든 화면까지 4 Step으로 적용한다.
 - **근거:** [계획/디자인_전환_계획](../계획/디자인_전환_계획.md) §1~§3 · [frontend-design](../docs/rules/frontend-design.md)(2026-11-18 개정) · [프론트_정렬규격](프론트_정렬규격.md) v1.8 · [명세/HOME_융합_시안.html](명세/HOME_융합_시안.html) · [자료/DESIGN_하라켄야_수정안](자료/DESIGN_하라켄야_수정안.md) · [협업 §1.2](협업_시니어주니어.md)
 - **step ID:** `DS2-1`~`DS2-4`. 테스트 이름 접두어 `DS21-`·`DS22-`…(기존 `shell.spec.js`의 옛 `DS2-N1~N3`와 구별)
-- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 0단계 시니어 구현 + 4단계 주니어 로컬 검증 완료(2026-11-19, 브랜치 `feat/DS2-3-practice-chords-log`) — PR·CI 마무리 진행
+- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 PR [#46](https://github.com/choise-hun/doloop/pull/46) 생성·로컬 932 passed 완료, **CI `E2E XSS & CSP` `DS23-C3` 1건 실패(차단 — 시니어 판정 대기)**
 
 ## 1. 단계 표
 
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DS2-1 | 토큰 3블록(쿨 라이트·파생 hex·`--radius-block`) + 곡률 가드 일원화·다크 동기화 가드 + AppShell `PLAYER` 1순위·A안 | **[시니어]** 구현·표적 테스트·커밋 2개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | 명세 승인 | [명세/DS2-1](명세/DS2-1_구현명세.md), 이 파일 | [결과/DS2-1](결과/DS2-1.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#44](https://github.com/choise-hun/doloop/pull/44) 머지, main `1103f0d`) |
 | DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](명세/DS2-2_구현명세.md), 이 파일 | [결과/DS2-2](결과/DS2-2.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지, main `44af6c3`) |
-| DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](명세/DS2-3_구현명세.md), [시안](명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | 4단계 로컬 검증 완료 — PR·CI 확인 중 |
+| DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](명세/DS2-3_구현명세.md), [시안](명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **CI 차단** (PR [#46](https://github.com/choise-hun/doloop/pull/46) `DS23-C3` 1건 실패 — 시니어 판정 대기) |
 | DS2-4 | Notes·Progressions·Settings·Profile·Privacy 전환 + 공용 `.ghostBtn`·`.inpField` 블록 전환(D2) + 위 메뉴 글꼴 확인(D11) + 전 화면 Q1~Q9 | 1단계 명세에서 판정 | DS2-3 완료 | 계획 §2 순서 4, 결과/DS2-3 | `개발산출물/결과/DS2-4.md` | 전 화면 4폭+다크 스크린샷 표, `완료/` 이동 | 높음 | 대기 |
 
 ## 2. 고정된 결정 (Step 경계를 넘는 것만)
@@ -50,7 +50,8 @@
   - 표적 Green: `node --test test/design_rules.test.js test/r2_chords.test.js test/r3_practice_log.test.js` → pass 24 / fail 0 · `npm run build` 오류 0 · `practice.spec.js` → **71 passed**(layoutSuite G 실패 0 — 명세 §9 주의 1·2 해당 없음, padding 축소 안 함) · `chords.spec.js chords_instruments.spec.js` → **126 passed** · `log.spec.js` → **23 passed**(known 1건 그대로) · TSX 영향 확인 `chords_caged·chords_instruments·chords_scroll·progression-play.spec.js` → 12 passed · `grep oklab|oklch frontend/src` → `tokens.css:68` 주석 1줄뿐(기존).
   - 명세와 다른 점: ① TSX 1개 수정(위, 사용자 결정) ② 체크리스트 "Chords `radius-pill`은 `.playbtn` 1곳만" → 사용처 0인 `.mini`(§1 비범위)가 남아 2곳 ③ DS23-C3: 찾기 탭 재생 `#a-vplay`는 검색 결과 패널에만 있어 검색 전 0개·`#a-go` 뒤 1개, 진행 연주 빈 상태는 재생 버튼이 없어 0개·진행(`?c=C,G,Am,F`)을 받은 뒤 `#pp-play` 1개로 둘 다 단언 ④ DS23-P1 곡 기록 카드는 첫 `.panel`이 숨은 `#srAbPanel`이라 `#songRecord .panel:visible`로 찾음 ⑤ DS23-P2 필 0개 범위는 `.playerWrap` 전체(머리 막대 부모) ⑥ Practice `.ppDriveBtn`·`.ppRecPopClose`·Chords `.ccStep`도 표대로 3px.
   - **4단계 주니어 검증(2026-11-19 Mac):** 제품 코드 무수정. `npm run build` 오류 0 · `node --test test/design_rules.test.js test/r2_chords.test.js test/r3_practice_log.test.js` 24 pass · `npm test` 542 pass(58 suites) · `npx playwright test` 전체 **932 passed (14.1m)** · `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/{practice,chords,log}.spec.js` **163 passed (2.1m)** · `grep`/`git diff --stat` 기준 충족 · `check-config-sync.sh`는 로컬 `/Users/seokhunchoi/config` 부재로 미실행. 경고 수 `main(44af6c3)` 대비 G5b `282→282`(practice 14·chords 38·chords_instruments 8·log 0), G7b `1718→1718`(practice 66·chords 451·chords_instruments 326·log 48), A1 `233→233`, G8 `1616→1612`(-4), `known` 8건 기존 동일. 세 화면 4폭+다크 Q1~Q9 전부 `○` — [결과/DS2-3](결과/DS2-3.md).
-  - 다음: PR 생성·CI·리뷰 확인 후 사용자 머지 대기(머지 후 DS2-4 진행).
+  - **PR #46 CI·리뷰 확인:** head `f520879`, `chatgpt-codex-connector` 리뷰 `has_any_findings: false`·인라인/사람 리뷰 0건. 단, CI [Run #44367854341](https://github.com/choise-hun/doloop/actions/runs/44367854341) `E2E XSS & CSP (Playwright, spa)`에서 `chords.spec.js:191` (`DS23-C3` `'tf 검색 전'`) 1건 실패(`[]` 기대 vs `["a-vplay"]` 수신 — `#tab-tf` 클릭 시 이미 검색 결과 `#a-vplay`가 렌더됨). 단언 완화·수정 없이 시니어 판정 대기.
+  - 다음: 시니어(또는 3-P/수정)에서 `chords.spec.js:191` 원인 판정·수정 후 4단계 CI 재확인.
 
 ```text
 # Gemini (주니어) — DS2-3 4단계 최종 검증·문서·PR 마무리
