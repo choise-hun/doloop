@@ -79,6 +79,7 @@
   --seam-highlight: #F1F4F7BF;
   --relief-bottom-mid: #BCBFC4;
   --shadow-ambient: rgba(24, 28, 36, 0.11);
+  --streak-done: #CDD7DC;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +129,7 @@
     --seam-highlight: #242422BF;
     --relief-bottom-mid: #444340;
     --shadow-ambient: rgba(0, 0, 0, 0.35);
+    --streak-done: #3B403B;
     color-scheme: dark;
   }
 }
@@ -178,6 +180,7 @@
   --seam-highlight: #242422BF;
   --relief-bottom-mid: #444340;
   --shadow-ambient: rgba(0, 0, 0, 0.35);
+  --streak-done: #3B403B;
   color-scheme: dark;
 }
 

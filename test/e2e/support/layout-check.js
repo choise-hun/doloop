@@ -158,7 +158,8 @@ function browserCheck(o) {
     if (NOT_CARD.has(el.tagName.toUpperCase())) return false;
     const s = S(el);
     if (['inline', 'contents', 'none'].includes(s.display)) return false;
-    if (parseFloat(s.borderTopLeftRadius) >= 1) return false;
+    // 곡률 3px(--radius-block)까지 카드다. 필(9999px)·원(50%)은 빠진다(정렬 규격 §5-1 2번, v1.9)
+    if (parseFloat(s.borderTopLeftRadius) > 3) return false;
     const r = R(el);
     if (r.width < 48 || r.height < 32) return false;
     if (['Top', 'Right', 'Bottom', 'Left'].every((side) => sideBorder(s, side))) return true;
