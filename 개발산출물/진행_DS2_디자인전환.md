@@ -3,14 +3,14 @@
 - **목표:** 확정 시안(`4:6` + 쿨 라이트 -20% + `▶ PLAYER` A안 + `12px` 계기판)을 토큰·가드·AppShell부터 모든 화면까지 4 Step으로 적용한다.
 - **근거:** [계획/디자인_전환_계획](../계획/디자인_전환_계획.md) §1~§3 · [frontend-design](../docs/rules/frontend-design.md)(2026-11-18 개정) · [프론트_정렬규격](프론트_정렬규격.md) v1.8 · [명세/HOME_융합_시안.html](명세/HOME_융합_시안.html) · [자료/DESIGN_하라켄야_수정안](자료/DESIGN_하라켄야_수정안.md) · [협업 §1.2](협업_시니어주니어.md)
 - **step ID:** `DS2-1`~`DS2-4`. 테스트 이름 접두어 `DS21-`·`DS22-`…(기존 `shell.spec.js`의 옛 `DS2-N1~N3`와 구별)
-- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 명세 승인(2026-11-19) → 0단계 시니어 구현 중(브랜치 `feat/DS2-2-home-fusion`)
+- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 명세 승인(2026-11-19) → 0단계 시니어 구현 완료(브랜치 `feat/DS2-2-home-fusion` `85cc36f`, PR 없음) — 주니어 4단계 대기
 
 ## 1. 단계 표
 
 | 단계 | 범위 | 담당 | 선행 | 입력 파일 | 결과 파일 | 완료 기준 | effort | 상태 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DS2-1 | 토큰 3블록(쿨 라이트·파생 hex·`--radius-block`) + 곡률 가드 일원화·다크 동기화 가드 + AppShell `PLAYER` 1순위·A안 | **[시니어]** 구현·표적 테스트·커밋 2개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | 명세 승인 | [명세/DS2-1](명세/DS2-1_구현명세.md), 이 파일 | [결과/DS2-1](결과/DS2-1.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#44](https://github.com/choise-hun/doloop/pull/44) 머지, main `1103f0d`) |
-| DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](명세/DS2-2_구현명세.md), 이 파일 | `개발산출물/결과/DS2-2.md` | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | 0단계 진행 중 |
+| DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](명세/DS2-2_구현명세.md), 이 파일 | `개발산출물/결과/DS2-2.md` | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | 0단계 완료 → 4단계 주니어 대기 |
 | DS2-3 | Practice·Chords·Log 전환(지판 계열 토큰 D8 판정, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 갱신) | 1단계 명세에서 판정(Practice/Chords 고위험, Log 격리) | DS2-2 머지 | 계획 §2 순서 3, 결과/DS2-2 | `개발산출물/결과/DS2-3.md` | 명세에서 정함 | 높음 | 대기 |
 | DS2-4 | Notes·Progressions·Settings·Profile·Privacy 전환 + 공용 `.ghostBtn`·`.inpField` 블록 전환(D2) + 위 메뉴 글꼴 확인(D11) + 전 화면 Q1~Q9 | 1단계 명세에서 판정 | DS2-3 완료 | 계획 §2 순서 4, 결과/DS2-3 | `개발산출물/결과/DS2-4.md` | 전 화면 4폭+다크 스크린샷 표, `완료/` 이동 | 높음 | 대기 |
 
@@ -40,7 +40,24 @@
 
 ## 5. 다음 세션 시작 지시
 
-- **DS2-2 (2026-11-19 Mac, Claude 시니어):** 1단계 명세 [명세/DS2-2](명세/DS2-2_구현명세.md) 작성, main `1103f0d` 위 미커밋(구현·테스트 미실행). 사용자 승인 뒤 명세 §7 순서로 0단계 시니어 구현(브랜치 `feat/DS2-2-home-fusion`, 첫 커밋에 명세·이 파일 포함). 아래 DS2-1 항목은 이력이다.
+- **DS2-2 0단계 결과(2026-11-19 Mac, Claude 시니어):** 브랜치 `feat/DS2-2-home-fusion`(main `1103f0d`에서), 커밋 `a8a94d6` docs(명세·이 파일) · `59c60c6` feat(design) 가드 · `85cc36f` feat(home) · 이후 docs(이 기록). PR 없음. 파일은 명세 §3의 11개만(제품 6·테스트/검사기 3·규칙 문서 2).
+  - 구현 전 실패 확인: `node --test test/design_rules.test.js` → DR-8 실패(`--streak-done` 없음) · `npx playwright test test/e2e/layout/home.spec.js -g "DS22|UIUX-R"` → 9 failed(UIUX-R T1, DS22-1~8).
+  - 표적 검증: `node --test test/design_rules.test.js test/r0_core.test.js test/r1_home.test.js` → pass 19 / fail 0 · `npm run build` 오류 0 · `npx playwright test test/e2e/layout/home.spec.js` → 46 passed(layoutSuite G 실패 0 — `isCard` 3px 변경 뒤에도 G1·G6 실패 없음, 명세 §9 주의 1·2 해당 없음) · `npx playwright test test/e2e/progressions.spec.js -g "P1[12]"` → 2 passed · `grep oklab frontend/src` 0줄 · `grep barAccent|barInk HomePage.*` 0줄 · `grep radius-pill HomePage.module.css` 0줄.
+  - `--streak-done` 값은 oklab 혼합(`fill3 34% + paper`)을 다시 계산해 `#CDD7DC`·`#3B403B` 일치 확인. DR-9 정규식은 `in oklab`·`oklch(`·`lab(` 검출, `in srgb`·`--label`·`.tablab(` 미검출 확인.
+  - 명세와 다른 점: 정렬 규격의 `isCard` 안내 한 줄은 명세 "§5-4-2 2번"이 아니라 isCard 상호작용 항목이 있는 **§5-4-3 2번**에 넣었다(내용 동일). DS22-6의 "히어로 안" 범위는 `.hero`가 CSS 모듈 해시라 `#go` 폼으로 셌다.
+  - 미실행(4단계 몫): `npm test` 전체, `npx playwright test` 전체(G5b·G7b·A1·G8 경고 수 main 대비, 다른 화면 G1·G6 새 실패 여부 — 명세 §9 주의 3), `LAYOUT_SHOTS=1` 4폭+다크 Q1~Q9 표, `bash scripts/check-config-sync.sh`, 결과 파일 `개발산출물/결과/DS2-2.md`, PR·CI.
+- 다음: 아래 멘트로 주니어 4단계(템플릿 §4)를 시작한다. 그 아래 DS2-1 항목은 이력이다.
+
+```text
+# Gemini (주니어) — DS2-2 4단계 최종 검증·문서·PR 마무리
+개발산출물/프롬프트_템플릿_4단계.md §4를 따른다. 입력: 개발산출물/명세/DS2-2_구현명세.md(§6·§8·§9), 개발산출물/진행_DS2_디자인전환.md §2·§5, 브랜치 feat/DS2-2-home-fusion 최신 head.
+목표: 시니어 구현(홈 스파인·릴리프·버튼 3단계·합산 기본·DR-9·isCard 3px·--streak-done)의 전체 회귀와 홈 스크린샷 검토, 결과 파일·PR·CI를 맞춘다.
+기준: 명세 §8 (4단계) 항목, docs/rules/frontend-layout.md 9대 질문(Q1 필 1개·Q7 유채색 위치·Q8 3px·줄눈·스파인·Q9 다크 대비), G5b·G7b·A1·G8 경고 수 main(1103f0d) 대비(홈 G5b 0 유지·홈 G7b 증가 없음, 늘면 요소 목록).
+선행 조건: git switch feat/DS2-2-home-fusion && git pull --ff-only, gh 계정 choise-hun 확인. 다른 화면 G1·G6 새 실패 등 새 실패가 나면 원인만 기록하고 시니어 판정 전 단언 완화·skip·known 추가 금지.
+범위: npm test·npm run build·npx playwright test 전체·LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/home.spec.js·bash scripts/check-config-sync.sh(없으면 미실행 기록) 실행, 개발산출물/결과/DS2-2.md 작성, 진행 파일 DS2-2 상태 갱신. 제품 코드 수정 금지.
+완료 기준: 전체 회귀 새 실패 0, 결과 파일에 명령·출력 끝·4폭+다크 Q1~Q9 표·경고 수 비교, 최신 head CI 통과·리뷰 확인 기록.
+Git 처리: docs(ds2) 커밋 → push → main 대상 신규 PR 생성 → gh pr checks --watch → 리뷰 확인. 머지·배포는 하지 않는다.
+```
 - **DS2-1 0단계 결과(2026-11-19 Mac, Claude 시니어):** 브랜치 `feat/DS2-1-tokens-shell`(origin/main `1f3d201` merge), 커밋 `92cbaf3` docs · `4f4e7e6` feat(design) · `7068a99` feat(shell) · 이후 docs. PR 없음.
   - 표적 검증: `node --test test/design_rules.test.js test/r0_core.test.js test/r1_home.test.js test/r1_settings_notes.test.js test/r3_practice_log.test.js test/cm_ui.test.js test/ch5_progressions.test.js` → pass 64 / fail 0 · `npm run build` 오류 0 · `npx playwright test test/e2e/layout/shell.spec.js test/e2e/layout/ui-polish.spec.js` → 71 passed(DS3-N1 36개 포함) · `grep radius-block tokens.css` 1줄 · `grep "var(--line)" AppShell.module.css` 0줄.
   - 구현 전 실패 확인: R0-T1(`--bg`), W1-1·W1-6·UP-2(순서), DS21-N1~N4.
