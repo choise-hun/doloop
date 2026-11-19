@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -1220,5 +1221,154 @@ class SongApiTest {
         val resB = putOrder(client, tokenB, listOf(songsA[1], songsA[0]))
         assertEquals(HttpStatusCode.NotFound, resB.status)
         assertEquals(beforeA, sortOrders(userA))
+    }
+
+    @Test
+    fun `SL2-K1 전체 순서 저장은 200과 새 순서를 반환하고 GET 목록도 같다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+        val (a, b, c) = insertOrderedSongs(userA, 3, 'a')
+
+        val requested = listOf(c, a, b)
+        val res = putOrder(client, tokenA, requested)
+        assertEquals(HttpStatusCode.OK, res.status)
+        assertEquals("no-store", res.headers[HttpHeaders.CacheControl])
+        val expected = requested.map { it.toString() }
+        assertEquals(expected, songIdsOf(res.bodyAsText()))
+
+        val listRes = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, listRes.status)
+        assertEquals(expected, songIdsOf(listRes.bodyAsText()))
+    }
+
+    @Test
+    fun `SL2-K4 잘못된 요청 6종은 400 INVALID_INPUT이고 DB 순서를 바꾸지 않는다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+        val songs = insertOrderedSongs(userA, 2, 'b')
+        val before = sortOrders(userA)
+
+        val overLimit = (0 until 1001).joinToString(",") { "\"${UUID.randomUUID()}\"" }
+        val payloads = listOf(
+            "{}",
+            """{"ids":[]}""",
+            """{"ids":[$overLimit]}""",
+            """{"ids":["${songs[0]}","${songs[0]}"]}""",
+            """{"ids":["${songs[0].toString().uppercase()}"]}""",
+            """{"ids":[123]}"""
+        )
+
+        for (payload in payloads) {
+            val res = client.put("/api/v1/songs/order") {
+                header(HttpHeaders.Authorization, "Bearer $tokenA")
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            assertEquals(HttpStatusCode.BadRequest, res.status, payload)
+            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+            assertEquals(before, sortOrders(userA), payload)
+        }
+    }
+
+    @Test
+    fun `SL2-K5 새 곡은 맨 위에 들어가고 동점이 있어도 순서 저장으로 0부터 중복 없이 정리된다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+        val existing = insertOrderedSongs(userA, 2, 'c')
+
+        val createdRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"dQw4w9WgXcQ","title":"New Top"}""")
+        }
+        assertEquals(HttpStatusCode.Created, createdRes.status)
+        val newId = Json.parseToJsonElement(createdRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        val listRes = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(listOf(newId, existing[0].toString(), existing[1].toString()), songIdsOf(listRes.bodyAsText()))
+
+        // 동점 상태를 강제로 만든 뒤 순서 저장하면 0..n-1 중복 없이 정리
+        transaction(db) {
+            SongsTable.update({ SongsTable.userId eq userA }) { it[sortOrder] = 7 }
+        }
+        val reordered = listOf(existing[1], UUID.fromString(newId), existing[0])
+        val orderRes = putOrder(client, tokenA, reordered)
+        assertEquals(HttpStatusCode.OK, orderRes.status)
+
+        val orders = sortOrders(userA)
+        assertEquals(3, orders.values.toSet().size)
+        assertEquals(setOf(0, 1, 2), orders.values.toSet())
+        assertEquals(reordered.map { it.toString() }, songIdsOf(orderRes.bodyAsText()))
+    }
+
+    @Test
+    fun `SL2-K6 순서 저장은 자동 연동 공개 폴더의 item position도 새 순서로 반영한다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+        TestTier.set(db, userA, "pro")
+        val patchMeRes = client.patch("/api/v1/me") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"shareAutosync":true}""")
+        }
+        assertEquals(HttpStatusCode.OK, patchMeRes.status, patchMeRes.bodyAsText())
+        val nameRes = client.put("/api/v1/community/me/public-name") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"publicName":"작성자${userA.toString().take(6)}"}""")
+        }
+        assertEquals(HttpStatusCode.OK, nameRes.status, nameRes.bodyAsText())
+
+        val songs = insertOrderedSongs(userA, 3, 'p')
+        val catId = UUID.randomUUID()
+        transaction(db) {
+            CategoriesTable.insert {
+                it[id] = catId
+                it[userId] = userA
+                it[name] = "공개폴더"
+            }
+            songs.forEach { songId ->
+                SongCategoriesTable.insert {
+                    it[SongCategoriesTable.userId] = userA
+                    it[SongCategoriesTable.songId] = songId
+                    it[SongCategoriesTable.categoryId] = catId
+                }
+            }
+        }
+
+        val shareRes = client.put("/api/v1/categories/$catId/share") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"isPublic":true,"autoSync":true,"consentNoticeVersion":1}""")
+        }
+        assertEquals(HttpStatusCode.OK, shareRes.status, shareRes.bodyAsText())
+        val folderId = UUID.fromString(
+            Json.parseToJsonElement(shareRes.bodyAsText()).jsonObject["share"]!!.jsonObject["folderId"]!!.jsonPrimitive.content
+        )
+
+        val reversed = songs.reversed()
+        val orderRes = putOrder(client, tokenA, reversed)
+        assertEquals(HttpStatusCode.OK, orderRes.status)
+
+        val expectedVideos = transaction(db) {
+            val videoById = SongsTable.selectAll().where { SongsTable.userId eq userA }
+                .associate { it[SongsTable.id] to it[SongsTable.videoId] }
+            reversed.map { videoById.getValue(it) }
+        }
+        val sharedVideos = transaction(db) {
+            SharedFolderItemsTable.selectAll()
+                .where { SharedFolderItemsTable.folderId eq folderId }
+                .orderBy(SharedFolderItemsTable.position to org.jetbrains.exposed.sql.SortOrder.ASC)
+                .map { it[SharedFolderItemsTable.videoId] }
+        }
+        assertEquals(expectedVideos, sharedVideos)
     }
 }

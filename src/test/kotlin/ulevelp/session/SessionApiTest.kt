@@ -669,4 +669,31 @@ class SessionApiTest {
             assertEquals(HttpStatusCode.NotFound, r.status, bad)
         }
     }
+
+    @Test
+    fun `SL2-K9 없는 id, 형식 오류 id, 두 번 삭제는 모두 404를 반환한다`() = testApplication {
+        val storage = FakeStorageClient()
+        configureApiTestApp(dbConfig, storageClient = storage)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val songA = insertSong(userA)
+        val sessionA = insertSession(userA, songA, LocalDate.of(2026, 11, 18), 180)
+
+        val firstDelete = client.delete("/api/v1/sessions/$sessionA") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, firstDelete.status)
+
+        val secondDelete = client.delete("/api/v1/sessions/$sessionA") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, secondDelete.status)
+        assertStandardError(secondDelete.bodyAsText(), 404, "NOT_FOUND")
+
+        val missingDelete = client.delete("/api/v1/sessions/${UUID.randomUUID()}") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, missingDelete.status)
+        assertStandardError(missingDelete.bodyAsText(), 404, "NOT_FOUND")
+
+        val badFormatDelete = client.delete("/api/v1/sessions/invalid-uuid") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, badFormatDelete.status)
+        assertStandardError(badFormatDelete.bodyAsText(), 404, "NOT_FOUND")
+    }
 }

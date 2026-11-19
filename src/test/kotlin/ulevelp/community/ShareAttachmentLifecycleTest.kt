@@ -95,6 +95,12 @@ class ShareAttachmentLifecycleTest : EpisodeTestSupport() {
         client.send(HttpMethod.Delete, "/songs/$song", u).checked(HttpStatusCode.OK)
         assertEquals(0, attachmentCount()); assertEquals(0L, cardCount()); assertTrue(copy in storage.deleted)
     }
+    @Test fun L3b_SL2_K10_sessionDeletionPurgesCopyAndCard() = testApplication {
+        val storage = FakeStorageClient(); configureApiTestApp(config, storageClient = storage)
+        val u = client.user(); val s = session(u); client.agree(u); val (_, copy) = client.attach(u, s, storage)
+        client.send(HttpMethod.Delete, "/sessions/$s", u).checked(HttpStatusCode.OK)
+        assertEquals(0, attachmentCount()); assertEquals(0L, cardCount()); assertTrue(copy in storage.deleted)
+    }
     @Test fun L4_accountDeletionLeavesSharedTrashForCron() = testApplication {
         val storage = FakeStorageClient(); configureApiTestApp(config, storageClient = storage)
         val u = client.user(); val s = session(u); client.agree(u); val (_, copy) = client.attach(u, s, storage)
