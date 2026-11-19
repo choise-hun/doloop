@@ -266,3 +266,99 @@ test('DS24-G2 Progressions 넣기 패널: 열면 필은 패널 저장 1개 · gu
   await page.locator('#progLoginGate').waitFor();
   expect(await visiblePills(page)).toEqual([]);
 });
+
+async function openAllDisclosures(page) {
+  for (const detail of await page.locator('[data-setting-disclosure]').all()) {
+    if (!await detail.evaluate((node) => node.open)) await detail.locator(':scope > summary').click();
+    await expect(detail).toHaveAttribute('open', '');
+  }
+}
+
+test('DS24-S1 Settings 계정: 섹션 스파인 fill3 · T1 제목 · 안쪽 상자 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.user, community: false });
+  await page.goto('/settings.html#account', { waitUntil: 'load' });
+  await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+  const colors = await ds24Colors(page);
+  await expectSpine(page.locator('#account'), colors.fill3, colors, '#account');
+  const h = await ds24Box(page.locator('#hAccount'));
+  expect(h.fontSize).toBe('24px');
+  expect(h.fontWeight).toBe('300');
+  const panel = await ds24Box(page.locator('#driveStoragePanel'));
+  expect(panel.leftW).toBe('1px');
+  expect(panel.radius).toBe('3px');
+  expect(panel.bg).toBe(colors.panelFrosted);
+  expect(await page.locator('#btnDriveEnable').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('9999px');
+});
+
+test('DS24-S2 Settings 전부 펼침: 필은 섹션마다 최대 1개 · 세그먼트 밑줄 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.user, community: false });
+  await page.goto('/settings.html', { waitUntil: 'load' });
+  await expect(page.locator('#accEmail')).toHaveText('a@example.com');
+  await openAllDisclosures(page);
+  const colors = await ds24Colors(page);
+  expect(await visiblePills(page, '#account')).toEqual(['btnDriveEnable']);
+  expect(await visiblePills(page, '[data-setting-disclosure="advancedData"]')).toEqual(['btnSaveNotionKey']);
+  expect(await visiblePills(page)).toEqual(['btnDriveEnable', 'btnSaveNotionKey']);
+  for (const sel of ['#btnSyncEnable', '#btnConfirmZip']) {
+    expect(await page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius), sel).toBe('3px');
+  }
+  const seg = page.locator('#screen [role="group"]');
+  expect(await seg.evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  expect((await ds24Box(seg.locator('button[aria-pressed="true"]'))).bg).toBe(colors.paper);
+});
+
+test('DS24-S3 Privacy: 공유 .setSec 스파인 fill3 · 필 0 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.guest, community: false });
+  await page.goto('/privacy.html', { waitUntil: 'load' });
+  const secs = page.locator('section.set-sec');
+  await expect(secs).toHaveCount(5);
+  const colors = await ds24Colors(page);
+  for (let i = 0; i < 5; i++) await expectSpine(secs.nth(i), colors.fill3, colors, `privacy sec ${i}`);
+  expect(await visiblePills(page)).toEqual([]);
+});
+
+test('DS24-P1 Profile: 계정 카드 스파인 fill3 · guest 필 1 / user 필 0 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.guest, community: false });
+  await page.goto('/profile.html', { waitUntil: 'load' });
+  await page.locator('#profileLoginLink').waitFor();
+  const colors = await ds24Colors(page);
+  await expectSpine(page.locator('#profileAccount'), colors.fill3, colors, '#profileAccount');
+  expect(await visiblePills(page)).toEqual(['profileLoginLink']);
+
+  await mockApp(page, { ...STATES.user, community: false });
+  await page.goto('/profile.html', { waitUntil: 'load' });
+  await page.locator('#profileLogout').waitFor();
+  expect(await visiblePills(page)).toEqual([]);
+  expect(await page.locator('#profileLogout').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  await expectSpine(page.locator('#profileNames'), colors.fill3, colors, '#profileNames');
+  expect(await page.locator('#profileNamesTitle').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('300');
+});
+
+test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const dark = () => page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const leftC = (sel) => page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderLeftColor);
+
+  await mockApp(page, { ...STATES.userData, community: false });
+  await page.goto('/notes.html', { waitUntil: 'load' });
+  await page.locator('#form').waitFor();
+  await dark();
+  expect(await leftC('#form')).toBe('rgb(212, 178, 106)');
+
+  await mockApp(page, { ...STATES.user, community: false });
+  await page.goto('/settings.html#account', { waitUntil: 'load' });
+  await expect(page.locator('#btnLogout')).toBeVisible();
+  await dark();
+  expect(await leftC('#account')).toBe('rgb(108, 125, 114)');
+  expect(await page.locator('#btnLogout').evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(32, 32, 30)');
+
+  await mockApp(page, { ...STATES.guest, community: false });
+  await page.goto('/progressions.html', { waitUntil: 'load' });
+  await page.locator('#progTaste').waitFor();
+  await dark();
+  expect(await leftC('#progTaste')).toBe('rgb(212, 178, 106)');
+});
