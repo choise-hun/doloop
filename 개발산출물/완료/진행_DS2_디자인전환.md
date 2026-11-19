@@ -1,11 +1,11 @@
 # 진행 — DS2 디자인 전환 (홈 융합 4:6 기조 전 페이지 적용)
 
-> **완료 2026-11-19** — DS2-1(PR #44)·DS2-2(PR #45)·DS2-3(PR #46) 머지, DS2-4(전 화면 마감) 4단계 최종 검증 완료 및 PR 생성·CI 확인. 후속 후보(D15 파사드·아치, P20 `.cardBox/.panelBox`, P2 2단 덮기 정리)는 [계획 §4](../../계획/상용_서비스_계획.md) 대기 목록에 등록.
+> **완료 2026-11-19** — DS2-1(PR #44)·DS2-2(PR #45)·DS2-3(PR #46) 머지, DS2-4(전 화면 마감) 4단계 최종 검증·PR [#47](https://github.com/choise-hun/doloop/pull/47) CI 통과([Run #44443821134](https://github.com/choise-hun/doloop/actions/runs/44443821134))·리뷰 확인 완료(머지 대기). 후속 후보(D15 파사드·아치, P20 `.cardBox/.panelBox`, P2 2단 덮기 정리)는 [계획 §4](../../계획/상용_서비스_계획.md) 대기 목록에 등록.
 
 - **목표:** 확정 시안(`4:6` + 쿨 라이트 -20% + `▶ PLAYER` A안 + `12px` 계기판)을 토큰·가드·AppShell부터 모든 화면까지 4 Step으로 적용한다.
 - **근거:** [계획/디자인_전환_계획](../../계획/디자인_전환_계획.md) §1~§3 · [frontend-design](../../docs/rules/frontend-design.md)(2026-11-18 개정) · [프론트_정렬규격](../프론트_정렬규격.md) v1.8 · [명세/HOME_융합_시안.html](../명세/HOME_융합_시안.html) · [자료/DESIGN_하라켄야_수정안](../자료/DESIGN_하라켄야_수정안.md) · [협업 §1.2](../협업_시니어주니어.md)
 - **step ID:** `DS2-1`~`DS2-4`. 테스트 이름 접두어 `DS21-`·`DS22-`…(기존 `shell.spec.js`의 옛 `DS2-N1~N3`와 구별)
-- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 완료(PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지 2026-11-19T01:10:16Z, main `8b79c79`). **DS2-4 4단계 최종 검증·문서·완료 이동 완료**([명세](../명세/DS2-4_구현명세.md), [결과](../결과/DS2-4.md), 브랜치 `feat/DS2-4-notes-progressions-account`, PR 생성·CI 확인 진행)
+- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 완료(PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지 2026-11-19T01:10:16Z, main `8b79c79`). **DS2-4 완료(PR [#47](https://github.com/choise-hun/doloop/pull/47) CI 통과·리뷰 확인 완료, 머지 대기)**([명세](../명세/DS2-4_구현명세.md), [결과](../결과/DS2-4.md))
 
 ## 1. 단계 표
 
@@ -14,7 +14,7 @@
 | DS2-1 | 토큰 3블록(쿨 라이트·파생 hex·`--radius-block`) + 곡률 가드 일원화·다크 동기화 가드 + AppShell `PLAYER` 1순위·A안 | **[시니어]** 구현·표적 테스트·커밋 2개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | 명세 승인 | [명세/DS2-1](../명세/DS2-1_구현명세.md), 이 파일 | [결과/DS2-1](../결과/DS2-1.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#44](https://github.com/choise-hun/doloop/pull/44) 머지, main `1103f0d`) |
 | DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](../명세/DS2-2_구현명세.md), 이 파일 | [결과/DS2-2](../결과/DS2-2.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지, main `44af6c3`) |
 | DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](../명세/DS2-3_구현명세.md), [시안](../명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](../결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지, main `8b79c79`) |
-| DS2-4 | Notes·NoteDetail·Progressions·Settings·Privacy·Profile 전환 + 공용 `.ghostBtn`·`.inpField` 본체 3px(D2) + 위 메뉴 글꼴(D12)·범위 순서(D10)·파사드(D15) 판정 + 전 화면 Q1~Q9 — 파일 8개(CSS 7·spec 1, TSX 0), 단일 Step·커밋 4개 추천 | **[시니어]** 구현·표적 테스트·커밋 5개·push / [주니어] 4단계 전체 회귀·PR·CI·전 화면 스크린샷·결과·`완료/` 이동 | DS2-3 머지(완료) + 명세 승인 | [명세/DS2-4](../명세/DS2-4_구현명세.md), [시안](../명세/DS2-4_시안.html), 이 파일 | [결과/DS2-4](../결과/DS2-4.md) | 명세 §8 전부, 전 화면 4폭+다크 Q표, 최신 head CI 통과·리뷰 처리, `완료/` 이동 | 높음 | **완료 (4단계 검증·`완료/` 이동, PR CI 확인 진행)** |
+| DS2-4 | Notes·NoteDetail·Progressions·Settings·Privacy·Profile 전환 + 공용 `.ghostBtn`·`.inpField` 본체 3px(D2) + 위 메뉴 글꼴(D12)·범위 순서(D10)·파사드(D15) 판정 + 전 화면 Q1~Q9 — 파일 8개(CSS 7·spec 1, TSX 0), 단일 Step·커밋 4개 추천 | **[시니어]** 구현·표적 테스트·커밋 5개·push / [주니어] 4단계 전체 회귀·PR·CI·전 화면 스크린샷·결과·`완료/` 이동 | DS2-3 머지(완료) + 명세 승인 | [명세/DS2-4](../명세/DS2-4_구현명세.md), [시안](../명세/DS2-4_시안.html), 이 파일 | [결과/DS2-4](../결과/DS2-4.md) | 명세 §8 전부, 전 화면 4폭+다크 Q표, 최신 head CI 통과·리뷰 처리, `완료/` 이동 | 높음 | **완료** (PR [#47](https://github.com/choise-hun/doloop/pull/47) CI 통과·머지 대기) |
 
 ## 2. 고정된 결정 (Step 경계를 넘는 것만)
 
