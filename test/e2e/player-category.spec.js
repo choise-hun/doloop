@@ -139,9 +139,8 @@ test('P4b-1 홈 분류 버튼 → 플레이어에서 인라인 폴더가 선택�
   await page.waitForURL(/\/practice\.html$/);
 
   await expect(page.locator('#lib')).toBeHidden();
-  await expect(page.locator('#folderSelect')).toHaveValue(CAT.pop);
-  await expect(page.locator('#folderToggle')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#folderCount')).toHaveText('1곡');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', CAT.pop);
+  await expect(page.locator('#folderCount')).toHaveText(' · 1곡');
   await expect(page.locator('#folderList')).toContainText('Song 1');
   // 한 번 읽은 분류는 지워져 새로고침하면 서랍이 저절로 열리지 않는다
   expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
@@ -187,7 +186,7 @@ test('P4b-4 지워진 분류로 넘어오면 전체 곡 선택 + 안내', async 
   await page.goto('/practice.html', { waitUntil: 'load' });
   test.skip(!(await isReact(page)), 'legacy 모드: React 화면 아님');
   await expect(page.locator('#lib')).toBeHidden();
-  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
   await expect(page.locator('#ppFolderPanel')).toContainText('선택한 폴더를 찾을 수 없어 전체 곡을 표시합니다');
   await expect(page.locator('#folderList button')).toHaveCount(3);
 });

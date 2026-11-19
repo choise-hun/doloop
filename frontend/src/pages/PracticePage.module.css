@@ -51,6 +51,36 @@
   color: var(--bad);
 }
 
+/* SL-1 ⑨: 제목 아래 = 밑줄 [제목 수정] + 같은 줄 오른쪽 오류·안내 문구(저장 시각은 표시하지 않음, D8) */
+.ppSyncRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  min-width: 0;
+}
+
+/* 밑줄 글자 버튼(구간 프리셋 저장과 같은 13px/700) */
+.uBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 32px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.uBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* UXR-3: 왼쪽 = 영상·타임라인·(재생|녹음), 오른쪽 = 구간 설정·선택 폴더 곡 목록. DOM 순서 = 모바일 읽기 순서 */
 .ppMain {
   display: grid;
@@ -269,7 +299,7 @@
 }
 
 .ppLab {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   display: flex;
   flex-wrap: wrap;
@@ -880,8 +910,16 @@
   box-shadow: 0 10px 24px var(--shadow-ambient);
 }
 
+.ppCatPopHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .ppCatPopTitle {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
@@ -924,6 +962,87 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ppCatNameBtn {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ppCatAdd {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ppCatAddInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.ppCatAdd :global(.ghostBtn) {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.ppCatErr {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--bad);
+}
+
+/* SL-1 대화창 아래 줄: [삭제] ··· [취소] [저장] */
+.modalCardSmall {
+  width: min(360px, 100%);
+}
+
+.dlgFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dlgSpacer {
+  flex: 1 1 auto;
+}
+
+.dangerText {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bad);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.dangerText:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Drive 미연결 1곡 제한 교체 선택 모달 (#takeLimitModal) */
@@ -993,26 +1112,12 @@
   padding-top: 10px;
 }
 
-.ppLibBtn {
-  border-radius: var(--radius-block);
-  min-height: 40px;
-  padding: 0 16px;
-  font-size: 14px;
-}
-
 /* UXN correction: preset actions directly follow the loop controls. */
 .presetSelect {
-  width: 100%;
   height: 44px;
-  text-overflow: ellipsis;
-  padding: 0 10px;
-  border-radius: var(--radius-block);
-  border: 1px solid var(--seam-hairline);
+  padding: 0 6px; /* SL-1: AppSelect span.value G3(ja 91px) 여유 확보 */
   background: var(--surface);
-  color: var(--ink);
-  font: inherit;
   font-size: 13px;
-  min-width: 0;
 }
 
 .presetActionRow {
@@ -1089,47 +1194,42 @@
   gap: 8px;
 }
 
-.folderSelect {
-  width: 100%;
-  min-width: 0;
-  height: 40px;
-  padding: 0 10px;
-  border: 1px solid var(--seam-hairline);
-  border-radius: var(--radius-block);
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
+/* ④ 박스 가로 = 아래 곡 카드 가로: 목록과 같은 스크롤바 자리(scrollbar-gutter)를 박스 쪽에도 비워 둔다 */
+.folderSelectWrap {
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+  padding: 2px;
 }
 
-.folderHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+.folderSelect {
+  height: 44px;
+  background: var(--bg);
 }
 
 .folderName {
-  flex: 1 1 auto;
-  min-width: 0;
+  font-size: 14px;
   font-weight: 700;
-  overflow-wrap: anywhere;
 }
 
 .folderCountText {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 
-.folderToggle {
-  display: none;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: var(--radius-block);
+/* ⑧ 목록 수정 중(D1): 스파인 색을 바꾸고 라벨 옆 "· 수정 중", 카드 왼쪽 3px 표시
+   플레이어 화면 스파인이 이미 --fill2라 구분되도록 --fill1을 쓴다(결정 D1의 "다른 스파인 색"을 따름) */
+.ppFolderPanel[data-editing] {
+  --section-spine: var(--fill1);
+}
+
+.ppFolderPanel[data-editing] .ppSongBtn {
+  border-left: 3px solid var(--section-spine);
+}
+
+.editTag {
+  color: var(--ink);
 }
 
 .folderStatus p {
@@ -1144,10 +1244,13 @@
   color: var(--bad);
 }
 
+/* ⑦ 목록은 박스 바로 아래 8px(패널 gap 8 − 4 + 위·아래 여백 2+2). 높이 맞춤(⑥)은 SL-2 */
 .folderBody {
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 2px;
+  margin-top: -4px;
 }
 
 .folderBody p {
@@ -1156,16 +1259,8 @@
 }
 
 @media (max-width: 960px) {
-  .folderToggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .folderSelect {
-    height: 44px;
-  }
-  .folderBody[data-collapsed="true"] {
-    display: none;
+  .folderBody {
+    max-height: 360px;
   }
 }
 

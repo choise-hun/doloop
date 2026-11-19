@@ -7,6 +7,13 @@ const { mockApp, STATES, FIXTURES, DEFAULT_ME, LONG_TITLE } = require('../suppor
 
 const SONG_0 = FIXTURES.longSongs(1)[0];
 
+// SL-1 ⑤: 플레이어 선택창은 공용 AppSelect(박스 = #id, 목록 = #id-list). 고른 값은 박스의 data-value
+async function pickOption(page, id, value) {
+  await page.locator(`#${id}`).click();
+  await page.locator(`#${id}-list [data-value="${value}"]`).click();
+  await expect(page.locator(`#${id}-list`)).toHaveCount(0);
+}
+
 const SR_SONG_DETAIL = {
   song: SONG_0,
   takes: [
@@ -431,7 +438,7 @@ test('DS23-P2 영상 있음: 필 0개, 트랜스포트·보조 버튼 3px, 속�
       return r.width > 0 && r.height > 0 && window.getComputedStyle(b).borderTopLeftRadius === '9999px';
     }).map((b) => b.id || b.textContent.trim().slice(0, 20));
   })).toEqual([]);
-  for (const sel of ['#playBtn', '#backBtn', '#recBtn', '#saveBtn', '#loopBtn', '#songCatBtn', '#libBtn', '#folderToggle', '#clearBtn', '#btnWaitTimer']) {
+  for (const sel of ['#playBtn', '#backBtn', '#recBtn', '#saveBtn', '#loopBtn', '#songCatBtn', '#libBtn', '#folderSelect', '#presetSelect', '#clearBtn', '#btnWaitTimer']) {
     expect(await page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius), sel).toBe('3px');
   }
   // 공용 .ghostBtn을 덮은 보조 버튼: 줄눈 테두리 + cream 배경(필·먹색 테두리 잔존 금지)
@@ -560,8 +567,7 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
   await page.locator('#presetSection').waitFor();
 
   // 프리셋 선택 시 업데이트 버튼(#btnUpdatePreset)과 삭제 버튼(#btnDeletePreset) 노출
-  const presetSelect = page.locator('#presetSelect');
-  await presetSelect.selectOption('preset-1');
+  await pickOption(page, 'presetSelect', 'preset-1');
   await expect(page.locator('#btnUpdatePreset')).toBeVisible();
   await expect(page.locator('#btnDeletePreset')).toBeVisible();
   await expect(page.locator('#btnDeletePreset')).toHaveText('삭제');
@@ -846,7 +852,7 @@ for (const width of [1280, 1150]) {
   });
 }
 
-test('UXR3-PL02: 모바일 단일 열·DOM 순서·접힘, 960↔961에서 플레이어 노드·선택 폴더 유지', async ({ page }) => {
+test('UXR3-PL02: 모바일 단일 열·DOM 순서·목록 바로 표시(SL-1 D9), 960↔961에서 플레이어 노드·선택 폴더 유지', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await mockApp(page, ux3Mock());
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
@@ -858,22 +864,18 @@ test('UXR3-PL02: 모바일 단일 열·DOM 순서·접힘, 960↔961에서 플�
   });
   expect([...order.tops].sort((a, b) => a - b)).toEqual(order.tops);
   expect(order.hScroll).toBe(false);
-  // 모바일은 기본 접힘: 본문은 Tab/탐색에서 제외(display:none)
-  const toggle = page.locator('#folderToggle');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('#folderList')).toBeHidden();
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // SL-1 D9: 펼치기 버튼 없음 — 모바일도 목록이 바로 보이고 안에서 스크롤
+  await expect(page.locator('#folderToggle')).toHaveCount(0);
   await expect(page.locator('#folderList')).toBeVisible();
-  await page.locator('#folderSelect').selectOption(CAT_POP);
+  await pickOption(page, 'folderSelect', CAT_POP);
 
   await page.evaluate(() => { window.__playerEl = document.getElementById('player'); });
   await page.setViewportSize({ width: 961, height: 900 });
   await page.setViewportSize({ width: 960, height: 900 });
   await page.setViewportSize({ width: 961, height: 900 });
   expect(await page.evaluate(() => window.__playerEl === document.getElementById('player'))).toBe(true);
-  await expect(page.locator('#folderSelect')).toHaveValue(CAT_POP);
-  await expect(page.locator('#folderList')).toBeVisible(); // 데스크톱은 항상 표시
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', CAT_POP);
+  await expect(page.locator('#folderList')).toBeVisible();
 });
 
 test('UXR3-PL05: 전체/폴더/미분류 필터·곡 수·중복 소속·빈 폴더', async ({ page }) => {
@@ -882,15 +884,15 @@ test('UXR3-PL05: 전체/폴더/미분류 필터·곡 수·중복 소속·빈 폴
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   const items = page.locator('#folderList li button');
   await expect(items).toHaveCount(3); // 기본값: 전체 곡
-  await expect(page.locator('#folderSelect')).toHaveValue('__all');
-  await page.locator('#folderSelect').selectOption(CAT_JAZZ);
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
+  await pickOption(page, 'folderSelect', CAT_JAZZ);
   await expect(items).toHaveText([/Song 1/, /Song 2/]);
   await expect(page.locator('#folderCount')).toHaveText(/2/);
-  await page.locator('#folderSelect').selectOption(CAT_POP);
+  await pickOption(page, 'folderSelect', CAT_POP);
   await expect(items).toHaveText([/Song 1/]); // 곡1은 Pop에도 한 번만
-  await page.locator('#folderSelect').selectOption('__uncategorized');
+  await pickOption(page, 'folderSelect', '__uncategorized');
   await expect(items).toHaveText([/Song 3/]);
-  await page.locator('#folderSelect').selectOption(CAT_EMPTY);
+  await pickOption(page, 'folderSelect', CAT_EMPTY);
   await expect(items).toHaveCount(0);
   await expect(page.locator('#folderList')).toContainText('이 폴더에는 곡이 없습니다');
 });
@@ -960,13 +962,13 @@ test('UXR3-PL04: 홈에서 삭제/미존재 분류 전달 시 전체 곡 복구 
   await page.locator('#ppFolderPanel').waitFor();
 
   // 삭제된 분류는 전체로 복구되고 안내 메시지 표시
-  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
   const panel = page.locator('#ppFolderPanel');
   await expect(panel).toContainText('선택한 폴더를 찾을 수 없어 전체 곡을 표시합니다');
   // 세션 스토리지 값은 소비됨
   expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
   // 현재 곡이 다중 분류(곡1: Jazz+Pop)여도 임의로 폴더가 변경되지 않고 __all 유지
-  await expect(page.locator('#folderSelect')).toHaveValue('__all');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
 });
 
 test('UXR3-PL07: A 조회 중 B 로그인 계정 경합 — 지연 응답 해제 후 B 화면에 A 데이터 없음', async ({ page }) => {
@@ -1111,7 +1113,7 @@ test('UXR3-PL08: 현재 곡을 빈 분류에 넣으면 그 폴더 목록·곡 �
   await mockApp(page, mock);
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   const items = page.locator('#folderList li button');
-  await page.locator('#folderSelect').selectOption(CAT_EMPTY);
+  await pickOption(page, 'folderSelect', CAT_EMPTY);
   await expect(items).toHaveCount(0);
 
   await page.locator('#songCatBtn').click();
@@ -1127,25 +1129,17 @@ test('UXR3-PL08: 현재 곡을 빈 분류에 넣으면 그 폴더 목록·곡 �
   await expect(page.locator(`#songCatPop [data-category="${CAT_EMPTY}"] input`)).toBeChecked();
 });
 
-// RECFIX-1(F7): PL-11 — 모바일에서 접힌 목록 본문은 키보드 Tab 순서에서 빠지고, 펼치면 첫 곡에 도달한다
-test('UXR3-PL11: 390 접힘 상태에서 #folderToggle 다음 Tab이 목록 안으로 들어가지 않고, 펼치면 첫 곡에 도달', async ({ page }) => {
+// RECFIX-1(F7): PL-11 → SL-1 D9로 접힘이 없어졌다. 390에서 폴더 박스 다음 Tab이 곧 목록 첫 곡에 닿는다
+test('UXR3-PL11: 390 폴더 박스(#folderSelect) 다음 Tab으로 목록 첫 곡에 도달', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await mockApp(page, ux3Mock());
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
-  const toggle = page.locator('#folderToggle');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(toggle).toHaveAttribute('aria-controls', /.+/);
-  await toggle.focus();
+  const box = page.locator('#folderSelect');
+  await expect(box).toHaveAttribute('aria-controls', /.+/);
+  await box.focus();
   const inList = async () => page.evaluate(() => Boolean(document.activeElement?.closest('#folderList')));
-  for (let i = 0; i < 4; i++) {
-    await page.keyboard.press('Tab');
-    expect(await inList()).toBe(false);
-  }
-  await toggle.focus();
-  await page.keyboard.press('Enter');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   let reached = false;
-  for (let i = 0; i < 6 && !reached; i++) {
+  for (let i = 0; i < 4 && !reached; i++) {
     await page.keyboard.press('Tab');
     reached = await inList();
   }
@@ -1283,4 +1277,207 @@ test('UXN-AC timer: three seconds only, cancellation never resumes playback', as
   await page.clock.runFor(2999);expect(await page.evaluate(()=>window.__ytPlays)).toBe(2);
   await page.clock.runFor(1);await expect.poll(()=>page.evaluate(()=>window.__ytPlays)).toBe(3);
   await expect(wait).toHaveText('3s');
+});
+
+// ---------- SL-1 플레이어 곡 목록·분류 화면 (진행_SL_곡목록분류.md §2, 시안 명세/SL_시안.html) ----------
+test('SL1-01 1280: ①버튼 크기 ②라벨 13px ④⑦폴더 박스·목록 간격 ⑤앱 선택창 위치·키보드 ⑨제목 수정', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, ux3Mock());
+  // 현재 곡(Song 1)이 목록에 있어야 "현재 곡이 이 폴더에 없음" 안내가 박스·목록 사이에 끼지 않는다
+  await page.goto(`/practice.html?v=${UX3_SONGS[0].videoId}`, { waitUntil: 'load' });
+  await expect(page.locator('#folderList li button')).toHaveCount(3);
+
+  // ① [곡 목록] = [분류] 크기·글자
+  const btn = (sel) => page.locator(sel).evaluate((el) => {
+    const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
+    return { h: Math.round(r.height), font: cs.fontSize, weight: cs.fontWeight };
+  });
+  expect(await btn('#libBtn')).toEqual(await btn('#songCatBtn'));
+
+  // ② 패널 라벨 13px
+  for (const lab of await page.locator('.pp-lab').all()) await expect(lab).toHaveCSS('font-size', '13px');
+  await expect(page.locator('#folderSelectLabel')).toHaveText('폴더 선택');
+
+  // ⑦ 제목 줄·펼치기 없음, 박스 안 "이름 · N곡"
+  await expect(page.locator('#folderToggle')).toHaveCount(0);
+  await expect(page.locator('#folderSelect')).toHaveText(/전체 곡\s*·\s*3곡/);
+  // ④ 박스 가로 = 곡 카드 가로, ▾ 오른쪽 여백 = 글자 왼쪽 여백, 목록은 박스 아래 8px
+  const g = await page.evaluate(() => {
+    const box = document.getElementById('folderSelect').getBoundingClientRect();
+    const card = document.querySelector('#folderList li button').getBoundingClientRect();
+    const val = document.querySelector('#folderSelect > span').getBoundingClientRect();
+    const chev = document.querySelector('#folderSelect > span:last-child').getBoundingClientRect();
+    return { bl: box.left, br: box.right, cl: card.left, cr: card.right, gap: card.top - box.bottom,
+      padL: val.left - box.left, padR: box.right - chev.right };
+  });
+  expect(Math.abs(g.bl - g.cl)).toBeLessThanOrEqual(1);
+  expect(Math.abs(g.br - g.cr)).toBeLessThanOrEqual(1);
+  expect(Math.abs(g.gap - 8)).toBeLessThanOrEqual(1);
+  // ▾는 회전한 사각형이라 바깥 상자가 약 2px 넓다
+  expect(Math.abs(g.padL - g.padR)).toBeLessThanOrEqual(3);
+
+  // ⑤ D3: 목록은 박스 바로 아래, 같은 가로. 기본 <select> 없음
+  await expect(page.locator('#ppCtl select, #ppFolderPanel select')).toHaveCount(0);
+  await page.locator('#folderSelect').click();
+  const list = page.locator('#folderSelect-list');
+  await expect(list).toBeVisible();
+  await expect(page.locator('#folderSelect')).toHaveAttribute('aria-expanded', 'true');
+  const p = await page.evaluate(() => {
+    const b = document.getElementById('folderSelect').getBoundingClientRect();
+    const l = document.getElementById('folderSelect-list').getBoundingClientRect();
+    return { dl: l.left - b.left, dw: l.width - b.width, dy: l.top - b.bottom };
+  });
+  expect(Math.abs(p.dl)).toBeLessThanOrEqual(1);
+  expect(Math.abs(p.dw)).toBeLessThanOrEqual(1);
+  expect(p.dy).toBeGreaterThanOrEqual(0);
+  expect(p.dy).toBeLessThanOrEqual(6);
+  await expect(list.locator('[role="option"]')).toHaveText([/전체 곡\s*3곡/, /Jazz\s*2곡/, /Pop\s*1곡/, /빈 분류\s*0곡/, /미분류\s*1곡/]);
+  // Esc = 닫고 박스로 초점, 재생 단축키로 새지 않음
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  await expect(page.locator('#folderSelect')).toBeFocused();
+  // 키보드: ↓ 열기 → ↓ → Enter = Jazz
+  await page.keyboard.press('ArrowDown');
+  await expect(list).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', CAT_JAZZ);
+  await expect(page.locator('#folderCount')).toHaveText(/2곡/);
+  // 바깥 누름 = 닫힘(값 그대로)
+  await page.locator('#folderSelect').click();
+  await page.mouse.click(5, 5);
+  await expect(list).toHaveCount(0);
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', CAT_JAZZ);
+
+  // ⑨ 저장 시각 대신 밑줄 [제목 수정]
+  await expect(page.locator('#titleEditBtn')).toHaveText('제목 수정');
+  await expect(page.locator('#titleEditBtn')).toHaveCSS('text-decoration-line', 'underline');
+  await expect(page.locator('#syncState')).not.toContainText('저장됨');
+  await expect(page.locator('#syncState')).not.toContainText('계정 연결됨');
+});
+
+test('SL1-02: ⑨제목 수정·⑧목록 EDIT 곡 수정 창·③분류 EDIT 추가/이름 변경/삭제', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const mock = ux3Mock();
+  const calls = [];
+  let cats = UX3_CATEGORIES.map((c) => ({ ...c }));
+  mock.routes = [
+    [
+      (url) => url.pathname === '/api/v1/categories' || url.pathname.startsWith('/api/v1/categories/'),
+      (route) => {
+        const req = route.request();
+        const path = new URL(req.url()).pathname;
+        const method = req.method();
+        if (method === 'GET' && path === '/api/v1/categories') return UX3_JSON(route, { categories: cats });
+        const body = method === 'GET' || method === 'DELETE' ? null : req.postDataJSON();
+        calls.push({ method, path, body });
+        if (method === 'POST') {
+          if (cats.some((c) => c.name === body.name)) return UX3_JSON(route, { code: 'CONFLICT', message: '같은 이름의 분류가 이미 있습니다.' }, 409);
+          const created = { id: '00000000-0000-4000-8000-000000000304', name: body.name, sortOrder: 3, onHome: false, songCount: 0 };
+          cats = [...cats, created];
+          return UX3_JSON(route, { category: created }, 201);
+        }
+        const id = path.split('/').pop();
+        if (method === 'PATCH') {
+          cats = cats.map((c) => (c.id === id ? { ...c, ...body } : c));
+          return UX3_JSON(route, { category: cats.find((c) => c.id === id) });
+        }
+        if (method === 'DELETE') {
+          cats = cats.filter((c) => c.id !== id);
+          return UX3_JSON(route, { ok: true });
+        }
+        return route.fallback();
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/songs\/[^/]+$/.test(url.pathname),
+      (route) => {
+        const req = route.request();
+        if (req.method() !== 'PATCH') return route.fallback();
+        const id = new URL(req.url()).pathname.split('/').pop();
+        const body = req.postDataJSON();
+        calls.push({ method: 'PATCH', path: `/songs/${id}`, body });
+        const base = UX3_SONGS.find((x) => x.id === id) || UX3_SONGS[0];
+        return UX3_JSON(route, { song: { ...base, ...body } });
+      },
+    ],
+  ];
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await expect(page.locator('#folderList li button')).toHaveCount(3);
+  page.on('dialog', (d) => d.accept());
+
+  // ⑨ 제목 수정: 빈 값은 막고, 저장하면 PATCH title 1번
+  await page.locator('#titleEditBtn').click();
+  const titleInput = page.locator('#titleDialogInput');
+  await expect(titleInput).toBeFocused();
+  await titleInput.fill('   ');
+  await page.locator('#titleDialogSave').click();
+  await expect(page.locator('#titleDialog')).toContainText('제목을 입력해 주세요');
+  await titleInput.fill('새 제목');
+  await page.locator('#titleDialogSave').click();
+  await expect(page.locator('#titleDialog')).toHaveCount(0);
+  await expect(page.locator('#songTitle')).toHaveText('새 제목');
+  expect(calls.filter((c) => c.path.startsWith('/songs/'))).toEqual([
+    { method: 'PATCH', path: `/songs/${UX3_SONGS[0].id}`, body: { title: '새 제목' } },
+  ]);
+  await expect(page.locator('#folderList li button').first()).toContainText('새 제목');
+
+  // ⑧ 목록 EDIT: 수정 중 표시(스파인 색 변경·라벨), 카드 누르면 곡 전환 대신 수정 창
+  const panel = page.locator('#ppFolderPanel');
+  const spineBefore = await panel.evaluate((el) => getComputedStyle(el).borderLeftColor);
+  await page.locator('#folderEditBtn').click();
+  await expect(panel).toHaveAttribute('data-editing', 'true');
+  await expect(page.locator('#folderSelectLabel')).toContainText('수정 중');
+  await expect(page.locator('#folderEditBtn')).toHaveText('완료');
+  expect(await panel.evaluate((el) => getComputedStyle(el).borderLeftColor)).not.toBe(spineBefore);
+  await page.locator('#folderList li button', { hasText: 'Song 2' }).click();
+  const dlg = page.locator('#songEditDialog');
+  await expect(dlg).toBeVisible();
+  await expect(page.locator('#songEditTitleInput')).toHaveValue('Song 2');
+  await expect(page.locator('#songTitle')).toHaveText('새 제목'); // 곡 전환 없음
+  await dlg.locator(`[data-category="${CAT_POP}"] input`).check();
+  await page.locator('#songEditSave').click();
+  await expect(dlg).toHaveCount(0);
+  expect(calls.at(-1)).toEqual({ method: 'PATCH', path: `/songs/${UX3_SONGS[1].id}`, body: { categoryIds: [CAT_JAZZ, CAT_POP] } });
+  await pickOption(page, 'folderSelect', CAT_POP);
+  await expect(page.locator('#folderList li button')).toHaveText([/새 제목/, /Song 2/]);
+  await page.locator('#folderEditBtn').click();
+  await expect(panel).not.toHaveAttribute('data-editing', /.*/);
+
+  // ③ 분류 EDIT: 체크박스 대신 이름 버튼 + 새 분류 입력 줄
+  await page.locator('#songCatBtn').click();
+  const pop = page.locator('#songCatPop');
+  await pop.locator('#songCatEdit').click();
+  await expect(pop.locator('input[type="checkbox"]')).toHaveCount(0);
+  const addInput = pop.locator('#songCatAdd input');
+  await addInput.fill('Jazz');
+  await pop.locator('#songCatAdd button').click();
+  await expect(pop).toContainText('같은 이름의 분류가 이미 있습니다');
+  await addInput.fill('Rock');
+  await pop.locator('#songCatAdd button').click();
+  await expect(pop.locator('li', { hasText: 'Rock' })).toHaveCount(1);
+  await expect(addInput).toHaveValue('');
+  expect(calls.at(-1)).toEqual({ method: 'POST', path: '/api/v1/categories', body: { name: 'Rock' } });
+
+  // 이름 변경: 작은 창, 창 안 누름은 분류 창을 닫지 않는다
+  await pop.locator(`[data-category="${CAT_POP}"] button`).click();
+  const one = page.locator('#catEditDialog');
+  await expect(one).toBeVisible();
+  await page.locator('#catEditInput').fill('Pop 2');
+  await page.locator('#catEditSave').click();
+  await expect(one).toHaveCount(0);
+  await expect(pop).toBeVisible();
+  expect(calls.at(-1)).toEqual({ method: 'PATCH', path: `/api/v1/categories/${CAT_POP}`, body: { name: 'Pop 2' } });
+  await expect(page.locator('#folderSelect')).toHaveText(/Pop 2\s*·\s*2곡/);
+
+  // 삭제: 확인 뒤 DELETE, 곡은 남고 이 분류에서만 빠진다 → 지운 폴더를 보던 목록은 전체 곡
+  await pop.locator(`[data-category="${CAT_POP}"] button`).click();
+  await page.locator('#catEditDelete').click();
+  await expect(one).toHaveCount(0);
+  expect(calls.at(-1)).toEqual({ method: 'DELETE', path: `/api/v1/categories/${CAT_POP}`, body: null });
+  await expect(pop.locator(`[data-category="${CAT_POP}"]`)).toHaveCount(0);
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
+  await expect(page.locator('#folderList li button')).toHaveCount(3);
+  await expect(page.locator('#songCatBtn')).toHaveText('분류 1');
 });

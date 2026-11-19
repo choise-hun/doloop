@@ -226,8 +226,7 @@ test('C4a-5 분류 버튼 → URL 그대로 플레이어, 서랍이 열리고 �
   await page.waitForURL(/\/practice\.html$/);
   // UXR-3: 자동 서랍 개방 대신 인라인 폴더 선택 및 모바일 펼침
   await expect(page.locator('#lib')).toBeHidden();
-  await expect(page.locator('#folderSelect')).toHaveValue(jazzId);
-  await expect(page.locator('#folderToggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', jazzId);
   await expect(page.locator('#folderList')).toContainText('이 폴더에는 곡이 없습니다');
   expect(await page.evaluate(() => sessionStorage.getItem('ulp:open-category'))).toBeNull();
 });
