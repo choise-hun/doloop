@@ -2,6 +2,7 @@
 // 설계: 개발산출물/결과/CH-1a_프레임.md §3, CH-1b_설계.md §8, CH-5_CHORDS화면.md §3. 비로그인 시드로 확인. React 화면 전용(legacy 모드는 skip)
 'use strict';
 const { test, expect } = require('@playwright/test');
+const { pickOption, expectValue } = require('./support/app-select');
 
 const MODES = ['scale', 'tone', 'matrix', 'circle', 'reint', 'tf', 'ds'];
 
@@ -87,7 +88,7 @@ test('PP3 진행 연주: 못 읽는 코드 빠짐, 정석 폼, 키 옮기기, �
   await expect(page.locator('#pp-back')).toHaveAttribute('href', 'progressions.html?scope=all#p-00000000-0000-4000-8000-0000000000b1');
 
   // 키 옮기기 +2 → D Major, 심볼·로마숫자
-  await page.locator('#pp-semis').selectOption('2');
+  await pickOption(page, 'pp-semis', '2');
   await expect(page.locator('#pp-title')).toContainText('D Major');
   await expect(chips.nth(1)).toContainText('A');
   await expect(chips.nth(2)).toContainText('Bm');
@@ -125,7 +126,7 @@ test('PP3 진행 연주: 못 읽는 코드 빠짐, 정석 폼, 키 옮기기, �
   await chips.nth(5).click();
   await page.locator('#pp-open-matrix').click();
   await expect(tab(page, 'matrix')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#mx-root')).toHaveValue('9');
+  await expectValue(page, 'mx-root', '9');
   expect(new URL(page.url()).hash).toBe('#matrix');
   // 진행 연주 탭으로 돌아오면 같은 진행
   await tab(page, 'prog').click();

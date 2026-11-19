@@ -1,6 +1,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('./support/mock-app');
+const { pickOption } = require('./support/app-select');
 
 async function openScale(page) {
   await mockApp(page, STATES.guest);
@@ -27,13 +28,13 @@ test('CH-A 전체·5블럭과 미지원 스케일 폴백·복귀', async ({ page
   await expect(page.locator('#sc-board .blk, #sc-board .press, #sc-board .ctx')).toHaveCount(0);
   await buttons.nth(3).click();
   for (const scale of ['harmMinor', 'melMinor']) {
-    await page.locator('#sc-type').selectOption(scale);
+    await pickOption(page, 'sc-type', scale);
     await expect(buttons.nth(5)).toHaveAttribute('aria-pressed', 'true');
     for (let i = 0; i < 5; i++) await expect(buttons.nth(i)).toBeDisabled();
     await expect(page.locator('#sc-block-msg')).toBeVisible();
     await expect(page.locator('#sc-board .blk')).toHaveCount(0);
   }
-  await page.locator('#sc-type').selectOption('major');
+  await pickOption(page, 'sc-type', 'major');
   await expect(buttons.nth(3)).toBeEnabled();
   await expect(buttons.nth(3)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#sc-block-msg')).toBeHidden();
