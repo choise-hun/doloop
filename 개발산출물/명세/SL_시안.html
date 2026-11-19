@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SL 곡 목록·분류 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap">
+<!--
+  SL(플레이어 곡 목록·분류 개선) 시안. 진행 파일: 개발산출물/진행_SL_곡목록분류.md
+  값은 frontend/src/styles/tokens.css · PracticePage.module.css(main aad04a0)에서 옮겼다. 제품 코드가 아니다.
+  위 막대 선택지: 테마, D1 수정 중 표시, D2 라벨 글자, D3 선택창 위치, D4 드래그 방식.
+  화면 안 번호 ①~⑩은 사용자 요청 번호(9가 두 번 나와 두 번째를 ⑩으로 적음).
+-->
+<style>
+:root {
+  --bg:#ECEEF0; --surface:#F1F4F7; --surface2:#DCE0E5; --ink:#1d1d1f; --muted:#61656C; --line:#C7CCD3;
+  --accent:#1d1d1f; --accent-ink:#F1F4F7; --good:#2f6b3a; --bad:#b3261e;
+  --paper:#F1F4F7; --cream:#EDF0F3; --ink-strong:#1D1D1F; --fill1:#E64D01; --fill2:#7F93A8; --fill3:#8BA1A8;
+  --panel-frosted:#EFF1F4; --seam-hairline:#CBCDCF; --seam-highlight:#F1F4F7BF; --relief-bottom-mid:#BCBFC4;
+  --shadow-ambient:rgba(24,28,36,0.11); --scrim:rgb(0 0 0 / 0.45); --media-bg:#000;
+  --radius-pill:9999px; --radius-block:3px;
+  --font-body:"Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --section-spine:var(--fill1);
+  --lab:13px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg:#171716; --surface:#20201e; --surface2:#2b2a27; --ink:#ecece4; --muted:#9c9a92; --line:#3a3935;
+  --accent:#ecece4; --accent-ink:#171716; --good:#6fbf73; --bad:#ff8a80;
+  --paper:#242422; --cream:#20201E; --ink-strong:#ECECE4; --fill1:#FF6B2B; --fill2:#D4B26A; --fill3:#6C7D72;
+  --panel-frosted:#1E1E1D; --seam-hairline:#30302E; --seam-highlight:#242422BF; --relief-bottom-mid:#444340;
+  --shadow-ambient:rgba(0,0,0,0.35);
+  color-scheme: dark;
+}
+body[data-lab="14"] { --lab:14px; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:14px; line-height:1.5; }
+button { font:inherit; color:inherit; }
+.bar { position:sticky; top:0; z-index:20; background:var(--paper); border-bottom:1px solid var(--seam-hairline); padding:10px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+.bar b { font-size:13px; }
+.opt { display:inline-flex; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); overflow:hidden; background:var(--bg); }
+.opt button { font-size:12px; font-weight:700; border:0; border-right:1px solid var(--seam-hairline); background:transparent; color:var(--muted); padding:0 10px; min-height:32px; cursor:pointer; }
+.opt button:last-child { border-right:0; }
+.opt button[aria-pressed="true"] { background:var(--paper); color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink-strong); }
+.wrap { max-width:1280px; margin:0 auto; padding:20px 16px 80px; display:flex; flex-direction:column; gap:36px; }
+h2 { font-size:18px; margin:0 0 4px; }
+.why { margin:0 0 12px; color:var(--muted); font-size:13px; max-width:90ch; }
+.cap { font-size:12px; color:var(--muted); border-left:3px solid var(--seam-hairline); padding-left:8px; margin:6px 0 0; }
+.num { display:inline-block; font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--fill1); margin-right:4px; }
+
+/* 공용 */
+.ghostBtn { font-weight:700; font-size:17px; min-height:48px; padding:0 24px; border-radius:var(--radius-block); border:1px solid var(--seam-hairline); background:var(--cream); color:var(--ink); cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; }
+.ghostBtn:hover { border-color:var(--ink); }
+.ghostBtn.before { min-height:40px; padding:0 16px; font-size:14px; }
+.uBtn { border:0; background:transparent; padding:0; min-height:32px; font-size:13px; font-weight:700; color:var(--ink); text-decoration:underline; text-underline-offset:4px; cursor:pointer; }
+.uBtn.danger { color:var(--bad); }
+.card { min-width:0; background:linear-gradient(145deg,var(--paper) 0%,var(--cream) 100%); border:1px solid var(--seam-hairline); border-left:12px solid var(--section-spine); border-radius:var(--radius-block); box-shadow: inset 1px 0 0 var(--seam-hairline), 2px 2px 0 var(--surface2), 4px 5px 0 var(--relief-bottom-mid), 10px 14px 22px var(--shadow-ambient); padding:16px 18px; display:flex; flex-direction:column; gap:8px; }
+.lab { font-size:var(--lab); color:var(--muted); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.lab.before { font-size:12px; }
+.inp { font-size:16px; color:var(--ink); background:var(--surface); border:1px solid var(--seam-hairline); border-radius:var(--radius-block); padding:0 14px; min-height:44px; width:100%; }
+
+/* 플레이어 축약 */
+.head { display:flex; align-items:center; gap:12px; background:var(--paper); border:1px solid var(--seam-hairline); border-radius:var(--radius-block); padding:12px 16px; }
+.title { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.3; }
+.title b { font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.title .sync { font-size:12px; color:var(--muted); }
+.actions { display:flex; gap:8px; }
+.main { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; margin-top:16px; align-items:stretch; }
+.stage { display:flex; flex-direction:column; gap:10px; }
+.video { aspect-ratio:16/9; background:var(--media-bg); border-radius:var(--radius-block); display:grid; place-items:center; color:#888; font-size:13px; }
+.slider { height:44px; display:flex; align-items:center; gap:10px; font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+.slider i { flex:1; height:4px; background:var(--ink); border-radius:2px; }
+.side { display:flex; flex-direction:column; gap:16px; min-height:0; }
+.seg4 { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--seam-hairline); border-radius:var(--radius-block); overflow:hidden; }
+.seg4 span { text-align:center; padding:12px 0; font-family:var(--font-mono); font-weight:700; border-right:1px solid var(--seam-hairline); }
+.seg4 span:last-child { border-right:0; }
+.seg4 .on { background:var(--ink); color:var(--bg); }
+.ab { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.ab div { border:1px solid var(--seam-hairline); border-radius:var(--radius-block); height:52px; display:grid; place-items:center; font-family:var(--font-mono); font-size:13px; }
+.loopRow { display:grid; grid-template-columns:80px 1fr 52px 44px; gap:6px; }
+.loopRow > * { height:44px; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); display:grid; place-items:center; font-size:13px; font-weight:700; background:var(--bg); }
+.loopRow .on { background:var(--ink); color:var(--bg); }
+.gapMark { outline:1px dashed var(--fill1); outline-offset:0; }
+
+/* ④⑦ 폴더 선택 박스 */
+.folderPanel { flex:1; min-height:0; }
+.selBox { display:flex; align-items:center; justify-content:space-between; gap:8px; height:44px; padding:0 12px; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); background:var(--bg); cursor:pointer; text-align:left; width:100%; }
+.selBox .name { font-size:14px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.selBox .cnt { font-family:var(--font-mono); font-size:12px; font-weight:500; color:var(--muted); letter-spacing:.04em; }
+.selBox .chev { width:10px; height:10px; border-right:2px solid var(--ink); border-bottom:2px solid var(--ink); transform:translateY(-3px) rotate(45deg); flex:none; }
+.selBox.native { padding-right:4px; }
+.list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; overflow:auto; flex:1; min-height:0; }
+.song { position:relative; display:flex; align-items:stretch; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); background:var(--paper); }
+.song[aria-current="true"] { border-color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink); }
+.song .body { flex:1; min-width:0; padding:9px 12px; cursor:pointer; }
+.song .t { display:block; font-size:14px; font-weight:700; line-height:1.35; }
+.song .m { display:block; font-family:var(--font-mono); font-size:12px; color:var(--muted); margin-top:2px; }
+.handle { display:none; width:32px; flex:none; align-items:center; justify-content:center; cursor:grab; color:var(--muted); font-size:16px; letter-spacing:-2px; border-right:1px solid var(--seam-hairline); }
+.song.dragging { opacity:.5; }
+/* D4 B: 항상 길게 눌러 끌기 → 핸들 없음 */
+body[data-drag="a"] .folderPanel.editing .handle { display:flex; }
+
+/* ⑧ 수정 중 표시 (D1) */
+.editTag { display:none; font-family:var(--font-mono); font-size:12px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; }
+.folderPanel.editing .editTag { display:inline; }
+body[data-edit="a"] .folderPanel.editing { --section-spine:var(--fill2); }
+body[data-edit="a"] .folderPanel.editing .song { border-left:3px solid var(--fill2); }
+body[data-edit="a"] .folderPanel.editing .editTag { color:var(--ink); }
+body[data-edit="b"] .folderPanel.editing .list { outline:1px dashed var(--muted); outline-offset:4px; background:var(--surface2); padding:6px; border-radius:var(--radius-block); }
+body[data-edit="c"] .folderPanel.editing .editBand { display:flex; }
+.editBand { display:none; justify-content:space-between; align-items:center; margin:-16px -18px 4px -18px; padding:6px 18px; background:var(--surface2); border-bottom:1px solid var(--seam-hairline); font-size:13px; font-weight:700; }
+body[data-edit="c"] .folderPanel.editing .editTag { display:none; }
+
+/* 모달 */
+.scrim { position:fixed; inset:0; background:var(--scrim); display:none; z-index:40; }
+.scrim.open { display:block; }
+.dlg { position:fixed; z-index:50; display:none; background:var(--paper); border:1px solid var(--seam-hairline); border-radius:var(--radius-block); box-shadow:2px 2px 0 var(--surface2), 4px 5px 0 var(--relief-bottom-mid), 10px 14px 22px var(--shadow-ambient); padding:16px 18px; width:min(360px, calc(100vw - 32px)); max-height:min(520px, calc(100vh - 32px)); overflow:auto; flex-direction:column; gap:10px; }
+.dlg.open { display:flex; }
+.dlg.center { left:50%; top:50%; transform:translate(-50%,-50%); }
+.dlg.small { width:min(300px, calc(100vw - 32px)); }
+.dlgHead { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.dlgHead b { font-size:16px; }
+.dlgFoot { display:flex; justify-content:flex-end; gap:8px; align-items:center; margin-top:4px; }
+.dlgFoot .sp { flex:1; }
+.mBtn { font-weight:700; font-size:14px; min-height:40px; padding:0 16px; border-radius:var(--radius-block); border:1px solid var(--seam-hairline); background:var(--cream); color:var(--ink); cursor:pointer; }
+.mBtn.primary { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.mBtn.dangerFill { background:var(--bad); color:var(--accent-ink); border-color:var(--bad); }
+.opts { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.opts li { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; padding:0 10px; border-bottom:1px solid var(--seam-hairline); cursor:pointer; font-size:14px; }
+.opts li:last-child { border-bottom:0; }
+.opts li[aria-selected="true"] { font-weight:700; box-shadow:inset 3px 0 0 var(--ink); background:var(--surface2); }
+.opts li .cnt { font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+.cats li { cursor:default; }
+.cats label { display:flex; align-items:center; gap:10px; flex:1; min-height:44px; cursor:pointer; }
+.cats input { width:18px; height:18px; accent-color:var(--ink); }
+.cats .nm { flex:1; }
+.cats.editing input { display:none; }
+.cats.editing .nm { text-decoration:underline; text-underline-offset:4px; cursor:pointer; }
+.addRow { display:none; gap:6px; }
+.cats.editing ~ .addRow { display:flex; }
+.addRow .inp { min-height:40px; font-size:14px; flex:1; width:auto; min-width:0; }
+.addRow .mBtn { white-space:nowrap; flex:none; }
+
+/* ⑩ 세션 카드 */
+.sess { background:var(--panel-frosted); border:1px solid var(--seam-hairline); border-radius:var(--radius-block); padding:14px 16px; display:flex; flex-direction:column; gap:8px; position:relative; }
+.sess .meta { font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+.sess textarea { width:100%; min-height:64px; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); background:var(--surface); padding:10px 12px; font:inherit; font-size:14px; color:var(--ink); }
+.sessFoot { display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--seam-hairline); padding-top:8px; font-size:13px; color:var(--muted); }
+.xBtn { width:44px; height:44px; border:1px solid var(--seam-hairline); border-radius:var(--radius-block); background:var(--cream); color:var(--ink); cursor:pointer; font-size:16px; }
+.xBtn:hover { border-color:var(--bad); color:var(--bad); }
+.twoCol { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.tag { font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; margin-bottom:6px; }
+.dec { border:1px solid var(--seam-hairline); border-radius:var(--radius-block); background:var(--paper); padding:12px 16px; }
+.dec table { border-collapse:collapse; width:100%; font-size:13px; }
+.dec td, .dec th { border-bottom:1px solid var(--seam-hairline); padding:6px 8px; text-align:left; vertical-align:top; }
+@media (max-width: 960px) {
+  .main { grid-template-columns:1fr; }
+  .twoCol { grid-template-columns:1fr; }
+  .folderPanel .list { max-height:360px; }
+}
+</style>
+</head>
+<body data-edit="a" data-lab="13" data-pick="a" data-drag="a">
+<div class="bar">
+  <b>SL 시안</b>
+  <span class="opt" data-k="theme"><button aria-pressed="true" data-v="light">라이트</button><button data-v="dark">다크</button></span>
+  <span class="opt" data-k="edit" title="D1 수정 중 표시"><b style="padding:0 8px;align-self:center">D1</b><button aria-pressed="true" data-v="a">A 스파인 전환(추천)</button><button data-v="b">B 점선 바탕</button><button data-v="c">C 상단 띠</button></span>
+  <span class="opt" data-k="lab" title="D2 라벨 글자"><b style="padding:0 8px;align-self:center">D2</b><button aria-pressed="true" data-v="13">13px(추천)</button><button data-v="14">14px</button></span>
+  <span class="opt" data-k="pick" title="D3 선택창 위치"><b style="padding:0 8px;align-self:center">D3</b><button aria-pressed="true" data-v="a">A 박스 아래(추천)</button><button data-v="b">B 화면 가운데</button></span>
+  <span class="opt" data-k="drag" title="D4 드래그"><b style="padding:0 8px;align-self:center">D4</b><button aria-pressed="true" data-v="a">A EDIT 중 핸들(추천)</button><button data-v="b">B 항상 길게 눌러</button></span>
+</div>
+
+<div class="wrap">
+
+<section>
+  <h2>1. 플레이어 — 바뀐 뒤 (1440 폭 축약)</h2>
+  <p class="why">눌러 보세요: <b>제목 수정</b>, <b>분류</b>, <b>곡 목록 박스</b>, 오른쪽 <b>EDIT</b>(그다음 곡 카드 클릭·끌기).</p>
+  <div class="head">
+    <div class="title">
+      <b id="songTitle">ヨルシカ『春泥棒』のギターをTAB譜付きで徹底解説します</b>
+      <span><button class="uBtn" data-open="dlgTitle">제목 수정</button></span>
+    </div>
+    <div class="actions">
+      <button class="ghostBtn" data-open="dlgCat" data-anchor="1">분류</button>
+      <button class="ghostBtn">곡 목록</button>
+    </div>
+  </div>
+  <p class="cap"><span class="num">①</span>[곡 목록]을 [분류]와 같은 공용 크기(높이 48px · 글자 17px · 굵기 700)로 맞춥니다. 지금은 곡 목록만 40px/14px로 줄여 둔 상태입니다. <span class="num">⑨</span>제목 아래 "저장됨 20:29"를 빼고 그 자리에 밑줄 글자 버튼 <b>제목 수정</b>(구간 프리셋 저장과 같은 13px/700)을 둡니다. 저장 실패 같은 오류 문구는 같은 줄 오른쪽에 그대로 표시합니다.</p>
+
+  <div class="main" id="main">
+    <div class="stage" id="stage">
+      <div class="video">영상 (16:9)</div>
+      <div class="slider">17:17 <i></i> 22:16</div>
+    </div>
+    <div class="side">
+      <div class="card">
+        <div class="lab">속도</div>
+        <div class="seg4"><span>0.25</span><span>0.5</span><span class="on">0.75</span><span>1.0</span></div>
+        <div class="lab"><span>구간 반복 · 시작 전 여유</span><span style="font-family:var(--font-mono);font-size:12px">49.4초</span></div>
+        <div class="ab gapMark" id="abBox"><div>시작 17:16.4</div><div>끝 18:05.8</div></div>
+        <div class="loopRow gapMark"><span class="on">반복 중</span><span>프리셋 선택</span><span>0s</span><span>✕</span></div>
+        <div><button class="uBtn">구간 프리셋 저장</button></div>
+      </div>
+      <div class="card folderPanel" id="folderPanel">
+        <div class="editBand"><span>곡 목록 수정 중 — 카드를 누르면 수정 창</span><button class="uBtn" data-edit-toggle>완료</button></div>
+        <div class="lab"><span>폴더 선택 <span class="editTag">· 수정 중</span></span><button class="uBtn" data-edit-toggle id="editBtn">EDIT</button></div>
+        <button class="selBox" id="selBox" data-open="dlgPick" data-anchor="1"><span class="name"><span id="selName">미분류</span> <span class="cnt">· <span id="selCnt">7</span>곡</span></span><span class="chev" aria-hidden="true"></span></button>
+        <ul class="list" id="songList"></ul>
+      </div>
+    </div>
+  </div>
+  <p class="cap"><span class="num">②</span>패널 라벨(속도 · 구간 반복 · 폴더 선택)을 12px → <b>D2 값</b>으로 키웁니다(<b>글자 크기만</b> 바꾸고 상자 가로·세로는 그대로). 폴더 이름은 따로 제목을 두지 않고 선택 박스 안 글자(14px/700)로만 보여 줍니다.
+  <span class="num">④</span>선택 박스의 ▾ 표시는 오른쪽 안쪽 여백을 왼쪽 글자 여백과 같은 12px로 둡니다. 박스 가로는 스크롤바가 아니라 아래 곡 카드 가로 끝에 맞춥니다. 라벨은 "폴더 변경" → "폴더 선택"으로 바꿉니다.
+  <span class="num">⑦</span>"미분류 / 7곡" 제목 줄과 펼치기 버튼을 지우고, 박스 안에 "미분류 · 7곡"으로 적습니다. 카드 목록은 박스 바로 아래에 붙이고, 간격은 점선으로 표시한 [시작·끝 박스]↔[반복·프리셋 줄] 간격과 같은 8px로 둡니다.
+  <span class="num">⑥</span>곡 목록 패널은 아래 끝을 왼쪽 영상·슬라이더 줄의 아래 끝(<b>세로</b>)에 맞추고, 목록은 그 안에서 스크롤합니다. 960px 이하(세로 배치)에서는 목록 최대 높이 360px를 유지합니다.</p>
+</section>
+
+<section>
+  <h2>2. 분류 창 ③ — EDIT로 추가·이름 변경·삭제</h2>
+  <p class="why">위 [분류]를 누르면 열립니다. 오른쪽 끝 <b>EDIT</b>를 누르면 체크박스가 숨고 이름에 밑줄이 생깁니다. 이름을 누르면 작은 창(이름 변경 | 삭제)이 열리고, 맨 아래에 "새 분류" 입력 줄이 생깁니다. 분류를 삭제해도 곡은 지워지지 않고 그 분류에서만 빠집니다.</p>
+</section>
+
+<section>
+  <h2>3. 곡 수정 창 ⑧ · 선택창 ⑤</h2>
+  <p class="why">EDIT 중에 곡 카드를 누르면 페이지를 옮기지 않고 <b>곡 수정</b> 창이 열립니다(제목 · 분류 · 삭제). 폴더 박스를 누르면 브라우저 기본 선택창 대신 앱 선택창이 열립니다. <b>⑤ 원칙</b>: 앱 안의 브라우저 기본 선택창(<code>&lt;select&gt;</code>, 현재 31곳 — 플레이어 2 · 연습 기록 카드 1 · 코드 연습실 21 · 진행 2 · 기록 2 · 운영 1 · 커뮤니티 2(숨김))을 모두 같은 공용 선택창으로 바꿉니다. 플레이어 2곳(폴더 · 프리셋)은 SL-1, 나머지 29곳은 SL-3에서 바꿉니다.</p>
+</section>
+
+<section>
+  <h2>4. 이 곡의 연습 기록 — 세션 삭제 ⑩</h2>
+  <div class="twoCol">
+    <div>
+      <div class="tag">지금</div>
+      <div class="sess">
+        <b>ヨルシカ『春泥棒』… · かずき / ギターのある暮らし</b>
+        <span class="meta">2026-11-15 · 1:21 · 20회 루프 · 17:16-18:05</span>
+        <span class="lab before">세션 메모</span><textarea placeholder="세션 메모를 남겨보세요"></textarea>
+        <div><button class="mBtn">메모 저장</button></div>
+        <div class="sessFoot"><span>미공유</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="tag">바뀐 뒤</div>
+      <div class="sess">
+        <b>ヨルシカ『春泥棒』… · かずき / ギターのある暮らし</b>
+        <span class="meta">2026-11-15 · 1:21 · 20회 루프 · 17:16-18:05</span>
+        <span class="lab">세션 메모</span><textarea placeholder="세션 메모를 남겨보세요"></textarea>
+        <div><button class="mBtn">메모 저장</button></div>
+        <div class="sessFoot"><span>미공유</span><button class="xBtn" aria-label="이 연습 세션 삭제" data-open="dlgSess">✕</button></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">카드 아래 줄 오른쪽 끝에 ✕(44×44, 프리셋 줄 ✕와 같은 모양)를 둡니다. 누르면 확인 창이 열리고, 확인하면 세션과 그 세션의 녹음 기록·공유 카드를 함께 지웁니다(곡 삭제와 같은 정리 규칙). 누적 시간·기록 화면 집계도 함께 줄어듭니다.</p>
+</section>
+
+<section class="dec">
+  <h2>결정할 것 (시안 밖)</h2>
+  <table>
+    <tr><th>ID</th><th>질문</th><th>추천</th><th>대안</th></tr>
+    <tr><td>D5</td><td>곡 순서(⑥)를 어떤 단위로 저장할까</td><td><b>곡마다 순서 1개</b>. 어느 폴더에서 끌어도 같은 순서를 쓰고, 폴더는 그 순서대로 걸러 보여 줍니다. DB는 <code>songs</code>에 순서 칸 1개 추가 + 순서 저장 API 1개</td><td>폴더마다 따로 순서(분류-곡 연결표에 순서 칸, "전체·미분류"는 별도). 구현·검증이 약 2배</td></tr>
+    <tr><td>D6</td><td>세션 삭제(⑩) 때 녹음·공유는</td><td><b>곡 삭제와 같은 규칙</b>: 녹음 기록(앱 저장소 파일은 휴지통 대기열), 공유 카드·첨부, Notion 동기화 삭제를 함께 처리</td><td>녹음이 있는 세션은 삭제 막기</td></tr>
+    <tr><td>D7</td><td>단계 나누기</td><td><b>SL-1</b> 화면만(①②③④⑦⑧ 수정 창·⑨ + 플레이어 선택창 2곳), <b>SL-2</b> 서버 계약(곡 순서 · 세션 삭제 API, ⑥ 드래그 · ⑩ ✕), <b>SL-3</b> 공용 선택창을 나머지 29곳에 적용</td><td>한 Step으로 합치기(상한 초과)</td></tr>
+  </table>
+</section>
+</div>
+
+<!-- 모달들 -->
+<div class="scrim" id="scrim"></div>
+
+<div class="dlg" id="dlgPick" role="dialog" aria-label="폴더 선택">
+  <ul class="opts" id="pickOpts"></ul>
+</div>
+
+<div class="dlg center" id="dlgCat" role="dialog" aria-label="곡 분류">
+  <div class="dlgHead"><b>곡 분류</b><button class="uBtn" id="catEdit">EDIT</button></div>
+  <ul class="opts cats" id="catList"></ul>
+  <form class="addRow" id="addRow"><input class="inp" id="addInp" placeholder="새 분류 이름"><button class="mBtn" type="submit">추가</button></form>
+  <div class="dlgFoot"><button class="mBtn" data-close>닫기</button></div>
+</div>
+
+<div class="dlg center small" id="dlgCatOne" role="dialog" aria-label="분류 수정" style="z-index:60">
+  <div class="dlgHead"><b id="catOneTitle">분류</b></div>
+  <input class="inp" id="catOneInp">
+  <div class="dlgFoot"><button class="uBtn danger" id="catOneDel">삭제</button><span class="sp"></span><button class="mBtn" data-close-one>취소</button><button class="mBtn primary" id="catOneSave">이름 변경</button></div>
+</div>
+
+<div class="dlg center" id="dlgSong" role="dialog" aria-label="곡 수정">
+  <div class="dlgHead"><b>곡 수정</b></div>
+  <label class="lab" for="songInp">제목</label>
+  <input class="inp" id="songInp">
+  <span class="lab">분류</span>
+  <ul class="opts cats" id="songCats"></ul>
+  <div class="dlgFoot"><button class="uBtn danger" id="songDel">곡 삭제</button><span class="sp"></span><button class="mBtn" data-close>취소</button><button class="mBtn primary" data-close>저장</button></div>
+</div>
+
+<div class="dlg center" id="dlgTitle" role="dialog" aria-label="제목 수정">
+  <div class="dlgHead"><b>제목 수정</b></div>
+  <input class="inp" id="titleInp">
+  <div class="dlgFoot"><button class="mBtn" data-close>취소</button><button class="mBtn primary" id="titleSave">저장</button></div>
+</div>
+
+<div class="dlg center small" id="dlgSess" role="dialog" aria-label="세션 삭제">
+  <div class="dlgHead"><b>이 연습 세션을 삭제할까요?</b></div>
+  <p style="margin:0;font-size:13px;color:var(--muted)">2026-11-15 · 1:21 세션과 녹음 기록 · 공유 카드가 함께 지워지고 되돌릴 수 없습니다.</p>
+  <div class="dlgFoot"><button class="mBtn" data-close>취소</button><button class="mBtn dangerFill" data-close>삭제</button></div>
+</div>
+
+<div class="dlg center small" id="dlgConfirm" role="dialog" aria-label="삭제 확인" style="z-index:70">
+  <div class="dlgHead"><b id="confTitle">삭제할까요?</b></div>
+  <p style="margin:0;font-size:13px;color:var(--muted)" id="confBody"></p>
+  <div class="dlgFoot"><button class="mBtn" id="confNo">취소</button><button class="mBtn dangerFill" id="confYes">삭제</button></div>
+</div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+let cats = ['POP','J-POP','핑거스타일','연습곡'];
+let songs = [
+  {t:'ヨルシカ『春泥棒』のギターをTAB譜付きで徹底解説します', m:'연습 중 · 17:16–18:05 · 0.75× · 11/19', c:[], cur:true},
+  {t:'Yorushika - Rubato (guitar cover with tabs & chords)', m:'연습 중 · 1× · 11/15', c:[]},
+  {t:'【TAB譜】アドベンチャー Adventure / YOASOBI ギターカバー', m:'연습 중 · 1×', c:[]},
+  {t:'[TAB] Belief - John Mayer (기타리베)', m:'연습 중 · 1×', c:[]},
+  {t:'Lemon - 米津玄師 Fingerstyle', m:'완료 · 11/02', c:[]},
+  {t:'Plastic Love ギター TAB', m:'연습 중 · 0.5×', c:[]},
+  {t:'Wonderwall - Oasis acoustic', m:'연습 중 · 1×', c:[]},
+];
+let folder = '미분류';
+const folders = () => ['전체 곡', ...cats, '미분류'];
+const inFolder = (s, f) => f==='전체 곡' ? true : f==='미분류' ? s.c.length===0 : s.c.includes(f);
+const editing = () => $('#folderPanel').classList.contains('editing');
+
+function renderList(){
+  const vis = songs.filter(s => inFolder(s, folder));
+  $('#selName').textContent = folder; $('#selCnt').textContent = vis.length;
+  $('#songList').innerHTML = vis.map(s => `<li class="song" draggable="true" data-i="${songs.indexOf(s)}" ${s.cur?'aria-current="true"':''}><span class="handle" aria-label="순서 끌기">⋮⋮</span><span class="body"><span class="t">${s.t}</span><span class="m">${s.m}</span></span></li>`).join('');
+}
+function fitPanel(){ // ⑥ 패널 아래 끝 = 스테이지 아래 끝
+  if (innerWidth <= 960) { $('#folderPanel').style.maxHeight=''; return; }
+  const st = $('#stage .slider').getBoundingClientRect(), fp = $('#folderPanel').getBoundingClientRect();
+  $('#folderPanel').style.maxHeight = (st.bottom - fp.top) + 'px';
+}
+let lastFocus = null;
+function open(id, anchor){
+  const d = $('#'+id); lastFocus = document.activeElement;
+  if (id==='dlgPick') {
+    $('#pickOpts').innerHTML = folders().map(f => `<li role="option" tabindex="0" aria-selected="${f===folder}"><span>${f}</span><span class="cnt">${songs.filter(s=>inFolder(s,f)).length}곡</span></li>`).join('');
+    const center = document.body.dataset.pick==='b' || innerWidth<=600;
+    d.classList.toggle('center', center);
+    if (!center) { const r = $('#selBox').getBoundingClientRect(); Object.assign(d.style,{left:r.left+'px', top:(r.bottom+4)+'px', width:r.width+'px', transform:'none'}); }
+    else Object.assign(d.style,{left:'',top:'',width:'',transform:''});
+    $('#scrim').classList.toggle('open', center);
+  } else $('#scrim').classList.add('open');
+  if (id==='dlgCat') renderCats();
+  if (id==='dlgTitle') $('#titleInp').value = $('#songTitle').textContent;
+  d.classList.add('open'); (d.querySelector('input,li,button')||d).focus?.();
+}
+function closeAll(){ $$('.dlg.open').forEach(d=>d.classList.remove('open')); $('#scrim').classList.remove('open'); $('#catList').classList.remove('editing'); $('#catEdit').textContent='EDIT'; lastFocus?.focus?.(); }
+function renderCats(){
+  const cur = songs.find(s=>s.cur);
+  $('#catList').innerHTML = cats.map(c => `<li><label><input type="checkbox" ${cur.c.includes(c)?'checked':''} data-c="${c}"><span class="nm" data-c="${c}">${c}</span></label></li>`).join('');
+}
+function confirmBox(title, body, yes){
+  $('#confTitle').textContent=title; $('#confBody').textContent=body; $('#dlgConfirm').classList.add('open');
+  $('#confYes').onclick=()=>{ $('#dlgConfirm').classList.remove('open'); yes(); };
+  $('#confNo').onclick=()=>$('#dlgConfirm').classList.remove('open');
+}
+
+$$('.opt').forEach(g => g.addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  $$('button', g).forEach(x=>x.setAttribute('aria-pressed', x===b)); const k=g.dataset.k, v=b.dataset.v;
+  if (k==='theme') document.documentElement.dataset.theme = v; else document.body.dataset[k]=v;
+  fitPanel();
+}));
+document.addEventListener('click', e => {
+  const o = e.target.closest('[data-open]'); if (o) { e.stopPropagation(); open(o.dataset.open); return; }
+  if (e.target.closest('[data-close]')) closeAll();
+  if (e.target.closest('[data-close-one]')) $('#dlgCatOne').classList.remove('open');
+  if (e.target.closest('[data-edit-toggle]')) { const p=$('#folderPanel'); p.classList.toggle('editing'); $('#editBtn').textContent = p.classList.contains('editing')?'완료':'EDIT'; }
+  const li = e.target.closest('#pickOpts li'); if (li) { folder = li.firstElementChild.textContent; renderList(); closeAll(); }
+  const sb = e.target.closest('.song .body');
+  if (sb) { const s = songs[+sb.parentElement.dataset.i];
+    if (editing()) { $('#songInp').value=s.t; $('#songCats').innerHTML = cats.map(c=>`<li><label><input type="checkbox" ${s.c.includes(c)?'checked':''}><span class="nm">${c}</span></label></li>`).join(''); $('#dlgSong').dataset.i=sb.parentElement.dataset.i; open('dlgSong'); }
+    else { songs.forEach(x=>x.cur=false); s.cur=true; $('#songTitle').textContent=s.t; renderList(); } }
+  const nm = e.target.closest('.cats.editing .nm');
+  if (nm) { e.preventDefault(); const c=nm.dataset.c; $('#catOneTitle').textContent=c; $('#catOneInp').value=c; $('#dlgCatOne').dataset.c=c; $('#dlgCatOne').classList.add('open'); }
+});
+$('#scrim').addEventListener('click', closeAll);
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeAll(); if (e.key==='Enter' && e.target.matches('#pickOpts li')) e.target.click(); });
+document.addEventListener('click', e => { if ($('#dlgPick').classList.contains('open') && !e.target.closest('#dlgPick')) { $('#dlgPick').classList.remove('open'); $('#scrim').classList.remove('open'); } }, true);
+$('#catEdit').onclick = () => { const l=$('#catList'); l.classList.toggle('editing'); $('#catEdit').textContent = l.classList.contains('editing')?'완료':'EDIT'; };
+$('#catList').addEventListener('change', e => { const c=e.target.dataset.c, cur=songs.find(s=>s.cur); cur.c = e.target.checked ? [...cur.c,c] : cur.c.filter(x=>x!==c); renderList(); });
+$('#addRow').onsubmit = e => { e.preventDefault(); const v=$('#addInp').value.trim(); if(v && !cats.includes(v)){ cats.push(v); $('#addInp').value=''; renderCats(); } };
+$('#catOneSave').onclick = () => { const o=$('#dlgCatOne').dataset.c, n=$('#catOneInp').value.trim(); if(n){ cats=cats.map(c=>c===o?n:c); songs.forEach(s=>s.c=s.c.map(c=>c===o?n:c)); if(folder===o) folder=n; } $('#dlgCatOne').classList.remove('open'); renderCats(); renderList(); };
+$('#catOneDel').onclick = () => { const o=$('#dlgCatOne').dataset.c; confirmBox(`'${o}' 분류를 삭제할까요?`, '곡은 지워지지 않고 이 분류에서만 빠집니다.', () => { cats=cats.filter(c=>c!==o); songs.forEach(s=>s.c=s.c.filter(c=>c!==o)); if(folder===o) folder='전체 곡'; $('#dlgCatOne').classList.remove('open'); renderCats(); renderList(); }); };
+$('#songDel').onclick = () => { const i=+$('#dlgSong').dataset.i; confirmBox('이 곡을 삭제할까요?', '곡과 연습 세션 · 녹음 기록이 함께 지워집니다.', () => { songs.splice(i,1); closeAll(); renderList(); }); };
+$('#titleSave').onclick = () => { const v=$('#titleInp').value.trim(); if(v){ $('#songTitle').textContent=v; songs.find(s=>s.cur).t=v; renderList(); } closeAll(); };
+
+// ⑥ 드래그(시안: 마우스 HTML5 드래그만. 제품은 터치·키보드 이동 포함)
+let dragI = null;
+$('#songList').addEventListener('dragstart', e => {
+  const li = e.target.closest('.song'); const mode=document.body.dataset.drag;
+  if (mode==='a' && !editing()) { e.preventDefault(); return; }
+  dragI = +li.dataset.i; li.classList.add('dragging');
+});
+$('#songList').addEventListener('dragover', e => { e.preventDefault(); });
+$('#songList').addEventListener('drop', e => {
+  e.preventDefault(); const li = e.target.closest('.song'); if (!li || dragI==null) return;
+  const to = +li.dataset.i; const [m] = songs.splice(dragI,1); songs.splice(songs.indexOf(songs[to]) === -1 ? to : to, 0, m); dragI=null; renderList();
+});
+$('#songList').addEventListener('dragend', () => { dragI=null; renderList(); });
+
+renderList(); addEventListener('resize', fitPanel); setTimeout(fitPanel, 50);
+</script>
+</body>
+</html>
