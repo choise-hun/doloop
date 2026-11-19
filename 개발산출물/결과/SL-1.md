@@ -73,3 +73,7 @@
 | Q7 | 무채색 구조 + `--fill` 포인트 | ○ | ○ | ○ | ○ | ○ | △ (목록 수정 중 `--fill1` 주황 적용 — 사용자 확인 필요) |
 | Q8 | 곡률 3px·줄눈 1px·스파인 12px | ○ | ○ | ○ | ○ | ○ | ○ (선택창·분류 팝오버·곡 수정 모달 모두 `3px` + `1px` 줄눈) |
 | Q9 | 다크 모드 대비 | — | — | — | — | ○ | ○ |
+
+## 5. 시니어 후속 수정
+- 3-1 해결: `PracticePage.module.css` `.presetSelect` 좌우 패딩 10px→6px(ja `プリセット選択` 91px가 `span.value`에 들어가도록 +8px). `npm run build` 0 오류, `npm test` 542 통과, `i18n-lang.spec.js`+`layout/practice.spec.js` 78 통과.
+- 3-2 `--fill1` 확인은 사용자 대기(미확정).
