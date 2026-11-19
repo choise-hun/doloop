@@ -1,8 +1,8 @@
 # AS-1 결과 — 코드 화면 21곳 `AppSelect` 전환 및 공용 E2E 헬퍼
 
-> 작업: AS-1 (2단계 주니어 구현·검증·PR) | 브랜치: `feat/AS-1-chords-select` (base `origin/main` `60178ca`)
+> 작업: AS-1 (2단계 주니어 구현·검증·PR → 3단계 시니어 검증 → 4단계 주니어 최종 정리) | 브랜치: `feat/AS-1-chords-select` (base `origin/main` `60178ca`) | PR: [#54](https://github.com/choise-hun/doloop/pull/54)
 > 기준: [명세/AS_구현명세.md](../명세/AS_구현명세.md) §2~§5, [진행_AS_선택창전환.md](../진행_AS_선택창전환.md) §1·§3 (입력 목록: 미커밋 `SL-3.md` 29곳 중 코드 화면 21곳)
-> 상태: **2단계 구현·로컬 검증 완료 — PR 업로드·CI 확인 후 시니어 3-P 검증 대기**
+> 상태: **4단계 로컬 최종 검증 완료 — PR #54 갱신 push 후 최신 CI·리뷰 확인 중**
 
 ## 1. 바꾼 파일 (제품 3 + 테스트 6 + 문서 2)
 
@@ -81,3 +81,37 @@
 - **공용 헬퍼 경로:** `test/e2e/support/app-select.js` (`pickOption`, `expectValue`)가 준비되었으므로 AS-3에서 그대로 import해 사용할 수 있다.
 - **미전환 남아 있는 곳:** `test/e2e/progression-play.spec.js:189,191,197`의 `#progSort`는 `ProgressionsPage.tsx` 소속이라 AS-1 범위에서 제외(AS-3 대상).
 - **시니어 검증 입력:** 아래 PR 번호·head SHA·CI 결과를 확인한 뒤 시니어 3-P 검증으로 인계한다.
+
+## 6. 시니어 3단계 독립 검증 (2026-11-20, head `7fea16b` = PR #54 head 일치)
+
+**판정: 제품 코드 결함 없음. 검증 구멍 1건을 표적 spec으로 메움.**
+
+| 항목(명세 §4·§5·§7) | 결과 |
+| --- | --- |
+| 21곳 전환·`<select>`/`<option>` 잔존 | `ChordsPage.tsx`·`ProgressionPlayTab.tsx` grep 0건. `pp-semis`·`pp-beats` 4곳은 키보드/기타 early-return 분기라 id 중복 없음 |
+| 기존 `id`·`data-align-group` | 모두 유지(`sc-root`·`sc-type`의 `scRow1:bottom@1150` 포함) |
+| `ariaLabelledBy` | 21곳 모두 `<label id="…-lab">` 연결, e2e `getByRole('combobox', {name})` 1개씩 확인 |
+| 숫자 상태 변환 | `Number`/`+v` 위치 불변, `setScCi(0)`·`stop()` 부수 동작 보존. **구멍:** 기존 spec은 숫자 값이 상태·화면에 반영되는지 단언하지 않음 → 아래 표적 spec 추가 |
+| 스타일 3px/44px | `.selectField`를 `.numField` 공유 규칙에서 분리, `AppSelect` 기본(44px·`--radius-block`) 유지. 계산 스타일 44px·3px 단언 추가 |
+| 키 입력/단축키 | 코드 화면에 전역 keydown 단축키 없음. 박스에서 Space·방향키·Enter가 목록 조작만 하고 값 선택으로 끝남을 단언 |
+| 미수정 파일 | `AppSelect.tsx`·`SongRecordParts.*`·`layout/practice.spec.js`·i18n 사전 무변경, `SL-3.md` 미커밋 보존 |
+| 옛 셀렉터 잔존 | 21개 id에 대한 `selectOption`/`toHaveValue` 잔존 0건 |
+
+**추가한 표적 회귀:** `test/e2e/layout/chords.spec.js` 끝 `AS-1 숫자 상태 변환·스타일·키 입력 계약` — 루트 6→제목 `Gb` 반영, 44px·3px, Space/↓/Enter로 스케일 종류 변경, `pp-beats=8`·`pp-semis=2`(제목 `D`)·`ri-keyboard-note=60`(`C4`).
+- 첫 실행 실패는 내 단언 오류(표기가 `F#`이 아니라 `Gb`) → 단언 수정, 제품 코드 무변경.
+- 명령: `npm run build`(0 오류) 후 `npx playwright test --config=<scratch pw.config.js, PORT 3111> test/e2e/layout/chords.spec.js -g "AS-1"` → **2 passed**.
+- 미실행: 전체 회귀·타 화면 spec·CI(주니어 4단계). 이 변경은 **미커밋**(`chords.spec.js`, 이 파일).
+
+**주니어 4단계 인계:** 위 변경 커밋·push(PR #54), 전체 회귀·`npm test`, CI 대기·리뷰 코멘트 확인, 진행 파일 AS-1 상태 갱신. 참고: 포털 목록 때문에 `<label htmlFor>` 클릭은 박스를 다시 연다(원래 select와 같은 동작이라 수정 불필요).
+
+## 7. 주니어 4단계 최종 검증·PR 정리 (2026-11-20)
+
+- **시니어 수정 대조:** `test/e2e/layout/chords.spec.js`에 추가된 `AS-1 숫자 상태 변환·스타일·키 입력 계약` 테스트(루트 `6` → 제목 `Gb`, `#sc-type` 높이 `44px`·곡률 `3px`, `Space`/`ArrowDown`/`Enter` 목록 조작, `#pp-beats=8`, `#pp-semis=2` → `#pp-title` `D`, `#ri-keyboard-note=60` → `C4`)를 확인. 제품 코드 변경 없음.
+- **최종 로컬 검증 (미커밋 `SL-3.md` 무변경 보존):**
+  - `npm test`: **542 pass / 0 fail** (`58 suites`, `3969.453792ms`)
+  - `npx playwright test --config=.../pw-sl3.config.js test/e2e/layout/chords.spec.js test/e2e/layout/chords_instruments.spec.js test/e2e/chords_instruments.spec.js test/e2e/chords_caged.spec.js test/e2e/chords_scroll.spec.js test/e2e/progression-play.spec.js test/e2e/i18n-lang.spec.js test/e2e/layout.spec.js test/e2e/theme-footer.spec.js` (포트 3000은 `../doloop` PID 92123 점유 중이라 스크래치 config `PORT=3111`, `cwd: ../doloop-sl3`로 실행): **157 passed (2.8m)** / 0 failed (기존 156건 + 시니어 추가 `AS-1 숫자 상태 변환·스타일·키 입력 계약` 1건)
+  - 미실행 범위: 타 화면 E2E spec(`practice-record.spec.js`, `community.spec.js`, `ops.spec.js`, `progressions.spec.js`, `layout/practice.spec.js`, `layout/profile.spec.js`, `layout/settings.spec.js` 등)은 CI 워크플로에서 전체 실행.
+- **PR #54 리뷰 코멘트 확인 (`7fea16b` 기준):**
+  - `chatgpt-codex-connector` 자동 리뷰는 Codex 사용 한도 초과로 실패(`https://github.com/choise-hun/doloop/pull/54#issuecomment-7012565612`, `#issuecomment-7012566745`). 그 외 사람/시니어 리뷰 코멘트 0건.
+  - 이전 `7fea16b` CI: `CI ok` SUCCESS (`https://github.com/choise-hun/doloop/actions/runs/44547866044/job/135650497174`).
+- **최신 커밋 CI 결과:** 커밋·push 후 갱신 예정.

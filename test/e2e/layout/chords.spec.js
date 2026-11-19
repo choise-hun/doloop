@@ -400,3 +400,50 @@ test('AS-1 코드 화면 AppSelect 21곳 접근 이름(getByRole combobox) 및 �
     await page.keyboard.press('Escape');
   }
 });
+
+// AS-1 시니어 검증: 숫자 상태 변환(Number(v))이 화면에 실제 반영되는지, 스타일 계약(3px·44px), 키 입력이 화면으로 새지 않는지
+test('AS-1 숫자 상태 변환·스타일·키 입력 계약', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#scale');
+  await expect(page.locator('#sc-board svg')).toBeVisible();
+
+  // 숫자 상태: 루트 음 F#(6) → 제목에 반영, 박스 data-value는 문자열
+  const title0 = await page.locator('#sc-title').innerText();
+  await pickOption(page, 'sc-root', '6');
+  await expectValue(page, 'sc-root', '6');
+  await expect(page.locator('#sc-title')).not.toHaveText(title0);
+  await expect(page.locator('#sc-title')).toContainText('Gb');
+
+  // 스타일 계약: 높이 44px, 곡률 3px(필 9999px 아님)
+  const style = await page.locator('#sc-type').evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { h: Math.round(el.getBoundingClientRect().height), r: cs.borderTopLeftRadius };
+  });
+  expect(style.h).toBe(44);
+  expect(style.r).toBe('3px');
+
+  // 키 입력: 박스에서 Space/Enter/방향키는 목록만 열고 화면 재생 등으로 새지 않는다
+  await page.locator('#sc-type').focus();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#sc-type-list')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#sc-type-list')).toHaveCount(0);
+  await expect(page.locator('#sc-type')).not.toHaveAttribute('data-value', 'major');
+
+  // 코드당 박(숫자) — 진행 연주 탭
+  await page.goto('/chords.html#prog?c=C%2CG%2CAm%2CF&k=C%20Major');
+  await pickOption(page, 'pp-beats', '8');
+  await expectValue(page, 'pp-beats', '8');
+  await pickOption(page, 'pp-semis', '2');
+  await expectValue(page, 'pp-semis', '2');
+  await expect(page.locator('#pp-title')).toContainText('D');
+
+  // 건반 음 선택(숫자 pitch)
+  await page.locator('#instrument-keyboard').click();
+  await page.locator('#tab-reint').click();
+  await pickOption(page, 'ri-keyboard-note', '60');
+  await expectValue(page, 'ri-keyboard-note', '60');
+  await expect(page.locator('#ri-keyboard-note')).toContainText('C4');
+});
