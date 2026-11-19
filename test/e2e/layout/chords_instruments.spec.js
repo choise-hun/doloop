@@ -2,6 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('../support/mock-app');
 const { layoutSuite } = require('../support/layout-check');
+const { pickOption, expectValue } = require('../support/app-select');
 
 test('CH-B 악기 전환은 지원 탭과 튜닝을 첫 렌더부터 정규화한다', async ({ page }) => {
   const errors = [];
@@ -11,10 +12,10 @@ test('CH-B 악기 전환은 지원 탭과 튜닝을 첫 렌더부터 정규화�
   await page.locator('#instrument-bass').click();
   await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveAttribute('id', 'tab-scale');
   await expect(page.locator('[role="tab"]')).toHaveCount(2);
-  await expect(page.locator('#instrument-tuning')).toHaveValue('b4');
+  await expectValue(page, 'instrument-tuning', 'b4');
   await page.locator('#instrument-settings summary').click();
   for (const tuning of ['b4', 'b5', 'b6']) {
-    await page.locator('#instrument-tuning').selectOption(tuning);
+    await pickOption(page, 'instrument-tuning', tuning);
     await page.locator('#tab-tone').click();
     await expect(page.locator('#tone-board svg')).toHaveAttribute('data-strings', tuning.slice(1));
     await expect(page.locator('#tone-seq .seqn')).toHaveCount(Number(tuning.slice(1)) * 2);
@@ -30,16 +31,16 @@ test('CH-B 악기 전환은 지원 탭과 튜닝을 첫 렌더부터 정규화�
   await page.locator('#tab-tone').click();
   await page.locator('#instrument-guitar').click();
   await expect(page.locator('[role="tab"]')).toHaveCount(8);
-  await expect(page.locator('#instrument-tuning')).toHaveValue('g6');
+  await expectValue(page, 'instrument-tuning', 'g6');
   await page.locator('#instrument-settings summary').click();
-  await page.locator('#instrument-tuning').selectOption('g7');
+  await pickOption(page, 'instrument-tuning', 'g7');
   await expect(page.locator('#tone-board svg')).toHaveAttribute('data-strings', '7');
   await page.locator('#instrument-bass').click();
   await page.evaluate(() => { location.hash = '#ds'; });
   await expect(page).toHaveURL(/#scale$/);
   await expect(page.locator('#pane-ds, #pane-prog, #pane-matrix')).toHaveCount(0);
   await page.locator('#instrument-guitar').click();
-  await expect(page.locator('#instrument-tuning')).toHaveValue('g7');
+  await expectValue(page, 'instrument-tuning', 'g7');
   await page.locator('#tab-ds').click();
   await expect(page.locator('#ds-board svg')).toHaveAttribute('data-strings', '7');
   expect(errors).toEqual([]);
@@ -133,11 +134,11 @@ test.describe('UXR-2', () => {
     await mockApp(page, STATES.guest);
     await page.goto('/chords.html#scale');
     await page.locator('#instrument-settings summary').click();
-    await page.locator('#instrument-tuning').selectOption('g7');
+    await pickOption(page, 'instrument-tuning', 'g7');
     await page.locator('#instrument-bass').click();
-    await expect(page.locator('#instrument-tuning')).toHaveValue('b4');
+    await expectValue(page, 'instrument-tuning', 'b4');
     await page.locator('#instrument-guitar').click();
-    await expect(page.locator('#instrument-tuning')).toHaveValue('g7');
+    await expectValue(page, 'instrument-tuning', 'g7');
     await page.locator('#instrument-keyboard').click();
     await expect(page.locator('#instrument-settings')).toHaveCount(0);
     await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);

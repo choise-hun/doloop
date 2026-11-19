@@ -1,6 +1,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('./support/mock-app');
+const { pickOption } = require('./support/app-select');
 
 test('CH-B 건반 5모드의 MIDI 표시·재생·입력·악기 전환 취소', async ({ page }) => {
   const errors = [];
@@ -35,7 +36,7 @@ test('CH-B 건반 5모드의 MIDI 표시·재생·입력·악기 전환 취소',
   await page.locator('#tab-reint').click();
   await page.locator('#ri-clear').click();
   await expect(page.locator('#ri-board [data-pressed="true"]')).toHaveCount(0);
-  await page.locator('#ri-keyboard-note').selectOption('69');
+  await pickOption(page, 'ri-keyboard-note', '69');
   await page.locator('#ri-keyboard-toggle').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#ri-board [data-midi="69"]')).toHaveAttribute('data-pressed', 'true');

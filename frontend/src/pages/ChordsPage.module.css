@@ -63,7 +63,7 @@
 .instrumentControls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
 .instrumentControls > .field { flex: 1 1 180px; }
 .instrumentControls button { min-height: 44px; }
-.instrumentControls select { min-height: 44px; }
+.instrumentControls .selectField { min-height: 44px; }
 .keyboard { width: 100%; height: auto; display: block; max-height: 220px; }
 .whiteKey { fill: var(--surface); stroke: var(--ink); stroke-width: 0.8; }
 .blackKey { fill: var(--ink); stroke: var(--line); stroke-width: 0.8; }
@@ -147,7 +147,6 @@
   color: var(--muted);
 }
 
-.selectField,
 .numField {
   font: inherit;
   color: var(--ink);
@@ -705,7 +704,7 @@
 .scRows { display: flex; flex-direction: column; gap: 12px; }
 .scRow { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
 .scField { flex: 0 1 auto; min-width: 0; }
-.scField select, .scField input, .scField .chip { min-height: 44px; }
+.scField .selectField, .scField input, .scField .chip { min-height: 44px; }
 .scField .chips .chip { white-space: nowrap; align-items: center; justify-content: center; }
 .scField .selectField, .scField .numField { width: auto; min-width: 120px; }
 .scCheck { min-height: 44px; align-self: flex-end; align-items: center; padding-bottom: 0; }

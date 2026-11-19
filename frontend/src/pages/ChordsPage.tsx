@@ -2,6 +2,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { t, type I18nKey } from '../lib/i18n.mts';
 import { AppShell } from '../components/layout/AppShell';
+import { AppSelect, type AppSelectOption } from '../components/common/AppSelect';
 import {
   audioEngine,
   BoardNote,
@@ -122,6 +123,18 @@ export const DOUBLE_STOP_SCALES: ReadonlyArray<{ id: string; name: string }> = [
   { id: 'pentMaj', name: 'Pentatonic Major' },
   { id: 'pentMin', name: 'Pentatonic Minor' },
 ];
+
+const NOTE_OPTIONS: AppSelectOption[] = CT.NAMES.map((name, i) => ({ value: String(i), label: name }));
+const SCALE_OPTIONS: AppSelectOption[] = CT.SCALES.map((s) => ({ value: s.id, label: s.name }));
+const CC_TOP_OPTIONS: AppSelectOption[] = [2, 9, 4, 6, 1, 8, 3, 10, 5, 0, 7].map((iv) => ({
+  value: String(iv),
+  label: CT.TOP_DEG[iv],
+}));
+const RI_KEYBOARD_NOTE_OPTIONS: AppSelectOption[] = Array.from({ length: 48 }, (_, index) => 36 + index).map((pitch) => ({
+  value: String(pitch),
+  label: `${CT.NAMES[CT.pc(pitch)]}${Math.floor(pitch / 12) - 1}`,
+}));
+const DS_SCALE_OPTIONS: AppSelectOption[] = DOUBLE_STOP_SCALES.map((s) => ({ value: s.id, label: s.name }));
 
 export function isCagedUnsupportedScale(scaleId: string): boolean {
   return scaleId === 'harmMinor' || scaleId === 'melMinor';
@@ -1158,11 +1171,15 @@ export function ChordsPage(): React.ReactElement {
           {!isKeyboard && <details id="instrument-settings" className={styles.instrumentSettings}>
             <summary id="instrument-settings-summary">{t('chords.instrumentSettings')} · {t(TUNING_NAME_KEY[selectedTuning])}</summary>
             <div className={styles.field}>
-              <label htmlFor="instrument-tuning">{t('chords.instrumentTuning')}</label>
-              <select id="instrument-tuning" className={styles.selectField} value={selectedTuning}
-                onChange={(event) => changeTuning(event.target.value as TuningId)}>
-                {availableTunings.map((tuning) => <option key={tuning.id} value={tuning.id}>{t(TUNING_NAME_KEY[tuning.id])}</option>)}
-              </select>
+              <label id="instrument-tuning-lab" htmlFor="instrument-tuning">{t('chords.instrumentTuning')}</label>
+              <AppSelect
+                id="instrument-tuning"
+                className={styles.selectField}
+                value={selectedTuning}
+                ariaLabelledBy="instrument-tuning-lab"
+                options={availableTunings.map((tuning) => ({ value: tuning.id, label: t(TUNING_NAME_KEY[tuning.id]) }))}
+                onChange={(v) => changeTuning(v as TuningId)}
+              />
             </div>
           </details>}
         </div>
@@ -1387,38 +1404,30 @@ export function ChordsPage(): React.ReactElement {
                 <label id="sc-root-lab" htmlFor="sc-root">
                   {scMode === 'circle' ? t('chords.startRootLabel') : t('chords.rootNoteLabel')}
                 </label>
-                <select
+                <AppSelect
                   id="sc-root"
                   className={styles.selectField}
                   data-align-group="scRow1:bottom@1150"
-                  value={scRoot}
-                  onChange={(e) => {
-                    setScRoot(+e.target.value);
+                  value={String(scRoot)}
+                  ariaLabelledBy="sc-root-lab"
+                  options={NOTE_OPTIONS}
+                  onChange={(v) => {
+                    setScRoot(+v);
                     setScCi(0);
                   }}
-                >
-                  {CT.NAMES.map((name, i) => (
-                    <option key={name} value={i}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div className={`${styles.field} ${styles.scField}`}>
-                <label htmlFor="sc-type">{t('chords.scaleTypeLabel')}</label>
-                <select
+                <label id="sc-type-lab" htmlFor="sc-type">{t('chords.scaleTypeLabel')}</label>
+                <AppSelect
                   id="sc-type"
                   className={styles.selectField}
                   data-align-group="scRow1:bottom@1150"
                   value={scType}
-                  onChange={(e) => setScType(e.target.value)}
-                >
-                  {CT.SCALES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabelledBy="sc-type-lab"
+                  options={SCALE_OPTIONS}
+                  onChange={setScType}
+                />
               </div>
             </div>
             <div id="sc-row-circle" className={styles.scRow} hidden={scMode !== 'circle'}>
@@ -1450,18 +1459,20 @@ export function ChordsPage(): React.ReactElement {
                 </div>
               </div>
               <div className={`${styles.field} ${styles.scField}`}>
-                <label htmlFor="sc-bars">{t('chords.barsPerKeyLabel')}</label>
-                <select
+                <label id="sc-bars-lab" htmlFor="sc-bars">{t('chords.barsPerKeyLabel')}</label>
+                <AppSelect
                   id="sc-bars"
                   className={styles.selectField}
-                  value={scBars}
-                  onChange={(e) => setScBars(+e.target.value)}
-                >
-                  <option value={0}>{t('chords.scaleOneCycle')}</option>
-                  <option value={1}>{t('chords.barsOne')}</option>
-                  <option value={2}>{t('chords.barsTwo')}</option>
-                  <option value={4}>{t('chords.barsFour')}</option>
-                </select>
+                  value={String(scBars)}
+                  ariaLabelledBy="sc-bars-lab"
+                  options={[
+                    { value: '0', label: t('chords.scaleOneCycle') },
+                    { value: '1', label: t('chords.barsOne') },
+                    { value: '2', label: t('chords.barsTwo') },
+                    { value: '4', label: t('chords.barsFour') },
+                  ]}
+                  onChange={(v) => setScBars(+v)}
+                />
               </div>
             </div>
             <div id="sc-row-display" className={styles.scRow}>
@@ -1573,19 +1584,15 @@ export function ChordsPage(): React.ReactElement {
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="tone-root">{t('chords.rootNoteLabel')}</label>
-              <select
+              <label id="tone-root-lab" htmlFor="tone-root">{t('chords.rootNoteLabel')}</label>
+              <AppSelect
                 id="tone-root"
                 className={styles.selectField}
-                value={toneRoot}
-                onChange={(e) => setToneRoot(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                value={String(toneRoot)}
+                ariaLabelledBy="tone-root-lab"
+                options={NOTE_OPTIONS}
+                onChange={(v) => setToneRoot(+v)}
+              />
             </div>
             <div className={styles.field} hidden={isKeyboard}>
               <label htmlFor="tone-near">{t('chords.startFretNearLabel')}</label>
@@ -1718,19 +1725,15 @@ export function ChordsPage(): React.ReactElement {
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="mx-root">{t('chords.rootNoteLabel')}</label>
-              <select
+              <label id="mx-root-lab" htmlFor="mx-root">{t('chords.rootNoteLabel')}</label>
+              <AppSelect
                 id="mx-root"
                 className={styles.selectField}
-                value={mxRoot}
-                onChange={(e) => setMxRoot(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                value={String(mxRoot)}
+                ariaLabelledBy="mx-root-lab"
+                options={NOTE_OPTIONS}
+                onChange={(v) => setMxRoot(+v)}
+              />
             </div>
             <div className={styles.field}>
               <label htmlFor="mx-span">{t('chords.handSpanFretLabel')}</label>
@@ -1963,49 +1966,40 @@ export function ChordsPage(): React.ReactElement {
 
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="cc-root">{t('chords.startRootLabel')}</label>
-              <select
+              <label id="cc-root-lab" htmlFor="cc-root">{t('chords.startRootLabel')}</label>
+              <AppSelect
                 id="cc-root"
                 className={styles.selectField}
-                value={ccRoot}
-                onChange={(e) => setCcRoot(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                value={String(ccRoot)}
+                ariaLabelledBy="cc-root-lab"
+                options={NOTE_OPTIONS}
+                onChange={(v) => setCcRoot(+v)}
+              />
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-top">{t('chords.topNoteIntervalLabel')}</label>
-              <select
+              <label id="cc-top-lab" htmlFor="cc-top">{t('chords.topNoteIntervalLabel')}</label>
+              <AppSelect
                 id="cc-top"
                 className={styles.selectField}
-                value={ccIv}
-                onChange={(e) => setCcIv(+e.target.value)}
-              >
-                {[2, 9, 4, 6, 1, 8, 3, 10, 5, 0, 7].map((iv) => (
-                  <option key={iv} value={iv}>
-                    {CT.TOP_DEG[iv]}
-                  </option>
-                ))}
-              </select>
+                value={String(ccIv)}
+                ariaLabelledBy="cc-top-lab"
+                options={CC_TOP_OPTIONS}
+                onChange={(v) => setCcIv(+v)}
+              />
             </div>
             <div className={styles.field}>
-              <label htmlFor="cc-str">{t('chords.topNoteStringLabel')}</label>
-              <select
+              <label id="cc-str-lab" htmlFor="cc-str">{t('chords.topNoteStringLabel')}</label>
+              <AppSelect
                 id="cc-str"
                 className={styles.selectField}
-                value={ccStr}
-                onChange={(e) => setCcStr(+e.target.value)}
-              >
-                {[5, 4, 3, 2, 1, 0].map((s) => (
-                  <option key={s} value={s}>
-                    {t('chords.stringNum', { n: 6 - s })}
-                  </option>
-                ))}
-              </select>
+                value={String(ccStr)}
+                ariaLabelledBy="cc-str-lab"
+                options={[5, 4, 3, 2, 1, 0].map((s) => ({
+                  value: String(s),
+                  label: t('chords.stringNum', { n: 6 - s }),
+                }))}
+                onChange={(v) => setCcStr(+v)}
+              />
             </div>
             <div className={styles.field}>
               <label htmlFor="cc-near">{t('chords.nearFretLabel')}</label>
@@ -2195,10 +2189,15 @@ export function ChordsPage(): React.ReactElement {
           </div>
           {isKeyboard && <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="ri-keyboard-note">{t('chords.keyboardNote')}</label>
-              <select id="ri-keyboard-note" className={styles.selectField} value={riInputPitch} onChange={(event) => setRiInputPitch(+event.target.value)}>
-                {Array.from({ length: 48 }, (_, index) => 36 + index).map((pitch) => <option value={pitch} key={pitch}>{CT.NAMES[CT.pc(pitch)]}{Math.floor(pitch / 12) - 1}</option>)}
-              </select>
+              <label id="ri-keyboard-note-lab" htmlFor="ri-keyboard-note">{t('chords.keyboardNote')}</label>
+              <AppSelect
+                id="ri-keyboard-note"
+                className={styles.selectField}
+                value={String(riInputPitch)}
+                ariaLabelledBy="ri-keyboard-note-lab"
+                options={RI_KEYBOARD_NOTE_OPTIONS}
+                onChange={(v) => setRiInputPitch(+v)}
+              />
             </div>
             <button id="ri-keyboard-toggle" type="button" className={styles.btn} aria-pressed={riKeyboardPitches.includes(riInputPitch)} onClick={() => {
               stopAllTransports();
@@ -2275,19 +2274,15 @@ export function ChordsPage(): React.ReactElement {
               <h3 className={styles.h3}>{t('chords.reintTwoFiveOneTitle')}</h3>
               <div className={styles.controls}>
                 <div className={styles.field}>
-                  <label htmlFor="ri-key">{t('chords.selectKeyLabel')}</label>
-                  <select
+                  <label id="ri-key-lab" htmlFor="ri-key">{t('chords.selectKeyLabel')}</label>
+                  <AppSelect
                     id="ri-key"
                     className={styles.selectField}
-                    value={riKey}
-                    onChange={(e) => setRiKey(+e.target.value)}
-                  >
-                    {CT.NAMES.map((name, i) => (
-                      <option key={name} value={i}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
+                    value={String(riKey)}
+                    ariaLabelledBy="ri-key-lab"
+                    options={NOTE_OPTIONS}
+                    onChange={(v) => setRiKey(+v)}
+                  />
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="ri-bpm">BPM</label>
@@ -2402,16 +2397,18 @@ export function ChordsPage(): React.ReactElement {
           </p>
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="a-kind">{t('chords.tfProgKindLabel')}</label>
-              <select
+              <label id="a-kind-lab" htmlFor="a-kind">{t('chords.tfProgKindLabel')}</label>
+              <AppSelect
                 id="a-kind"
                 className={styles.selectField}
                 value={tfKind}
-                onChange={(e) => setTfKind(e.target.value as 'major' | 'minor')}
-              >
-                <option value="major">{t('chords.tfMajorTwoFiveOne')}</option>
-                <option value="minor">{t('chords.tfMinorTwoFiveOne')}</option>
-              </select>
+                ariaLabelledBy="a-kind-lab"
+                options={[
+                  { value: 'major', label: t('chords.tfMajorTwoFiveOne') },
+                  { value: 'minor', label: t('chords.tfMinorTwoFiveOne') },
+                ]}
+                onChange={(v) => setTfKind(v as 'major' | 'minor')}
+              />
             </div>
             <div className={styles.field} hidden={isKeyboard}>
               <label htmlFor="a-lo">{t('chords.fretStartLabel')}</label>
@@ -2438,31 +2435,29 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-proot">{t('chords.tfPentaRootLabel')}</label>
-              <select
+              <label id="a-proot-lab" htmlFor="a-proot">{t('chords.tfPentaRootLabel')}</label>
+              <AppSelect
                 id="a-proot"
                 className={styles.selectField}
-                value={tfProot}
-                onChange={(e) => setTfProot(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                value={String(tfProot)}
+                ariaLabelledBy="a-proot-lab"
+                options={NOTE_OPTIONS}
+                onChange={(v) => setTfProot(+v)}
+              />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-ptype">{t('chords.tfPentaTypeLabel')}</label>
-              <select
+              <label id="a-ptype-lab" htmlFor="a-ptype">{t('chords.tfPentaTypeLabel')}</label>
+              <AppSelect
                 id="a-ptype"
                 className={styles.selectField}
                 value={tfPtype}
-                onChange={(e) => setTfPtype(e.target.value as 'min' | 'maj')}
-              >
-                <option value="min">{t('chords.tfMinorPenta')}</option>
-                <option value="maj">{t('chords.tfMajorPenta')}</option>
-              </select>
+                ariaLabelledBy="a-ptype-lab"
+                options={[
+                  { value: 'min', label: t('chords.tfMinorPenta') },
+                  { value: 'maj', label: t('chords.tfMajorPenta') },
+                ]}
+                onChange={(v) => setTfPtype(v as 'min' | 'maj')}
+              />
             </div>
             <div className={styles.field}>
               <label htmlFor="a-out">{t('chords.tfMaxNotesOutPenta')}</label>
@@ -2477,17 +2472,19 @@ export function ChordsPage(): React.ReactElement {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="a-guide">{t('chords.tfGuideToneReq')}</label>
-              <select
+              <label id="a-guide-lab" htmlFor="a-guide">{t('chords.tfGuideToneReq')}</label>
+              <AppSelect
                 id="a-guide"
                 className={styles.selectField}
-                value={tfNeedGuide}
-                onChange={(e) => setTfNeedGuide(+e.target.value)}
-              >
-                <option value={2}>{t('chords.tfBothThreeSevenReq')}</option>
-                <option value={1}>{t('chords.tfOnlyOneReq')}</option>
-                <option value={0}>{t('chords.tfNoLimit')}</option>
-              </select>
+                value={String(tfNeedGuide)}
+                ariaLabelledBy="a-guide-lab"
+                options={[
+                  { value: '2', label: t('chords.tfBothThreeSevenReq') },
+                  { value: '1', label: t('chords.tfOnlyOneReq') },
+                  { value: '0', label: t('chords.tfNoLimit') },
+                ]}
+                onChange={(v) => setTfNeedGuide(+v)}
+              />
             </div>
             <label className={styles.check}>
               <input
@@ -2639,34 +2636,26 @@ export function ChordsPage(): React.ReactElement {
 
           <div className={styles.controls}>
             <div className={styles.field}>
-              <label htmlFor="ds-root">{t('chords.rootNoteLabel')}</label>
-              <select
+              <label id="ds-root-lab" htmlFor="ds-root">{t('chords.rootNoteLabel')}</label>
+              <AppSelect
                 id="ds-root"
                 className={styles.selectField}
-                value={dsRoot}
-                onChange={(e) => setDsRoot(+e.target.value)}
-              >
-                {CT.NAMES.map((name, i) => (
-                  <option key={name} value={i}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                value={String(dsRoot)}
+                ariaLabelledBy="ds-root-lab"
+                options={NOTE_OPTIONS}
+                onChange={(v) => setDsRoot(+v)}
+              />
             </div>
             <div className={styles.field}>
-              <label htmlFor="ds-scale">{t('chords.scaleTypeLabel')}</label>
-              <select
+              <label id="ds-scale-lab" htmlFor="ds-scale">{t('chords.scaleTypeLabel')}</label>
+              <AppSelect
                 id="ds-scale"
                 className={styles.selectField}
                 value={dsScale}
-                onChange={(e) => setDsScale(e.target.value)}
-              >
-                {DOUBLE_STOP_SCALES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabelledBy="ds-scale-lab"
+                options={DS_SCALE_OPTIONS}
+                onChange={setDsScale}
+              />
             </div>
             <div className={styles.field}>
               <label htmlFor="ds-bpm">BPM</label>

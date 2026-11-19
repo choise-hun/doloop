@@ -5,6 +5,7 @@
 const { layoutSuite } = require('../support/layout-check');
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES } = require('../support/mock-app');
+const { pickOption, expectValue } = require('../support/app-select');
 
 // CH-A: 기존 8탭 공통 검사에 변경되는 화면 계약을 추가한다.
 for (const width of [390, 768, 1150, 1280]) {
@@ -89,7 +90,7 @@ for (const state of ['unsupported', 'circle']) {
     ready: async (page) => {
       await page.locator('#sc-board svg').waitFor();
       if (state === 'unsupported') {
-        await page.locator('#sc-type').selectOption('harmMinor');
+        await pickOption(page, 'sc-type', 'harmMinor');
         await expect(page.locator('#sc-block-msg')).toBeVisible();
       } else {
         await page.locator('#sc-mode button').nth(1).click();
@@ -320,3 +321,82 @@ for (const c of C5_CASES) {
     expect(r.issues).toEqual([]);
   });
 }
+
+test('AS-1 코드 화면 AppSelect 21곳 접근 이름(getByRole combobox) 및 선택창 열림 확인', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#scale');
+  await expect(page.locator('#sc-board svg')).toBeVisible();
+
+  const checkCombo = async (id, name) => {
+    const box = page.getByRole('combobox', { name, exact: true });
+    await expect(box).toHaveCount(1);
+    await expect(box).toHaveAttribute('id', id);
+  };
+
+  // 상단 악기 설정 (열림 시)
+  await page.locator('#instrument-settings summary').click();
+  await checkCombo('instrument-tuning', '현 수 · 튜닝');
+
+  // 1. scale
+  await checkCombo('sc-root', '루트 음');
+  await checkCombo('sc-type', '스케일 종류');
+  await page.locator('#sc-mode button').nth(1).click();
+  await checkCombo('sc-root', '시작 루트');
+  await checkCombo('sc-bars', '키당 마디 수');
+  await page.locator('#sc-mode button').nth(0).click();
+
+  // 선택창 열린 상태 확인 및 스크린샷(LAYOUT_SHOTS=1)
+  await page.locator('#sc-type').click();
+  await expect(page.locator('#sc-type-list')).toBeVisible();
+  if (process.env.LAYOUT_SHOTS === '1') {
+    await page.screenshot({ path: 'test-results/layout-shots/as1-chords-select-open-1280.png', fullPage: false });
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sc-type-list')).toHaveCount(0);
+  await pickOption(page, 'sc-type', 'dorian');
+  await expectValue(page, 'sc-type', 'dorian');
+
+  // 2. tone · 3. matrix · 4. circle · 5. reint · 6. tf · 7. ds
+  await page.locator('#tab-tone').click();
+  await checkCombo('tone-root', '루트 음');
+  await page.locator('#tab-matrix').click();
+  await checkCombo('mx-root', '루트 음');
+  await page.locator('#tab-circle').click();
+  await checkCombo('cc-root', '시작 루트');
+  await checkCombo('cc-top', '탑노트 음정');
+  await checkCombo('cc-str', '탑노트 줄');
+  await page.locator('#tab-reint').click();
+  await checkCombo('ri-key', '키 선택');
+  await page.locator('#tab-tf').click();
+  await checkCombo('a-kind', '진행 성격');
+  await checkCombo('a-proot', '펜타토닉 기준 루트');
+  await checkCombo('a-ptype', '펜타 종류');
+  await checkCombo('a-guide', '가이드톤 필수');
+  await page.locator('#tab-ds').click();
+  await checkCombo('ds-root', '루트 음');
+  await checkCombo('ds-scale', '스케일 종류');
+
+  // 8. prog (기타)
+  await page.goto('/chords.html#prog?c=C%2CG%2CAm%2CF&k=C%20Major');
+  await checkCombo('pp-semis', '키 옮기기');
+  await checkCombo('pp-beats', '코드당 박');
+
+  // 건반: reint 음 선택 + prog (건반)
+  await page.locator('#instrument-keyboard').click();
+  await checkCombo('pp-semis', '키 옮기기');
+  await checkCombo('pp-beats', '코드당 박');
+  await page.locator('#tab-reint').click();
+  await checkCombo('ri-keyboard-note', '음 선택');
+
+  // 390px 선택창 열린 상태 스크린샷
+  if (process.env.LAYOUT_SHOTS === '1') {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.locator('#instrument-guitar').click();
+    await page.locator('#tab-scale').click();
+    await page.locator('#sc-type').click();
+    await expect(page.locator('#sc-type-list')).toBeVisible();
+    await page.screenshot({ path: 'test-results/layout-shots/as1-chords-select-open-390.png', fullPage: false });
+    await page.keyboard.press('Escape');
+  }
+});

@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { t, type I18nKey } from '../../lib/i18n.mts';
 import { SafeLink } from '../common/SafeLink';
+import { AppSelect } from '../common/AppSelect';
 import { audioEngine, CT, GE, loadChordForms, PATH } from '../../lib/musicEngine';
 import type { FormTable, PathOptions, Voicing, VoicingPath } from '../../lib/musicEngine';
 import { ChordBoxSvg, ChordNeckSvg, KeyboardDiagramSvg, buildCtxNotes, geNotesToDiagram, pitchesOf } from './ChordDiagrams';
@@ -276,20 +277,36 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
         </div>
         <div className={styles.controls}>
           <div className={styles.field}>
-            <label htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
-            <select id="pp-semis" className={styles.selectField} value={semis} onChange={(event) => { stop(); setSemis(+event.target.value); }}>
-              {SEMIS.map((n) => <option key={n} value={n}>{n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`}</option>)}
-            </select>
+            <label id="pp-semis-lab" htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
+            <AppSelect
+              id="pp-semis"
+              className={styles.selectField}
+              value={String(semis)}
+              ariaLabelledBy="pp-semis-lab"
+              options={SEMIS.map((n) => ({
+                value: String(n),
+                label: n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`,
+              }))}
+              onChange={(v) => { stop(); setSemis(+v); }}
+            />
           </div>
           <div className={styles.field}>
             <label htmlFor="pp-bpm">BPM</label>
             <input id="pp-bpm" type="number" min={40} max={200} className={styles.numField} value={bpm} onChange={(event) => { stop(); setBpm(Math.max(40, Math.min(200, +event.target.value || 80))); }} />
           </div>
           <div className={styles.field}>
-            <label htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
-            <select id="pp-beats" className={styles.selectField} value={beats} onChange={(event) => { stop(); setBeats(+event.target.value); }}>
-              {[1, 2, 4, 8].map((beat) => <option key={beat} value={beat}>{t('chords.beatsUnit', { b: beat })}</option>)}
-            </select>
+            <label id="pp-beats-lab" htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
+            <AppSelect
+              id="pp-beats"
+              className={styles.selectField}
+              value={String(beats)}
+              ariaLabelledBy="pp-beats-lab"
+              options={[1, 2, 4, 8].map((beat) => ({
+                value: String(beat),
+                label: t('chords.beatsUnit', { b: beat }),
+              }))}
+              onChange={(v) => { stop(); setBeats(+v); }}
+            />
           </div>
           <label className={styles.check}><input id="pp-loop" type="checkbox" checked={loop} onChange={(event) => { stop(); setLoop(event.target.checked); }} />{t('chords.repeatLabel')}</label>
         </div>
@@ -374,15 +391,18 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
 
         <div className={styles.controls}>
           <div className={styles.field}>
-            <label htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
-            <select id="pp-semis" className={styles.selectField} value={semis} onChange={(e) => setSemis(+e.target.value)}>
-              {SEMIS.map((n) => (
-                <option key={n} value={n}>
-                  {n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`}
-                  {prog.key ? ` · ${transposeKey(prog.key, n)}` : ''}
-                </option>
-              ))}
-            </select>
+            <label id="pp-semis-lab" htmlFor="pp-semis">{t('chords.transposeLabel')}</label>
+            <AppSelect
+              id="pp-semis"
+              className={styles.selectField}
+              value={String(semis)}
+              ariaLabelledBy="pp-semis-lab"
+              options={SEMIS.map((n) => ({
+                value: String(n),
+                label: `${n === 0 ? t('chords.originalKey') : `${n > 0 ? '+' : ''}${n}`}${prog.key ? ` · ${transposeKey(prog.key, n)}` : ''}`,
+              }))}
+              onChange={(v) => setSemis(+v)}
+            />
           </div>
           <div className={styles.field}>
             <label htmlFor="pp-lo">{t('chords.fretStartLabel')}</label>
@@ -397,14 +417,18 @@ export function ProgressionPlayTab({ active, hash, onNavigate, onOpenMatrix, onO
             <input id="pp-bpm" type="number" className={styles.numField} min={40} max={200} value={bpm} onChange={(e) => setBpm(Math.max(40, Math.min(200, +e.target.value || 80)))} />
           </div>
           <div className={styles.field}>
-            <label htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
-            <select id="pp-beats" className={styles.selectField} value={beats} onChange={(e) => setBeats(+e.target.value)}>
-              {[1, 2, 4, 8].map((b) => (
-                <option key={b} value={b}>
-                  {t('chords.beatsUnit', { b })}
-                </option>
-              ))}
-            </select>
+            <label id="pp-beats-lab" htmlFor="pp-beats">{t('chords.beatsPerChordLabel')}</label>
+            <AppSelect
+              id="pp-beats"
+              className={styles.selectField}
+              value={String(beats)}
+              ariaLabelledBy="pp-beats-lab"
+              options={[1, 2, 4, 8].map((b) => ({
+                value: String(b),
+                label: t('chords.beatsUnit', { b }),
+              }))}
+              onChange={(v) => setBeats(+v)}
+            />
           </div>
           <label className={styles.check}>
             <input type="checkbox" id="pp-loop" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
