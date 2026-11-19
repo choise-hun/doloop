@@ -3,11 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { SafeAudio } from '../components/common/SafeAudio';
 import { SafeLink } from '../components/common/SafeLink';
+import { AppSelect } from '../components/common/AppSelect';
 import { SongRecordPanel } from '../components/songRecord/SongRecordPanel';
 import { auth, useAuth } from '../lib/auth';
 import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto } from '../lib/apiClient';
 import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
+import { deleteConfirmText } from '../lib/episode.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
 import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
@@ -155,7 +157,10 @@ export function PracticePage(): React.ReactElement {
   const [listUid, setListUid] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState(ALL_FOLDER);
   const [folderNotice, setFolderNotice] = useState('');
-  const [folderOpen, setFolderOpen] = useState(false);
+  // SL-1 ⑧: 곡 목록 EDIT(수정 중) — 카드를 누르면 곡 수정 창
+  const [listEditing, setListEditing] = useState(false);
+  const [editSongId, setEditSongId] = useState<string | null>(null);
+  const [titleDialogOpen, setTitleDialogOpen] = useState(false);
   const [switchingSong, setSwitchingSong] = useState(false);
   const folderBodyRef = useRef<HTMLDivElement | null>(null);
   const listStatusRef = useRef<ListStatus>('idle');
@@ -167,6 +172,11 @@ export function PracticePage(): React.ReactElement {
   const [catPopOpen, setCatPopOpen] = useState(false);
   const [catSaving, setCatSaving] = useState(false);
   const catWrapRef = useRef<HTMLDivElement | null>(null);
+  // SL-1 ③: 분류 창 EDIT(추가·이름 변경·삭제)
+  const [catEditing, setCatEditing] = useState(false);
+  const [catEditId, setCatEditId] = useState<string | null>(null);
+  const [catNewName, setCatNewName] = useState('');
+  const [catErr, setCatErr] = useState('');
   // 홈 분류 버튼에서 넘어온 분류 id (null = 아직 안 읽음)
   const pendingCategoryRef = useRef<string | null>(null);
 
@@ -378,7 +388,7 @@ export function PracticePage(): React.ReactElement {
     if (reason === 'auto' && !cur.dirty && addSec < 15) return;
 
     savingRef.current = true;
-    setSyncMsg({ text: t('practice.syncSaving'), err: false });
+    setSyncMsg({ text: '', err: false });
     try {
       const targetSong = cur.song || (await ensureAccountSong());
       const pos = cur.ready ? computeCurrentPos() : startAtRef.current;
@@ -412,7 +422,7 @@ export function PracticePage(): React.ReactElement {
       stRef.current.song = updatedSong;
       setSong(updatedSong);
       setSrReloadKey((k) => k + 1);
-      setSyncMsg({ text: t('practice.syncSaved', { time: getNowHhMm() }), err: false });
+      setSyncMsg({ text: '', err: false });
     } catch (e: any) {
       if (e && e.status === 404) {
         stRef.current.song = null;
@@ -1290,7 +1300,6 @@ export function PracticePage(): React.ReactElement {
         if (known(wanted)) {
           setSelectedFolderId(wanted);
           setFolderNotice('');
-          setFolderOpen(true);
         } else {
           setSelectedFolderId(ALL_FOLDER);
           setFolderNotice(t('practice.folderMissing'));
@@ -1355,6 +1364,120 @@ export function PracticePage(): React.ReactElement {
     } finally {
       setCatSaving(false);
     }
+  };
+
+  // ---------- SL-1: 곡 제목·분류 수정, 곡 삭제, 분류 추가·이름 변경·삭제 ----------
+  const sameUid = (uid: string | null) => (auth.getUser()?.id ?? null) === uid;
+
+  // 곡 하나의 바뀐 칸을 목록과 현재 곡에 함께 반영한다
+  const applySongPatch = (id: string, patch: Partial<SongDto>) => {
+    if (stRef.current.song && stRef.current.song.id === id) {
+      const merged = { ...stRef.current.song, ...patch };
+      stRef.current.song = merged;
+      setSong(merged);
+    }
+    setSongsList((prev) => (prev ? prev.map((x) => (x.id === id ? { ...x, ...patch } : x)) : prev));
+  };
+
+  /** 제목·분류 저장. 실패 문구를 돌려주고, 성공·계정 변경이면 null */
+  const saveSongEdit = async (
+    id: string,
+    patch: { title?: string; categoryIds?: string[] }
+  ): Promise<string | null> => {
+    const myUid = auth.getUser()?.id ?? null;
+    try {
+      const updated = await apiClient.songs.update(id, patch);
+      if (!sameUid(myUid)) return null;
+      const next: Partial<SongDto> = {};
+      if (patch.title !== undefined) next.title = updated?.title || patch.title;
+      if (patch.categoryIds !== undefined) {
+        next.categoryIds = updated && Array.isArray(updated.categoryIds) ? updated.categoryIds : patch.categoryIds;
+      }
+      applySongPatch(id, next);
+      return null;
+    } catch (e: any) {
+      return (e && e.message) || t('practice.songSaveFailed');
+    }
+  };
+
+  /** 곡 삭제(기록 화면과 같은 확인 문구). 취소 = '', 실패 = 문구, 성공·계정 변경 = null */
+  const deleteSong = async (s: SongDto): Promise<string | null> => {
+    const myUid = auth.getUser()?.id ?? null;
+    const impact = await apiClient.community.shareImpactOrNull({ songId: s.id });
+    if (!sameUid(myUid)) return null;
+    if (!window.confirm(deleteConfirmText('song', impact))) return '';
+    try {
+      await apiClient.songs.remove(s.id);
+    } catch (e: any) {
+      return (e && e.message) || t('practice.songDeleteFailed');
+    }
+    if (!sameUid(myUid)) return null;
+    setSongsList((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
+    if (stRef.current.song && stRef.current.song.id === s.id) {
+      // 영상은 그대로 두고 계정 곡만 뗀다(저장하면 새 곡으로 다시 만든다)
+      stRef.current.song = null;
+      setSong(null);
+      setSyncMsg({ text: t('practice.songDeleted'), err: false });
+    }
+    return null;
+  };
+
+  const addCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = catNewName.trim();
+    if (!name) {
+      setCatErr(t('practice.catNameRequired'));
+      return;
+    }
+    const myUid = auth.getUser()?.id ?? null;
+    setCatSaving(true);
+    setCatErr('');
+    try {
+      const created = await apiClient.categories.create(name);
+      if (!sameUid(myUid)) return;
+      if (created) setCategories((prev) => [...prev, created]);
+      setCatNewName('');
+    } catch (err: any) {
+      if (sameUid(myUid)) setCatErr((err && err.message) || t('practice.catSaveFailed'));
+    } finally {
+      setCatSaving(false);
+    }
+  };
+
+  /** 분류 이름 변경. 실패 문구 또는 null */
+  const renameCategory = async (id: string, name: string): Promise<string | null> => {
+    const myUid = auth.getUser()?.id ?? null;
+    try {
+      const updated = await apiClient.categories.update(id, { name });
+      if (!sameUid(myUid)) return null;
+      setCategories((prev) => prev.map((c) => (c.id === id ? updated || { ...c, name } : c)));
+      return null;
+    } catch (e: any) {
+      return (e && e.message) || t('practice.catSaveFailed');
+    }
+  };
+
+  /** 분류 삭제: 서버가 곡 연결만 지우고 곡은 남긴다(FK CASCADE). 화면도 같은 규칙으로 뗀다 */
+  const removeCategory = async (id: string): Promise<string | null> => {
+    const myUid = auth.getUser()?.id ?? null;
+    try {
+      await apiClient.categories.remove(id);
+    } catch (e: any) {
+      return (e && e.message) || t('practice.catSaveFailed');
+    }
+    if (!sameUid(myUid)) return null;
+    const strip = (x: SongDto) =>
+      (x.categoryIds || []).includes(id) ? { ...x, categoryIds: (x.categoryIds || []).filter((c) => c !== id) } : x;
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setSongsList((prev) => (prev ? prev.map(strip) : prev));
+    if (stRef.current.song) {
+      const next = strip(stRef.current.song);
+      if (next !== stRef.current.song) {
+        stRef.current.song = next;
+        setSong(next);
+      }
+    }
+    return null;
   };
 
   // ---------- 초기화, YouTube API 로드, 인터벌, 키보드 단축키 ----------
@@ -1590,7 +1713,13 @@ export function PracticePage(): React.ReactElement {
     setCatPopOpen(false);
     setSelectedFolderId(ALL_FOLDER);
     setFolderNotice('');
-    setFolderOpen(false);
+    setListEditing(false);
+    setEditSongId(null);
+    setTitleDialogOpen(false);
+    setCatEditing(false);
+    setCatEditId(null);
+    setCatNewName('');
+    setCatErr('');
     setSwitchingSong(false);
     if (pendingCategoryRef.current === null) pendingCategoryRef.current = takeOpenCategory();
     // 로그인 상태면 영상이 없어도 곡 목록을 읽는다. guest·로그아웃은 loadSongList가 idle로 초기화
@@ -1598,15 +1727,26 @@ export function PracticePage(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUid]);
 
-  // 곡이 바뀌면 분류 팝업은 닫는다
+  // 곡이 바뀌면 분류 팝업·제목 수정 창은 닫는다
   useEffect(() => {
     setCatPopOpen(false);
+    setTitleDialogOpen(false);
   }, [song?.id]);
+
+  useEffect(() => {
+    if (catPopOpen) return;
+    setCatEditing(false);
+    setCatEditId(null);
+    setCatNewName('');
+    setCatErr('');
+  }, [catPopOpen]);
 
   useEffect(() => {
     if (!catPopOpen) return;
     const handleDown = (e: MouseEvent) => {
-      if (catWrapRef.current && !catWrapRef.current.contains(e.target as Node)) setCatPopOpen(false);
+      const target = e.target as Element | null;
+      if (target && typeof target.closest === 'function' && target.closest('[data-pp-dialog]')) return;
+      if (catWrapRef.current && !catWrapRef.current.contains(target as Node)) setCatPopOpen(false);
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setCatPopOpen(false);
@@ -1632,7 +1772,7 @@ export function PracticePage(): React.ReactElement {
     : videoId
       ? getVideoTitle() || t('practice.defaultTitle')
       : t('practice.defaultTitle');
-  const displaySync = syncMsg.text || (song ? t('practice.accountConnected') : '');
+  const displaySync = syncMsg.text;
   const hasBothPoints = pointA != null && pointB != null;
   const loopDurationText = hasBothPoints
     ? (loopOn && loops
@@ -1686,6 +1826,30 @@ export function PracticePage(): React.ReactElement {
       : folderId === UNCATEGORIZED_FOLDER
         ? t('practice.uncategorized')
         : sortedCategories.find((c) => c.id === folderId)?.name || '';
+  const songCountIn = (fid: string) =>
+    fid === ALL_FOLDER
+      ? allSongs.length
+      : fid === UNCATEGORIZED_FOLDER
+        ? allSongs.filter((x) => !(x.categoryIds || []).some((id) => knownCategoryIds.has(id))).length
+        : allSongs.filter((x) => (x.categoryIds || []).includes(fid)).length;
+  const countMeta = (fid: string) =>
+    listState === 'success' ? t('practice.folderCount', { count: songCountIn(fid) }) : undefined;
+  const folderOptions = [
+    { value: ALL_FOLDER, label: t('practice.folderAll'), meta: countMeta(ALL_FOLDER) },
+    ...sortedCategories.map((c) => ({ value: c.id, label: c.name, meta: countMeta(c.id) })),
+    { value: UNCATEGORIZED_FOLDER, label: t('practice.uncategorized'), meta: countMeta(UNCATEGORIZED_FOLDER) },
+  ];
+  const presetOptions = [
+    { value: '', label: t('practice.presetSelect') },
+    ...presets.map((p) => ({
+      value: p.id,
+      label: `${p.name} (${formatPlayerTime(p.a)}–${formatPlayerTime(p.b)})${p.completed ? ' ✓' : ''}`,
+    })),
+  ];
+  // 목록이 없거나(게스트·로딩·오류) 곡이 0개면 수정 중을 풀어 보인다(렌더 시점 정규화)
+  const editingList = listEditing && listState === 'success' && allSongs.length > 0;
+  const editSong = editingList && editSongId ? allSongs.find((x) => x.id === editSongId) || null : null;
+  const catEditTarget = catPopOpen && catEditing && catEditId ? sortedCategories.find((c) => c.id === catEditId) || null : null;
   const currentNotInFolder =
     listState === 'success' && Boolean(song) && Boolean(videoId) && !visibleSongs.some((x) => x.videoId === videoId);
 
@@ -1725,8 +1889,13 @@ export function PracticePage(): React.ReactElement {
           type="button"
           className={styles.ppSongBtn}
           aria-current={isCurrent ? 'true' : undefined}
-          aria-disabled={switchingSong || undefined}
+          aria-disabled={(switchingSong && !(inline && editingList)) || undefined}
+          aria-haspopup={inline && editingList ? 'dialog' : undefined}
           onClick={() => {
+            if (inline && editingList) {
+              setEditSongId(s.id);
+              return;
+            }
             if (!inline) closeDrawer();
             // 현재 곡 재클릭은 재시작·녹음 중지를 일으키지 않는다. 전환 중에는 중복 클릭을 막는다
             if (isCurrent || switchingSong) return;
@@ -1771,12 +1940,25 @@ export function PracticePage(): React.ReactElement {
         <header className={`pp-head ${styles.ppHead}`}>
           <div className={`pp-title ${styles.ppTitle}`}>
             <b id="songTitle">{displayTitle}</b>
-            <span
-              id="syncState"
-              className={`pp-sync ${styles.ppSync} ${syncMsg.err ? `err ${styles.ppSyncErr}` : ''}`}
-              aria-live="polite"
-            >
-              {displaySync}
+            <span className={styles.ppSyncRow}>
+              {song && (
+                <button
+                  type="button"
+                  id="titleEditBtn"
+                  className={styles.uBtn}
+                  aria-haspopup="dialog"
+                  onClick={() => setTitleDialogOpen(true)}
+                >
+                  {t('practice.titleEdit')}
+                </button>
+              )}
+              <span
+                id="syncState"
+                className={`pp-sync ${styles.ppSync} ${syncMsg.err ? `err ${styles.ppSyncErr}` : ''}`}
+                aria-live="polite"
+              >
+                {displaySync}
+              </span>
             </span>
           </div>
           <div className={styles.ppHeadActions}>
@@ -1794,25 +1976,77 @@ export function PracticePage(): React.ReactElement {
                 </button>
                 {catPopOpen && (
                   <div className={styles.ppCatPop} id="songCatPop" role="dialog" aria-label={t('practice.songCatPopTitle')}>
-                    <p className={styles.ppCatPopTitle}>{t('practice.songCatPopTitle')}</p>
+                    <div className={styles.ppCatPopHead}>
+                      <p className={styles.ppCatPopTitle}>{t('practice.songCatPopTitle')}</p>
+                      <button
+                        type="button"
+                        id="songCatEdit"
+                        className={styles.uBtn}
+                        aria-pressed={catEditing}
+                        onClick={() => {
+                          setCatEditing((v) => !v);
+                          setCatErr('');
+                        }}
+                      >
+                        {catEditing ? t('practice.editDone') : t('practice.editToggle')}
+                      </button>
+                    </div>
                     {sortedCategories.length === 0 ? (
                       <p className={`note ${styles.ppSongNote}`}>{t('practice.songCatEmpty')}</p>
                     ) : (
                       <ul className={styles.ppCatList}>
                         {sortedCategories.map((c) => (
                           <li key={c.id} data-category={c.id}>
-                            <label className={styles.ppCatLabel} title={c.name}>
-                              <input
-                                type="checkbox"
-                                checked={songCategoryIds.includes(c.id)}
-                                disabled={catSaving}
-                                onChange={() => void toggleSongCategory(c.id)}
-                              />
-                              <span className={styles.ppCatName}>{c.name}</span>
-                            </label>
+                            {catEditing ? (
+                              <button
+                                type="button"
+                                className={styles.ppCatNameBtn}
+                                title={c.name}
+                                aria-haspopup="dialog"
+                                onClick={() => setCatEditId(c.id)}
+                              >
+                                {c.name}
+                              </button>
+                            ) : (
+                              <label className={styles.ppCatLabel} title={c.name}>
+                                <input
+                                  type="checkbox"
+                                  checked={songCategoryIds.includes(c.id)}
+                                  disabled={catSaving}
+                                  onChange={() => void toggleSongCategory(c.id)}
+                                />
+                                <span className={styles.ppCatName}>{c.name}</span>
+                              </label>
+                            )}
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {catEditing && (
+                      <form id="songCatAdd" className={styles.ppCatAdd} onSubmit={(e) => void addCategory(e)}>
+                        <input
+                          type="text"
+                          className={`inpField ${styles.ppCatAddInput}`}
+                          maxLength={20}
+                          autoComplete="off"
+                          placeholder={t('practice.catNewPh')}
+                          aria-label={t('practice.catNewPh')}
+                          value={catNewName}
+                          disabled={catSaving}
+                          onChange={(e) => {
+                            setCatNewName(e.target.value);
+                            setCatErr('');
+                          }}
+                        />
+                        <button type="submit" className="ghostBtn" disabled={catSaving}>
+                          {t('practice.catAdd')}
+                        </button>
+                      </form>
+                    )}
+                    {catErr && (
+                      <p className={styles.ppCatErr} role="alert">
+                        {catErr}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1820,7 +2054,7 @@ export function PracticePage(): React.ReactElement {
             )}
             <button
               type="button"
-              className={`ghostBtn pp-lib-btn ${styles.ppLibBtn}`}
+              className="ghostBtn pp-lib-btn"
               id="libBtn"
               aria-expanded={libOpen}
               aria-controls="lib"
@@ -2261,21 +2495,16 @@ export function PracticePage(): React.ReactElement {
                 >
                   {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
                 </button>
-                <select
+                <AppSelect
                   id="presetSelect"
                   className={styles.presetSelect}
                   data-align-group="looprow:top,bottom,height"
                   value={selectedPresetId}
-                  onChange={(e) => handleSelectPreset(e.target.value)}
-                  aria-label={t('practice.presetSelect')}
-                >
-                  <option value="">{t('practice.presetSelect')}</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({formatPlayerTime(p.a)}–{formatPlayerTime(p.b)}){p.completed ? ' ✓' : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleSelectPreset}
+                  ariaLabel={t('practice.presetSelect')}
+                  placeholder={t('practice.presetSelect')}
+                  options={presetOptions}
+                />
 
                 <button
                   type="button"
@@ -2370,47 +2599,46 @@ export function PracticePage(): React.ReactElement {
               className={`${styles.ppCard} ${styles.ppFolderPanel}`}
               aria-label={t('practice.folderTitle')}
               data-align-group="practice-side:left,right@961"
+              data-editing={editingList || undefined}
             >
               <div className={`pp-lab ${styles.ppLab}`}>
-                <label htmlFor="folderSelect">{t('practice.folderChange')}</label>
-              </div>
-              <select
-                id="folderSelect"
-                className={styles.folderSelect}
-                value={folderId}
-                disabled={listState !== 'success'}
-                onChange={(e) => {
-                  setSelectedFolderId(e.target.value);
-                  setFolderNotice('');
-                }}
-              >
-                <option value={ALL_FOLDER}>{t('practice.folderAll')}</option>
-                {sortedCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-                <option value={UNCATEGORIZED_FOLDER}>{t('practice.uncategorized')}</option>
-              </select>
-              <div className={styles.folderHead}>
-                <span className={styles.folderName}>{folderName}</span>
-                {listState === 'success' && (
-                  <span id="folderCount" className={styles.folderCountText}>
-                    {t('practice.folderCount', { count: visibleSongs.length })}
-                  </span>
-                )}
-                {listState === 'success' && (
+                <span id="folderSelectLabel">
+                  {t('practice.folderChange')}
+                  {editingList && <span className={styles.editTag}> · {t('practice.editingTag')}</span>}
+                </span>
+                {listState === 'success' && allSongs.length > 0 && (
                   <button
                     type="button"
-                    id="folderToggle"
-                    className={`ghostBtn ${styles.folderToggle}`}
-                    aria-expanded={folderOpen}
-                    aria-controls="folderList"
-                    onClick={() => setFolderOpen((v) => !v)}
+                    id="folderEditBtn"
+                    className={styles.uBtn}
+                    aria-pressed={editingList}
+                    onClick={() => setListEditing((v) => !v)}
                   >
-                    {folderOpen ? t('practice.folderCollapse') : t('practice.folderExpand')}
+                    {editingList ? t('practice.editDone') : t('practice.editToggle')}
                   </button>
                 )}
+              </div>
+              <div className={styles.folderSelectWrap}>
+                <AppSelect
+                  id="folderSelect"
+                  className={styles.folderSelect}
+                  value={folderId}
+                  disabled={listState !== 'success'}
+                  ariaLabelledBy="folderSelectLabel folderSelect"
+                  options={folderOptions}
+                  onChange={(v) => {
+                    setSelectedFolderId(v);
+                    setFolderNotice('');
+                  }}
+                >
+                  <span className={styles.folderName}>{folderName}</span>
+                  {listState === 'success' && (
+                    <span id="folderCount" className={styles.folderCountText}>
+                      {' · '}
+                      {t('practice.folderCount', { count: visibleSongs.length })}
+                    </span>
+                  )}
+                </AppSelect>
               </div>
               <div className={styles.folderStatus} aria-live="polite" aria-busy={listState === 'loading'}>
                 {listState === 'guest' && <p className="note">{t('practice.folderLoginPrompt')}</p>}
@@ -2430,7 +2658,6 @@ export function PracticePage(): React.ReactElement {
                 id="folderList"
                 ref={folderBodyRef}
                 className={styles.folderBody}
-                data-collapsed={!folderOpen}
                 hidden={listState !== 'success'}
               >
                 {listState !== 'success' ? null : visibleSongs.length === 0 ? (
@@ -2605,6 +2832,57 @@ export function PracticePage(): React.ReactElement {
         />
       ) : null}
 
+      {titleDialogOpen && song ? (
+        <TitleEditDialog
+          key={song.id}
+          initial={song.title}
+          onCancel={() => setTitleDialogOpen(false)}
+          onSubmit={async (title) => {
+            const err = await saveSongEdit(song.id, { title });
+            if (!err) setTitleDialogOpen(false);
+            return err;
+          }}
+        />
+      ) : null}
+
+      {editSong ? (
+        <SongEditDialog
+          key={editSong.id}
+          song={editSong}
+          categories={sortedCategories}
+          onCancel={() => setEditSongId(null)}
+          onSubmit={async (patch) => {
+            const err = Object.keys(patch).length > 0 ? await saveSongEdit(editSong.id, patch) : null;
+            if (!err) setEditSongId(null);
+            return err;
+          }}
+          onDelete={async () => {
+            const err = await deleteSong(editSong);
+            if (err === null) setEditSongId(null);
+            return err || null;
+          }}
+        />
+      ) : null}
+
+      {catEditTarget ? (
+        <CategoryEditDialog
+          key={catEditTarget.id}
+          category={catEditTarget}
+          onCancel={() => setCatEditId(null)}
+          onRename={async (name) => {
+            const err = name === catEditTarget.name ? null : await renameCategory(catEditTarget.id, name);
+            if (!err) setCatEditId(null);
+            return err;
+          }}
+          onDelete={async () => {
+            if (!window.confirm(t('practice.catDeleteConfirm', { name: catEditTarget.name }))) return null;
+            const err = await removeCategory(catEditTarget.id);
+            if (!err) setCatEditId(null);
+            return err;
+          }}
+        />
+      ) : null}
+
       <PlaylistImportModal
         url={importModalUrl}
         me={authState.me}
@@ -2747,6 +3025,370 @@ function PresetNameDialog({
         </div>
       </form>
     </div>
+  );
+}
+
+/** SL-1 대화창 틀: 초점 가두기·Esc 취소·바깥 누름 취소, 키 입력은 플레이어 단축키로 새지 않는다.
+ *  data-pp-dialog: 분류 창의 바깥 누름 닫기에서 뺀다. 닫히면 연 자리로 초점을 돌린다 */
+function PlayerDialog({
+  id,
+  title,
+  busy,
+  small,
+  onCancel,
+  onSubmit,
+  children,
+  actions,
+}: {
+  id: string;
+  title: string;
+  busy: boolean;
+  small?: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+  children: React.ReactNode;
+  actions: React.ReactNode;
+}): React.ReactElement {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const first = cardRef.current?.querySelector<HTMLElement>('input:not(:disabled)');
+    (first || cardRef.current)?.focus();
+    return () => {
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
+  const cancel = () => {
+    if (!busy) onCancel();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+      return;
+    }
+    if (e.key !== 'Tab' || !dialogRef.current) return;
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(PRESET_DIALOG_FOCUSABLE);
+    if (focusable.length === 0) {
+      e.preventDefault();
+      cardRef.current?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div
+      ref={dialogRef}
+      className={styles.modalBackdrop}
+      id={id}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${id}Title`}
+      data-pp-dialog=""
+      onKeyDown={onKeyDown}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) cancel();
+      }}
+    >
+      <form
+        ref={cardRef}
+        className={`${styles.modalCard} ${small ? styles.modalCardSmall : ''}`}
+        tabIndex={-1}
+        aria-busy={busy}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy) onSubmit();
+        }}
+      >
+        <h2 className={styles.modalTitle} id={`${id}Title`}>
+          {title}
+        </h2>
+        {children}
+        <div className={styles.dlgFoot}>{actions}</div>
+      </form>
+    </div>
+  );
+}
+
+/** 대화창 저장·삭제를 한 번에 하나만 돌리고, 실패 문구를 보여 준다 */
+function useDialogRun(): [boolean, string, (fn: () => Promise<string | null>) => Promise<void>, (m: string) => void] {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const busyRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    []
+  );
+  const run = async (fn: () => Promise<string | null>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setErr('');
+    const failure = await fn();
+    busyRef.current = false;
+    if (!mountedRef.current) return;
+    setBusy(false);
+    if (failure) setErr(failure);
+  };
+  return [busy, err, run, setErr];
+}
+
+/** ⑨ 제목 수정 */
+function TitleEditDialog({
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  initial: string;
+  onCancel: () => void;
+  onSubmit: (title: string) => Promise<string | null>;
+}): React.ReactElement {
+  const [title, setTitle] = useState(initial);
+  const [busy, err, run, setErr] = useDialogRun();
+  const submit = () => {
+    const v = title.trim();
+    if (!v) {
+      setErr(t('practice.titleRequired'));
+      return;
+    }
+    if (v === initial) {
+      onCancel();
+      return;
+    }
+    void run(() => onSubmit(v));
+  };
+  return (
+    <PlayerDialog
+      id="titleDialog"
+      title={t('practice.titleEdit')}
+      busy={busy}
+      onCancel={onCancel}
+      onSubmit={submit}
+      actions={
+        <>
+          <button type="button" className="ghostBtn" id="titleDialogCancel" disabled={busy} onClick={onCancel}>
+            {t('practice.dlgCancel')}
+          </button>
+          <button type="submit" className="pillBtn" id="titleDialogSave" disabled={busy}>
+            {t('practice.dlgSave')}
+          </button>
+        </>
+      }
+    >
+      <label className={styles.presetDialogLabel} htmlFor="titleDialogInput">
+        {t('practice.titleLabel')}
+      </label>
+      <input
+        id="titleDialogInput"
+        className="inpField"
+        type="text"
+        maxLength={300}
+        autoComplete="off"
+        value={title}
+        disabled={busy}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setErr('');
+        }}
+      />
+      <p className={styles.modalDesc} role="status" aria-live="polite">
+        {err ? <span className={styles.presetDialogErr}>{err}</span> : ''}
+      </p>
+    </PlayerDialog>
+  );
+}
+
+/** ⑧ 곡 수정(제목·분류·삭제). 드래그 순서는 SL-2 */
+function SongEditDialog({
+  song,
+  categories,
+  onCancel,
+  onSubmit,
+  onDelete,
+}: {
+  song: SongDto;
+  categories: CategoryDto[];
+  onCancel: () => void;
+  onSubmit: (patch: { title?: string; categoryIds?: string[] }) => Promise<string | null>;
+  onDelete: () => Promise<string | null>;
+}): React.ReactElement {
+  const [title, setTitle] = useState(song.title);
+  const [catIds, setCatIds] = useState<string[]>(song.categoryIds || []);
+  const [busy, err, run, setErr] = useDialogRun();
+  const toggle = (id: string) =>
+    setCatIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const submit = () => {
+    const v = title.trim();
+    if (!v) {
+      setErr(t('practice.titleRequired'));
+      return;
+    }
+    const patch: { title?: string; categoryIds?: string[] } = {};
+    if (v !== song.title) patch.title = v;
+    const before = [...(song.categoryIds || [])].sort().join(',');
+    if ([...catIds].sort().join(',') !== before) patch.categoryIds = catIds;
+    void run(() => onSubmit(patch));
+  };
+  return (
+    <PlayerDialog
+      id="songEditDialog"
+      title={t('practice.songEditTitle')}
+      busy={busy}
+      onCancel={onCancel}
+      onSubmit={submit}
+      actions={
+        <>
+          <button
+            type="button"
+            className={styles.dangerText}
+            id="songEditDelete"
+            disabled={busy}
+            onClick={() => void run(onDelete)}
+          >
+            {t('practice.songDelete')}
+          </button>
+          <span className={styles.dlgSpacer} />
+          <button type="button" className="ghostBtn" id="songEditCancel" disabled={busy} onClick={onCancel}>
+            {t('practice.dlgCancel')}
+          </button>
+          <button type="submit" className="pillBtn" id="songEditSave" disabled={busy}>
+            {t('practice.dlgSave')}
+          </button>
+        </>
+      }
+    >
+      <label className={styles.presetDialogLabel} htmlFor="songEditTitleInput">
+        {t('practice.titleLabel')}
+      </label>
+      <input
+        id="songEditTitleInput"
+        className="inpField"
+        type="text"
+        maxLength={300}
+        autoComplete="off"
+        value={title}
+        disabled={busy}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setErr('');
+        }}
+      />
+      {categories.length > 0 && (
+        <>
+          <span className={styles.presetDialogLabel} id="songEditCatsLabel">
+            {t('practice.songEditCats')}
+          </span>
+          <ul className={styles.ppCatList} aria-labelledby="songEditCatsLabel">
+            {categories.map((c) => (
+              <li key={c.id} data-category={c.id}>
+                <label className={styles.ppCatLabel} title={c.name}>
+                  <input
+                    type="checkbox"
+                    checked={catIds.includes(c.id)}
+                    disabled={busy}
+                    onChange={() => toggle(c.id)}
+                  />
+                  <span className={styles.ppCatName}>{c.name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className={styles.modalDesc} role="status" aria-live="polite">
+        {err ? <span className={styles.presetDialogErr}>{err}</span> : ''}
+      </p>
+    </PlayerDialog>
+  );
+}
+
+/** ③ 분류 하나 이름 변경 | 삭제 */
+function CategoryEditDialog({
+  category,
+  onCancel,
+  onRename,
+  onDelete,
+}: {
+  category: CategoryDto;
+  onCancel: () => void;
+  onRename: (name: string) => Promise<string | null>;
+  onDelete: () => Promise<string | null>;
+}): React.ReactElement {
+  const [name, setName] = useState(category.name);
+  const [busy, err, run, setErr] = useDialogRun();
+  const submit = () => {
+    const v = name.trim();
+    if (!v) {
+      setErr(t('practice.catNameRequired'));
+      return;
+    }
+    void run(() => onRename(v));
+  };
+  return (
+    <PlayerDialog
+      id="catEditDialog"
+      title={t('practice.catOneTitle')}
+      busy={busy}
+      small
+      onCancel={onCancel}
+      onSubmit={submit}
+      actions={
+        <>
+          <button
+            type="button"
+            className={styles.dangerText}
+            id="catEditDelete"
+            disabled={busy}
+            onClick={() => void run(onDelete)}
+          >
+            {t('practice.catDelete')}
+          </button>
+          <span className={styles.dlgSpacer} />
+          <button type="button" className="ghostBtn" id="catEditCancel" disabled={busy} onClick={onCancel}>
+            {t('practice.dlgCancel')}
+          </button>
+          <button type="submit" className="pillBtn" id="catEditSave" disabled={busy}>
+            {t('practice.catRename')}
+          </button>
+        </>
+      }
+    >
+      <input
+        id="catEditInput"
+        className="inpField"
+        type="text"
+        maxLength={20}
+        autoComplete="off"
+        aria-label={t('practice.catOneTitle')}
+        value={name}
+        disabled={busy}
+        onChange={(e) => {
+          setName(e.target.value);
+          setErr('');
+        }}
+      />
+      <p className={styles.modalDesc} role="status" aria-live="polite">
+        {err ? <span className={styles.presetDialogErr}>{err}</span> : ''}
+      </p>
+    </PlayerDialog>
   );
 }
 
