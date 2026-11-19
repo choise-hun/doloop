@@ -2,7 +2,7 @@
 
 > 작업: SL-2 (1단계 시니어 명세) | 진행 파일: [진행_SL_곡목록분류.md](../진행_SL_곡목록분류.md) §2 D4·D5·D6, §3 SL-2 행 | 시안: [SL_시안.html](SL_시안.html) §3(⑥)·§4(⑩)
 > 기준 커밋: `main` `e996121`(PR #51 SL-1 머지) | 작성 2026-11-19 Mac Claude 시니어
-> 상태: **사용자 결정 대기(§3 E1~E6)** — 승인 전에는 제품 코드를 고치지 않는다.
+> 상태: **사용자 결정 대기(§3 E1~E5, E6 해소)** — 승인 전에는 제품 코드를 고치지 않는다.
 
 ## 1. 범위와 배정
 
@@ -11,7 +11,7 @@
 | 포함 | ⑥ 곡 순서 저장(V14 `songs.sort_order` + `PUT /api/v1/songs/order`), 수정 중일 때 왼쪽 핸들 드래그(D4), 곡 목록 패널 아래 끝 = 플레이어 버튼 섹션 아래 끝(961px 이상). ⑩ `DELETE /api/v1/sessions/{sessionId}`(D6 정리 규칙), 플레이어 "이 곡의 연습 기록" 세션 카드 아래 줄 오른쪽 ✕ → 확인 → 삭제 |
 | 제외 | SL-3(나머지 29곳 선택창), D1 `--fill1` 색 확정(SL-1 사용자 확인 항목, 이 Step은 그 색을 새로 쓰지 않는다), Notion 동기화(폐기 기능 — 새 경로에 outbox를 넣지 않는다), 기록 화면(`log.html`) 세션 카드 ✕(E4), 폴더별 순서(D5에서 제외) |
 | 배정 | **[시니어 직접 구현] → 주니어 4단계**(협업 §1.2 기본). 근거: 서버는 잠금·보상 정리(저장소 휴지통·공유 첨부)·소유권, 화면은 요청 세대(`songsListReqSeqRef`) 경합과 낙관적 갱신 되돌리기가 있어 고위험 |
-| Step 구성 | E5 추천: **한 Step·한 브랜치(`feat/SL-2-order-delete`)·커밋 2개**(① 서버+Kotlin 테스트 ② 화면+e2e). 대기능 SL은 이미 Step 4개(SL-0~3, 최대치)라 나누면 상한을 넘는다. 파일 수는 골디락스 상한(7)을 넘는다(§10, 약 17개) — 서버 커밋이 독립 검증 단위이므로 커밋 경계에서 끊어 인계할 수 있다 |
+| Step 구성 | E5 추천: **한 Step·한 브랜치(`feat/SL-2-order-delete`)·커밋 2개**(① 서버+Kotlin 테스트 ② 화면+e2e). (SL-3이 AS로 빠져 SL은 Step 3개라 SL-2a/2b로 나눌 여유는 있다. 그래도 나눈 두 Step 모두 상한 7을 넘고 화면이 서버에 의존해 따로 머지할 이득이 작다.) 파일 수는 골디락스 상한(7)을 넘는다(§10, 약 17개) — 서버 커밋이 독립 검증 단위이므로 커밋 경계에서 끊어 인계할 수 있다 |
 
 ## 2. 전제 표 (코드로 확인, `main` `e996121`)
 
@@ -36,7 +36,7 @@
 | P17 | 곡 카드는 `<li><button class=ppSongBtn>` 하나. 수정 중이면 클릭 = 곡 수정 창. 서랍(`libOpen`)도 같은 `renderSongItem`을 `inline=false`로 쓴다 | `PracticePage.tsx:1879-1912` |
 | P18 | 부모 재렌더: 플레이어는 재생 중 250ms·녹음 중 50ms마다 다시 그려진다 → 드래그 중 순서는 `useState`로 들고, effect 의존성에 렌더마다 새 배열을 넣지 않는다 | `frontend-state.md` §6 |
 | P19 | Exposed 0.56.0. `databaseGenerated()` 사용 가능 여부는 **미확인**(구현 첫 단계에서 컴파일로 확인) | `build.gradle.kts:18` |
-| P20 | SL-3 겹침: `SongRecordParts.tsx:184`에 `<select class="ab-select">`(SL-3 대상 "기록 카드 1곳"). SL-2는 같은 파일의 `SessionTimeline`(`:420-480`)에 prop 1개를 통과시켜야 한다 → **같은 파일 동시 수정**(E6) | grep `<select` |
+| P20 | (E6에서 해소) 옛 SL-3 겹침: `SongRecordParts.tsx:184`에 `<select class="ab-select">`(SL-3 대상 "기록 카드 1곳"). SL-2는 같은 파일의 `SessionTimeline`(`:420-480`)에 prop 1개를 통과시켜야 한다 → **같은 파일 동시 수정**(E6) | grep `<select` |
 
 ## 3. 사용자 결정 (승인 필요)
 
@@ -46,8 +46,8 @@
 | E2 | 새로 넣은 곡의 자리 | **맨 위**(방금 넣은 곡을 바로 연습) | 맨 아래 |
 | E3 | 세션을 지운 뒤 곡의 "마지막 연습일" | **남은 세션의 가장 늦은 날짜로 다시 계산**(없으면 비움) | 그대로 둠(지운 날짜가 계속 보일 수 있음) |
 | E4 | ✕를 어느 화면에 두나 | **플레이어 "이 곡의 연습 기록"만**(요청 ⑩ 범위) | 기록 화면 카드에도 |
-| E5 | Step 구성 | **한 Step·한 PR, 커밋 2개(서버 → 화면)** | SL-2a 서버 / SL-2b 화면으로 분리(대기능 Step 5개로 상한 초과) |
-| E6 | SL-3과 `SongRecordParts.tsx`(·i18n 3파일) 겹침 | **SL-2 구현은 SL-3 PR 머지 뒤 main에서 시작**한다. SL-3이 길어지면 서버 커밋(①)만 먼저 하고 화면 커밋(②)은 SL-3 머지 뒤 | SL-2가 `SessionTimeline` 블록만 고치고 SL-3 머지 뒤 main을 merge해 충돌 처리 |
+| E5 | Step 구성 | **한 Step·한 PR, 커밋 2개(서버 → 화면)** | SL-2a 서버 / SL-2b 화면으로 분리(SL Step 4개, 상한 안. PR 2개·머지 2번) |
+| E6 | SL-3과 `SongRecordParts.tsx`(·i18n 3파일) 겹침 | **해소(2026-11-19 갱신):** 옛 SL-3을 [AS](../진행_AS_선택창전환.md)로 이관하고 `SongRecordParts.tsx`를 고치는 AS-2를 SL-2 머지 뒤로 미뤘다. 병렬 AS-1(코드 화면)은 겹치는 파일이 없고 새 i18n 키도 만들지 않는다 → **SL-2는 기다리지 않고 바로 시작** | — |
 
 확인 창 방식은 결정하지 않고 SL-1 곡 삭제와 같은 `window.confirm`으로 맞춘다(자유 범위, 시안 문구 사용).
 
@@ -230,7 +230,7 @@ CREATE TRIGGER songs_sort_order_default BEFORE INSERT ON songs
 | ② | `frontend/src/lib/songOrder.mts`(신규, `applySubsetOrder`) + `test/sl2_song_order.test.js`(신규, `npm test` = `node --test test/*.test.js`) | 순수 함수 |
 | ② 테스트 | `test/e2e/layout/practice.spec.js`(+필요하면 `test/e2e/support/mock-app.js`) | §11.2 |
 
-SL-3과 겹침: `SongRecordParts.tsx`(확실), i18n 3파일(SL-3이 문구를 추가하면). `PracticePage.*`는 SL-3 범위 밖(SL-3 지시에 따라). E6 결정 전에는 ② 커밋 파일을 열지 않는다.
+겹침: 옛 SL-3은 AS로 이관(E6). `SongRecordParts.tsx`·`layout/practice.spec.js`를 고치는 AS-2는 SL-2 머지 뒤라 SL-2가 먼저 고친다. AS-1은 이 표의 파일을 건드리지 않는다.
 
 ## 11. 검증과 수용 기준
 
@@ -271,7 +271,7 @@ SL-3과 겹침: `SongRecordParts.tsx`(확실), i18n 3파일(SL-3이 문구를 �
 
 ## 12. 구현 순서와 Git (승인 뒤)
 
-1. `cd ../doloop-sl2 && git switch -c feat/SL-2-order-delete origin/main`(E6 추천이면 SL-3 머지 뒤 최신 main).
+1. `cd ../doloop-sl2 && git fetch && git switch -c feat/SL-2-order-delete origin/main`(PR #52 머지 뒤 main).
 2. 커밋 ①: V14 → Tables → SongService/Routes → SessionService/Routes/Main → Kotlin 테스트 K1~K11 중 표적(K2·K3·K7·K8) 실행.
 3. 커밋 ②: apiClient·songOrder → PracticePage ⑥ → 세션 ✕ → i18n → e2e SL2-01~08 표적 실행.
 4. 진행 파일 §3에 시니어 구현 결과·주니어 실행 목록 기록 → push. PR은 주니어 4단계(협업 §1.2 시니어 직접 구현 예외).
@@ -280,4 +280,4 @@ SL-3과 겹침: `SongRecordParts.tsx`(확실), i18n 3파일(SL-3이 문구를 �
 
 - P19 Exposed `databaseGenerated()`(§4 대안 있음).
 - §7.4 `contain: size` + `align-self: stretch`로 960px 초과 4폭에서 맞춤이 되는지 — 구현 때 계산 스타일·SL2-06으로 증명.
-- SL-3이 i18n 3파일을 고치는지(E6).
+- (해소) SL-3 i18n 겹침 — AS-1·AS-3은 새 i18n 키를 만들지 않는다(AS 명세 §4-6).
