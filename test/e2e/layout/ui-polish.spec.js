@@ -1,7 +1,7 @@
 // UI 다듬기(2026-11-15): 커뮤니티 숨김 · PLAYER 메뉴 이름 · 로고↔HOME 간격 · 플레이어 재생:녹음 10:2 · 제목 세로 가운데
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { mockApp, STATES } = require('../support/mock-app');
+const { mockApp, STATES, FIXTURES } = require('../support/mock-app');
 
 test('UP-1: 커뮤니티 숨김 기본값 — 위 메뉴·탭 바·홈 배너·설정/프로필 섹션이 없고 주소는 홈으로 간다', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -87,4 +87,105 @@ test('UP-5: 곡이 없을 때 "연습 플레이어" 제목이 머리 막대의 �
     return { head: head.top + head.height / 2, title: t.top + t.height / 2 };
   });
   expect(Math.abs(r.head - r.title)).toBeLessThanOrEqual(1);
+});
+
+// ── DS2-4(2026-11-19 승인): 공용 .ghostBtn·.inpField 본체 3px · Notes·NoteDetail·Progressions·Settings·Privacy·Profile 4:6 전환
+// 색은 토큰을 화면에서 해석해 비교한다(DS2-2 resolveTokenColors 방식). 다크만 rgb 직접(DS24-D1)
+
+async function ds24Colors(page) {
+  return page.evaluate(() => {
+    const read = (prop, val) => {
+      const el = document.createElement('span');
+      el.style[prop] = val;
+      document.body.appendChild(el);
+      const out = window.getComputedStyle(el)[prop];
+      el.remove();
+      return out;
+    };
+    return {
+      ink: read('color', 'var(--ink)'),
+      inkStrong: read('color', 'var(--ink-strong)'),
+      fill2: read('color', 'var(--fill2)'),
+      fill3: read('color', 'var(--fill3)'),
+      seamHairline: read('color', 'var(--seam-hairline)'),
+      cream: read('backgroundColor', 'var(--cream)'),
+      paper: read('backgroundColor', 'var(--paper)'),
+      panelFrosted: read('backgroundColor', 'var(--panel-frosted)'),
+      reliefBottomMid: read('color', 'var(--relief-bottom-mid)'),
+    };
+  });
+}
+
+const ds24Rgb = (c) => (c.match(/\d+(?:\.\d+)?/g) || []).slice(0, 3).map(Number).join(',');
+
+async function ds24Box(locator) {
+  return locator.evaluate((el) => {
+    const s = window.getComputedStyle(el);
+    return {
+      leftW: s.borderLeftWidth, leftC: s.borderLeftColor,
+      topW: s.borderTopWidth, topC: s.borderTopColor,
+      radius: s.borderTopLeftRadius, shadow: s.boxShadow,
+      bg: s.backgroundColor, bgImage: s.backgroundImage,
+      fontSize: s.fontSize, fontWeight: s.fontWeight, height: el.getBoundingClientRect().height,
+    };
+  });
+}
+
+// 스파인 카드: 왼쪽 12px(색 = 스파인) · 위 1px 줄눈 · 3px · 릴리프 그림자
+async function expectSpine(locator, spine, colors, label) {
+  const b = await ds24Box(locator);
+  expect(b.leftW, `${label} 왼쪽 테두리`).toBe('12px');
+  expect(b.leftC, `${label} 스파인 색`).toBe(spine);
+  expect(b.topW, `${label} 위 테두리`).toBe('1px');
+  expect(b.topC, `${label} 위 테두리 색`).toBe(colors.seamHairline);
+  expect(b.radius, `${label} 곡률`).toBe('3px');
+  const rgbs = (b.shadow.match(/rgba?\([^)]*\)|color\([^)]*\)/g) || []).map(ds24Rgb);
+  expect(rgbs, `${label} 릴리프`).toContain(ds24Rgb(colors.reliefBottomMid));
+}
+
+// 범위 안의 보이는 필(곡률 9999px) a·button id 목록 — 규칙 §1 Q1
+async function visiblePills(page, scope = 'main') {
+  return page.locator(scope).evaluate((root) => [...root.querySelectorAll('a, button')]
+    .filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && window.getComputedStyle(b).borderTopLeftRadius === '9999px';
+    })
+    .map((b) => b.id || b.getAttribute('data-act') || b.textContent.trim()));
+}
+
+test('DS24-C1 공용 본체 .ghostBtn·.inpField = 3px 블록, 크기 불변 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.user, community: false });
+  await page.goto('/settings.html#account', { waitUntil: 'load' });
+  const logout = page.locator('#btnLogout');
+  await expect(logout).toBeVisible();
+  const colors = await ds24Colors(page);
+  const b = await ds24Box(logout);
+  expect(b.radius).toBe('3px');
+  expect(b.topC).toBe(colors.seamHairline);
+  expect(b.bg).toBe(colors.cream);
+  expect(b.fontSize).toBe('17px');
+  expect(b.height).toBeGreaterThanOrEqual(48);
+  await logout.hover();
+  await expect.poll(() => logout.evaluate((el) => window.getComputedStyle(el).borderTopColor)).toBe(colors.ink);
+
+  await page.goto('/profile.html', { waitUntil: 'load' });
+  const inp = page.locator('#profileDisplayNameInput');
+  await inp.waitFor();
+  const i = await ds24Box(inp);
+  expect(i.radius).toBe('3px');
+  expect(i.topC).toBe(colors.seamHairline);
+  expect(i.fontSize).toBe('16px');
+});
+
+test('DS24-C2 textarea.inpField 3px · 홈 #goNote 회귀 없음 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.userData, community: false });
+  await page.goto(`/note.html?id=${FIXTURES.note.id}`, { waitUntil: 'load' });
+  await expect(page.locator('#noteTitle')).toContainText('노트');
+  expect(await page.locator('#noteMemoInput').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+
+  await page.goto('/', { waitUntil: 'load' });
+  await page.locator('#goNote').waitFor({ state: 'attached' });
+  expect(await page.locator('#goNote').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
 });
