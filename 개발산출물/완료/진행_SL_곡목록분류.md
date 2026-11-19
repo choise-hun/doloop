@@ -2,7 +2,7 @@
 
 - **목표:** 플레이어 화면의 분류 추가·지정, 곡 목록(폴더 선택·순서·수정), 제목 수정, 연습 세션 삭제 흐름을 사용자 요청 10건(2026-11-19)대로 고친다. 앱 안의 브라우저 기본 선택창(`<select>`)은 공용 선택창으로 바꾼다.
 - **근거:** 사용자 요청 2026-11-19(아래 §1 원문 요약), 시안 [명세/SL_시안.html](명세/SL_시안.html), 규칙 [frontend-design](../docs/rules/frontend-design.md)·[frontend-layout](../docs/rules/frontend-layout.md)·[frontend-state](../docs/rules/frontend-state.md)·[backend-kotlin](../docs/rules/backend-kotlin.md), 계획 §4의 "연습 카드(세션) 개별 삭제"(S3b R03)
-- **상태:** SL-0 완료(PR #50 머지). **SL-1 4단계 주니어 검증·PR 완료(2026-11-19, `feat/SL-1-player-list-ui`)** — `npm test` 542 pass, `practice.spec.js` 73 passed, 전체 Playwright 944 passed / 1 failed(`i18n-lang.spec.js` `[ja]` 1280px `#presetSelect` `G3` 넘침 `91>87`, 제품 코드 결함으로 시니어 인계). D1 수정 중 `--fill1` 색은 사용자 확인 필요. [결과/SL-1](결과/SL-1.md). SL-1 PR #51 머지(main `e996121`). SL-2 명세 PR #52 머지, 사용자 결정 E1~E5 추천안 승인(E6 해소). **SL-2 0단계 시니어 구현 완료·push(2026-11-19, `feat/SL-2-order-delete`, PR 없음) — 주니어 4단계 대기**(아래 §3 "SL-2 시니어 구현 결과").
+- **상태:** SL-0 완료(PR #50 머지). SL-1 완료(PR #51 머지, main `e996121`). SL-2 명세 PR #52 머지. **SL-2 4단계 주니어 검증 완료(2026-11-20, `feat/SL-2-order-delete`)** — `./gradlew test` 401 passed, `npm test` 545 pass, `npm run build` 0 errors, Playwright 전체 957 passed, `LAYOUT_SHOTS=1 practice.spec.js` 85 passed. [결과/SL-2](결과/SL-2.md). SL-3은 AS로 이관, SL 작업 전체 완료(`완료/` 이동).
 - **step ID:** `SL-` (다른 진행 파일과 겹치지 않음. `PL-`은 이미 사용)
 - **배정:** 기본 시니어 원스톱(협업 §1.2). 전체 회귀·PR 정리는 주니어 4단계.
 
@@ -41,7 +41,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | SL-0 | 시안·결정 | 시니어 | 요청·코드 조사 → [SL_시안.html](명세/SL_시안.html), 이 파일 §2 | 사용자 D1~D9 확정 | 중간 | 완료(PR #50) |
 | SL-1 | 화면만: ①②③④⑦⑧(수정 창, 드래그 제외)⑨ + 공용 선택창 컴포넌트와 플레이어 2곳 적용 | 시니어 구현 → 주니어 4단계 | §2 확정 → `결과/SL-1.md` | 표적 e2e(`test/e2e/layout/practice*.spec.js`)·4폭 스크린샷 Q표, `npm test` | 높음 | 4단계 검증·PR 완료 (`i18n-lang` `[ja]` 1건 시니어 인계) |
-| SL-2 | 서버 계약: 곡 순서(V14 + API)·세션 삭제 API, ⑥ 드래그·패널 높이, ⑩ ✕ | [시니어 직접 구현] → 주니어 4단계 | SL-1 머지 → [명세/SL-2_구현명세.md](명세/SL-2_구현명세.md), `결과/SL-2.md` | Kotlin 통합(소유권 A↔B 404·정리 규칙), e2e | 높음 | **0단계 시니어 구현·push 완료(2026-11-19, `feat/SL-2-order-delete` `b7c31c1`·`c8a18e9`) — 주니어 4단계 대기** |
+| SL-2 | 서버 계약: 곡 순서(V14 + API)·세션 삭제 API, ⑥ 드래그·패널 높이, ⑩ ✕ | [시니어 직접 구현] → 주니어 4단계 | SL-1 머지 → [명세/SL-2_구현명세.md](명세/SL-2_구현명세.md), `결과/SL-2.md` | Kotlin 통합(소유권 A↔B 404·정리 규칙), e2e | 높음 | **4단계 주니어 검증·PR 정리 완료(2026-11-20, `feat/SL-2-order-delete`)** |
 | SL-3 | 공용 선택창을 나머지 29곳에 적용 | — | — | — | — | **AS로 이관(2026-11-19)** — Step 상한 때문에 대기능 분리: [진행_AS_선택창전환.md](진행_AS_선택창전환.md). SL은 SL-2로 끝난다 |
 
 ### SL-1 시니어 구현 결과 (2026-11-19, 주니어 4단계 입력)
