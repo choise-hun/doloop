@@ -2,8 +2,9 @@
 
 /* ── 행 ── */
 .row {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--paper);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-width: 0;
 }
 
@@ -50,8 +51,8 @@
   font-size: 12px;
   font-weight: 700;
   padding: 1px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   color: var(--ink);
 }
 
@@ -76,7 +77,6 @@
   gap: 8px;
 }
 
-.rowActs :global(.pillBtn),
 .rowActs :global(.ghostBtn) {
   min-height: 40px;
   font-size: 15px;
@@ -85,8 +85,33 @@
   text-align: center;
 }
 
+/* DS2-4 D8: 행·취향의 연주·랜덤 필 → 텍스트 버튼(규칙 §2-3 "연주하기 →"·"랜덤 ↻"). 대표 필은 화면당 1개 */
+.rowActs :global(.pillBtn) {
+  min-height: 40px;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 0 2px;
+  border: 0;
+  border-radius: var(--radius-block);
+  background: transparent;
+  color: var(--ink);
+  white-space: normal;
+  text-align: center;
+}
+
+.rowActs :global(.pillBtn):hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+@media (max-width: 820px) {
+  .rowActs :global(.pillBtn) {
+    min-height: 44px;
+  }
+}
+
 .detail {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--seam-hairline);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -119,8 +144,8 @@
 .tagList span {
   font-size: 12px;
   padding: 2px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
 }
 
 .memo {
@@ -145,7 +170,8 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   background: var(--bg);
   min-width: 64px;
   max-width: 100%;
@@ -238,8 +264,8 @@
   font-size: 15px;
   min-height: 40px;
   padding: 0 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  border-radius: var(--radius-block);
+  border: 1px solid var(--seam-hairline);
   background: var(--bg);
   color: var(--ink);
   cursor: pointer;
@@ -330,6 +356,7 @@
   gap: 12px;
   padding: 12px 16px;
   border: 1px dashed var(--line);
+  border-radius: var(--radius-block);
   background: var(--surface2);
   font-size: 14px;
 }
@@ -368,8 +395,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--paper);
 }
 
 .candidate > div {
@@ -394,8 +422,9 @@
 
 /* ── 읽는 법 안내 ── */
 .guide {
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--panel-frosted);
   padding: 12px 16px;
   font-size: 14px;
   margin-bottom: 16px;
@@ -434,7 +463,9 @@
   color: var(--muted);
 }
 .tastePick {
-  border: 1px solid var(--line);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--panel-frosted);
   padding: 14px;
   display: flex;
   flex-direction: column;

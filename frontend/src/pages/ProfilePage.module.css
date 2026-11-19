@@ -17,9 +17,17 @@
 }
 
 .accountCard {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  --section-spine: var(--fill3);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -28,10 +36,10 @@
 }
 
 .accountCard h2 {
-  font-family: var(--font-display);
-  font-weight: 900;
+  font-family: var(--font-body);
+  font-weight: 300;
   font-size: 24px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.025em;
   color: var(--ink);
   margin: 0;
 }

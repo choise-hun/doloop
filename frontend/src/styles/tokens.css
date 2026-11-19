@@ -255,15 +255,16 @@ a {
   cursor: default;
 }
 
+/* 사각 보조 버튼 (docs/rules/frontend-design.md §2-2: 3px 블록·줄눈 테두리·hover 먹색) */
 .ghostBtn {
   font: inherit;
   font-weight: 700;
   font-size: 17px;
   min-height: 48px;
   padding: 0 24px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--ink);
-  background: transparent;
+  border-radius: var(--radius-block);
+  border: 1px solid var(--seam-hairline);
+  background: var(--cream);
   color: var(--ink);
   cursor: pointer;
   display: inline-flex;
@@ -277,6 +278,10 @@ a {
 .ghostBtn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.ghostBtn:hover:not(:disabled) {
+  border-color: var(--ink);
 }
 
 /* 공통 직각 카드·패널 (docs/rules/frontend-design.md §2: 곡률 0px) */
@@ -297,8 +302,8 @@ a {
   font-size: 16px;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 0 22px;
   min-height: 48px;
   width: 100%;
@@ -306,7 +311,7 @@ a {
 }
 
 textarea.inpField {
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   padding: 14px 18px;
   min-height: 88px;
   resize: vertical;
