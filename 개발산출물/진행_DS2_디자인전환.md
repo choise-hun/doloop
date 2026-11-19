@@ -3,7 +3,7 @@
 - **목표:** 확정 시안(`4:6` + 쿨 라이트 -20% + `▶ PLAYER` A안 + `12px` 계기판)을 토큰·가드·AppShell부터 모든 화면까지 4 Step으로 적용한다.
 - **근거:** [계획/디자인_전환_계획](../계획/디자인_전환_계획.md) §1~§3 · [frontend-design](../docs/rules/frontend-design.md)(2026-11-18 개정) · [프론트_정렬규격](프론트_정렬규격.md) v1.8 · [명세/HOME_융합_시안.html](명세/HOME_융합_시안.html) · [자료/DESIGN_하라켄야_수정안](자료/DESIGN_하라켄야_수정안.md) · [협업 §1.2](협업_시니어주니어.md)
 - **step ID:** `DS2-1`~`DS2-4`. 테스트 이름 접두어 `DS21-`·`DS22-`…(기존 `shell.spec.js`의 옛 `DS2-N1~N3`와 구별)
-- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 완료(PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지 2026-11-19T01:10:16Z, main `8b79c79`). **DS2-4 명세 승인(2026-11-19, §9 7건 추천안) → 0단계 시니어 구현 중**([명세](명세/DS2-4_구현명세.md), 브랜치 `feat/DS2-4-notes-progressions-account`)
+- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 완료(PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지 2026-11-19T01:10:16Z, main `8b79c79`). **DS2-4 0단계 시니어 구현·push 완료, 4단계 주니어 대기**([명세](명세/DS2-4_구현명세.md), 브랜치 `feat/DS2-4-notes-progressions-account`, PR 없음)
 
 ## 1. 단계 표
 
@@ -12,7 +12,7 @@
 | DS2-1 | 토큰 3블록(쿨 라이트·파생 hex·`--radius-block`) + 곡률 가드 일원화·다크 동기화 가드 + AppShell `PLAYER` 1순위·A안 | **[시니어]** 구현·표적 테스트·커밋 2개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | 명세 승인 | [명세/DS2-1](명세/DS2-1_구현명세.md), 이 파일 | [결과/DS2-1](결과/DS2-1.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#44](https://github.com/choise-hun/doloop/pull/44) 머지, main `1103f0d`) |
 | DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](명세/DS2-2_구현명세.md), 이 파일 | [결과/DS2-2](결과/DS2-2.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지, main `44af6c3`) |
 | DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](명세/DS2-3_구현명세.md), [시안](명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지, main `8b79c79`) |
-| DS2-4 | Notes·NoteDetail·Progressions·Settings·Privacy·Profile 전환 + 공용 `.ghostBtn`·`.inpField` 본체 3px(D2) + 위 메뉴 글꼴(D12)·범위 순서(D10)·파사드(D15) 판정 + 전 화면 Q1~Q9 — 파일 8개(CSS 7·spec 1, TSX 0), 단일 Step·커밋 4개 추천 | **[시니어]** 구현·표적 테스트·커밋 5개·push / [주니어] 4단계 전체 회귀·PR·CI·전 화면 스크린샷·결과·`완료/` 이동 | DS2-3 머지(완료) + 명세 승인 | [명세/DS2-4](명세/DS2-4_구현명세.md), [시안](명세/DS2-4_시안.html), 이 파일 | `개발산출물/결과/DS2-4.md` | 명세 §8 전부, 전 화면 4폭+다크 Q표, 최신 head CI 통과·리뷰 처리, `완료/` 이동 | 높음 | **0단계 시니어 구현 중** |
+| DS2-4 | Notes·NoteDetail·Progressions·Settings·Privacy·Profile 전환 + 공용 `.ghostBtn`·`.inpField` 본체 3px(D2) + 위 메뉴 글꼴(D12)·범위 순서(D10)·파사드(D15) 판정 + 전 화면 Q1~Q9 — 파일 8개(CSS 7·spec 1, TSX 0), 단일 Step·커밋 4개 추천 | **[시니어]** 구현·표적 테스트·커밋 5개·push / [주니어] 4단계 전체 회귀·PR·CI·전 화면 스크린샷·결과·`완료/` 이동 | DS2-3 머지(완료) + 명세 승인 | [명세/DS2-4](명세/DS2-4_구현명세.md), [시안](명세/DS2-4_시안.html), 이 파일 | `개발산출물/결과/DS2-4.md` | 명세 §8 전부, 전 화면 4폭+다크 Q표, 최신 head CI 통과·리뷰 처리, `완료/` 이동 | 높음 | **0단계 완료(push) · 4단계 주니어 대기** |
 
 ## 2. 고정된 결정 (Step 경계를 넘는 것만)
 
@@ -43,6 +43,27 @@
 - **접근 이름 측정:** Playwright 1.51 `getByRole({ name })`은 `content: "▶" / ""` 대체 텍스트를 지원하지 않아 이름을 `▶" / " PLAYER`로 계산한다. Chromium 실제 접근성 트리(CDP `Accessibility.getPartialAXTree`)는 `PLAYER` → DS21-N1·N2는 CDP 값으로 `PLAYER` 정확히 일치를 단언한다(기대값 동일).
 
 ## 5. 다음 세션 시작 지시
+
+- **DS2-4 0단계 결과(2026-11-19 Mac, Claude 시니어):** 명세 §9 7건 모두 추천안 승인(§2). 브랜치 `feat/DS2-4-notes-progressions-account`(main `8b79c79`, origin/main 앞선 커밋 없음), 커밋 `465e096` docs(명세·시안·이 파일·인수인계) · `5f0d515` feat(design) 본체 · `48c6f94` feat(notes) · `7d8b944` feat(progressions) · `3c8fef4` feat(settings) · 이후 docs(이 기록). PR 없음. 파일은 명세 §3의 8개만(CSS 7·spec 1, **TSX 0**, `AppShell`·`Community.module.css`·규칙 문서 무수정). D12 A(글꼴 현행)라 P18 웹 글꼴 확인은 불필요.
+  - **구현 전 실패(Red, 묶음마다 테스트 먼저 → `npm run build` → 실행):** ② `npx playwright test test/e2e/layout/ui-polish.spec.js -g "DS24-C"` → 2 failed(C1 `#btnLogout` `9999px`≠`3px`, C2 `#noteMemoInput` `0px`≠`3px`) · ③ `-g "DS24-N"` → 2 failed(N1 `#form` 왼쪽 `1px`, N2 `#noteHeader` 왼쪽 `1px`) · ④ `-g "DS24-G"` → 2 failed(G1 보이는 필 6개 초과, G2 `#progAddBtn` `9999px`) · ⑤ `-g "DS24-(S|P|D)"` → 5 failed(S1 `#account` 왼쪽 `1px`, S2 필 목록 1개 초과, S3 privacy 첫 `.set-sec` `1px`, P1 `#profileAccount` `1px`, D1 `#account` `rgb(58, 57, 53)`≠`rgb(108, 125, 114)`).
+  - **P3 본체 덮기 계산값:** DS24-C1이 `#btnLogout` 곡률 `3px`·위 테두리 `seamHairline`·배경 `cream`·`17px`·높이 ≥48·hover 테두리 `ink`를 실제 계산값으로 통과 → 번들 순서와 무관하게 본체가 적용됨을 확인. C2 홈 `#goNote` `3px`(P2 회귀 없음).
+  - **표적 Green:** 커밋마다 `node --test test/design_rules.test.js test/r0_core.test.js test/r1_settings_notes.test.js test/ch5_progressions.test.js` → pass 43 / fail 0 · `npm run build` 오류 0 · ② `ui-polish·home·practice·log.spec.js` **148 passed** · ③ `layout/notes·note.spec.js` **38 passed** · ④ `layout/progressions.spec.js`·`progressions.spec.js`·`progression-play.spec.js` **39 passed** · ⑤ `layout/settings·privacy·profile·shell.spec.js` **218 passed** · 최종 `ui-polish.spec.js` **17 passed**(UP-1~5 + DS24 11개). layoutSuite G 실패 0 → 명세 §9 주의 1(G1, padding 축소) 해당 없음, padding 그대로.
+  - **체크리스트 grep:** 대상 화면 CSS 6개 `radius-pill` 0줄 · `tokens.css` `radius-pill` = 토큰 정의 `:58` + `.pillBtn` `:240` 2줄 · `oklab|oklch` = `tokens.css:68` 주석뿐 · `git diff --stat main -- '*.tsx' '*.mts'` 0.
+  - **주의 2(본체 순서) 확인:** Practice `.presetBtn`은 모두 `.ppCtl` 안이라 `.ppCtl .presetBtn`(0,2,0)이 투명·`border: 0`을 지킨다. 새 `.ghostBtn:hover:not(:disabled)`는 명시도 0,3,0이지만 `border-color`만 바꿔 `border: 0` 버튼에 보이는 변화 없음. Notes `.optToggle`·`.retryBtn`은 일반 사각 보조(`cream`)로 바뀌며 의도와 일치 → 질문 없음.
+  - **명세와 다른 점:** ① `.conceptsBox`는 원래 테두리가 없어 배경 `--panel-frosted`·`3px`만(테두리 추가 안 함, 폭 불변) ② `.count`는 T4(500·`0.08em`·대문자)만 넣고 기존 `opacity: 0.7` 유지(색 `--muted`로 바꾸지 않음) ③ D9 사각 보조(`#btnSyncEnable`·`#btnConfirmZip`)에도 D7과 같은 hover `border-color: var(--ink)` ④ DS24-G2 user 넣기 패널 기본 탭은 `manual` → 필 1개 = `ProgressionEditor` 저장(`#new-submit`) ⑤ DS24-S2는 `[data-setting-disclosure]` 전부 펼친 뒤 범위별(`#account` = `['btnDriveEnable']`, `advancedData` = `['btnSaveNotionKey']`, 화면 전체 2개)로 단언 ⑥ `.tabs button` 비선택 배경은 `--cream`(명세 §4-4대로), `.guide`·`.tastePick` 배경 `--panel-frosted`, `.candidate` 배경 `--paper`.
+  - 미실행(4단계 몫): `npm test` 전체, `npx playwright test` 전체(G5b·G7b·A1·G8 경고 수 main `8b79c79` 대비), `LAYOUT_SHOTS=1` 전 화면 4폭+다크 Q표, `bash scripts/check-config-sync.sh`, 결과 파일 `개발산출물/결과/DS2-4.md`, 계획 대기 목록(D15 파사드·아치, P20 `.cardBox/.panelBox` 정리, P2 2단 덮기 정리 제안), PR·CI, `완료/` 이동.
+- 다음: 아래 멘트로 주니어 4단계(템플릿 §4)를 시작한다.
+
+```text
+# Gemini (주니어) — DS2-4 4단계 최종 검증·문서·PR·완료 이동
+개발산출물/프롬프트_템플릿_4단계.md §4를 따른다. 입력: 개발산출물/명세/DS2-4_구현명세.md(§5·§6·§8·§9), 개발산출물/진행_DS2_디자인전환.md §2·§5(DS2-4 0단계 결과), 브랜치 feat/DS2-4-notes-progressions-account 최신 head.
+목표: 시니어 구현(공용 .ghostBtn·.inpField 3px, Notes·NoteDetail·Progressions·Settings·Privacy·Profile 스파인·필 수·밑줄 세그먼트·T1/T4)의 전체 회귀와 전 화면 스크린샷 검토, 결과 파일·계획 대기 목록·PR·CI·완료 이동을 맞춘다.
+기준: 명세 §8 (4단계) 항목, §5 상태별 필 수 표, docs/rules/frontend-layout.md 9대 질문(전 화면 4폭+다크 Q1~Q9, 커뮤니티 제외), G5b·G7b·A1·G8 경고 수 main(8b79c79) 대비(대상 6화면 G5b·G7b 증가 없음, 늘면 요소 목록).
+선행 조건: git switch feat/DS2-4-notes-progressions-account && git pull --ff-only, gh 계정 choise-hun 확인, 테스트 전에 npm run build(서버가 dist/ 서빙). 새 실패가 나면 원인만 기록하고 시니어 판정 전 단언 완화·skip·known 추가 금지.
+범위: npm test·npm run build·npx playwright test 전체·LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/ 전체·bash scripts/check-config-sync.sh(없으면 미실행 기록) 실행, 개발산출물/결과/DS2-4.md 작성, 계획/상용_서비스_계획.md 대기 목록(D15 파사드·아치 별도 시안, P20 .cardBox/.panelBox 정리, P2 2단 덮기 정리 제안), 진행 파일·인수인계 메모 갱신. 제품 코드 수정 금지.
+완료 기준: 명세 §8 전부 체크, 결과 파일에 경고 수 표·전 화면 Q1~Q9 표, PR(base main) 최신 head CI 통과·리뷰 확인 기록, 진행 파일 git mv 완료/ + 완료 줄.
+Git 처리: docs 커밋·push, main 대상 신규 PR 생성, gh pr checks --watch, 리뷰 확인. 머지·배포는 하지 않는다.
+```
 
 - **DS2-4 1단계 명세(2026-11-19 Mac, Claude 시니어):** PR #46 머지 확인(`gh pr view 46` → `MERGED`, `mergedAt 2026-11-19T01:10:16Z`) 후 main `8b79c79`로 `git pull --ff-only`, 브랜치 `feat/DS2-4-notes-progressions-account` 생성(커밋 없음). 작성: [명세/DS2-4](명세/DS2-4_구현명세.md)(전제 P1~P20, D1~D17, 파일 8개, 테스트 DS24-C1·C2·N1·N2·G1·G2·S1~S3·P1·D1), [시안](명세/DS2-4_시안.html)(테마·D2·D4·D8·D9·D12 선택지). 소스·테스트 수정·빌드·테스트 실행 없음.
   - 사용자 승인 요청 7건(명세 §9): ① 단일 Step·[시니어]·파일 8개(대안: DS2-4/DS2-5 + Step 상한 1회 예외) ② 계정 화면 스파인 `fill3` ③ Progressions 행 연주 = 텍스트 버튼 ④ Settings 필 = 펼친 섹션마다 1개 ⑤ Progressions 범위 순서·기본값 변경 안 함 ⑥ 위 메뉴 글꼴 현행 유지 ⑦ 파사드·아치 제외 + 대기 목록 등록.
