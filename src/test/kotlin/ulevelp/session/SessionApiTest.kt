@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -559,5 +560,140 @@ class SessionApiTest {
         }
         assertEquals(HttpStatusCode.Unauthorized, pRes.status)
         assertStandardError(pRes.bodyAsText(), 401, "UNAUTHORIZED")
+    }
+
+    // ============================================================
+    // SL-2 ⑩ DELETE /sessions/{id} (명세 §6)
+    // ============================================================
+
+    private fun insertDriveTake(userId: UUID, songId: UUID, sessionId: UUID, fileId: String) {
+        transaction(db) {
+            TakesTable.insert {
+                it[TakesTable.userId] = userId
+                it[TakesTable.songId] = songId
+                it[TakesTable.sessionId] = sessionId
+                it[TakesTable.recordedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                it[TakesTable.durationSec] = 10
+                it[TakesTable.mime] = "audio/mp4"
+                it[TakesTable.sizeBytes] = 1024L
+                it[TakesTable.storage] = "drive"
+                it[TakesTable.storageKey] = fileId
+            }
+        }
+    }
+
+    private fun setLastDate(songId: UUID, date: LocalDate) {
+        transaction(db) {
+            SongsTable.update({ SongsTable.id eq songId }) { it[lastDate] = date }
+        }
+    }
+
+    @Test
+    fun `SL2-K7 세션 삭제는 녹음을 지우고 supabase 키만 저장소에서 지우며 마지막 연습일을 다시 계산`() = testApplication {
+        val storage = FakeStorageClient()
+        configureApiTestApp(dbConfig, storageClient = storage)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val songId = insertSong(userA)
+        val keep = insertSession(userA, songId, LocalDate.of(2026, 11, 10), 300)
+        val target = insertSession(userA, songId, LocalDate.of(2026, 11, 18), 600)
+        setLastDate(songId, LocalDate.of(2026, 11, 18))
+        val supabaseTake = insertTake(userA, songId, target, OffsetDateTime.now(ZoneOffset.UTC))
+        insertDriveTake(userA, songId, target, "driveFileId-1")
+        val keepTake = insertTake(userA, songId, keep, OffsetDateTime.now(ZoneOffset.UTC))
+
+        val res = client.delete("/api/v1/sessions/$target") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, res.status)
+        assertEquals("no-store", res.headers[HttpHeaders.CacheControl])
+        assertEquals(true, Json.parseToJsonElement(res.bodyAsText()).jsonObject["ok"]?.jsonPrimitive?.boolean)
+
+        transaction(db) {
+            assertEquals(0L, SessionsTable.selectAll().where { SessionsTable.id eq target }.count())
+            assertEquals(0L, TakesTable.selectAll().where { TakesTable.sessionId eq target }.count())
+            // 같은 곡의 다른 세션·녹음은 그대로
+            assertEquals(1L, SessionsTable.selectAll().where { SessionsTable.id eq keep }.count())
+            assertEquals(1L, TakesTable.selectAll().where { TakesTable.id eq keepTake }.count())
+            // 커밋 뒤 purge로 휴지통이 비었다
+            assertEquals(0L, StorageTrashTable.selectAll().count())
+            assertEquals(LocalDate.of(2026, 11, 10), SongsTable.selectAll().where { SongsTable.id eq songId }.single()[SongsTable.lastDate])
+        }
+        assertEquals(listOf("$userA/$supabaseTake.m4a"), storage.deleted.toList())
+
+        val song = Json.parseToJsonElement(
+            client.get("/api/v1/songs/$songId") { header(HttpHeaders.Authorization, "Bearer $tokenA") }.bodyAsText()
+        ).jsonObject["song"]!!.jsonObject
+        assertEquals(300L, song["totalSeconds"]!!.jsonPrimitive.long)
+        assertEquals("2026-11-10", song["lastDate"]!!.jsonPrimitive.content)
+
+        // 마지막 세션까지 지우면 마지막 연습일은 비운다
+        val res2 = client.delete("/api/v1/sessions/$keep") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, res2.status)
+        transaction(db) {
+            assertNull(SongsTable.selectAll().where { SongsTable.id eq songId }.single()[SongsTable.lastDate])
+        }
+    }
+
+    @Test
+    fun `SL2-K8 다른 사용자 세션 삭제는 404이고 세션·녹음·저장소 무변경`() = testApplication {
+        val storage = FakeStorageClient()
+        configureApiTestApp(dbConfig, storageClient = storage)
+        val userA = UUID.randomUUID()
+        val userB = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        val tokenB = TestJwt.token(userB)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+
+        val songA = insertSong(userA)
+        val sessionA = insertSession(userA, songA, LocalDate.of(2026, 11, 18), 600)
+        setLastDate(songA, LocalDate.of(2026, 11, 18))
+        insertTake(userA, songA, sessionA, OffsetDateTime.now(ZoneOffset.UTC))
+
+        val res = client.delete("/api/v1/sessions/$sessionA") { header(HttpHeaders.Authorization, "Bearer $tokenB") }
+        assertEquals(HttpStatusCode.NotFound, res.status)
+        assertStandardError(res.bodyAsText(), 404, "NOT_FOUND")
+
+        transaction(db) {
+            assertEquals(1L, SessionsTable.selectAll().where { SessionsTable.id eq sessionA }.count())
+            assertEquals(1L, TakesTable.selectAll().where { TakesTable.sessionId eq sessionA }.count())
+            assertEquals(0L, StorageTrashTable.selectAll().count())
+            assertEquals(LocalDate.of(2026, 11, 18), SongsTable.selectAll().where { SongsTable.id eq songA }.single()[SongsTable.lastDate])
+        }
+        assertTrue(storage.deleted.isEmpty())
+
+        // 형식 오류·없는 id도 404
+        for (bad in listOf("not-a-uuid", UUID.randomUUID().toString())) {
+            val r = client.delete("/api/v1/sessions/$bad") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+            assertEquals(HttpStatusCode.NotFound, r.status, bad)
+        }
+    }
+
+    @Test
+    fun `SL2-K9 없는 id, 형식 오류 id, 두 번 삭제는 모두 404를 반환한다`() = testApplication {
+        val storage = FakeStorageClient()
+        configureApiTestApp(dbConfig, storageClient = storage)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val songA = insertSong(userA)
+        val sessionA = insertSession(userA, songA, LocalDate.of(2026, 11, 18), 180)
+
+        val firstDelete = client.delete("/api/v1/sessions/$sessionA") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, firstDelete.status)
+
+        val secondDelete = client.delete("/api/v1/sessions/$sessionA") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, secondDelete.status)
+        assertStandardError(secondDelete.bodyAsText(), 404, "NOT_FOUND")
+
+        val missingDelete = client.delete("/api/v1/sessions/${UUID.randomUUID()}") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, missingDelete.status)
+        assertStandardError(missingDelete.bodyAsText(), 404, "NOT_FOUND")
+
+        val badFormatDelete = client.delete("/api/v1/sessions/invalid-uuid") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.NotFound, badFormatDelete.status)
+        assertStandardError(badFormatDelete.bodyAsText(), 404, "NOT_FOUND")
     }
 }

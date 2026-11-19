@@ -16,6 +16,8 @@ export interface SongRecordPanelProps {
   songId: string | null;
   loggedIn: boolean;
   reloadKey: number;
+  /** SL-2 ⑩: 세션을 지운 뒤 부모(곡 목록 메타 다시 읽기)에 알린다 */
+  onSessionDeleted?: () => void;
 }
 
 export function SongRecordPanel(props: SongRecordPanelProps): React.ReactElement {
@@ -27,6 +29,7 @@ function OwnedSongRecordPanel({
   songId,
   loggedIn,
   reloadKey,
+  onSessionDeleted,
 }: SongRecordPanelProps): React.ReactElement {
   const authState = useAuth();
   const activeUid = authState.user?.id ?? null;
@@ -133,6 +136,26 @@ function OwnedSongRecordPanel({
       prev ? { ...prev, takes: prev.takes.filter((it) => it.id !== takeId) } : prev
     );
   };
+  // SL-2 ⑩: 지운 세션과 그 녹음을 빼고 A/B 슬롯에서도 비운 뒤, 요약(누적 시간·마지막 연습일)을 다시 읽는다
+  const removeSession = (sessionId: string) => {
+    const goneTakeIds = new Set(takes.filter((it) => it.sessionId === sessionId).map((it) => it.id));
+    setAbSelected((prev) => {
+      const slotA = prev[0] && !goneTakeIds.has(prev[0]) ? prev[0] : '';
+      const slotB = prev[1] && !goneTakeIds.has(prev[1]) ? prev[1] : '';
+      return slotA || slotB ? [slotA, slotB] : [];
+    });
+    setDetailData((prev) =>
+      prev
+        ? {
+            ...prev,
+            sessions: prev.sessions.filter((it) => it.id !== sessionId),
+            takes: prev.takes.filter((it) => it.sessionId !== sessionId),
+          }
+        : prev
+    );
+    void loadSongRecord(songId, activeUid);
+    onSessionDeleted?.();
+  };
   const replaceTake = (take: TakeDto) =>
     setDetailData((prev) =>
       prev ? { ...prev, takes: prev.takes.map((it) => (it.id === take.id ? take : it)) } : prev
@@ -202,6 +225,7 @@ function OwnedSongRecordPanel({
               initialLimit={5}
               abSelection={abSelection}
               onSelectAbSlot={selectAbSlot}
+              onSessionDeleted={removeSession}
             />
           </div>
 

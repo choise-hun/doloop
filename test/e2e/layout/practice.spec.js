@@ -1441,7 +1441,8 @@ test('SL1-02: ⑨제목 수정·⑧목록 EDIT 곡 수정 창·③분류 EDIT �
   await expect(dlg).toHaveCount(0);
   expect(calls.at(-1)).toEqual({ method: 'PATCH', path: `/songs/${UX3_SONGS[1].id}`, body: { categoryIds: [CAT_JAZZ, CAT_POP] } });
   await pickOption(page, 'folderSelect', CAT_POP);
-  await expect(page.locator('#folderList li button')).toHaveText([/새 제목/, /Song 2/]);
+  // SL-2 ⑥: 수정 중에는 곡 카드 왼쪽에 순서 이동 핸들(data-drag-id)이 붙으므로 카드 버튼만 센다
+  await expect(page.locator('#folderList li button:not([data-drag-id])')).toHaveText([/새 제목/, /Song 2/]);
   await page.locator('#folderEditBtn').click();
   await expect(panel).not.toHaveAttribute('data-editing', /.*/);
 
@@ -1480,4 +1481,328 @@ test('SL1-02: ⑨제목 수정·⑧목록 EDIT 곡 수정 창·③분류 EDIT �
   await expect(page.locator('#folderSelect')).toHaveAttribute('data-value', '__all');
   await expect(page.locator('#folderList li button')).toHaveCount(3);
   await expect(page.locator('#songCatBtn')).toHaveText('분류 1');
+});
+
+// ============================================================
+// SL-2 ⑥ 곡 순서(수정 중 핸들 드래그·키보드)·패널 높이, ⑩ 세션 삭제 ✕ (명세 SL-2 §7·§8·§11.2)
+// ============================================================
+const songRowIds = (page) =>
+  page.locator('#folderList li[data-song-id]').evaluateAll((els) => els.map((el) => el.dataset.songId));
+const handleOf = (page, id) => page.locator(`#folderList [data-drag-id="${id}"]`);
+const [S1, S2, S3] = UX3_SONGS.map((s) => s.id);
+
+// PUT /songs/order: 요청 본문을 모으고, onOrder가 응답을 정한다(기본 = 서버처럼 전체 목록에 자리 유지 반영)
+function sl2Mock({ onOrder, songs = UX3_SONGS } = {}) {
+  const mock = ux3Mock({ songs });
+  const orders = [];
+  mock.routes.push([
+    (url) => url.pathname === '/api/v1/songs/order',
+    async (route) => {
+      const req = route.request();
+      if (req.method() !== 'PUT') return route.fallback();
+      const ids = req.postDataJSON().ids;
+      orders.push(ids);
+      if (onOrder) return onOrder(route, ids);
+      const moving = new Set(ids);
+      let k = 0;
+      const next = songs.map((s) => {
+        if (!moving.has(s.id)) return s;
+        const id = ids[k++];
+        return songs.find((x) => x.id === id);
+      });
+      return UX3_JSON(route, { songs: next });
+    },
+  ]);
+  return { mock, orders };
+}
+
+test('SL2-01: 핸들은 수정 중·곡 2개 이상일 때 인라인 목록에만 있다(서랍 없음)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, sl2Mock().mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await expect(page.locator('#folderList li[data-song-id]')).toHaveCount(3);
+  await expect(page.locator('#folderList [data-drag-id]')).toHaveCount(0);
+
+  await page.locator('#folderEditBtn').click();
+  await expect(page.locator('#folderList [data-drag-id]')).toHaveCount(3);
+  await expect(handleOf(page, S1)).toHaveAttribute('aria-label', '순서 이동: Song 1');
+  const hb = await handleOf(page, S1).boundingBox();
+  expect(hb.width).toBeGreaterThanOrEqual(44);
+  expect(hb.height).toBeGreaterThanOrEqual(44);
+
+  // 곡 1개 폴더(Pop)에서는 핸들 없음
+  await pickOption(page, 'folderSelect', CAT_POP);
+  await expect(page.locator('#folderList li[data-song-id]')).toHaveCount(1);
+  await expect(page.locator('#folderList [data-drag-id]')).toHaveCount(0);
+
+  // 서랍 목록에는 핸들 없음
+  await pickOption(page, 'folderSelect', '__all');
+  await page.locator('#libBtn').click();
+  await expect(page.locator('#lib li button').first()).toBeVisible();
+  await expect(page.locator('#lib [data-drag-id]')).toHaveCount(0);
+});
+
+test('SL2-02: 키보드 ↓ 한 칸 이동 → PUT 본문 = 새 순서, 응답 반영·같은 핸들 포커스 유지', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock, orders } = sl2Mock();
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#folderEditBtn').click();
+  await handleOf(page, S1).focus();
+  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order') && r.method() === 'PUT');
+  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  await page.keyboard.press('ArrowDown');
+  expect((await reqP).postDataJSON()).toEqual({ ids: [S2, S1, S3] });
+  await resP;
+  expect(await songRowIds(page)).toEqual([S2, S1, S3]);
+  await expect(handleOf(page, S1)).toBeFocused();
+  // 맨 위에서 ↑는 무시(요청 없음)
+  await handleOf(page, S2).focus();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(() => orders.length).toBe(2);
+  expect(orders[1]).toEqual([S1, S2, S3]);
+});
+
+test('SL2-03: 포인터로 끌어 맨 위로 옮기면 저장', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock } = sl2Mock();
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#folderEditBtn').click();
+  // 목록 안에서 보이는 두 번째 곡 핸들을 첫 곡 위쪽으로 끈다
+  const from = await handleOf(page, S2).boundingBox();
+  const top = await page.locator(`#folderList li[data-song-id="${S1}"]`).boundingBox();
+  const fx = from.x + from.width / 2;
+  const fy = from.y + from.height / 2;
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.dataset?.dragId, [fx, fy])).toBe(S2);
+  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order') && r.method() === 'PUT');
+  await page.mouse.move(fx, fy);
+  await page.mouse.down();
+  await expect(page.locator(`#folderList li[data-song-id="${S2}"]`)).toHaveAttribute('data-dragging', 'true');
+  await page.mouse.move(fx, top.y + 4, { steps: 8 });
+  // 끄는 중: 화면 순서가 바뀐다(아직 저장 요청 없음)
+  await expect.poll(() => songRowIds(page)).toEqual([S2, S1, S3]);
+  await page.mouse.up();
+  expect((await reqP).postDataJSON()).toEqual({ ids: [S2, S1, S3] });
+  await expect(page.locator('#folderList li[data-dragging]')).toHaveCount(0);
+  await expect.poll(() => songRowIds(page)).toEqual([S2, S1, S3]);
+});
+
+test('SL2-03b: 4px 미만으로 움직이고 놓으면 저장하지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock, orders } = sl2Mock();
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#folderEditBtn').click();
+  const from = await handleOf(page, S2).boundingBox();
+  await page.mouse.move(from.x + 22, from.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 22, from.y + 23);
+  await page.mouse.up();
+  await expect(page.locator('#folderList li[data-dragging]')).toHaveCount(0);
+  // 다음 키보드 저장이 첫 요청이어야 한다(앞의 놓기는 요청을 만들지 않음)
+  await handleOf(page, S1).focus();
+  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order'));
+  await page.keyboard.press('ArrowDown');
+  await reqP;
+  expect(orders).toEqual([[S2, S1, S3]]);
+});
+
+test('SL2-04: 저장 실패 500 → 원래 순서로 되돌리고 #folderOrderErr 표시', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock } = sl2Mock({
+    onOrder: (route) => UX3_JSON(route, { ok: false, status: 500, code: 'INTERNAL', message: '순서 저장 실패(테스트)' }, 500),
+  });
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#folderEditBtn').click();
+  await handleOf(page, S2).focus();
+  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  await page.keyboard.press('ArrowUp');
+  await resP;
+  await expect(page.locator('#folderOrderErr')).toHaveText('순서 저장 실패(테스트)');
+  await expect.poll(() => songRowIds(page)).toEqual([S1, S2, S3]);
+  // 폴더를 바꾸면 오류 문구는 지운다
+  await pickOption(page, 'folderSelect', CAT_JAZZ);
+  await expect(page.locator('#folderOrderErr')).toHaveCount(0);
+});
+
+test('SL2-05: 저장 응답을 붙잡은 채 다른 계정으로 바뀌면 늦은 응답이 화면을 덮지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const userBId = '00000000-0000-4000-8000-000000000002';
+  const songB = { ...UX3_SONGS[2], id: '00000000-0000-4000-8000-0000000002b1', title: 'User B Song', categoryIds: [] };
+  let release;
+  const held = new Promise((r) => { release = r; });
+  let currentUid = DEFAULT_ME.id;
+  const { mock } = sl2Mock({
+    onOrder: async (route) => {
+      await held;
+      return UX3_JSON(route, { songs: [UX3_SONGS[1], UX3_SONGS[0], UX3_SONGS[2]] });
+    },
+  });
+  mock.routes.push(
+    [(url) => url.pathname.startsWith('/api/v1/me'), (route) => UX3_JSON(route, { ...DEFAULT_ME, id: currentUid })],
+    [
+      (url) => url.pathname === '/api/v1/songs',
+      (route) => UX3_JSON(route, { songs: currentUid === userBId ? [songB] : UX3_SONGS }),
+    ],
+  );
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#folderEditBtn').click();
+  await handleOf(page, S1).focus();
+  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order'));
+  await page.keyboard.press('ArrowDown');
+  await reqP;
+  expect(await songRowIds(page)).toEqual([S2, S1, S3]); // 낙관적 반영
+
+  currentUid = userBId;
+  await page.evaluate((bId) => {
+    window.__supabaseAuthListener('SIGNED_IN', {
+      access_token: 'fake-jwt-token-b',
+      user: { id: bId, email: 'b@example.com', user_metadata: {} },
+    });
+  }, userBId);
+  const panel = page.locator('#ppFolderPanel');
+  await expect(panel).toContainText('User B Song');
+  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  release();
+  await resP;
+  await expect(panel).toContainText('User B Song');
+  await expect(panel).not.toContainText('Song 1');
+  await expect(page.locator('#folderOrderErr')).toHaveCount(0);
+});
+
+for (const width of [1150, 1280]) {
+  test(`SL2-06: ${width} 곡 목록 패널 아래 끝 = 플레이어 버튼 섹션 아래 끝(±1), 목록은 안에서 스크롤`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const many = FIXTURES.longSongs(30).map((s, i) => ({ ...s, title: `Song ${i + 1}`, categoryIds: [] }));
+    for (const songs of [UX3_SONGS, many]) {
+      await mockApp(page, ux3Mock({ songs }));
+      // 현재 곡이 목록에 있는 보통 상태(없으면 "이 폴더에 없음" 안내 줄만큼 오른쪽이 길어진다)
+      await page.goto(`/practice.html?v=${songs[0].videoId}`, { waitUntil: 'load' });
+      await expect(page.locator('#folderList li[data-song-id]')).toHaveCount(songs.length);
+      const r = await page.evaluate(() => {
+        let actions = document.getElementById('ppPlayCard');
+        while (actions.parentElement && !actions.parentElement.classList.contains('pp-main')) actions = actions.parentElement;
+        const list = document.getElementById('folderList');
+        return {
+          panel: document.getElementById('ppFolderPanel').getBoundingClientRect().bottom,
+          actions: actions.getBoundingClientRect().bottom,
+          listH: list.clientHeight,
+          scroll: list.scrollHeight > list.clientHeight,
+        };
+      });
+      expect(Math.abs(r.panel - r.actions), JSON.stringify(r)).toBeLessThanOrEqual(1);
+      expect(r.listH).toBeGreaterThanOrEqual(160);
+      if (songs === many) expect(r.scroll).toBe(true);
+    }
+  });
+}
+
+for (const width of [390, 768]) {
+  test(`SL2-06: ${width} 곡 목록 최대 높이 360px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const many = FIXTURES.longSongs(30).map((s, i) => ({ ...s, title: `Song ${i + 1}`, categoryIds: [] }));
+    await mockApp(page, ux3Mock({ songs: many }));
+    await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+    await expect(page.locator('#folderList li[data-song-id]')).toHaveCount(30);
+    const box = await page.locator('#folderList').boundingBox();
+    expect(box.height).toBeLessThanOrEqual(361);
+    expect(box.height).toBeGreaterThan(300);
+  });
+}
+
+// ⑩ 세션 ✕: 플레이어 "이 곡의 연습 기록" 카드 아래 줄 오른쪽 끝
+const SL2_SESSION = SR_SONG_DETAIL.sessions[0].id; // 2026-11-06, 18분, 녹음 tk2(…802)는 다른 세션
+
+function sl2SessionMock({ onDelete } = {}) {
+  const mock = ux3Mock();
+  const calls = { del: [], detail: 0, list: 0 };
+  let deleted = false;
+  mock.routes.push(
+    [
+      (url) => url.pathname.startsWith('/api/v1/sessions/'),
+      async (route) => {
+        const req = route.request();
+        if (req.method() !== 'DELETE') return route.fallback();
+        calls.del.push(new URL(req.url()).pathname);
+        if (onDelete) return onDelete(route);
+        deleted = true;
+        return UX3_JSON(route, { ok: true });
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/songs\/[0-9a-f-]+$/.test(url.pathname),
+      (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        calls.detail++;
+        const sessions = SR_SONG_DETAIL.sessions.filter((s) => !(deleted && s.id === SL2_SESSION));
+        return UX3_JSON(route, { ...SR_SONG_DETAIL, sessions });
+      },
+    ],
+    [
+      (url) => url.pathname === '/api/v1/songs',
+      (route) => {
+        calls.list++;
+        return UX3_JSON(route, { songs: UX3_SONGS });
+      },
+    ],
+  );
+  return { mock, calls };
+}
+
+test('SL2-07: 세션 ✕ → 확인 취소면 요청 없음, 확인하면 DELETE 후 카드가 빠지고 요약·곡 목록을 다시 읽는다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock, calls } = sl2SessionMock();
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const card = page.locator(`#srTimeline [data-session-id="${SL2_SESSION}"]`);
+  const x = page.locator(`#sessionDelete-player-${SL2_SESSION}`);
+  await expect(x).toBeVisible();
+  await expect(x).toHaveAttribute('aria-label', '이 연습 세션 삭제');
+  const xb = await x.boundingBox();
+  const cb = await card.boundingBox();
+  expect(xb.width).toBeGreaterThanOrEqual(44);
+  expect(xb.height).toBeGreaterThanOrEqual(44);
+  expect(Math.abs(cb.x + cb.width - (xb.x + xb.width))).toBeLessThanOrEqual(24); // 카드 오른쪽 끝(카드 안쪽 여백)
+  expect(xb.y + xb.height).toBeGreaterThan(cb.y + cb.height - 40); // 아래 줄
+
+  let message = '';
+  page.once('dialog', (d) => { message = d.message(); return d.dismiss(); });
+  await x.click();
+  expect(message).toContain('2026-11-06');
+  expect(message).toContain('되돌릴 수 없습니다');
+  expect(calls.del).toEqual([]);
+
+  const detailBefore = calls.detail;
+  const listBefore = calls.list;
+  page.once('dialog', (d) => d.accept());
+  const reqP = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().endsWith(`/api/v1/sessions/${SL2_SESSION}`));
+  await x.click();
+  await reqP;
+  await expect(card).toHaveCount(0);
+  await expect.poll(() => calls.detail).toBeGreaterThan(detailBefore);
+  await expect.poll(() => calls.list).toBeGreaterThan(listBefore);
+  expect(calls.del).toEqual([`/api/v1/sessions/${SL2_SESSION}`]);
+  // 남은 세션 5개(6개 중 1개 삭제)가 처음 5개로 보인다
+  await expect(page.locator('#srTimeline .tl-row')).toHaveCount(5);
+});
+
+test('SL2-08: 세션 삭제 실패 500 → 카드 유지·오류 문구', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { mock } = sl2SessionMock({
+    onDelete: (route) => UX3_JSON(route, { ok: false, status: 500, code: 'INTERNAL', message: '삭제 실패(테스트)' }, 500),
+  });
+  await mockApp(page, mock);
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  const card = page.locator(`#srTimeline [data-session-id="${SL2_SESSION}"]`);
+  page.once('dialog', (d) => d.accept());
+  const resP = page.waitForResponse((r) => r.request().method() === 'DELETE');
+  await page.locator(`#sessionDelete-player-${SL2_SESSION}`).click();
+  await resP;
+  await expect(card).toContainText('삭제 실패(테스트)');
+  await expect(card).toHaveCount(1);
+  await expect(page.locator(`#sessionDelete-player-${SL2_SESSION}`)).toBeEnabled();
 });

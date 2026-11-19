@@ -9,7 +9,10 @@ import ulevelp.api.NotFoundException
 import ulevelp.db.DatabaseFactory
 import ulevelp.db.OutboxRepository
 import ulevelp.db.SessionsTable
+import ulevelp.db.SharedCardAttachmentsTable
+import ulevelp.db.SharedPracticeCardsTable
 import ulevelp.db.SongsTable
+import ulevelp.db.StorageTrashTable
 import ulevelp.db.TakesTable
 import java.math.BigDecimal
 import java.time.DayOfWeek
@@ -196,6 +199,60 @@ class SessionService(private val db: Database?) {
                 throw NotFoundException("연습 기록을 찾을 수 없습니다.")
             }
             OutboxRepository.enqueueIfSyncEnabled(userId, "session", sessionId, "upsert")
+        }
+    }
+
+    /**
+     * SL-2 ⑩ 세션 하나 삭제(명세 §6.2, 곡 삭제 [SongService.delete]와 같은 정리 규칙).
+     * 녹음·공유 카드·신고는 FK CASCADE, supabase 녹음 키와 공유 첨부 사본은 휴지통에 넣고 그 id를 돌려준다
+     * — 라우트가 커밋 뒤에만 purge한다(롤백되면 휴지통 행도 함께 사라진다). drive 녹음은 사용자 드라이브 파일이라 두고,
+     * Notion outbox는 폐기 기능이라 넣지 않는다. 없음·다른 사용자 세션은 404, 무변경
+     */
+    suspend fun delete(userId: UUID, sessionId: UUID): List<Long> {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
+            // 세션 행을 먼저 잠가 그 사이 녹음 추가(takes FK)가 끼어들지 못하게 한다
+            val songId = SessionsTable.select(SessionsTable.songId)
+                .where { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq userId) }
+                .forUpdate()
+                .singleOrNull()
+                ?.get(SessionsTable.songId)
+                ?: throw NotFoundException("연습 기록을 찾을 수 없습니다.")
+
+            val trashIds = TakesTable.select(TakesTable.storageKey)
+                .where { (TakesTable.userId eq userId) and (TakesTable.sessionId eq sessionId) and (TakesTable.storage eq "supabase") }
+                .map { row ->
+                    StorageTrashTable.insert { it[storageKey] = row[TakesTable.storageKey] } get StorageTrashTable.id
+                }
+                .toMutableList()
+
+            // 곡 삭제와 같은 잠금 순서: 공유 카드 → 첨부
+            SharedPracticeCardsTable.selectAll().where { SharedPracticeCardsTable.sessionId eq sessionId }
+                .forUpdate()
+                .toList()
+            trashIds.addAll(with(ShareAttachmentService(database, null, StorageTrashService(database, null))) {
+                removeShareAttachments { SharedCardAttachmentsTable.sessionId eq sessionId }
+            })
+            SessionsTable.deleteWhere { (SessionsTable.id eq sessionId) and (SessionsTable.userId eq userId) }
+
+            // E3: 곡의 마지막 연습일 = 남은 세션의 가장 늦은 날짜(없으면 비움). 같으면 UPDATE하지 않는다
+            val maxDate = SessionsTable.date.max()
+            val latest = SessionsTable.select(maxDate)
+                .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq songId) }
+                .singleOrNull()
+                ?.get(maxDate)
+            val currentLast = SongsTable.select(SongsTable.lastDate)
+                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                .singleOrNull()
+                ?.get(SongsTable.lastDate)
+            if (currentLast != latest) {
+                SongsTable.update({ (SongsTable.id eq songId) and (SongsTable.userId eq userId) }) {
+                    it[lastDate] = latest
+                }
+            }
+
+            trashIds
         }
     }
 

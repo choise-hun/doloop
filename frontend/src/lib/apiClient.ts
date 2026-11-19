@@ -805,6 +805,17 @@ async function removeCategory(categoryId: string): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+// SL-2 ⑥: 보이는 폴더의 곡 id를 새 순서대로 보낸다. 응답 = GET /songs와 같은 전체 목록·순서
+async function reorderSongs(ids: string[]): Promise<SongDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/songs/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids }),
+  });
+  if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.orderSaveFailed'));
+  return r.songs;
+}
+
 async function removeSong(songId: string): Promise<{ ok: boolean }> {
   requireLogin();
   const path = '/api/v1/songs/' + encodeURIComponent(songId);
@@ -1000,6 +1011,14 @@ async function updateMemo(sessionId: string, memo: string): Promise<{ ok: boolea
     method: 'PATCH',
     body: JSON.stringify({ memo: String(memo ?? '') }),
   });
+}
+
+// SL-2 ⑩: 세션 하나 삭제(녹음 기록·공유 카드 함께). 없는·남의 세션은 404
+async function deleteSession(sessionId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  const path = '/api/v1/sessions/' + encodeURIComponent(sessionId);
+  await getAuthRef().apiFetch(path, { method: 'DELETE' });
+  return { ok: true };
 }
 
 async function shareEpisode(
@@ -1932,6 +1951,7 @@ export const apiClient = {
     create: createSong,
     get: getSong,
     update: updateSong,
+    reorder: reorderSongs,
     remove: removeSong,
     importPreview: importPlaylistPreview,
     importPlaylist,
@@ -1976,6 +1996,7 @@ export const apiClient = {
   sessions: {
     list: listSessions,
     updateMemo,
+    remove: deleteSession,
     share: shareEpisode,
     withdrawShare: withdrawShareEpisode,
     uploadShareAttachment,

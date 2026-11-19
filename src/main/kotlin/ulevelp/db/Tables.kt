@@ -77,6 +77,8 @@ object SongsTable : Table("songs") {
     val lastDate = date("last_date").nullable()
     val memo = text("memo").default("")
     val durationSec = integer("duration_sec").default(0)
+    /** V14(SL-2): 작은 값이 위. 삽입 때 값을 안 보내면 DB 트리거가 그 사용자 최솟값-1(맨 위)로 채운다 */
+    val sortOrder = integer("sort_order").databaseGenerated()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 

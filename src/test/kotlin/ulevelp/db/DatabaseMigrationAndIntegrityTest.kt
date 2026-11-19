@@ -3,6 +3,7 @@ package ulevelp.db
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -103,9 +104,9 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V13__share_copy_log migrations apply cleanly and create all 30 tables`() {
-        assertEquals("13", targetSchemaVersion, "Flyway target schema version should be 13")
-        assertTrue(migrationsExecutedCount >= 13, "V1__init.sql ~ V13__share_copy_log.sql migrations must have executed")
+    fun `Flyway V1__init to V14__song_sort_order migrations apply cleanly and create all 30 tables`() {
+        assertEquals("14", targetSchemaVersion, "Flyway target schema version should be 14")
+        assertTrue(migrationsExecutedCount >= 14, "V1__init.sql ~ V14__song_sort_order.sql migrations must have executed")
         assertEquals(30, ALL_TABLES.size, "Exposed ALL_TABLES should contain 30 tables")
 
         val actualTables = mutableListOf<String>()
@@ -694,5 +695,109 @@ class DatabaseMigrationAndIntegrityTest {
                 }
             }
         }.sqlState)
+    }
+
+    @Test
+    fun `SL2-K11 V14 마이그레이션은 기존 순서를 보존하고 updated_at 불변이며 트리거 기본값과 다른 사용자 격리를 지킨다`() {
+        val schema = "v14_check_schema"
+        val userA = UUID.randomUUID()
+        val userB = UUID.randomUUID()
+        val sDone = UUID.randomUUID()
+        val sPracticing = UUID.randomUUID()
+        val sPaused = UUID.randomUUID()
+        val sB = UUID.randomUUID()
+
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { st ->
+                st.execute("DROP SCHEMA IF EXISTS $schema CASCADE")
+                st.execute("CREATE SCHEMA $schema")
+            }
+            if (!conn.autoCommit) conn.commit()
+        }
+
+        try {
+            Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schema)
+                .locations("classpath:db/migration")
+                .target("13")
+                .load()
+                .migrate()
+
+            val tDone = java.sql.Timestamp.from(java.time.Instant.parse("2026-11-10T01:00:00Z"))
+            val tPracticing = java.sql.Timestamp.from(java.time.Instant.parse("2026-11-08T01:00:00Z"))
+            val tPaused = java.sql.Timestamp.from(java.time.Instant.parse("2026-11-09T01:00:00Z"))
+            val tB = java.sql.Timestamp.from(java.time.Instant.parse("2026-11-07T01:00:00Z"))
+
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO $schema")
+                    st.execute("INSERT INTO users (id, email) VALUES ('$userA', 'k11a@example.com'), ('$userB', 'k11b@example.com')")
+                    st.execute(
+                        """
+                        INSERT INTO songs (id, user_id, title, video_id, status, last_date, updated_at) VALUES
+                        ('$sDone', '$userA', 'Done', 'aaaaaaaaaaa', 'done', '2026-11-10', '$tDone'),
+                        ('$sPracticing', '$userA', 'Practicing', 'bbbbbbbbbbb', 'practicing', '2026-11-08', '$tPracticing'),
+                        ('$sPaused', '$userA', 'Paused', 'ccccccccccc', 'paused', '2026-11-09', '$tPaused'),
+                        ('$sB', '$userB', 'UserB', 'ddddddddddd', 'practicing', '2026-11-07', '$tB')
+                        """.trimIndent()
+                    )
+                }
+                if (!conn.autoCommit) conn.commit()
+            }
+
+            Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schema)
+                .locations("classpath:db/migration")
+                .target("14")
+                .load()
+                .migrate()
+
+            val rows = mutableMapOf<UUID, Pair<Int, Long>>()
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO $schema")
+                    st.executeQuery("SELECT id, sort_order, updated_at FROM songs").use { rs ->
+                        while (rs.next()) {
+                            rows[rs.getObject("id", UUID::class.java)] =
+                                rs.getInt("sort_order") to rs.getTimestamp("updated_at").toInstant().toEpochMilli()
+                        }
+                    }
+                }
+            }
+
+            // (a) 옛 LIST_ORDER(practicing -> paused -> done) 그대로 0, 1, 2 보존 및 updated_at 불변
+            assertEquals(0 to tPracticing.time, rows[sPracticing])
+            assertEquals(1 to tPaused.time, rows[sPaused])
+            assertEquals(2 to tDone.time, rows[sDone])
+            assertEquals(0 to tB.time, rows[sB])
+
+            // (b) 값 없이 넣은 새 곡 = 그 사용자 최솟값 - 1 (-1), (c) 다른 사용자 곡 무영향
+            val newA = UUID.randomUUID()
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO $schema")
+                    st.execute("INSERT INTO songs (id, user_id, title, video_id) VALUES ('$newA', '$userA', 'NewA', 'eeeeeeeeeee')")
+                    st.executeQuery("SELECT sort_order FROM songs WHERE id = '$newA'").use { rs ->
+                        assertTrue(rs.next())
+                        assertEquals(-1, rs.getInt("sort_order"))
+                    }
+                    st.executeQuery("SELECT sort_order FROM songs WHERE id = '$sB'").use { rs ->
+                        assertTrue(rs.next())
+                        assertEquals(0, rs.getInt("sort_order"))
+                    }
+                }
+                if (!conn.autoCommit) conn.commit()
+            }
+        } finally {
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO public")
+                    st.execute("DROP SCHEMA IF EXISTS $schema CASCADE")
+                }
+                if (!conn.autoCommit) conn.commit()
+            }
+        }
     }
 }

@@ -365,7 +365,7 @@ fun Application.module(
             registerProgressionRoutes(jwtVerifier, profileService, progressionService, noteService, effectiveDispatcher)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
-            registerSessionRoutes(jwtVerifier, profileService, sessionService, episodeLogService)
+            registerSessionRoutes(jwtVerifier, profileService, sessionService, episodeLogService, storageTrashService)
             registerExportImportRoutes(jwtVerifier, profileService, exportImportService)
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
