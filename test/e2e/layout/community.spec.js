@@ -215,6 +215,12 @@ test('AS-3 커뮤니티 #folderReportReason .selectPill 3px 전환·접근이름
     return { radius: s.borderTopLeftRadius, height: s.height };
   });
   expect(style).toEqual({ radius: '3px', height: '44px' });
+  // .selectPill width:auto가 AppSelect 기본 width:100%를 이겨야 한다(CSS 번들 순서에 기대지 않는다)
+  const widths = await page.locator('#folderReportReason').evaluate((el) => ({
+    box: el.getBoundingClientRect().width,
+    row: el.parentElement.getBoundingClientRect().width,
+  }));
+  expect(widths.box).toBeLessThan(widths.row);
   await expectValue(page, 'folderReportReason', 'spam');
   await pickOption(page, 'folderReportReason', 'copyright');
   await expectValue(page, 'folderReportReason', 'copyright');

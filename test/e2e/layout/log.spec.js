@@ -150,8 +150,11 @@ test('AS-3 旮半 頇旊┐ #songStatus-{id}路#detailStatus AppSelect 3px路鞝戧芳鞚
     return { radius: s.borderTopLeftRadius, height: s.height };
   });
   expect(cardStyle).toEqual({ radius: '3px', height: '44px' });
+  const cardPatch = page.waitForRequest((r) => r.method() === 'PATCH' && r.url().endsWith('/api/v1/songs/' + song.id));
   await pickOption(page, cardId, 'done');
+  expect((await cardPatch).postDataJSON()).toEqual({ status: 'done' });
   await expectValue(page, cardId, 'done');
+  await expect(page.locator(`#${cardId}`)).toBeEnabled();
 
   await page.goto(`/log.html?song=${encodeURIComponent(song.id)}`, { waitUntil: 'load' });
   await page.locator('#detailStatus').waitFor();
@@ -161,6 +164,8 @@ test('AS-3 旮半 頇旊┐ #songStatus-{id}路#detailStatus AppSelect 3px路鞝戧芳鞚
     return { radius: s.borderTopLeftRadius, height: s.height };
   });
   expect(detailStyle).toEqual({ radius: '3px', height: '44px' });
+  const detailPatch = page.waitForRequest((r) => r.method() === 'PATCH' && r.url().endsWith('/api/v1/songs/' + song.id));
   await pickOption(page, 'detailStatus', 'paused');
+  expect((await detailPatch).postDataJSON()).toEqual({ status: 'paused' });
   await expectValue(page, 'detailStatus', 'paused');
 });
