@@ -12,7 +12,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | AS-1 | 코드 화면 21곳(`ChordsPage` 17 · `ProgressionPlayTab` 4) + 공용 헬퍼 `test/e2e/support/app-select.js` | 주니어(4단계 정리) | 명세 §3·§4·§5 → `결과/AS-1.md` | 코드 화면 기존 spec·`layout/chords*.spec.js`·`i18n-lang.spec.js` 통과, 4폭+다크 Q1~Q9, `npm test` | 중간 | 완료(PR #54 머지) |
 | AS-2 | `AppSelect` 확장(`id` 선택·`dataAttrs`) + 기록 카드 `.ab-select` | 시니어 직접 → 주니어 4단계 | 명세 §6 → `결과/AS-2.md` | `practice-record`·`community`·`xss`·`layout/practice` spec, 4폭 | 높음 | 대기(SL-2 머지 뒤) |
-| AS-3 | 진행 2·운영 1·커뮤니티 2·기록 2 | 주니어(2단계 1차 구현·PR) | AS-1 머지 → `결과/AS-3.md` | 화면별 spec·4폭, `.selectPill` 3px 전환 | 중간 | 1차 구현·검증 완료(PR·시니어 검증 대기) |
+| AS-3 | 진행 2·운영 1·커뮤니티 2·기록 2 | 주니어(2단계 1차 구현·PR) | AS-1 머지 → `결과/AS-3.md` | 화면별 spec·4폭, `.selectPill` 3px 전환 | 중간 | 1차 구현·검증 완료(PR·시니어 검증 대기 — `결과/AS-3.md`) |
 
 ## 2. 겪은 문제
 
