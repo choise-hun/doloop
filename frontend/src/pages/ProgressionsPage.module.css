@@ -304,6 +304,7 @@
 .sortLabel > span {
   white-space: nowrap;
 }
-.sortSelect {
+/* AppSelect 기본 .trigger(width 100%)를 번들 순서와 무관하게 덮는다(명시도 0,2,0) */
+.sortLabel .sortSelect {
   width: auto;
 }

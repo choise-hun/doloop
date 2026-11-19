@@ -1119,7 +1119,8 @@
   flex-wrap: wrap;
 }
 
-.selectPill {
+/* AppSelect 기본 .trigger(width 100%)와 명시도가 같으면 CSS 번들 순서에 따라 진다 → 부모 문맥으로 0,2,0 */
+.reportControls .selectPill {
   width: auto;
   min-width: 0;
 }
