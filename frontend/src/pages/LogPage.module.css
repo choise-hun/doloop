@@ -1,5 +1,7 @@
 /* frontend/src/pages/LogPage.module.css */
 .logContainer {
+  /* DS2-3 D3: 화면 스파인 색 = TRAILS fill1 */
+  --section-spine: var(--fill1);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -25,11 +27,16 @@
   font-size: 14px;
 }
 
+/* DS2-3: 탭 2개 = 3px 세그먼트 틀(홈 범위 세그먼트와 같은 구조), 선택 = 종이 + 2px 먹색 밑줄(D9) */
 .tabs {
   display: inline-flex;
-  gap: 6px;
+  gap: 0;
   margin-top: 6px;
   align-self: flex-start;
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--bg);
+  overflow: hidden;
 }
 
 .tab {
@@ -38,23 +45,35 @@
   font-size: 14px;
   min-height: 40px;
   padding: 0 20px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  border: 0;
+  border-right: 1px solid var(--seam-hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
 }
 
+.tab:last-child {
+  border-right: 0;
+}
+
 .tab[aria-selected="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink-strong);
 }
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -96,9 +115,16 @@
 }
 
 .summaryCard {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -127,8 +153,8 @@
 .calDay {
   aspect-ratio: 1 / 1;
   min-height: 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   background: var(--bg);
   cursor: pointer;
   padding: 0;
@@ -170,8 +196,8 @@
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
 }
 
 /* 날짜별 세션 및 곡 카드 목록 */
@@ -182,9 +208,9 @@
 }
 
 .card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: var(--paper);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -231,14 +257,19 @@
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--seam-hairline);
 }
 
 /* 곡 필터 및 곡 편집 행 */
 .segPill {
   display: inline-flex;
-  gap: 6px;
+  gap: 0;
   flex-wrap: wrap;
+  align-self: flex-start;
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--bg);
+  overflow: hidden;
 }
 
 .segBtn {
@@ -247,17 +278,22 @@
   font-weight: 700;
   min-height: 38px;
   padding: 0 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  border: 0;
+  border-right: 1px solid var(--seam-hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
 }
 
+.segBtn:last-child {
+  border-right: 0;
+}
+
 .segBtn[aria-pressed="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink-strong);
 }
 
 .songCardEdit {
@@ -272,8 +308,8 @@
   font-size: 13px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 38px;
   padding: 0 14px;
 }
@@ -285,8 +321,8 @@
   font-size: 13px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 38px;
   padding: 0 14px;
 }
@@ -297,8 +333,8 @@
   font-weight: 700;
   min-height: 34px;
   padding: 0 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  border-radius: var(--radius-block);
+  border: 1px solid var(--seam-hairline);
   background: var(--bg);
   color: var(--ink);
   cursor: pointer;
@@ -330,4 +366,21 @@
   color: var(--muted);
   font-size: 13px;
   margin: 0;
+}
+
+/* DS2-3 D13: 곡 상세 패널의 공용 .ghostBtn·textarea.inpField를 TSX 변경 없이 3px로(명시도 0,2,0). 글자·높이 유지.
+   .pillBtn(#logGuest 로그인·#detailResume)은 대표 필이라 그대로 */
+.panel :global(.ghostBtn) {
+  border-radius: var(--radius-block);
+  border-color: var(--seam-hairline);
+  background: var(--cream);
+}
+
+.panel :global(.ghostBtn):hover {
+  border-color: var(--ink);
+}
+
+.panel :global(.inpField) {
+  border-radius: var(--radius-block);
+  border-color: var(--seam-hairline);
 }

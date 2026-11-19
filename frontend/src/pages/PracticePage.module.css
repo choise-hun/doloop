@@ -1,5 +1,7 @@
 /* frontend/src/pages/PracticePage.module.css */
 .playerWrap {
+  /* DS2-3 D3: 화면 스파인 색 = PLAYER fill2 */
+  --section-spine: var(--fill2);
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -13,9 +15,9 @@
   gap: 12px;
   min-height: 48px;
   padding: 10px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: var(--paper);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
 }
 
 .ppTitle {
@@ -104,7 +106,7 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   background: var(--media-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--seam-hairline);
   border-radius: var(--radius-card);
   overflow: hidden;
 }
@@ -137,7 +139,7 @@
   color: var(--ink);
   padding: 20px;
   text-align: center;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   z-index: 2;
 }
 
@@ -159,8 +161,8 @@
   font-size: 16px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 10px 18px;
   min-height: 44px;
 }
@@ -175,6 +177,9 @@
 .ppTime {
   font-family: var(--font-mono);
   font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
   min-width: 44px;
   text-align: center;
@@ -222,9 +227,16 @@
 .ppCtl {
   container-type: inline-size;
   container-name: practice-controls;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -234,9 +246,16 @@
 /* 재생·녹음·폴더 카드 공통 */
 .ppCard {
   min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  border: 1px solid var(--seam-hairline);
+  border-left: 12px solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow:
+    inset 1px 0 0 var(--seam-hairline),
+    2px 2px 0 var(--surface2),
+    4px 5px 0 var(--relief-bottom-mid),
+    10px 14px 22px var(--shadow-ambient),
+    inset 0 1px 0 var(--seam-highlight);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -267,8 +286,8 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   overflow: hidden;
   background: var(--bg);
 }
@@ -282,7 +301,7 @@
   background: var(--bg);
   color: var(--ink);
   border: 0;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--seam-hairline);
   border-radius: 0;
   cursor: pointer;
 }
@@ -309,8 +328,8 @@
   font-weight: 500;
   background: var(--bg);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   cursor: pointer;
 }
 
@@ -329,8 +348,8 @@
 .ppPt {
   display: grid;
   grid-template-columns: 36px 1fr 36px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   overflow: hidden;
   background: var(--bg);
 }
@@ -347,11 +366,11 @@
 }
 
 .ppNudge:first-child {
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--seam-hairline);
 }
 
 .ppNudge:last-child {
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--seam-hairline);
 }
 
 .ppSetPt {
@@ -405,8 +424,8 @@
   height: 44px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 44px;
   font-weight: 700;
   cursor: pointer;
@@ -427,8 +446,8 @@
   font: inherit;
   color: var(--muted);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 44px;
   min-width: 44px;
   cursor: pointer;
@@ -448,7 +467,7 @@
   font-weight: 700;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-block);
   border: 1px solid var(--ink);
   background: var(--ink);
   color: var(--bg);
@@ -473,7 +492,8 @@
   padding: 12px 40px 12px 12px;
   background: var(--surface);
   border: 1px solid var(--ink);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
+  box-shadow: 0 10px 24px var(--shadow-ambient);
   font-size: 13px;
   color: var(--ink);
 }
@@ -498,7 +518,7 @@
   color: var(--muted);
   background: none;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-block);
   cursor: pointer;
 }
 
@@ -543,8 +563,8 @@
   font-size: 13px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 44px;
   padding: 0 14px;
   display: inline-flex;
@@ -641,8 +661,8 @@
   font: inherit;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   min-height: 76px;
   font-size: 18px;
   font-weight: 700;
@@ -710,7 +730,7 @@
   width: min(380px, 92vw);
   z-index: 21;
   background: var(--surface);
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--seam-hairline);
   border-radius: var(--radius-card);
   display: flex;
   flex-direction: column;
@@ -744,8 +764,8 @@
   font: inherit;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   padding: 10px 12px;
   min-height: 56px;
   cursor: pointer;
@@ -802,7 +822,7 @@
   color: var(--ink);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--seam-hairline);
   padding: 8px 2px;
   cursor: pointer;
   text-align: left;
@@ -825,7 +845,9 @@
 .ppFolderCount {
   font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -853,9 +875,9 @@
   width: min(240px, 80vw);
   padding: 12px;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--ink) 12%, transparent);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  box-shadow: 0 10px 24px var(--shadow-ambient);
 }
 
 .ppCatPopTitle {
@@ -875,7 +897,7 @@
 
 .ppCatList li {
   padding: 4px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--seam-hairline);
 }
 
 .ppCatList li:last-child {
@@ -920,8 +942,9 @@
   width: min(520px, 100%);
   background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  box-shadow: 0 10px 24px var(--shadow-ambient);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -971,7 +994,7 @@
 }
 
 .ppLibBtn {
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   min-height: 40px;
   padding: 0 16px;
   font-size: 14px;
@@ -983,8 +1006,8 @@
   height: 44px;
   text-overflow: ellipsis;
   padding: 0 10px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--line);
+  border-radius: var(--radius-block);
+  border: 1px solid var(--seam-hairline);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -1008,7 +1031,7 @@
   font-size: 13px;
   font-weight: 700;
   border: 0;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   background: transparent;
   color: var(--ink);
   text-decoration: underline;
@@ -1031,7 +1054,7 @@
   padding: 0;
   font-size: 13px;
   border: 0;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   background: transparent;
   color: var(--ink);
   text-decoration: underline;
@@ -1043,7 +1066,7 @@
   min-height: 44px;
   height: 44px;
   padding: 0 10px;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
   font-size: 14px;
   font-family: var(--font-mono);
   white-space: nowrap;
@@ -1071,8 +1094,8 @@
   min-width: 0;
   height: 40px;
   padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
   background: var(--bg);
   color: var(--ink);
   font: inherit;
@@ -1096,6 +1119,9 @@
 .folderCountText {
   font-family: var(--font-mono);
   font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -1103,7 +1129,7 @@
   display: none;
   min-height: 44px;
   padding: 0 14px;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-block);
 }
 
 .folderStatus p {
@@ -1141,4 +1167,41 @@
   .folderBody[data-collapsed="true"] {
     display: none;
   }
+}
+
+/* DS2-3 D13: 공용 .ghostBtn/.pillBtn을 TSX 변경 없이 이 화면에서만 3px 사각으로 덮는다(명시도 0,2,0).
+   글자 크기·높이·padding은 공용 값 유지 */
+.ppHeadActions :global(.ghostBtn),
+.ppCtl :global(.ghostBtn),
+.ppFolderPanel :global(.ghostBtn) {
+  border-radius: var(--radius-block);
+  border-color: var(--seam-hairline);
+  background: var(--cream);
+}
+
+.ppHeadActions :global(.ghostBtn):hover,
+.ppCtl :global(.ghostBtn):hover,
+.ppFolderPanel :global(.ghostBtn):hover {
+  border-color: var(--ink);
+}
+
+/* 프리셋 텍스트 버튼은 위 규칙에 배경·테두리를 빼앗기지 않게 같은 명시도로 다시 지킨다(주의 3) */
+.ppCtl .presetBtn,
+.ppCtl .presetDeleteBtn,
+.ppCtl .presetBtn:hover,
+.ppCtl .presetDeleteBtn:hover {
+  background: transparent;
+  border: 0;
+}
+
+/* 서랍의 영상 열기는 대표 필이 아니라 사각(D6). 빈 상태 #urlForm 필은 그대로 */
+.ppLib .ppUrlForm :global(.pillBtn) {
+  border-radius: var(--radius-block);
+  border-color: var(--seam-hairline);
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.ppLib .ppUrlForm :global(.pillBtn):hover {
+  border-color: var(--ink);
 }

@@ -41,7 +41,7 @@ for (const width of [390, 768, 1150, 1280]) {
     }
     expect(geometry.buttons).toHaveLength(6);
     for (const button of geometry.buttons) {
-      expect(button.radius).toBe('0px');
+      expect(button.radius).toBe('3px'); // DS2-3: 블록 3px
       expect(button.border).toBe('1px');
       expect(button.height).toBeGreaterThanOrEqual(44);
     }
@@ -96,5 +96,227 @@ for (const state of ['unsupported', 'circle']) {
         await expect(page.locator('#sc-circle')).toBeVisible();
       }
     },
+  });
+}
+
+// DS2-3: Chords 4:6 전환 — 스파인 fill3·T1 제목·탭 종이+밑줄·패널 필 1개(.playbtn)
+async function chTokens(page) {
+  return page.evaluate(() => {
+    const read = (prop, val) => {
+      const el = document.createElement('span');
+      el.style[prop] = val;
+      document.body.appendChild(el);
+      const out = window.getComputedStyle(el)[prop];
+      el.remove();
+      return out;
+    };
+    return {
+      fill3: read('color', 'var(--fill3)'),
+      paper: read('backgroundColor', 'var(--paper)'),
+      cream: read('backgroundColor', 'var(--cream)'),
+      inkStrong: read('color', 'var(--ink-strong)'),
+      accent: read('backgroundColor', 'var(--accent)'),
+      wood: read('color', 'var(--wood)'),
+    };
+  });
+}
+// 보이는 a·button 중 필(9999px) 목록
+async function chPills(page, scope) {
+  return page.locator(scope).evaluate((root) => [...root.querySelectorAll('a, button')].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && window.getComputedStyle(el).borderTopLeftRadius === '9999px';
+  }).map((el) => el.id || el.textContent.trim().slice(0, 20)));
+}
+// 요소의 가장 가까운 스파인 카드 조상(왼쪽 테두리 12px)
+async function chCardOf(page, sel) {
+  return page.locator(sel).first().evaluate((el) => {
+    let n = el.parentElement;
+    while (n && n.tagName !== 'SECTION') {
+      if (parseFloat(window.getComputedStyle(n).borderLeftWidth) > 1) break;
+      n = n.parentElement;
+    }
+    const s = window.getComputedStyle(n);
+    return { tag: n.tagName, left: s.borderLeftWidth, leftColor: s.borderLeftColor, radius: s.borderTopLeftRadius };
+  });
+}
+
+test('DS23-C1 스파인·T1 제목 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#scale');
+  await expect(page.locator('#sc-board svg')).toBeVisible();
+  const tk = await chTokens(page);
+  const card = await chCardOf(page, '#sc-board');
+  expect(card.left).toBe('12px');
+  expect(card.leftColor).toBe(tk.fill3);
+  expect(card.radius).toBe('3px');
+  const h1 = await page.locator('h1').first().evaluate((el) => ({ w: getComputedStyle(el).fontWeight, f: getComputedStyle(el).fontSize }));
+  expect(h1).toEqual({ w: '300', f: '24px' });
+  const sc = await page.locator('#sc-title').evaluate((el) => ({ w: getComputedStyle(el).fontWeight, f: getComputedStyle(el).fontSize }));
+  expect(sc).toEqual({ w: '300', f: '24px' });
+});
+
+test('DS23-C2 탭 종이+밑줄·셀렉트 3px·스케일 패널 필 1개 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#scale');
+  await expect(page.locator('#sc-board svg')).toBeVisible();
+  const tk = await chTokens(page);
+  const tabs = page.locator('[role="tablist"] [role="tab"]');
+  await expect(tabs).toHaveCount(8);
+  for (const tab of await tabs.all()) {
+    const st = await tab.evaluate((el) => ({ r: getComputedStyle(el).borderTopLeftRadius, bg: getComputedStyle(el).backgroundColor, sh: getComputedStyle(el).boxShadow, sel: el.getAttribute('aria-selected') }));
+    expect(st.r).toBe('3px');
+    if (st.sel === 'true') {
+      expect(st.bg).toBe(tk.paper);
+      expect(st.sh).toContain(tk.inkStrong);
+    } else {
+      expect(st.bg).toBe(tk.cream);
+    }
+  }
+  expect(await page.locator('#sc-type').evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  expect(await chPills(page, '#pane-scale')).toHaveLength(1);
+});
+
+test('DS23-C3 재해석·찾기·진행 패널마다 필 1개, .btn 사각 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#reint');
+  const tk = await chTokens(page);
+  for (const tab of ['reint', 'tf', 'prog']) {
+    await page.locator(`#tab-${tab}`).click();
+    await expect(page.locator(`#pane-${tab}`)).toBeVisible();
+    // 찾기 탭은 진입 시 자동 검색(runTfSearch, 20ms 뒤 결과)한다 → 검색 전 상태는 타이밍 경합이라 단언하지 않는다.
+    // 자동 검색 결과의 재생(#a-vplay)이 보인 뒤, 다시 검색해도 필은 #a-vplay 1개
+    if (tab === 'tf') {
+      await expect(page.locator('#a-vplay')).toBeVisible();
+      await page.locator('#a-go').click();
+      await expect(page.locator('#a-vplay')).toBeVisible();
+    }
+    // 진행 연주 빈 상태는 재생 버튼이 없다(입력 확인 .btn만 사각) → 0개, 진행을 받으면 #pp-play 1개
+    if (tab === 'prog') {
+      expect(await chPills(page, '#pane-prog'), 'prog 빈 상태').toEqual([]);
+      await page.goto('/chords.html#prog?c=C%2CG%2CAm%2CF');
+      await expect(page.locator('#pp-play')).toBeVisible();
+    }
+    expect(await chPills(page, `#pane-${tab}`), tab).toHaveLength(1);
+  }
+  await page.locator('#tab-tf').click();
+  const go = await page.locator('#a-go').evaluate((el) => ({ r: getComputedStyle(el).borderTopLeftRadius, bg: getComputedStyle(el).backgroundColor }));
+  expect(go).toEqual({ r: '3px', bg: tk.cream });
+  await page.locator('#tab-reint').click();
+  const next = page.locator('#qz-next');
+  if (await next.isVisible()) {
+    expect(await next.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  }
+  // 건반: #ri-keyboard-toggle 눌림 = 먹색 채움
+  await page.locator('#instrument-keyboard').click();
+  await page.locator('#tab-reint').click();
+  const toggle = page.locator('#ri-keyboard-toggle');
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  expect(await toggle.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(tk.accent);
+  expect(await chPills(page, '#pane-reint')).toHaveLength(1);
+});
+
+test('DS23-C4 다크: 스파인 fill3 다크 값, 지판 나무 토큰 그대로 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/chords.html#scale');
+  await expect(page.locator('#sc-board svg')).toBeVisible();
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const card = await chCardOf(page, '#sc-board');
+  expect(card.leftColor).toBe('rgb(108, 125, 114)');
+  const tk = await chTokens(page);
+  const wood = await page.locator('#sc-board svg.fb .wood').first().evaluate((el) => getComputedStyle(el).fill);
+  expect(wood).toBe(tk.wood);
+});
+
+// DS23-C5 (사용자 추가 요구 2026-11-19): 지판·코드 박스의 모든 음 원이 칸 중앙에 있는지 렌더 좌표로 검사한다.
+// 가로 지판(svg.fb): 원 중심 y = 줄 선(line.str) y, 프렛 음 x = 양옆 프렛 선(line.fret/.nut) 가운데, 개방현 점은 너트 바깥 칸 안.
+// 인레이(circle.inlay)는 프렛 가운데·두 줄 사이 가운데. 세로 코드 박스(svg.cb): x = 줄 선(line.st), y = 양옆 프렛 선(line.fl/.nut) 가운데.
+const CENTER_TOL = 0.5;
+async function diagramCenterIssues(page, scope) {
+  return page.locator(scope).evaluate((root, tol) => {
+    const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const cx = (el) => { const r = el.getBoundingClientRect(); return r.left + r.width / 2; };
+    const cy = (el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+    const between = (sorted, v) => {
+      let lo = null; let hi = null;
+      for (const p of sorted) { if (p <= v) lo = p; else if (hi === null) hi = p; }
+      return { lo, hi };
+    };
+    const nearest = (arr, v) => arr.reduce((b, p) => (Math.abs(p - v) < Math.abs(b - v) ? p : b), arr[0]);
+    const issues = [];
+    let dots = 0;
+    const desc = (svg, el) => `${svg.getAttribute('aria-label') || svg.className.baseVal}: ${el.parentElement.getAttribute('class') || el.getAttribute('class') || 'circle'}`;
+    for (const svg of root.querySelectorAll('svg.fb, svg.cb')) {
+      if (!visible(svg)) continue;
+      const box = svg.classList.contains('cb');
+      const strings = [...svg.querySelectorAll(box ? 'line.st' : 'line.str')].map(box ? cx : cy).sort((a, b) => a - b);
+      const frets = [...svg.querySelectorAll(box ? 'line.fl, line.nut' : 'line.fret, line.nut')].map(box ? cy : cx).sort((a, b) => a - b);
+      const nutEl = svg.querySelector('line.nut');
+      const nut = nutEl ? (box ? cy(nutEl) : cx(nutEl)) : null;
+      const strEls = [...svg.querySelectorAll(box ? 'line.st' : 'line.str')];
+      const strStart = box ? null : Math.min(...strEls.map((e) => e.getBoundingClientRect().left));
+      const strEnd = box ? null : Math.max(...strEls.map((e) => e.getBoundingClientRect().right));
+      for (const c of svg.querySelectorAll('circle')) {
+        if (c.classList.contains('lr-ring')) continue;
+        const along = box ? cy(c) : cx(c); // 프렛 방향
+        const across = box ? cx(c) : cy(c); // 줄 방향
+        const inlay = c.classList.contains('inlay');
+        const open = c.classList.contains('open');
+        dots += 1;
+        if (inlay) {
+          const s = between(strings, across);
+          if (s.lo === null || s.hi === null || Math.abs(across - (s.lo + s.hi) / 2) > tol) issues.push(`${desc(svg, c)} 인레이 줄 사이 중앙 아님 (${across.toFixed(2)} vs ${s.lo}~${s.hi})`);
+        } else {
+          const s = nearest(strings, across);
+          if (Math.abs(across - s) > tol) issues.push(`${desc(svg, c)} 줄 선에서 벗어남 ${(across - s).toFixed(2)}px`);
+        }
+        if (open) continue; // 코드 박스 개방현 표시(너트 위 작은 원)는 줄 위만 본다
+        const f = between(frets, along);
+        if (f.lo !== null && f.hi !== null) {
+          const mid = (f.lo + f.hi) / 2;
+          if (Math.abs(along - mid) > tol) issues.push(`${desc(svg, c)} 프렛 칸 중앙에서 ${(along - mid).toFixed(2)}px`);
+        } else if (!box) {
+          // 너트 바깥(개방현) 칸: 줄 선 시작 ~ 너트 사이 중앙
+          const edge = f.lo === null ? strStart : strEnd;
+          const fret = f.lo === null ? f.hi : f.lo;
+          const mid = (edge + fret) / 2;
+          if (Math.abs(along - mid) > tol) issues.push(`${desc(svg, c)} 개방현 칸 중앙에서 ${(along - mid).toFixed(2)}px (칸 ${edge.toFixed(1)}~${fret.toFixed(1)}, nut ${nut})`);
+        } else {
+          issues.push(`${desc(svg, c)} 프렛 칸 밖`);
+        }
+      }
+    }
+    return { dots, issues };
+  }, CENTER_TOL);
+}
+
+const C5_CASES = [
+  ...['scale', 'tone', 'matrix', 'circle', 'reint', 'tf', 'ds'].map((tab) => ({ name: `기타 ${tab}`, tab })),
+  { name: '기타 prog 진행 선택', tab: 'prog', path: '/chords.html#prog?c=C%2CG%2CAm%2CF', prep: async (page) => { await page.locator('#pp-boxes > figure').nth(1).click(); await expect(page.locator('#pp-cur')).toBeVisible(); } },
+  { name: '기타 reint 개방현 입력', tab: 'reint', prep: async (page) => { for (const s of ['0', '5']) await page.locator(`#pane-reint svg.fb rect.hit[data-s="${s}"][data-f="0"]`).first().click(); } },
+  { name: '기타 scale 왼손', tab: 'scale', prep: async (page) => { await page.locator('#sc-hand button').nth(1).click(); } },
+  { name: '기타 scale CAGED C', tab: 'scale', prep: async (page) => { await page.locator('#sc-block button').nth(1).click(); } },
+  { name: '기타 scale 확대 최대', tab: 'scale', prep: async (page) => { const zoom = page.locator('#sc-zoom'); await zoom.fill(await zoom.getAttribute('max')); } },
+  { name: '베이스 scale', tab: 'scale', instrument: 'bass' },
+  { name: '베이스 tone', tab: 'tone', instrument: 'bass' },
+];
+for (const c of C5_CASES) {
+  test(`DS23-C5 지판 원 중앙 — ${c.name} (1280)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockApp(page, STATES.guest);
+    await page.goto(c.path || `/chords.html#${c.tab}`);
+    if (c.instrument) await page.locator(`#instrument-${c.instrument}`).click();
+    await page.locator(`#tab-${c.tab}`).click();
+    await expect(page.locator(`#pane-${c.tab}`)).toBeVisible();
+    await expect(page.locator(`#pane-${c.tab} svg.fb, #pane-${c.tab} svg.cb`).first()).toBeVisible();
+    if (c.prep) await c.prep(page);
+    const r = await diagramCenterIssues(page, `#pane-${c.tab}`);
+    expect(r.dots).toBeGreaterThan(0);
+    expect(r.issues).toEqual([]);
   });
 }
