@@ -4,6 +4,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES, DEFAULT_ME } = require('./support/mock-app');
+const { pickOption } = require('./support/app-select');
 
 const TARGET = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -294,7 +295,8 @@ test('M2-4b 폴더: 펼치면 목록(초안·공개 표시), 만들기 → 곡 �
   expect(server.calls.map((c) => c.method + ' ' + c.path)).toEqual(['GET /api/v1/admin/shared-folders']);
 
   // 이달의 곡 만들기: 달 기본값 = KST 다음 달, 사유 기본값
-  await page.locator('#opsNewKind').selectOption('monthly_pick');
+  await expect(page.getByRole('combobox', { name: '종류' })).toHaveCount(1);
+  await pickOption(page, 'opsNewKind', 'monthly_pick');
   await expect(page.locator('#opsNewMonth')).toHaveValue(/^\d{4}-\d{2}$/);
   await page.locator('#opsNewMonth').fill('2026-12');
   await page.locator('#opsNewTitle').fill(' 12월의 곡 ');

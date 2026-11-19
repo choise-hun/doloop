@@ -1,6 +1,7 @@
 // frontend/src/pages/LogPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
+import { AppSelect } from '../components/common/AppSelect';
 import { SafeLink } from '../components/common/SafeLink';
 import {
   AbCompare,
@@ -105,13 +106,18 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }:
           : t('log.summaryNoRecent', { duration: fmtDuration(song.totalSeconds) })}
       </div>
       <div className={`song-card-edit ${styles.songCardEdit}`}>
-        <select
+        <AppSelect
+          id={`songStatus-${song.id}`}
           className={styles.selectPill}
-          aria-label={t('log.ariaSongStatus')}
+          ariaLabel={t('log.ariaSongStatus')}
           value={statusVal}
           disabled={busyStatus}
-          onChange={async (e) => {
-            const nextStatus = e.target.value;
+          options={[
+            { value: 'practicing', label: t('log.statusPracticing') },
+            { value: 'paused', label: t('log.statusPaused') },
+            { value: 'done', label: t('log.statusDone') },
+          ]}
+          onChange={async (nextStatus) => {
             setStatusVal(nextStatus);
             setBusyStatus(true);
             try {
@@ -124,11 +130,7 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }:
               setBusyStatus(false);
             }
           }}
-        >
-          <option value="practicing">{t('log.statusPracticing')}</option>
-          <option value="paused">{t('log.statusPaused')}</option>
-          <option value="done">{t('log.statusDone')}</option>
-        </select>
+        />
         <input
           type="text"
           className={`inp ${styles.memoInlineInput}`}
@@ -652,14 +654,18 @@ function OwnedLogPage(): React.ReactElement {
               <SafeLink className="pillBtn" id="detailResume" href={detailResumeHref}>
                 {t('log.btnResumePractice')}
               </SafeLink>
-              <select
+              <AppSelect
                 id="detailStatus"
                 className={styles.selectPill}
-                aria-label={t('log.ariaSongStatus')}
+                ariaLabel={t('log.ariaSongStatus')}
                 value={detailStatus}
-                onChange={async (e) => {
+                options={[
+                  { value: 'practicing', label: t('log.statusPracticing') },
+                  { value: 'paused', label: t('log.statusPaused') },
+                  { value: 'done', label: t('log.statusDone') },
+                ]}
+                onChange={async (next) => {
                   if (!detailSong) return;
-                  const next = e.target.value;
                   setDetailStatus(next);
                   try {
                     const updated = await apiClient.songs.update(detailSong.id, { status: next });
@@ -671,11 +677,7 @@ function OwnedLogPage(): React.ReactElement {
                     setDetailStatus(detailSong.statusCode || 'practicing');
                   }
                 }}
-              >
-                <option value="practicing">{t('log.statusPracticing')}</option>
-                <option value="paused">{t('log.statusPaused')}</option>
-                <option value="done">{t('log.statusDone')}</option>
-              </select>
+              />
               <button
                 type="button"
                 className="ghostBtn"

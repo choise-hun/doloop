@@ -10,6 +10,7 @@ import type { MeProfile } from '../../lib/auth';
 import { communityErrorKey } from '../../lib/community.mts';
 import { json } from '../../lib/security';
 import { t } from '../../lib/i18n.mts';
+import { AppSelect } from '../common/AppSelect';
 import styles from './Community.module.css';
 
 export interface PlaylistImportModalProps {
@@ -266,18 +267,13 @@ export function PlaylistImportModal({
                     {t('playlist.toExisting')}
                   </label>
                   {choice === 'existing' ? (
-                    <select
+                    <AppSelect
                       id="playlistCatSelect"
-                      className={styles.selectPill}
                       value={categoryId}
-                      onChange={(e) => { setCategoryId(e.target.value); setTouched(true); }}
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      ariaLabel={t('playlist.toExisting')}
+                      options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                      onChange={(v) => { setCategoryId(v); setTouched(true); }}
+                    />
                   ) : null}
                 </div>
               ) : null}

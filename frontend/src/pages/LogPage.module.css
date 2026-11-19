@@ -303,15 +303,11 @@
   flex-wrap: wrap;
 }
 
-.selectPill {
-  font: inherit;
+/* AppSelect 기본 .trigger(width 100%·14px)를 번들 순서와 무관하게 덮는다(명시도 0,2,0) */
+.songCardEdit .selectPill,
+.row .selectPill {
+  width: auto;
   font-size: 13px;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--seam-hairline);
-  border-radius: var(--radius-block);
-  min-height: 38px;
-  padding: 0 14px;
 }
 
 .memoInlineInput {

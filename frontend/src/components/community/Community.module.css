@@ -1119,15 +1119,9 @@
   flex-wrap: wrap;
 }
 
-.selectPill {
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  min-height: 44px;
-  padding: 0 16px;
+/* AppSelect 기본 .trigger(width 100%)와 명시도가 같으면 CSS 번들 순서에 따라 진다 → 부모 문맥으로 0,2,0 */
+.reportControls .selectPill {
+  width: auto;
   min-width: 0;
 }
 

@@ -5,6 +5,7 @@ const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { STATES } = require('../support/mock-app');
 const { COMMUNITY_PRO_ME, communityRoutes, EPISODE_POST_1 } = require('../support/community-fixtures');
+const { pickOption, expectValue } = require('../support/app-select');
 
 const COMMUNITY_PRO = {
   ...STATES.userData,
@@ -198,4 +199,29 @@ test('DS3-P1 진행 막대 바탕', async ({ page }) => {
   });
   expect(got.want).not.toBe('rgba(0, 0, 0, 0)');
   expect(got.bg).toBe(got.want);
+});
+
+test('AS-3 커뮤니티 #folderReportReason .selectPill 3px 전환·접근이름·선택 계약', async ({ page }) => {
+  const { mockApp } = require('../support/mock-app');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, COMMUNITY_PRO);
+  await page.goto('/community.html', { waitUntil: 'load' });
+  await page.locator('[data-row="showcase"] [data-folder-id]').first().click();
+  await page.locator('#folderReportBtn').click();
+  await page.locator('#folderReportReason').waitFor();
+  await expect(page.getByRole('combobox', { name: '신고' })).toHaveCount(1);
+  const style = await page.locator('#folderReportReason').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { radius: s.borderTopLeftRadius, height: s.height };
+  });
+  expect(style).toEqual({ radius: '3px', height: '44px' });
+  // .selectPill width:auto가 AppSelect 기본 width:100%를 이겨야 한다(CSS 번들 순서에 기대지 않는다)
+  const widths = await page.locator('#folderReportReason').evaluate((el) => ({
+    box: el.getBoundingClientRect().width,
+    row: el.parentElement.getBoundingClientRect().width,
+  }));
+  expect(widths.box).toBeLessThan(widths.row);
+  await expectValue(page, 'folderReportReason', 'spam');
+  await pickOption(page, 'folderReportReason', 'copyright');
+  await expectValue(page, 'folderReportReason', 'copyright');
 });

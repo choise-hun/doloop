@@ -831,7 +831,6 @@ export const EN: Record<I18nKey, string> = {
   'prog.editorKeyUnknown': "Unknown",
   'prog.editorKeyEstimated': "Suggested",
   'prog.editorKeyRecommended': " (recommended)",
-  'prog.editorKeyAll': "All keys",
   'prog.editorKeyHelp': "Key estimated from chords. Change it if needed.",
   'prog.editorLabelRoman': "Roman Numerals",
   'prog.editorRomanHelp': "Select a key to calculate",

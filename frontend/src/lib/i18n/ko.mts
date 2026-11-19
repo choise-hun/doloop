@@ -844,7 +844,6 @@ export const KO = {
   'prog.editorKeyUnknown': "모름",
   'prog.editorKeyEstimated': "추정",
   'prog.editorKeyRecommended': " (추천)",
-  'prog.editorKeyAll': "전체",
   'prog.editorKeyHelp': "코드로 추정한 키예요. 다르면 골라 주세요.",
   'prog.editorLabelRoman': "로마숫자",
   'prog.editorRomanHelp': "키를 고르면 계산돼요",
