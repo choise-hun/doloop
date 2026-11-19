@@ -2,7 +2,7 @@
 
 - **목표:** 플레이어 화면의 분류 추가·지정, 곡 목록(폴더 선택·순서·수정), 제목 수정, 연습 세션 삭제 흐름을 사용자 요청 10건(2026-11-19)대로 고친다. 앱 안의 브라우저 기본 선택창(`<select>`)은 공용 선택창으로 바꾼다.
 - **근거:** 사용자 요청 2026-11-19(아래 §1 원문 요약), 시안 [명세/SL_시안.html](명세/SL_시안.html), 규칙 [frontend-design](../docs/rules/frontend-design.md)·[frontend-layout](../docs/rules/frontend-layout.md)·[frontend-state](../docs/rules/frontend-state.md)·[backend-kotlin](../docs/rules/backend-kotlin.md), 계획 §4의 "연습 카드(세션) 개별 삭제"(S3b R03)
-- **상태:** SL-0 완료(PR #50 머지). **SL-1 4단계 주니어 검증·PR 완료(2026-11-19, `feat/SL-1-player-list-ui`)** — `npm test` 542 pass, `practice.spec.js` 73 passed, 전체 Playwright 944 passed / 1 failed(`i18n-lang.spec.js` `[ja]` 1280px `#presetSelect` `G3` 넘침 `91>87`, 제품 코드 결함으로 시니어 인계). D1 수정 중 `--fill1` 색은 사용자 확인 필요. [결과/SL-1](결과/SL-1.md).
+- **상태:** SL-0 완료(PR #50 머지). **SL-1 4단계 주니어 검증·PR 완료(2026-11-19, `feat/SL-1-player-list-ui`)** — `npm test` 542 pass, `practice.spec.js` 73 passed, 전체 Playwright 944 passed / 1 failed(`i18n-lang.spec.js` `[ja]` 1280px `#presetSelect` `G3` 넘침 `91>87`, 제품 코드 결함으로 시니어 인계). D1 수정 중 `--fill1` 색은 사용자 확인 필요. [결과/SL-1](결과/SL-1.md). SL-1 PR #51 머지(main `e996121`). **SL-2 명세 작성 완료, 사용자 결정 E1~E6 대기**([명세/SL-2](명세/SL-2_구현명세.md)).
 - **step ID:** `SL-` (다른 진행 파일과 겹치지 않음. `PL-`은 이미 사용)
 - **배정:** 기본 시니어 원스톱(협업 §1.2). 전체 회귀·PR 정리는 주니어 4단계.
 
@@ -41,7 +41,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | SL-0 | 시안·결정 | 시니어 | 요청·코드 조사 → [SL_시안.html](명세/SL_시안.html), 이 파일 §2 | 사용자 D1~D9 확정 | 중간 | 완료(PR #50) |
 | SL-1 | 화면만: ①②③④⑦⑧(수정 창, 드래그 제외)⑨ + 공용 선택창 컴포넌트와 플레이어 2곳 적용 | 시니어 구현 → 주니어 4단계 | §2 확정 → `결과/SL-1.md` | 표적 e2e(`test/e2e/layout/practice*.spec.js`)·4폭 스크린샷 Q표, `npm test` | 높음 | 4단계 검증·PR 완료 (`i18n-lang` `[ja]` 1건 시니어 인계) |
-| SL-2 | 서버 계약: 곡 순서(V14 + API)·세션 삭제 API, ⑥ 드래그·패널 높이, ⑩ ✕ | 시니어 구현 → 주니어 4단계 | SL-1 머지 → `명세/SL-2_구현명세.md`, `결과/SL-2.md` | Kotlin 통합(소유권 A↔B 404·정리 규칙), e2e | 높음 | 대기 |
+| SL-2 | 서버 계약: 곡 순서(V14 + API)·세션 삭제 API, ⑥ 드래그·패널 높이, ⑩ ✕ | [시니어 직접 구현] → 주니어 4단계 | SL-1 머지 → [명세/SL-2_구현명세.md](명세/SL-2_구현명세.md), `결과/SL-2.md` | Kotlin 통합(소유권 A↔B 404·정리 규칙), e2e | 높음 | **명세 작성 완료 — 사용자 결정 E1~E6 대기**(2026-11-19, `docs/SL-2-spec`) |
 | SL-3 | 공용 선택창을 나머지 29곳에 적용 | 주니어 가능 | SL-1 컴포넌트 → `결과/SL-3.md` | 화면별 기존 spec·4폭 스크린샷 | 중간 | 대기 |
 
 ### SL-1 시니어 구현 결과 (2026-11-19, 주니어 4단계 입력)
@@ -62,5 +62,6 @@
 
 ## 5. 다음 세션 시작 지시
 
-- **SL-1 주니어 4단계:** 브랜치 `feat/SL-1-player-list-ui`를 pull → §3 "SL-1 시니어 구현 결과"의 인계 항목대로 spec 2개 단언 수정 → `npm run build` → 전체 `npx playwright test` → `LAYOUT_SHOTS=1` 4폭(390·768·1150·1280)+다크 Q1~Q9 표(분류 창 EDIT·곡 수정 창·선택창 열린 상태 포함) → `결과/SL-1.md` → PR(base main)·CI·리뷰 처리. D1 `--fill1` 색은 결과 파일에 사용자 확인 항목으로 적는다.
-- SL-2는 SL-1 머지 뒤 시니어가 `명세/SL-2_구현명세.md`부터.
+- **SL-2 명세 승인 대기:** [명세/SL-2_구현명세.md](명세/SL-2_구현명세.md) §3 E1~E6(곡 순서 적용 범위·새 곡 자리·세션 삭제 뒤 마지막 연습일·✕ 노출 화면·Step 구성·SL-3 겹침)을 사용자가 정한다. 승인되면 시니어가 같은 워크트리 `../doloop-sl2`에서 `feat/SL-2-order-delete`(base 최신 main)로 명세 §12 순서대로 구현(커밋 ① 서버 → ② 화면)하고 push, 전체 회귀·4폭 스크린샷·PR·CI는 주니어 4단계.
+- **SL-3과 겹침(명세 P20·E6):** ⑩이 `SongRecordParts.tsx`의 `SessionTimeline`에 prop을 통과시켜야 하는데 SL-3이 같은 파일의 `<select class="ab-select">`를 바꾼다. i18n 3파일도 겹칠 수 있다. E6 결정 전에는 SL-2 화면 커밋 파일을 열지 않는다.
+- D1 `--fill1` 색은 SL-1에서 이어진 사용자 확인 항목(SL-2는 이 색을 새로 쓰지 않는다).
