@@ -22,6 +22,8 @@ export interface PracticeSessionCardProps {
   onMemoSaved?: (sessionId: string, memo: string) => void;
   abSelection?: { a: string; b: string };
   onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
+  /** SL-2 ⑩: 있으면(플레이어 화면만) 카드 아래 줄 오른쪽 끝에 세션 삭제 ✕를 둔다 */
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
 export function PracticeSessionCard(props: PracticeSessionCardProps): React.ReactElement {
@@ -37,6 +39,7 @@ function OwnedPracticeSessionCard({
   onMemoSaved,
   abSelection,
   onSelectAbSlot,
+  onSessionDeleted,
 }: PracticeSessionCardProps): React.ReactElement {
   const authState = useAuth();
   const me = authState.me;
@@ -58,6 +61,7 @@ function OwnedPracticeSessionCard({
   const [removingRecording, setRemovingRecording] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
 
   const alive = useRef(false);
   const ownerUid = authState.user?.id;
@@ -171,6 +175,31 @@ function OwnedPracticeSessionCard({
       setActionMsg(err?.message || t('episode.err.generic'));
     } finally {
       if (isCurrent()) setRemovingRecording(false);
+    }
+  };
+
+  // SL-2 ⑩ 세션 삭제: 확인 → DELETE → 공유 캐시 다시 읽기 → 부모가 목록에서 뺀다. 404 = 이미 없음(성공과 같이)
+  const canDeleteSession = surface === 'player' && Boolean(onSessionDeleted);
+  const handleDeleteSession = async () => {
+    if (deletingSession || withdrawing || removingRecording || shareDialogOpen) return;
+    if (!window.confirm(t('episode.deleteSessionConfirm', { date: session.date, duration: fmtSec(session.seconds) }))) return;
+    setDeletingSession(true);
+    setActionMsg(null);
+    try {
+      await apiClient.sessions.remove(session.sessionId);
+      if (!isCurrent()) return;
+      invalidate();
+      onSessionDeleted?.(session.sessionId);
+    } catch (err: any) {
+      if (!isCurrent()) return;
+      if (err?.status === 404) {
+        invalidate();
+        onSessionDeleted?.(session.sessionId);
+        return;
+      }
+      setActionMsg(err?.message || t('episode.deleteSessionFailed'));
+    } finally {
+      if (isCurrent()) setDeletingSession(false);
     }
   };
 
@@ -446,6 +475,19 @@ function OwnedPracticeSessionCard({
           )}
 
           {isHidden && isWithdrawn && <span>{t('episode.share.withdrawn')}</span>}
+          {canDeleteSession && (
+            <button
+              type="button"
+              id={`sessionDelete-${surface}-${session.sessionId}`}
+              className={styles.sessionDeleteBtn}
+              aria-label={t('episode.deleteSession')}
+              title={t('episode.deleteSession')}
+              disabled={deletingSession}
+              onClick={() => void handleDeleteSession()}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {actionMsg && <p className={styles.actionMsg}>{actionMsg}</p>}

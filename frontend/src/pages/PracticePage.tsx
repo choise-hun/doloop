@@ -10,6 +10,7 @@ import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto } from '../lib/
 import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { deleteConfirmText } from '../lib/episode.mts';
+import { applySubsetOrder, moveId } from '../lib/songOrder.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
 import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
@@ -162,6 +163,23 @@ export function PracticePage(): React.ReactElement {
   const [editSongId, setEditSongId] = useState<string | null>(null);
   const [titleDialogOpen, setTitleDialogOpen] = useState(false);
   const [switchingSong, setSwitchingSong] = useState(false);
+  // SL-2 ⑥: 수정 중 핸들 드래그. orderDraft = 끄는 동안의 화면 순서(보이는 폴더 곡 id), 저장 세대는 목록 세대와 따로 둔다
+  const [orderDraft, setOrderDraft] = useState<{ id: string; ids: string[] } | null>(null);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderErr, setOrderErr] = useState('');
+  const orderSeqRef = useRef(0);
+  // 끄는 중 상태(포인터·최신 순서). 행이 DOM에서 옮겨져도 이어지게 window 리스너로 받는다
+  const dragRef = useRef<{
+    id: string;
+    pointerId: number;
+    startY: number;
+    moved: boolean;
+    base: string[];
+    ids: string[];
+    detach: () => void;
+  } | null>(null);
+  const saveOrderRef = useRef<(ids: string[]) => void>(() => {});
+  const orderFocusRef = useRef('');
   const folderBodyRef = useRef<HTMLDivElement | null>(null);
   const listStatusRef = useRef<ListStatus>('idle');
   const selectedFolderRef = useRef(ALL_FOLDER);
@@ -1674,6 +1692,12 @@ export function PracticePage(): React.ReactElement {
     lastUidRef.current = activeUid;
     songReqSeqRef.current++;
     songsListReqSeqRef.current++;
+    orderSeqRef.current++;
+    dragRef.current?.detach();
+    dragRef.current = null;
+    setOrderDraft(null);
+    setOrderSaving(false);
+    setOrderErr('');
     stRef.current.song = null;
     setSong(null);
     setSongsList(null);
@@ -1848,6 +1872,18 @@ export function PracticePage(): React.ReactElement {
   ];
   // 목록이 없거나(게스트·로딩·오류) 곡이 0개면 수정 중을 풀어 보인다(렌더 시점 정규화)
   const editingList = listEditing && listState === 'success' && allSongs.length > 0;
+  // SL-2 ⑥: 끄는 중이면 그 순서로 보인다. 수정 중이 아니거나 목록이 바뀌어 곡 묶음이 다르면 무시(렌더 시점 정규화)
+  const visibleIds = visibleSongs.map((x) => x.id);
+  const draftIds =
+    editingList &&
+    orderDraft &&
+    orderDraft.ids.length === visibleIds.length &&
+    orderDraft.ids.every((id) => visibleIds.includes(id))
+      ? orderDraft.ids
+      : null;
+  const shownSongs = draftIds ? applySubsetOrder(visibleSongs, draftIds) : visibleSongs;
+  const draggingId = draftIds && orderDraft ? orderDraft.id : null;
+  const showDragHandles = editingList && visibleSongs.length >= 2;
   const editSong = editingList && editSongId ? allSongs.find((x) => x.id === editSongId) || null : null;
   const catEditTarget = catPopOpen && catEditing && catEditId ? sortedCategories.find((c) => c.id === catEditId) || null : null;
   const currentNotInFolder =
@@ -1866,6 +1902,126 @@ export function PracticePage(): React.ReactElement {
     }
   }, [folderId, listState === 'success']);
 
+  // SL-2 ⑥ 순서 저장(명세 §7.3): 낙관적 반영 → PUT → 같은 세대·uid면 응답 반영, 실패면 되돌림
+  const saveSongOrder = async (ids: string[]) => {
+    const prev = songsList;
+    const myUid = auth.getUser()?.id ?? null;
+    if (!prev || !myUid) return;
+    setSongsList(applySubsetOrder(prev, ids));
+    setOrderDraft(null);
+    setOrderErr('');
+    const mySeq = ++songsListReqSeqRef.current; // 진행 중인 목록 읽기 응답은 버린다
+    const myOrder = ++orderSeqRef.current;
+    setOrderSaving(true);
+    try {
+      const list = await apiClient.songs.reorder(ids);
+      if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
+      setSongsList(list);
+    } catch (e: any) {
+      if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
+      setSongsList(prev);
+      setOrderErr((e && e.message) || t('practice.orderSaveFailed'));
+      // 다른 기기에서 곡이 지워진 경우 등: 되돌린 뒤 목록을 다시 읽는다
+      if (e && e.status === 404) void loadSongList({ silent: true });
+    } finally {
+      if (myOrder === orderSeqRef.current) setOrderSaving(false);
+    }
+  };
+
+  saveOrderRef.current = (ids) => void saveSongOrder(ids);
+
+  const cancelDrag = () => {
+    dragRef.current?.detach();
+    dragRef.current = null;
+    setOrderDraft(null);
+  };
+
+  // 언마운트 때 끄는 중 리스너를 뗀다
+  useEffect(() => () => dragRef.current?.detach(), []);
+
+  const onHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>, id: string) => {
+    if (e.button !== 0 || orderSaving || dragRef.current) return;
+    e.preventDefault();
+    e.currentTarget.focus();
+    const base = visibleIds;
+    const onMove = (ev: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== ev.pointerId) return;
+      if (!drag.moved && Math.abs(ev.clientY - drag.startY) < 4) return;
+      drag.moved = true;
+      const body = folderBodyRef.current;
+      if (!body) return;
+      const box = body.getBoundingClientRect();
+      if (ev.clientY < box.top + 32) body.scrollTop -= 8;
+      else if (ev.clientY > box.bottom - 32) body.scrollTop += 8;
+      // 포인터 위쪽에 가운데가 있는 다른 행 수 = 끄는 곡의 새 자리
+      let target = 0;
+      for (const row of Array.from(body.querySelectorAll<HTMLElement>('li[data-song-id]'))) {
+        if (row.dataset.songId === drag.id) continue;
+        const r = row.getBoundingClientRect();
+        if (r.top + r.height / 2 < ev.clientY) target++;
+      }
+      const from = drag.ids.indexOf(drag.id);
+      if (from === target) return;
+      drag.ids = moveId(drag.ids, from, target);
+      setOrderDraft({ id: drag.id, ids: drag.ids });
+    };
+    const onUp = (ev: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== ev.pointerId) return;
+      drag.detach();
+      dragRef.current = null;
+      if (!drag.moved || drag.ids.every((x, i) => x === drag.base[i])) {
+        setOrderDraft(null);
+        return;
+      }
+      saveOrderRef.current(drag.ids);
+    };
+    const onCancel = (ev: PointerEvent) => {
+      if (dragRef.current && dragRef.current.pointerId === ev.pointerId) cancelDrag();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    const detach = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+    dragRef.current = { id, pointerId: e.pointerId, startY: e.clientY, moved: false, base, ids: base, detach };
+    setOrderErr('');
+    setOrderDraft({ id, ids: base });
+  };
+
+  // 키보드: ↑↓ 한 칸 이동 후 바로 저장, 같은 곡 핸들에 포커스 유지. Esc = 끄는 중 취소
+  const onHandleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, id: string) => {
+    if (e.key === 'Escape' && dragRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelDrag();
+      return;
+    }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    if (orderSaving || dragRef.current) return;
+    const from = visibleIds.indexOf(id);
+    const to = e.key === 'ArrowUp' ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= visibleIds.length) return;
+    orderFocusRef.current = id;
+    void saveSongOrder(moveId(visibleIds, from, to));
+  };
+
+  // 순서가 바뀌어 행이 옮겨진 뒤에도 같은 곡 핸들에 포커스를 둔다
+  useEffect(() => {
+    const id = orderFocusRef.current;
+    if (!id) return;
+    orderFocusRef.current = '';
+    const handle = Array.from(folderBodyRef.current?.querySelectorAll<HTMLElement>('button[data-drag-id]') || []).find(
+      (el) => el.dataset.dragId === id
+    );
+    if (handle && document.activeElement !== handle) handle.focus();
+  });
+
   const switchToSong = async (s: SongDto) => {
     setSwitchingSong(true);
     try {
@@ -1883,8 +2039,27 @@ export function PracticePage(): React.ReactElement {
     if (s.rate) parts.push(`${s.rate}×`);
     if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
     const isCurrent = s.videoId === videoId;
+    const withHandle = inline && showDragHandles;
     return (
-      <li key={s.id}>
+      <li
+        key={s.id}
+        className={withHandle ? styles.songRow : undefined}
+        data-song-id={inline ? s.id : undefined}
+        data-dragging={(inline && draggingId === s.id) || undefined}
+      >
+        {withHandle && (
+          <button
+            type="button"
+            className={styles.dragHandle}
+            data-drag-id={s.id}
+            aria-label={t('practice.dragHandle', { title: s.title })}
+            aria-disabled={orderSaving || undefined}
+            onPointerDown={(e) => onHandlePointerDown(e, s.id)}
+            onKeyDown={(e) => onHandleKeyDown(e, s.id)}
+          >
+            ⠿
+          </button>
+        )}
         <button
           type="button"
           className={styles.ppSongBtn}
@@ -2629,6 +2804,8 @@ export function PracticePage(): React.ReactElement {
                   onChange={(v) => {
                     setSelectedFolderId(v);
                     setFolderNotice('');
+                    cancelDrag();
+                    setOrderErr('');
                   }}
                 >
                   <span className={styles.folderName}>{folderName}</span>
@@ -2653,6 +2830,11 @@ export function PracticePage(): React.ReactElement {
                 )}
                 {folderNotice && <p className="note">{folderNotice}</p>}
                 {currentNotInFolder && <p className="note">{t('practice.folderCurrentNotIn')}</p>}
+                {orderErr && listState === 'success' && (
+                  <p id="folderOrderErr" className={`note ${styles.folderErr}`} role="alert">
+                    {orderErr}
+                  </p>
+                )}
               </div>
               <div
                 id="folderList"
@@ -2665,7 +2847,7 @@ export function PracticePage(): React.ReactElement {
                     {folderId === ALL_FOLDER ? t('practice.folderEmptyAll') : t('practice.folderEmptyFolder')}
                   </p>
                 ) : (
-                  <ul className={styles.ppSongs}>{visibleSongs.map((s) => renderSongItem(s, folderId, true))}</ul>
+                  <ul className={styles.ppSongs}>{shownSongs.map((s) => renderSongItem(s, folderId, true))}</ul>
                 )}
               </div>
             </section>
@@ -2678,6 +2860,7 @@ export function PracticePage(): React.ReactElement {
               songId={song?.id ?? null}
               loggedIn={Boolean(activeUid) && apiClient.isLoggedIn()}
               reloadKey={srReloadKey}
+              onSessionDeleted={() => void loadSongList({ silent: true })}
             />
           </section>
         )}

@@ -330,6 +330,33 @@
   margin: 0;
 }
 
+/* SL-2 ⑩ 세션 삭제 ✕: 아래 줄 오른쪽 끝, 44×44(시안 §4 .xBtn) */
+.sessionDeleteBtn {
+  margin-left: auto;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  cursor: pointer;
+}
+
+.sessionDeleteBtn:hover:not(:disabled) {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.sessionDeleteBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* DS2-3 D13: 공용 textarea.inpField를 TSX 변경 없이 3px로(명시도 0,2,0 > textarea.inpField 0,1,1). 글자 16px 유지 */
 .sessionMemo :global(.inpField) {
   border-radius: var(--radius-block);

@@ -430,6 +430,8 @@ export interface SessionTimelineProps {
   loading?: boolean;
   abSelection?: { a: string; b: string };
   onSelectAbSlot?: (takeId: string, slot: 'a' | 'b' | '') => void;
+  /** SL-2 ⑩: 플레이어 카드(surface player)에만 세션 삭제 ✕를 보인다 */
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
 export function SessionTimeline({
@@ -444,6 +446,7 @@ export function SessionTimeline({
   loading = false,
   abSelection,
   onSelectAbSlot,
+  onSessionDeleted,
 }: SessionTimelineProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
 
@@ -475,6 +478,7 @@ export function SessionTimeline({
                 onMemoSaved={onMemoSaved}
                 abSelection={abSelection}
                 onSelectAbSlot={onSelectAbSlot}
+                onSessionDeleted={onSessionDeleted}
                 surface={idPrefix === 'sr' ? 'player' : 'detail'}
               />
             ))}
