@@ -220,3 +220,49 @@ test('DS24-N2 NoteDetail: 카드 스파인 fill2 · 필은 #notePracticeLink 1�
   const svg = page.locator('.svg-box');
   if (await svg.count()) expect((await ds24Box(svg.first())).bg).toBe(colors.panelFrosted);
 });
+
+test('DS24-G1 Progressions 목록: 필은 #progAddBtn 1개 · 행 연주 텍스트 · 범위 밑줄 · 취향 스파인 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, { ...STATES.guest, community: false });
+  await page.goto('/progressions.html', { waitUntil: 'load' });
+  await page.locator('#progList > li').first().waitFor();
+  const colors = await ds24Colors(page);
+  expect(await visiblePills(page)).toEqual(['progAddBtn']);
+  expect(await page.locator('#progScope').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  const on = await ds24Box(page.locator('#progScope button[aria-pressed="true"]'));
+  expect(on.bg).toBe(colors.paper);
+  const onShadow = await page.locator('#progScope button[aria-pressed="true"]').evaluate((el) => window.getComputedStyle(el).boxShadow);
+  expect((onShadow.match(/rgba?\([^)]*\)/g) || []).map(ds24Rgb)).toContain(ds24Rgb(colors.inkStrong));
+  const play = await ds24Box(page.locator('#progList > li').first().locator('[data-act="play"]'));
+  expect(play.topW).toBe('0px');
+  expect(play.bg).toBe('rgba(0, 0, 0, 0)');
+  expect(play.height).toBeGreaterThanOrEqual(40);
+  await expectSpine(page.locator('#progTaste'), colors.fill2, colors, '#progTaste');
+  expect(await page.locator('#progScope button[aria-pressed="true"] span').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('500');
+});
+
+test('DS24-G2 Progressions 넣기 패널: 열면 필은 패널 저장 1개 · guest 0개 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, {
+    ...STATES.user,
+    community: false,
+    routes: [[(url) => url.pathname === '/api/v1/progressions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ progressions: [] }) })]],
+  });
+  await page.goto('/progressions.html', { waitUntil: 'load' });
+  await page.locator('#progEmpty').waitFor();
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progAddPanel').waitFor();
+  const colors = await ds24Colors(page);
+  expect(await page.locator('#progAddBtn').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
+  const pills = await visiblePills(page);
+  expect(pills).toHaveLength(1);
+  expect(await visiblePills(page, '#progAddPanel')).toEqual(pills);
+  await expectSpine(page.locator('#progAddPanel'), colors.fill2, colors, '#progAddPanel');
+
+  await mockApp(page, { ...STATES.guest, community: false });
+  await page.goto('/progressions.html', { waitUntil: 'load' });
+  await page.locator('#progList > li').first().waitFor();
+  await page.locator('#progAddBtn').click();
+  await page.locator('#progLoginGate').waitFor();
+  expect(await visiblePills(page)).toEqual([]);
+});
