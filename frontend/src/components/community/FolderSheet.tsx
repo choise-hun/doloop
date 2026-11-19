@@ -12,6 +12,7 @@ import { getLang, t } from '../../lib/i18n.mts';
 import { thumb } from '../../lib/security';
 import { CoverArt, folderTitle } from './CommunityParts';
 import { songAddErrorKey, songAddInput, useSheetFocus } from './QuickAddSheet';
+import { AppSelect } from '../common/AppSelect';
 import styles from './Community.module.css';
 
 export interface FolderSheetProps {
@@ -392,21 +393,23 @@ function FolderSheetSession({ folderId, me, onClose, onPatchFolder }: FolderShee
             {reportOpen && canReport ? (
               <form className={styles.reportBox} onSubmit={(e) => void handleReportSubmit(e, f)}>
                 <div className={styles.reportControls}>
-                  <select
+                  <AppSelect
                     id="folderReportReason"
                     className={styles.selectPill}
                     value={reportReason}
-                    onChange={(e) =>
+                    ariaLabel={t('folder.report')}
+                    options={[
+                      { value: 'spam', label: t('folder.reason.spam') },
+                      { value: 'inappropriate', label: t('folder.reason.inappropriate') },
+                      { value: 'copyright', label: t('folder.reason.copyright') },
+                      { value: 'other', label: t('folder.reason.other') },
+                    ]}
+                    onChange={(v) =>
                       setReportReason(
-                        e.target.value as 'spam' | 'inappropriate' | 'copyright' | 'other',
+                        v as 'spam' | 'inappropriate' | 'copyright' | 'other',
                       )
                     }
-                  >
-                    <option value="spam">{t('folder.reason.spam')}</option>
-                    <option value="inappropriate">{t('folder.reason.inappropriate')}</option>
-                    <option value="copyright">{t('folder.reason.copyright')}</option>
-                    <option value="other">{t('folder.reason.other')}</option>
-                  </select>
+                  />
                   <input
                     type="text"
                     id="folderReportDetail"

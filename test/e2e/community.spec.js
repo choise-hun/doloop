@@ -403,6 +403,12 @@ test('WF-1 이 곡만 열기: 계정에 없던 곡은 이 기기의 구간·배�
   await page.locator('#urlInput').fill('https://www.youtube.com/watch?v=abcdefghij1&list=PL1');
   await page.locator('#urlForm button[type="submit"]').click();
   await page.locator('#playlistChoiceExisting').check();
+  await expect(page.locator('#playlistCatSelect')).toHaveAttribute('data-value', 'cat-1');
+  const catStyle = await page.locator('#playlistCatSelect').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { radius: s.borderTopLeftRadius, height: s.height };
+  });
+  expect(catStyle).toEqual({ radius: '3px', height: '44px' });
   const patched = page.waitForRequest((r) => r.method() === 'PATCH' && r.url().includes('/api/v1/songs/' + SONG.id));
   await page.locator('#playlistOnlyThis').click();
   expect((await patched).postDataJSON().categoryIds).toEqual(['cat-1']);

@@ -187,15 +187,16 @@ test('PP5 코드 진행 모음 목록 검색·정렬(곡명·키)', async ({ pag
 
   const order = () => rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-progression')));
   // 키: 노션 Scale 순서(C Major → C min → … → A min), 키 없음(F Dominant) 마지막, 같은 키는 곡명(ko: 한글 → 영문)
-  await page.locator('#progSort').selectOption('key');
+  await expect(page.getByRole('combobox', { name: '정렬' })).toHaveCount(1);
+  await pickOption(page, 'progSort', 'key');
   expect(await order()).toEqual(['arch-seed-1', 'ref-seed-1', 'ref-seed-5', 'arch-seed-2', 'ref-seed-4', 'arch-seed-4', 'arch-seed-5', 'ref-seed-3', 'ref-seed-2', 'arch-seed-3']);
-  await page.locator('#progSort').selectOption('title');
+  await pickOption(page, 'progSort', 'title');
   expect(await order()).toEqual(['arch-seed-2', 'arch-seed-4', 'arch-seed-5', 'arch-seed-3', 'ref-seed-4', 'arch-seed-1', 'ref-seed-2', 'ref-seed-5', 'ref-seed-1', 'ref-seed-3']);
   // 검색 + 정렬 같이
   await page.locator('#progSearch').fill('minor');
   expect(await order()).toEqual(['ref-seed-4', 'ref-seed-1']);
   await page.locator('#progSearch').fill('');
-  await page.locator('#progSort').selectOption('recent');
+  await pickOption(page, 'progSort', 'recent');
   await expect(rows.first()).toHaveAttribute('data-progression', 'ref-seed-1');
   expect(errors).toEqual([]);
 });

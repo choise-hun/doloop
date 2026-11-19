@@ -304,14 +304,8 @@
 }
 
 .selectPill {
-  font: inherit;
+  width: auto;
   font-size: 13px;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--seam-hairline);
-  border-radius: var(--radius-block);
-  min-height: 38px;
-  padding: 0 14px;
 }
 
 .memoInlineInput {

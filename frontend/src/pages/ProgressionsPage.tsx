@@ -21,6 +21,7 @@ import { DEFAULT_ARCHIVE_PROGRESSIONS, DEFAULT_REFERENCE_PROGRESSIONS } from '..
 import { videoIdFrom } from '../lib/security';
 import { describeJobError } from '../lib/jobError.mts';
 import { BetaBadge } from '../components/common/BetaBadge';
+import { AppSelect } from '../components/common/AppSelect';
 import styles from './ProgressionsPage.module.css';
 
 const SCOPES: ReadonlyArray<readonly [ProgressionScope, I18nKey]> = [
@@ -374,14 +375,18 @@ export function ProgressionsPage(): React.ReactElement {
                 onChange={(e) => setQuery(e.target.value)}
               />
               <label className={styles.sortLabel}>
-                {t('prog.sortLabel')}
-                <select id="progSort" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
-                  {(Object.keys(SORT_LABEL) as SortBy[]).map((k) => (
-                    <option key={k} value={k}>
-                      {SORT_LABEL[k]}
-                    </option>
-                  ))}
-                </select>
+                <span id="progSort-lab">{t('prog.sortLabel')}</span>
+                <AppSelect
+                  id="progSort"
+                  className={styles.sortSelect}
+                  value={sortBy}
+                  ariaLabelledBy="progSort-lab"
+                  options={(Object.keys(SORT_LABEL) as SortBy[]).map((k) => ({
+                    value: k,
+                    label: SORT_LABEL[k],
+                  }))}
+                  onChange={(v) => setSortBy(v as SortBy)}
+                />
               </label>
               {(query || tasteFilter) && (
                 <span className={styles.count} id="progSearchCount">

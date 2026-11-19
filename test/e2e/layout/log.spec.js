@@ -4,6 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES, FIXTURES } = require('../support/mock-app');
+const { pickOption, expectValue } = require('../support/app-select');
 
 layoutSuite({
   name: 'log',
@@ -134,4 +135,32 @@ test('DS23-L3 다크: 요약 스파인 fill1 다크 값·선택 탭 종이 (1280
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
   expect(await page.locator('#pane-log .summary-card').first().evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 107, 43)');
   expect(await page.locator('#logTabs [aria-selected="true"]').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(36, 36, 34)');
+});
+
+test('AS-3 기록 화면 #songStatus-{id}·#detailStatus AppSelect 3px·접근이름·선택 계약 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const song = FIXTURES.longSongs(5)[0];
+  await mockApp(page, STATES.userData);
+  await page.goto('/log.html#songs', { waitUntil: 'load' });
+  const cardId = `songStatus-${song.id}`;
+  await page.locator(`#${cardId}`).waitFor();
+  await expect(page.getByRole('combobox', { name: '곡 상태' })).toHaveCount(5);
+  const cardStyle = await page.locator(`#${cardId}`).evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { radius: s.borderTopLeftRadius, height: s.height };
+  });
+  expect(cardStyle).toEqual({ radius: '3px', height: '44px' });
+  await pickOption(page, cardId, 'done');
+  await expectValue(page, cardId, 'done');
+
+  await page.goto(`/log.html?song=${encodeURIComponent(song.id)}`, { waitUntil: 'load' });
+  await page.locator('#detailStatus').waitFor();
+  await expect(page.getByRole('combobox', { name: '곡 상태' })).toHaveCount(1);
+  const detailStyle = await page.locator('#detailStatus').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { radius: s.borderTopLeftRadius, height: s.height };
+  });
+  expect(detailStyle).toEqual({ radius: '3px', height: '44px' });
+  await pickOption(page, 'detailStatus', 'paused');
+  await expectValue(page, 'detailStatus', 'paused');
 });

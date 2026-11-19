@@ -1120,14 +1120,7 @@
 }
 
 .selectPill {
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  min-height: 44px;
-  padding: 0 16px;
+  width: auto;
   min-width: 0;
 }
 

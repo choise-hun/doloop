@@ -831,7 +831,6 @@ export const JA: Record<I18nKey, string> = {
   'prog.editorKeyUnknown': "不明",
   'prog.editorKeyEstimated': "推定",
   'prog.editorKeyRecommended': " (推奨)",
-  'prog.editorKeyAll': "すべて",
   'prog.editorKeyHelp': "コードから推定したキーです。異なる場合は選択してください。",
   'prog.editorLabelRoman': "ローマ数字",
   'prog.editorRomanHelp': "キーを選ぶと計算されます",

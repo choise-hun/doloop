@@ -301,12 +301,9 @@
   font-size: 13px;
   color: var(--muted);
 }
-.sortLabel select {
-  font: inherit;
-  min-height: 40px;
-  padding: 0 10px;
-  border: 1px solid var(--seam-hairline);
-  border-radius: var(--radius-block);
-  background: var(--bg);
-  color: var(--ink);
+.sortLabel > span {
+  white-space: nowrap;
+}
+.sortSelect {
+  width: auto;
 }

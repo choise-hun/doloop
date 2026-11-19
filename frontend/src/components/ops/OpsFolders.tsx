@@ -4,6 +4,7 @@
 // 제목·설명·곡 설명은 ko 칸만 보이고, 저장할 때 기존 en·ja를 같이 보낸다(O3 — PATCH가 번역 묶음을 통째로 바꾼다)
 // 문구 한국어 고정(O2). 사용자 글자는 React 텍스트로만 넣는다
 import React, { useEffect, useRef, useState } from 'react';
+import { AppSelect } from '../common/AppSelect';
 import { apiClient, AdminFolderDetail, AdminFolderDto, AdminFolderKind, AdminFolderPatch } from '../../lib/apiClient';
 import { thumb, videoIdFrom } from '../../lib/security';
 import {
@@ -334,11 +335,17 @@ export function OpsFolders({ open, onForbidden }: Props): React.ReactElement {
           <h4 className={o.h4}>새로 만들기</h4>
           <div className={o.pairRow}>
             <label className={s.field} data-align-group="opsForm: left">
-              <span className={s.lab}>종류</span>
-              <select className="inpField" id="opsNewKind" value={newKind} onChange={(e) => setNewKind(e.target.value as AdminFolderKind)}>
-                <option value="curated">큐레이션</option>
-                <option value="monthly_pick">이달의 곡</option>
-              </select>
+              <span className={s.lab} id="opsNewKind-lab">종류</span>
+              <AppSelect
+                id="opsNewKind"
+                value={newKind}
+                ariaLabelledBy="opsNewKind-lab"
+                options={[
+                  { value: 'curated', label: '큐레이션' },
+                  { value: 'monthly_pick', label: '이달의 곡' },
+                ]}
+                onChange={(v) => setNewKind(v as AdminFolderKind)}
+              />
             </label>
             {newKind === 'monthly_pick' ? (
               <label className={s.field}>

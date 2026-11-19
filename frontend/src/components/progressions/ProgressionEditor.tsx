@@ -16,6 +16,7 @@ import {
   validateForm,
 } from './model.mts';
 import type { ProgressionForm } from './model.mts';
+import { AppSelect, type AppSelectOption } from '../common/AppSelect';
 import styles from './Progressions.module.css';
 
 export interface ProgressionEditorProps {
@@ -157,34 +158,28 @@ export function ProgressionEditor({
 
       <div className={styles.grid2}>
         <label className={styles.field}>
-          <span className={styles.lab}>{t('prog.editorLabelKey')}</span>
-          <select
-            className="inpField"
+          <span className={styles.lab} id={fid('key-lab')}>{t('prog.editorLabelKey')}</span>
+          <AppSelect
             id={fid('key')}
             value={key}
-            onChange={(e) => {
+            ariaLabelledBy={fid('key-lab')}
+            options={([
+              { value: '', label: t('prog.editorKeyUnknown') },
+              ...guesses.map((g, i) => ({
+                value: g.key,
+                label: `${g.key}${i === 0 ? t('prog.editorKeyRecommended') : ''}`,
+                meta: t('prog.editorKeyEstimated'),
+              })),
+              ...KEYS.filter((k) => !guesses.some((g) => g.key === k)).map((k) => ({
+                value: k,
+                label: k,
+              })),
+            ] as AppSelectOption[])}
+            onChange={(v) => {
               setKeyTouched(true);
-              set('key', e.target.value);
+              set('key', v);
             }}
-          >
-            <option value="">{t('prog.editorKeyUnknown')}</option>
-            {guesses.length > 0 && (
-              <optgroup label={t('prog.editorKeyEstimated')}>
-                {guesses.map((g, i) => (
-                  <option key={'g' + g.key} value={g.key}>
-                    {g.key}{i === 0 ? t('prog.editorKeyRecommended') : ''}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label={t('prog.editorKeyAll')}>
-              {KEYS.filter((k) => !guesses.some((g) => g.key === k)).map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+          />
           <span className="hint" data-testid={`${idPrefix}-keyHint`}>
             {!keyTouched && guesses[0] ? t('prog.editorKeyHelp') : ' '}
           </span>

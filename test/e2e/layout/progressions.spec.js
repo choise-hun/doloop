@@ -1,9 +1,10 @@
 // 코드 진행 모음 화면 정렬 검사 (FT-2): 공통 검사 G0~G8. M2에서 다시 만드는 화면이라 배치 약속은 M2 step에서 쓴다
 // 규격: 개발산출물/프론트_정렬규격.md · 점검 기록: 개발산출물/결과/FT-2_전화면점검.md
 'use strict';
-const { expect } = require('@playwright/test');
+const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
-const { STATES, LONG_TITLE } = require('../support/mock-app');
+const { mockApp, STATES, LONG_TITLE } = require('../support/mock-app');
+const { pickOption, expectValue } = require('../support/app-select');
 
 function json(route, body) {
   return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body) });
@@ -54,4 +55,32 @@ layoutSuite({
     else await page.locator('#progList > li').first().waitFor();
   },
   dark: 'userData',
+});
+
+test('AS-3 progressions #progSort AppSelect 계약·열린 목록 캡처', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockApp(page, { ...STATES.userData, routes: [progRoute(rows())] });
+  await page.goto('/progressions.html', { waitUntil: 'load' });
+  await page.locator('#progSort').waitFor();
+  await expect(page.getByRole('combobox', { name: '정렬' })).toHaveCount(1);
+  await expectValue(page, 'progSort', 'recent');
+  const style1280 = await page.locator('#progSort').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { radius: s.borderTopLeftRadius, height: s.height };
+  });
+  expect(style1280).toEqual({ radius: '3px', height: '44px' });
+
+  await pickOption(page, 'progSort', 'title');
+  await expectValue(page, 'progSort', 'title');
+
+  if (process.env.LAYOUT_SHOTS === '1') {
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.locator('#progSort').click();
+      await expect(page.locator('#progSort-list')).toBeVisible();
+      await page.screenshot({ path: `test-results/layout-shots/as3-progressions-select-open-${width}.png`, fullPage: false });
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#progSort-list')).toHaveCount(0);
+    }
+  }
 });

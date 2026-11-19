@@ -2,6 +2,7 @@
 // 설계: 개발산출물/결과/CH-1a_프레임.md §2, CH-1b_설계.md §3. API는 테스트 안의 가짜 저장소로 흉내 낸다. React 화면 전용(legacy 모드는 skip)
 'use strict';
 const { test, expect } = require('@playwright/test');
+const { pickOption, expectValue } = require('./support/app-select');
 
 const UID = '00000000-0000-4000-8000-000000000001';
 const NOTE_ID = '00000000-0000-4000-8000-0000000000aa';
@@ -245,7 +246,8 @@ test('P2 직접 입력: 칩·키 추정·로마숫자 → 저장 → 저장 직�
   const chips = page.getByTestId('new-chips').locator('li');
   await expect(chips).toHaveCount(5);
   await expect(chips.nth(4)).toHaveAttribute('data-ok', '0');
-  await expect(page.locator('#new-key')).toHaveValue('C Major');
+  await expect(page.getByRole('combobox', { name: '키' })).toHaveCount(1);
+  await expectValue(page, 'new-key', 'C Major');
   await expect(page.locator('#new-roman')).toHaveText('I - vi - IV - V7 - ?');
 
   // 잘못된 입력: 제목 없음 → 요청 안 보냄
@@ -256,7 +258,7 @@ test('P2 직접 입력: 칩·키 추정·로마숫자 → 저장 → 저장 직�
   await page.locator('#new-chords').fill('C - Am - F - G7');
   await page.locator('#new-title').fill('My Song');
   await page.locator('#new-artist').fill('Me');
-  await page.locator('#new-key').selectOption('A min');
+  await pickOption(page, 'new-key', 'A min');
   await expect(page.locator('#new-roman')).toHaveText('bIII - i - bVI - bVII7');
   await page.locator('#new-submit').click();
 
