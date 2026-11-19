@@ -103,9 +103,9 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V13__share_copy_log migrations apply cleanly and create all 30 tables`() {
-        assertEquals("13", targetSchemaVersion, "Flyway target schema version should be 13")
-        assertTrue(migrationsExecutedCount >= 13, "V1__init.sql ~ V13__share_copy_log.sql migrations must have executed")
+    fun `Flyway V1__init to V14__song_sort_order migrations apply cleanly and create all 30 tables`() {
+        assertEquals("14", targetSchemaVersion, "Flyway target schema version should be 14")
+        assertTrue(migrationsExecutedCount >= 14, "V1__init.sql ~ V14__song_sort_order.sql migrations must have executed")
         assertEquals(30, ALL_TABLES.size, "Exposed ALL_TABLES should contain 30 tables")
 
         val actualTables = mutableListOf<String>()

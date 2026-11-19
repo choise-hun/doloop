@@ -12,7 +12,7 @@ import java.util.UUID
 
 /**
  * 공개본 복사·자동 연동 (개발산출물/결과/M1-1_스키마설계.md §4, M1-4a).
- * 복사하는 것: `video_id`·`a`·`b`·`rate`·순서(원본 분류의 곡 목록 순서 = [SongService.LIST_ORDER]).
+ * 복사하는 것: `video_id`·`a`·`b`·`rate`·순서(원본 분류의 곡 목록 순서 = [SongService.LIST_ORDER], SL-2부터 `sort_order`).
  * 제목·아티스트는 복사하지 않는다(N3 — 공개 응답은 `video_titles`를 조인), 메모·상태·pos도 복사하지 않는다
  */
 object SharedFolderSync {
@@ -52,7 +52,7 @@ object SharedFolderSync {
     fun Transaction.copyCategory(folderId: UUID, userId: UUID, categoryId: UUID, markPublished: Boolean): Int {
         val songs = SongCategoriesTable
             .join(SongsTable, JoinType.INNER, SongCategoriesTable.songId, SongsTable.id)
-            .select(SongsTable.videoId, SongsTable.a, SongsTable.b, SongsTable.rate, SongsTable.status, SongsTable.lastDate, SongsTable.updatedAt)
+            .select(SongsTable.id, SongsTable.videoId, SongsTable.a, SongsTable.b, SongsTable.rate, SongsTable.sortOrder, SongsTable.createdAt)
             .where {
                 (SongCategoriesTable.categoryId eq categoryId) and (SongCategoriesTable.userId eq userId) and
                     (SongsTable.userId eq userId)

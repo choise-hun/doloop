@@ -186,26 +186,63 @@ class SongService(
     suspend fun list(userId: UUID, statusCode: String?): List<SongDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
-            val query = SongsTable.selectAll().where { SongsTable.userId eq userId }
-            if (statusCode != null) {
-                query.andWhere { SongsTable.status eq statusCode }
+            loadList(userId, statusCode)
+        }
+    }
+
+    private fun Transaction.loadList(userId: UUID, statusCode: String?): List<SongDto> {
+        val query = SongsTable.selectAll().where { SongsTable.userId eq userId }
+        if (statusCode != null) {
+            query.andWhere { SongsTable.status eq statusCode }
+        }
+        val songRows = query.toList()
+
+        val sumExpr = SessionsTable.seconds.sum()
+        val totalSecondsMap = SessionsTable
+            .select(SessionsTable.songId, sumExpr)
+            .where { SessionsTable.userId eq userId }
+            .groupBy(SessionsTable.songId)
+            .associate { it[SessionsTable.songId] to (it[sumExpr]?.toLong() ?: 0L) }
+
+        val categoryIdsMap = categoryIdsBySong(userId)
+
+        return songRows.sortedWith(LIST_ORDER).map { row ->
+            val songId = row[SongsTable.id]
+            val totalSec = totalSecondsMap[songId] ?: 0L
+            rowToDto(row, totalSec, categoryIdsMap[songId].orEmpty())
+        }
+    }
+
+    /**
+     * SL-2 곡 순서 저장(명세 §5.2). [ids] = 화면에 보이는 폴더의 곡을 새 순서대로(중복 없음은 라우트가 검사).
+     * 전체 순서에서 [ids] 곡들이 차지한 자리에 [ids] 순서대로 다시 넣고 나머지는 제자리, 전체를 0..n-1로 다시 매긴다.
+     * 하나라도 내 곡이 아니면(없음·다른 사용자) 404, DB 무변경. 반환 = `GET /songs`와 같은 전체 목록
+     */
+    suspend fun reorder(userId: UUID, ids: List<UUID>): List<SongDto> {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true) // 곡 생성·삭제·다른 순서 저장과 직렬화(새 곡 트리거의 MIN 계산 경합 방지)
+            val rows = SongsTable.select(SongsTable.id, SongsTable.sortOrder, SongsTable.createdAt)
+                .where { SongsTable.userId eq userId }
+                .forUpdate()
+                .toList()
+                .sortedWith(LIST_ORDER)
+            val current = rows.map { it[SongsTable.id] }
+            val own = current.toHashSet()
+            if (ids.any { it !in own }) {
+                throw NotFoundException("곡을 찾을 수 없습니다.")
             }
-            val songRows = query.toList()
-
-            val sumExpr = SessionsTable.seconds.sum()
-            val totalSecondsMap = SessionsTable
-                .select(SessionsTable.songId, sumExpr)
-                .where { SessionsTable.userId eq userId }
-                .groupBy(SessionsTable.songId)
-                .associate { it[SessionsTable.songId] to (it[sumExpr]?.toLong() ?: 0L) }
-
-            val categoryIdsMap = categoryIdsBySong(userId)
-
-            songRows.sortedWith(LIST_ORDER).map { row ->
-                val songId = row[SongsTable.id]
-                val totalSec = totalSecondsMap[songId] ?: 0L
-                rowToDto(row, totalSec, categoryIdsMap[songId].orEmpty())
+            val oldOrder = rows.associate { it[SongsTable.id] to it[SongsTable.sortOrder] }
+            applySubsetOrder(current, ids).forEachIndexed { index, songId ->
+                if (oldOrder[songId] != index) { // 바뀐 행만 UPDATE(updated_at 트리거를 불필요하게 돌리지 않는다)
+                    SongsTable.update({ (SongsTable.id eq songId) and (SongsTable.userId eq userId) }) {
+                        it[sortOrder] = index
+                    }
+                }
             }
+            SharedFolderSync.resyncCategories(this, userId, null) // 공개본 순서도 sort_order를 따른다(E1)
+
+            loadList(userId, null)
         }
     }
 
@@ -652,13 +689,29 @@ class SongService(
     companion object {
         const val UNTITLED = "(제목 없음)"
 
-        private val STATUS_ORDER = mapOf("practicing" to 0, "paused" to 1, "done" to 2)
+        /** 순서 저장 한 번에 보낼 수 있는 곡 수(티어 곡 한도보다 넉넉하게 — 다운그레이드·가져오기 대비) */
+        const val MAX_ORDER_IDS = 1000
 
-        /** 곡 목록 순서: 상태(연습 중·보류·완료) → 마지막 연습일 최근 → 수정 최근. 공개본 항목 순서도 이것(M1-1 §4) */
+        /**
+         * 곡 목록 순서(SL-2 E1): `sort_order` 작은 값 → 만든 시각 최근 → id(동시 삽입 동점 대비).
+         * `GET /songs`·순서 저장 응답·공개본 항목 순서가 모두 이것. 행에 `sort_order`·`created_at`·`id`가 있어야 한다
+         */
         val LIST_ORDER: Comparator<ResultRow> =
-            compareBy<ResultRow> { STATUS_ORDER[it[SongsTable.status]] ?: 99 }
-                .thenBy(Comparator.nullsLast(Comparator.reverseOrder())) { it[SongsTable.lastDate] }
-                .thenByDescending { it[SongsTable.updatedAt] }
+            compareBy<ResultRow> { it[SongsTable.sortOrder] }
+                .thenByDescending { it[SongsTable.createdAt] }
+                .thenBy { it[SongsTable.id].toString() }
+
+        /**
+         * 부분집합 자리 유지(명세 §5.2-4): [current]에서 [ids]가 차지한 자리(오름차순)에 [ids] 순서대로 넣는다.
+         * [ids]는 중복 없이 [current] 안에 있어야 한다(부르는 쪽이 검사). 프런트 `songOrder.mts`의 `applySubsetOrder`와 같은 규칙
+         */
+        fun applySubsetOrder(current: List<UUID>, ids: List<UUID>): List<UUID> {
+            val moving = ids.toHashSet()
+            val slots = current.indices.filter { current[it] in moving }
+            val result = current.toMutableList()
+            slots.forEachIndexed { i, slot -> result[slot] = ids[i] }
+            return result
+        }
         val VIDEO_ID_REGEX = Regex("^[A-Za-z0-9_-]{11}$")
         val STATUS_LABELS: Map<String, String> = mapOf(
             "practicing" to "연습 중",

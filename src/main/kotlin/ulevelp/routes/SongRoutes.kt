@@ -148,6 +148,32 @@ fun Route.registerSongRoutes(
             call.respond(HttpStatusCode.OK, result)
         }
 
+        // SL-2 ⑥: 보이는 폴더의 곡 순서 저장(명세 §5). 리터럴 경로라 /{songId} 계열과 겹치지 않는다
+        put("/order") {
+            val user = call.requireAuthUser()
+            val body = call.receiveJsonObject()
+            val arr = body.requireArray("ids", SongService.MAX_ORDER_IDS)
+            if (arr.isEmpty()) {
+                throw InvalidInputException("ids 형식이 올바르지 않습니다.")
+            }
+            val ids = arr.map { elem ->
+                if (elem !is JsonPrimitive || !elem.isString) {
+                    throw InvalidInputException("ids 형식이 올바르지 않습니다.")
+                }
+                // 소문자 표준 표기만 받는다(fromString은 "1-1-1-1-1"·대문자도 받으므로 원문과 같은지 본다)
+                runCatching { UUID.fromString(elem.content) }.getOrNull()
+                    ?.takeIf { it.toString() == elem.content }
+                    ?: throw InvalidInputException("ids 형식이 올바르지 않습니다.")
+            }
+            if (ids.toSet().size != ids.size) {
+                throw InvalidInputException("ids에 같은 곡이 두 번 있습니다.")
+            }
+
+            val list = songService.reorder(user.id, ids)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
+        }
+
         get("/{songId}") {
             val user = call.requireAuthUser()
             val songId = parsePathUuid(call.parameters["songId"])

@@ -216,7 +216,7 @@ class SongApiTest {
     }
 
     @Test
-    fun `S4 목록 정렬·상태 필터·합계`() = testApplication {
+    fun `S4 목록 정렬(sort_order)·상태 필터·합계`() = testApplication {
         configureApiTestApp(dbConfig)
         val userA = UUID.randomUUID()
         val tokenA = TestJwt.token(userA)
@@ -305,7 +305,8 @@ class SongApiTest {
         assertEquals(HttpStatusCode.OK, listRes.status)
         val songs = Json.parseToJsonElement(listRes.bodyAsText()).jsonObject["songs"]!!.jsonArray
         val ids = songs.map { it.jsonObject["id"]?.jsonPrimitive?.content }
-        assertEquals(listOf(s2, s1, s6, s3, s4, s5).map { it.toString() }, ids)
+        // SL-2 E1(승인된 요구 변경): 목록 순서 = sort_order. 값 없이 넣은 곡은 V14 트리거가 맨 위(최솟값-1)로 넣으므로 넣은 순서의 반대
+        assertEquals(listOf(s5, s4, s6, s3, s2, s1).map { it.toString() }, ids)
 
         val s1Dto = songs.first { it.jsonObject["id"]?.jsonPrimitive?.content == s1.toString() }.jsonObject
         assertEquals(900L, s1Dto["totalSeconds"]?.jsonPrimitive?.long)
@@ -1139,5 +1140,85 @@ class SongApiTest {
             assertEquals("song", outboxRows[0][SyncOutboxTable.entity])
             assertEquals("upsert", outboxRows[0][SyncOutboxTable.op])
         }
+    }
+
+    // ============================================================
+    // SL-2 ⑥ PUT /songs/order (명세 §5)
+    // ============================================================
+
+    private fun insertOrderedSongs(owner: UUID, count: Int, videoPrefix: Char): List<UUID> = transaction(db) {
+        (0 until count).map { index ->
+            val songId = UUID.randomUUID()
+            SongsTable.insert {
+                it[id] = songId
+                it[userId] = owner
+                it[title] = "T$index"
+                it[videoId] = "$videoPrefix".repeat(10) + ('a' + index)
+                it[sortOrder] = index
+            }
+            songId
+        }
+    }
+
+    private fun sortOrders(owner: UUID): Map<UUID, Int> = transaction(db) {
+        SongsTable.selectAll().where { SongsTable.userId eq owner }
+            .associate { it[SongsTable.id] to it[SongsTable.sortOrder] }
+    }
+
+    private suspend fun putOrder(client: io.ktor.client.HttpClient, token: String, ids: List<UUID>): HttpResponse =
+        client.put("/api/v1/songs/order") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { putJsonArray("ids") { ids.forEach { add(it.toString()) } } }.toString())
+        }
+
+    private fun songIdsOf(body: String): List<String> =
+        Json.parseToJsonElement(body).jsonObject["songs"]!!.jsonArray.map { it.jsonObject["id"]!!.jsonPrimitive.content }
+
+    @Test
+    fun `SL2-K2 순서 저장은 보이는 부분집합의 자리를 유지하고 나머지는 제자리`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+        val (a, b, c, d, e) = insertOrderedSongs(userA, 5, 'k')
+
+        // 폴더 = [B,D,E] → 화면에서 [E,B,D]로 끌기 → 자리 {1,3,4}에 E,B,D
+        val res = putOrder(client, tokenA, listOf(e, b, d))
+        assertEquals(HttpStatusCode.OK, res.status)
+        assertEquals("no-store", res.headers[HttpHeaders.CacheControl])
+        val expected = listOf(a, e, c, b, d).map { it.toString() }
+        assertEquals(expected, songIdsOf(res.bodyAsText()))
+
+        val listRes = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(expected, songIdsOf(listRes.bodyAsText()))
+        // 전체가 0..n-1로 다시 매겨진다
+        assertEquals(mapOf(a to 0, e to 1, c to 2, b to 3, d to 4), sortOrders(userA))
+    }
+
+    @Test
+    fun `SL2-K3 다른 사용자 곡 id가 섞이면 404이고 A·B 순서 모두 무변경`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val userB = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        val tokenB = TestJwt.token(userB)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+        val songsA = insertOrderedSongs(userA, 3, 'm')
+        val songsB = insertOrderedSongs(userB, 2, 'n')
+        val beforeA = sortOrders(userA)
+        val beforeB = sortOrders(userB)
+
+        val res = putOrder(client, tokenA, listOf(songsA[2], songsB[0], songsA[0]))
+        assertEquals(HttpStatusCode.NotFound, res.status)
+        assertStandardError(res.bodyAsText(), 404, "NOT_FOUND")
+        assertEquals(beforeA, sortOrders(userA))
+        assertEquals(beforeB, sortOrders(userB))
+
+        // B 토큰으로 A 곡만 보내도 404
+        val resB = putOrder(client, tokenB, listOf(songsA[1], songsA[0]))
+        assertEquals(HttpStatusCode.NotFound, resB.status)
+        assertEquals(beforeA, sortOrders(userA))
     }
 }

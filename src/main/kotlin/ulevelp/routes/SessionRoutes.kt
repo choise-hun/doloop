@@ -13,6 +13,7 @@ import ulevelp.auth.requireAuthUser
 import ulevelp.service.ProfileService
 import ulevelp.service.SessionService
 import ulevelp.service.EpisodeLogService
+import ulevelp.service.StorageTrashService
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
@@ -41,7 +42,8 @@ fun Route.registerSessionRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
     sessionService: SessionService,
-    episodeLogService: EpisodeLogService
+    episodeLogService: EpisodeLogService,
+    storageTrashService: StorageTrashService
 ) {
     route("/sessions") {
         install(SupabaseAuthPlugin) {
@@ -79,6 +81,17 @@ fun Route.registerSessionRoutes(
             val memo = body.requireString("memo", 2000)
 
             sessionService.updateMemo(user.id, sessionId, memo)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
+        }
+
+        // SL-2 ⑩: 세션 하나 삭제(명세 §6). 곡 삭제와 같은 순서 — 커밋 뒤 휴지통 purge
+        delete("/{sessionId}") {
+            val user = call.requireAuthUser()
+            val sessionId = parsePathUuid(call.parameters["sessionId"])
+
+            val ids = sessionService.delete(user.id, sessionId)
+            storageTrashService.purge(ids)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
