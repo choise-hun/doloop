@@ -1,6 +1,7 @@
 // frontend/src/components/songRecord/SongRecordParts.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAudio } from '../common/SafeAudio';
+import { AppSelect } from '../common/AppSelect';
 import { auth, useAuth } from '../../lib/auth';
 import { apiClient, SongSessionDto, TakeDto } from '../../lib/apiClient';
 import { drive } from '../../lib/drive';
@@ -181,24 +182,25 @@ export function TakeItemRow({
   return (
     <div className={`take-row ${styles.takeRow}`}>
       {showAbCheck && (
-        <select
+        <AppSelect
           className={`ab-select ${styles.abSelect}`}
-          data-take-id={take.id}
+          dataAttrs={{ 'take-id': take.id }}
           value={currentSlotVal}
-          onChange={(e) => {
-            const val = e.target.value as 'a' | 'b' | '';
+          options={[
+            { value: '', label: t('record.abSelectNone') },
+            { value: 'a', label: t('record.abSelectA') },
+            { value: 'b', label: t('record.abSelectB') },
+          ]}
+          onChange={(v) => {
+            const val = v as 'a' | 'b' | '';
             if (onSelectAbSlot) {
               onSelectAbSlot(take.id, val);
             } else if (onToggleAb) {
               onToggleAb(take.id, Boolean(val));
             }
           }}
-          aria-label={t('record.abSelect')}
-        >
-          <option value="">{t('record.abSelectNone')}</option>
-          <option value="a">{t('record.abSelectA')}</option>
-          <option value="b">{t('record.abSelectB')}</option>
-        </select>
+          ariaLabel={t('record.abSelect')}
+        />
       )}
       <span className={`take-meta ${styles.takeMeta}`}>🎙 {fmtTakeMeta(take)}</span>
       <button
