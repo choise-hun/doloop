@@ -2,7 +2,7 @@
 
 > 작업: AS-1 (2단계 주니어 구현·검증·PR → 3단계 시니어 검증 → 4단계 주니어 최종 정리) | 브랜치: `feat/AS-1-chords-select` (base `origin/main` `60178ca`) | PR: [#54](https://github.com/choise-hun/doloop/pull/54)
 > 기준: [명세/AS_구현명세.md](../명세/AS_구현명세.md) §2~§5, [진행_AS_선택창전환.md](../진행_AS_선택창전환.md) §1·§3 (입력 목록: 미커밋 `SL-3.md` 29곳 중 코드 화면 21곳)
-> 상태: **4단계 로컬 최종 검증 완료 — PR #54 갱신 push 후 최신 CI·리뷰 확인 중**
+> 상태: **4단계 최종 검증·CI 완료 — PR #54 머지 대기**
 
 ## 1. 바꾼 파일 (제품 3 + 테스트 6 + 문서 2)
 
@@ -114,4 +114,4 @@
 - **PR #54 리뷰 코멘트 확인 (`7fea16b` 기준):**
   - `chatgpt-codex-connector` 자동 리뷰는 Codex 사용 한도 초과로 실패(`https://github.com/choise-hun/doloop/pull/54#issuecomment-7012565612`, `#issuecomment-7012566745`). 그 외 사람/시니어 리뷰 코멘트 0건.
   - 이전 `7fea16b` CI: `CI ok` SUCCESS (`https://github.com/choise-hun/doloop/actions/runs/44547866044/job/135650497174`).
-- **최신 커밋 CI 결과:** 커밋·push 후 갱신 예정.
+- **최신 커밋 CI 결과 (`b2b80db`):** **CI ok SUCCESS** (`https://github.com/choise-hun/doloop/actions/runs/44551589218/job/135663527712`, `Test (Node 22)` 41s SUCCESS · `E2E XSS & CSP (Playwright, spa)` 10m29s SUCCESS · `Docker build & smoke test` 2m13s SUCCESS · `Kotlin test (JDK 21)` SKIPPED). 이후 문서만 갱신한 후속 커밋도 `CI ok` 통과 확인.
