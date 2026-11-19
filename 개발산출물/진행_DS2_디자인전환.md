@@ -3,7 +3,7 @@
 - **목표:** 확정 시안(`4:6` + 쿨 라이트 -20% + `▶ PLAYER` A안 + `12px` 계기판)을 토큰·가드·AppShell부터 모든 화면까지 4 Step으로 적용한다.
 - **근거:** [계획/디자인_전환_계획](../계획/디자인_전환_계획.md) §1~§3 · [frontend-design](../docs/rules/frontend-design.md)(2026-11-18 개정) · [프론트_정렬규격](프론트_정렬규격.md) v1.8 · [명세/HOME_융합_시안.html](명세/HOME_융합_시안.html) · [자료/DESIGN_하라켄야_수정안](자료/DESIGN_하라켄야_수정안.md) · [협업 §1.2](협업_시니어주니어.md)
 - **step ID:** `DS2-1`~`DS2-4`. 테스트 이름 접두어 `DS21-`·`DS22-`…(기존 `shell.spec.js`의 옛 `DS2-N1~N3`와 구별)
-- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 PR [#46](https://github.com/choise-hun/doloop/pull/46)(head `488154d`) **로컬 전체 회귀(`542` + `932 passed`) 및 최신 CI 통과 / 머지 대기**
+- **상태:** DS2-1 완료(PR #44 머지, main `1103f0d`). DS2-2 완료(PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지 2026-11-18T17:14:44Z, main `44af6c3`). DS2-3 완료(PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지 2026-11-19T01:10:16Z, main `8b79c79`). **DS2-4 명세 승인(2026-11-19, §9 7건 추천안) → 0단계 시니어 구현 중**([명세](명세/DS2-4_구현명세.md), 브랜치 `feat/DS2-4-notes-progressions-account`)
 
 ## 1. 단계 표
 
@@ -11,8 +11,8 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DS2-1 | 토큰 3블록(쿨 라이트·파생 hex·`--radius-block`) + 곡률 가드 일원화·다크 동기화 가드 + AppShell `PLAYER` 1순위·A안 | **[시니어]** 구현·표적 테스트·커밋 2개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | 명세 승인 | [명세/DS2-1](명세/DS2-1_구현명세.md), 이 파일 | [결과/DS2-1](결과/DS2-1.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#44](https://github.com/choise-hun/doloop/pull/44) 머지, main `1103f0d`) |
 | DS2-2 | 홈 4:6 융합(스파인·릴리프·버튼 3단계·`합산→레퍼런스→분석`·`랜덤 ↻`) | **[시니어]** 구현·표적 테스트·커밋 3개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 | DS2-1 PR 머지(완료) | [명세/DS2-2](명세/DS2-2_구현명세.md), 이 파일 | [결과/DS2-2](결과/DS2-2.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#45](https://github.com/choise-hun/doloop/pull/45) 머지, main `44af6c3`) |
-| DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](명세/DS2-3_구현명세.md), [시안](명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **CI 통과/머지 대기** (PR [#46](https://github.com/choise-hun/doloop/pull/46), head `488154d`) |
-| DS2-4 | Notes·Progressions·Settings·Profile·Privacy 전환 + 공용 `.ghostBtn`·`.inpField` 블록 전환(D2) + 위 메뉴 글꼴 확인(D11) + 전 화면 Q1~Q9 | 1단계 명세에서 판정 | DS2-3 완료 | 계획 §2 순서 4, 결과/DS2-3 | `개발산출물/결과/DS2-4.md` | 전 화면 4폭+다크 스크린샷 표, `완료/` 이동 | 높음 | 대기 |
+| DS2-3 | Practice·Chords·Log 전환(스파인·릴리프·3px·버튼 3단계, 지판 토큰 D8 미변경 추천, `chords.spec.js:44`·`practice.spec.js:361-364` 곡률 단언 `3px` 교체) — 파일 8개(CSS 5·spec 3, TSX 0), 단일 Step·화면별 커밋 3개 추천 | **[시니어]** 구현·표적 테스트·커밋 4개·push / [주니어] 4단계 전체 회귀·PR·CI·스크린샷·결과 (Log는 격리 — 분할 대안 시 주니어 가능) | DS2-2 머지(완료) + 명세 승인 | [명세/DS2-3](명세/DS2-3_구현명세.md), [시안](명세/DS2-3_시안.html), 이 파일 | [결과/DS2-3](결과/DS2-3.md) | 명세 §8 체크리스트 전부, 최신 head CI 통과·리뷰 처리 | 높음 | **완료** (PR [#46](https://github.com/choise-hun/doloop/pull/46) 머지, main `8b79c79`) |
+| DS2-4 | Notes·NoteDetail·Progressions·Settings·Privacy·Profile 전환 + 공용 `.ghostBtn`·`.inpField` 본체 3px(D2) + 위 메뉴 글꼴(D12)·범위 순서(D10)·파사드(D15) 판정 + 전 화면 Q1~Q9 — 파일 8개(CSS 7·spec 1, TSX 0), 단일 Step·커밋 4개 추천 | **[시니어]** 구현·표적 테스트·커밋 5개·push / [주니어] 4단계 전체 회귀·PR·CI·전 화면 스크린샷·결과·`완료/` 이동 | DS2-3 머지(완료) + 명세 승인 | [명세/DS2-4](명세/DS2-4_구현명세.md), [시안](명세/DS2-4_시안.html), 이 파일 | `개발산출물/결과/DS2-4.md` | 명세 §8 전부, 전 화면 4폭+다크 Q표, 최신 head CI 통과·리뷰 처리, `완료/` 이동 | 높음 | **0단계 시니어 구현 중** |
 
 ## 2. 고정된 결정 (Step 경계를 넘는 것만)
 
@@ -27,6 +27,7 @@
 | 2026-11-19 | 파사드 배경(줄눈·리벳·결)은 DS2-2 제외, DS2-4 마감에서 전 화면 공통(AppShell)으로 할지 따로 결정 | 사용자(DS2-2 §9 질문 3, 추천안) |
 | 2026-11-19 | DS2-3 명세 §9 5건 모두 추천안 승인: ① 단일 Step·[시니어]·화면별 커밋 3개(파일 8, TSX 0) ② 스파인 화면별 1색(Practice `fill2`·Chords `fill3`·Log `fill1`) ③ Practice 트랜스포트 6버튼 같은 3px(UXR-1 D8 유지, 영상 있을 때 필 0) ④ 지판 계열 토큰 미변경 ⑤ 넓은 탭 선택 = 종이 + 2px 먹색 밑줄 | 사용자(DS2-3 §9) |
 | 2026-11-19 | DS2-3 추가 요구: Chords 지판의 음 원이 칸(프렛 사이·줄 위) 중앙에 있는지 테스트로 전부 검사(시안 모형에서 어긋난 원이 보였음) → `chords.spec.js` DS23-C5 | 사용자(DS2-3 승인 답변) |
+| 2026-11-19 | DS2-4 명세 §9 7건 모두 추천안 승인: ① 단일 Step·[시니어]·커밋 4개·파일 8(TSX 0) ② 계정 화면 스파인 `fill3` ③ Progressions 행 연주·취향 = 텍스트 버튼 ④ Settings 필 = 펼친 섹션마다 1개 ⑤ Progressions 범위 순서·기본값 변경 안 함 ⑥ 위 메뉴 글꼴 현행(Archivo 800) 유지 ⑦ 파사드·스파인 아치 제외 + 계획 대기 목록 등록(4단계) | 사용자(DS2-4 §9) |
 | 2026-11-19 | DS23-C5에서 개방현(너트 바깥) 원만 칸 중앙에서 2~3px 어긋남 발견 → `ChordDiagrams.tsx` 2줄 수정 허용(TSX 0 → 1, 파일 8 → 9) | 사용자(구현 중 질문, 추천안) |
 
 ## 3. DS2-1 실행 (0단계 시니어 → 4단계 주니어)
@@ -42,6 +43,11 @@
 - **접근 이름 측정:** Playwright 1.51 `getByRole({ name })`은 `content: "▶" / ""` 대체 텍스트를 지원하지 않아 이름을 `▶" / " PLAYER`로 계산한다. Chromium 실제 접근성 트리(CDP `Accessibility.getPartialAXTree`)는 `PLAYER` → DS21-N1·N2는 CDP 값으로 `PLAYER` 정확히 일치를 단언한다(기대값 동일).
 
 ## 5. 다음 세션 시작 지시
+
+- **DS2-4 1단계 명세(2026-11-19 Mac, Claude 시니어):** PR #46 머지 확인(`gh pr view 46` → `MERGED`, `mergedAt 2026-11-19T01:10:16Z`) 후 main `8b79c79`로 `git pull --ff-only`, 브랜치 `feat/DS2-4-notes-progressions-account` 생성(커밋 없음). 작성: [명세/DS2-4](명세/DS2-4_구현명세.md)(전제 P1~P20, D1~D17, 파일 8개, 테스트 DS24-C1·C2·N1·N2·G1·G2·S1~S3·P1·D1), [시안](명세/DS2-4_시안.html)(테마·D2·D4·D8·D9·D12 선택지). 소스·테스트 수정·빌드·테스트 실행 없음.
+  - 사용자 승인 요청 7건(명세 §9): ① 단일 Step·[시니어]·파일 8개(대안: DS2-4/DS2-5 + Step 상한 1회 예외) ② 계정 화면 스파인 `fill3` ③ Progressions 행 연주 = 텍스트 버튼 ④ Settings 필 = 펼친 섹션마다 1개 ⑤ Progressions 범위 순서·기본값 변경 안 함 ⑥ 위 메뉴 글꼴 현행 유지 ⑦ 파사드·아치 제외 + 대기 목록 등록.
+  - 주의: 공용 본체 변경은 비대상 화면(커뮤니티·운영·공유 대화상자·Practice 프리셋 대화상자)도 3px로 바꾼다(명세 P4, 곡률 단언 0건 확인). 인수인계 메모의 DS2 줄은 아직 DS2-3 상태 — 0단계 커밋 ①에서 맞춘다.
+  - 다음: 승인되면 같은 브랜치에서 0단계 시니어 구현(명세 §7, 커밋 ①~⑤, push까지). 승인 내용이 추천안과 다르면 명세 D표·§3·§4·§5·§6을 먼저 고친다.
 
 - **DS2-3 0단계 결과(2026-11-19 Mac, Claude 시니어):** 브랜치 `feat/DS2-3-practice-chords-log`(main `44af6c3`에서), 커밋 `d630ebf` docs(명세·시안·이 파일·승인 기록) · `85768d2` feat(practice) · `ff75ce8` feat(chords) · `7ab9691` feat(log) · 이후 docs(이 기록). PR 없음. 파일 9개(CSS 5·spec 3·`ChordDiagrams.tsx` 1).
   - **주의:** Playwright 서버(`node server.js`)는 `dist/`를 서빙한다 → CSS·TSX를 고친 뒤 `npm run build` 없이 돌리면 옛 화면으로 검사된다.
