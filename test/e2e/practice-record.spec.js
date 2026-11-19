@@ -3,6 +3,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { mockApp, STATES, FIXTURES } = require('./support/mock-app');
+const { pickOptionAt, expectValueAt } = require('./support/app-select');
 
 const SONGS = FIXTURES.longSongs(2);
 const SONG_1 = { ...SONGS[0], id: '00000000-0000-4000-8000-000000000101', videoId: 'jNQXAC9IVRw', title: '첫 번째 연습 곡' };
@@ -482,36 +483,36 @@ test('UXR1-1: 테이크는 한 번만 — 미연결 판정은 숨은 세션 포�
 
 test('UXR1-2·4: 세션 테이크↔미연결 테이크 교차 A/B, 순서 유지, 같은 테이크 슬롯 이동', async ({ page }) => {
   await openUx(page);
-  await sel(page, UX_IDS.t1).selectOption('a');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'a');
   await expect(page.locator('#srAbHint')).toBeVisible();
   await expect(page.locator('#srAbPanel')).toBeHidden();
-  await sel(page, UX_IDS.t3).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
   await expect(page.locator('#srAbPanel')).toBeVisible();
   await expect(page.locator('#srAbHint')).toHaveCount(0);
   await expect(page.locator('#srAbLabelA')).toContainText('2026-11-05 10:00');
   await expect(page.locator('#srAbLabelB')).toContainText('2026-11-07 09:00');
   // 사용자가 고른 순서 그대로(시각순 재정렬 없음): 늦은 녹음 t3를 A로, t1을 B로
-  await sel(page, UX_IDS.t3).selectOption('a');
-  await expect(sel(page, UX_IDS.t1)).toHaveValue('');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'a');
+  await expectValueAt(sel(page, UX_IDS.t1), '');
   await expect(page.locator('#srAbHint')).toBeVisible();
-  await sel(page, UX_IDS.t1).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'b');
   await expect(page.locator('#srAbLabelA')).toContainText('2026-11-07 09:00');
   await expect(page.locator('#srAbLabelB')).toContainText('2026-11-05 10:00');
   // 같은 테이크를 다른 슬롯으로 옮기면 원래 슬롯은 빈칸
-  await sel(page, UX_IDS.t3).selectOption('b');
-  await expect(sel(page, UX_IDS.t3)).toHaveValue('b');
-  await expect(sel(page, UX_IDS.t1)).toHaveValue('');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
+  await expectValueAt(sel(page, UX_IDS.t3), 'b');
+  await expectValueAt(sel(page, UX_IDS.t1), '');
 });
 
 test('UXR1-3: A 삭제 시 B는 B 자리에 남고 비교 영역이 닫힌다', async ({ page }) => {
   await openUx(page);
-  await sel(page, UX_IDS.t1).selectOption('a');
-  await sel(page, UX_IDS.t3).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'a');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
   await expect(page.locator('#srAbPanel')).toBeVisible();
   page.once('dialog', (d) => d.accept());
   await rowOf(page, UX_IDS.t1).locator('.btnDelete').click();
   await expect(sel(page, UX_IDS.t1)).toHaveCount(0);
-  await expect(sel(page, UX_IDS.t3)).toHaveValue('b');
+  await expectValueAt(sel(page, UX_IDS.t3), 'b');
   await expect(page.locator('#srAbHint')).toBeVisible();
   await expect(page.locator('#srAbPanel')).toBeHidden();
 });
@@ -523,16 +524,16 @@ test('UXR1-5: 삭제·완료 실패(500) 시 행과 슬롯을 유지한다', asy
       (route) => json(route, { error: 'INTERNAL_ERROR', message: '서버 오류' }, 500),
     ]],
   });
-  await sel(page, UX_IDS.t1).selectOption('a');
-  await sel(page, UX_IDS.t3).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'a');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
   const dialogs = [];
   page.on('dialog', (d) => { dialogs.push(d.type()); void d.accept(); });
   await rowOf(page, UX_IDS.t3).locator('.btnDelete').click();
   await expect.poll(() => dialogs.filter((x) => x === 'alert').length).toBe(1);
   await rowOf(page, UX_IDS.t3).locator('.btnComplete').click();
   await expect.poll(() => dialogs.filter((x) => x === 'alert').length).toBe(2);
-  await expect(sel(page, UX_IDS.t3)).toHaveValue('b');
-  await expect(sel(page, UX_IDS.t1)).toHaveValue('a');
+  await expectValueAt(sel(page, UX_IDS.t3), 'b');
+  await expectValueAt(sel(page, UX_IDS.t1), 'a');
   await expect(page.locator('#srAbPanel')).toBeVisible();
 });
 
@@ -564,8 +565,8 @@ test('UXR1-7: 늦게 도착한 A 재생 URL은 슬롯이 바뀐 뒤 audio에 할
       },
     ]],
   });
-  await sel(page, UX_IDS.t1).selectOption('a');
-  await sel(page, UX_IDS.t3).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'a');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
   // 기준선: B는 즉시 응답 → src 할당됨(URL이 유효함을 증명)
   await page.locator('#srAbPlayB').click();
   await expect(page.locator('#srAbAudioB')).toHaveAttribute('src', 'https://example.com/take.webm');
@@ -573,7 +574,7 @@ test('UXR1-7: 늦게 도착한 A 재생 URL은 슬롯이 바뀐 뒤 audio에 할
   const pending = page.waitForRequest((r) => r.url().includes(`${UX_IDS.t1}/url`));
   await page.locator('#srAbPlayA').click();
   await pending;
-  await sel(page, UX_IDS.t2).selectOption('a');
+  await pickOptionAt(page, sel(page, UX_IDS.t2), 'a');
   const answered = page.waitForResponse((r) => r.url().includes(`${UX_IDS.t1}/url`));
   release();
   await answered;
@@ -595,8 +596,8 @@ test('RECFIX1-1: A 재생 URL 대기 중 부모 재렌더가 일어나도 응답
       },
     ]],
   });
-  await sel(page, UX_IDS.t1).selectOption('a');
-  await sel(page, UX_IDS.t3).selectOption('b');
+  await pickOptionAt(page, sel(page, UX_IDS.t1), 'a');
+  await pickOptionAt(page, sel(page, UX_IDS.t3), 'b');
   await expect(page.locator('#srAbPanel')).toBeVisible();
   const pending = page.waitForRequest((r) => r.url().includes(`${UX_IDS.t1}/url`));
   await page.locator('#srAbPlayA').click();

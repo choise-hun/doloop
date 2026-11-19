@@ -2,6 +2,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { mockApp } = require('./support/mock-app');
+const { pickOptionAt } = require('./support/app-select');
 
 // 3.1 XSS 페이로드 4종
 const PAYLOADS = {
@@ -332,8 +333,8 @@ test('E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교', asyn
   // A/B 비교 녹음 2개 선택
   const selects = page.locator('.ab-select');
   await expect(selects).toHaveCount(2);
-  await selects.nth(0).selectOption('a');
-  await selects.nth(1).selectOption('b');
+  await pickOptionAt(page, selects.nth(0), 'a');
+  await pickOptionAt(page, selects.nth(1), 'b');
 
   // A/B 패널 표시 및 라벨 확인
   const abPanel = page.locator('#abPanel');
