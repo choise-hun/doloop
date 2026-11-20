@@ -128,7 +128,7 @@ async function chPills(page, scope) {
     return r.width > 0 && r.height > 0 && window.getComputedStyle(el).borderTopLeftRadius === '9999px';
   }).map((el) => el.id || el.textContent.trim().slice(0, 20)));
 }
-// 요소의 가장 가까운 스파인 카드 조상(왼쪽 테두리 12px)
+// 요소의 가장 가까운 스파인 카드 조상(왼쪽 테두리 3px, UF-1)
 async function chCardOf(page, sel) {
   return page.locator(sel).first().evaluate((el) => {
     let n = el.parentElement;
@@ -148,7 +148,7 @@ test('DS23-C1 스파인·T1 제목 (1280)', async ({ page }) => {
   await expect(page.locator('#sc-board svg')).toBeVisible();
   const tk = await chTokens(page);
   const card = await chCardOf(page, '#sc-board');
-  expect(card.left).toBe('12px');
+  expect(card.left).toBe('3px'); // UF-1 D1
   expect(card.leftColor).toBe(tk.fill3);
   expect(card.radius).toBe('3px');
   const h1 = await page.locator('h1').first().evaluate((el) => ({ w: getComputedStyle(el).fontWeight, f: getComputedStyle(el).fontSize }));

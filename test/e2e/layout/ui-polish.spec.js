@@ -112,6 +112,7 @@ async function ds24Colors(page) {
       paper: read('backgroundColor', 'var(--paper)'),
       panelFrosted: read('backgroundColor', 'var(--panel-frosted)'),
       reliefBottomMid: read('color', 'var(--relief-bottom-mid)'),
+      shadowAmbient: read('color', 'var(--shadow-ambient)'),
     };
   });
 }
@@ -131,16 +132,17 @@ async function ds24Box(locator) {
   });
 }
 
-// 스파인 카드: 왼쪽 12px(색 = 스파인) · 위 1px 줄눈 · 3px · 릴리프 그림자
+// 스파인 카드(UF-1 D1): 왼쪽 3px(색 = 스파인) · 위 1px 줄눈 · 3px · 그림자 1겹(릴리프 없음)
 async function expectSpine(locator, spine, colors, label) {
   const b = await ds24Box(locator);
-  expect(b.leftW, `${label} 왼쪽 테두리`).toBe('12px');
+  expect(b.leftW, `${label} 왼쪽 테두리`).toBe('3px');
   expect(b.leftC, `${label} 스파인 색`).toBe(spine);
   expect(b.topW, `${label} 위 테두리`).toBe('1px');
   expect(b.topC, `${label} 위 테두리 색`).toBe(colors.seamHairline);
   expect(b.radius, `${label} 곡률`).toBe('3px');
   const rgbs = (b.shadow.match(/rgba?\([^)]*\)|color\([^)]*\)/g) || []).map(ds24Rgb);
-  expect(rgbs, `${label} 릴리프`).toContain(ds24Rgb(colors.reliefBottomMid));
+  expect(rgbs, `${label} 그림자`).toContain(ds24Rgb(colors.shadowAmbient));
+  expect(rgbs, `${label} 두께 릴리프 없음`).not.toContain(ds24Rgb(colors.reliefBottomMid));
 }
 
 // 범위 안의 보이는 필(곡률 9999px) a·button id 목록 — 규칙 §1 Q1
@@ -347,7 +349,7 @@ test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
   await page.goto('/notes.html', { waitUntil: 'load' });
   await page.locator('#form').waitFor();
   await dark();
-  expect(await leftC('#form')).toBe('rgb(212, 178, 106)');
+  expect(await leftC('#form')).toBe('rgb(236, 236, 228)'); // UF-1: 다크 fill2 화이트
 
   await mockApp(page, { ...STATES.user, community: false });
   await page.goto('/settings.html#account', { waitUntil: 'load' });
@@ -360,5 +362,5 @@ test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
   await page.goto('/progressions.html', { waitUntil: 'load' });
   await page.locator('#progTaste').waitFor();
   await dark();
-  expect(await leftC('#progTaste')).toBe('rgb(212, 178, 106)');
+  expect(await leftC('#progTaste')).toBe('rgb(236, 236, 228)');
 });
