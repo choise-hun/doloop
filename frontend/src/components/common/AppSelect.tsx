@@ -13,7 +13,8 @@ export interface AppSelectOption {
 }
 
 interface AppSelectProps {
-  id: string;
+  /** 박스 id(목록은 `${id}-list`). 없으면 useId 기반 값을 만든다(AS-2) */
+  id?: string;
   value: string;
   options: AppSelectOption[];
   onChange: (value: string) => void;
@@ -27,6 +28,21 @@ interface AppSelectProps {
   /** 박스 안 글자를 직접 그릴 때(기본: 고른 항목 이름) */
   children?: React.ReactNode;
   'data-align-group'?: string;
+  /** 박스에 붙일 data-* (키는 `data-` 없이: { 'take-id': x } → data-take-id). data-value·data-align-group은 덮지 못한다 */
+  dataAttrs?: Record<string, string>;
+}
+
+const RESERVED_DATA = new Set(['value', 'align-group']);
+
+function toDataProps(attrs?: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!attrs) return out;
+  for (const [k, v] of Object.entries(attrs)) {
+    const key = k.replace(/^data-/, '');
+    if (!key || RESERVED_DATA.has(key)) continue;
+    out[`data-${key}`] = v;
+  }
+  return out;
 }
 
 interface PopPos {
@@ -43,13 +59,15 @@ const MAX_LIST_HEIGHT = 320;
 const OPTION_HEIGHT = 45; // 항목 최소 높이 44 + 줄 1
 
 export function AppSelect(props: AppSelectProps): React.ReactElement {
-  const { id, value, options, onChange, disabled, ariaLabel, ariaLabelledBy, placeholder, className, children } = props;
+  const { value, options, onChange, disabled, ariaLabel, ariaLabelledBy, placeholder, className, children, dataAttrs } = props;
+  const autoId = useId().replace(/:/g, '');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [pos, setPos] = useState<PopPos | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const optPrefix = useId().replace(/:/g, '');
+  const id = props.id || `appsel-${autoId}`;
   const listId = `${id}-list`;
 
   const selectedIndex = options.findIndex((o) => o.value === value);
@@ -197,6 +215,7 @@ export function AppSelect(props: AppSelectProps): React.ReactElement {
   return (
     <>
       <button
+        {...toDataProps(dataAttrs)}
         ref={triggerRef}
         type="button"
         id={id}

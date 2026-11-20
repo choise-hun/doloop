@@ -292,14 +292,13 @@
 }
 
 /* UI-2: 테이크 AB 셀렉트 및 완료 토글 버튼 */
-.abSelect {
+.takeRow .abSelect {
+  /* AS-2: AppSelect 기본 .trigger(width 100%·44px·14px)를 번들 순서와 무관하게 덮는다(명시도 0,2,0). 목록 항목은 44px 그대로 */
+  flex: none;
+  width: auto;
   height: 28px;
   padding: 0 8px;
-  border-radius: var(--radius-block);
-  border: 1px solid var(--seam-hairline);
   background: var(--surface);
-  color: var(--ink);
-  font: inherit;
   font-size: 12px;
 }
 

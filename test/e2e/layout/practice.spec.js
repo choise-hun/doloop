@@ -4,6 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const { layoutSuite } = require('../support/layout-check');
 const { mockApp, STATES, FIXTURES, DEFAULT_ME, LONG_TITLE } = require('../support/mock-app');
+const { pickOptionAt, expectValueAt } = require('../support/app-select');
 
 const SONG_0 = FIXTURES.longSongs(1)[0];
 
@@ -331,10 +332,10 @@ test('T4: 테이크 .ab-select 매핑 및 구간 완료 토글', async ({ page }
 
   const abSelects = page.locator('#songRecord .ab-select');
   await expect(abSelects).toHaveCount(2);
-  await abSelects.nth(0).selectOption('a');
-  await abSelects.nth(1).selectOption('b');
-  await expect(abSelects.nth(0)).toHaveValue('a');
-  await expect(abSelects.nth(1)).toHaveValue('b');
+  await pickOptionAt(page, abSelects.nth(0), 'a');
+  await pickOptionAt(page, abSelects.nth(1), 'b');
+  await expectValueAt(abSelects.nth(0), 'a');
+  await expectValueAt(abSelects.nth(1), 'b');
 
   const btnComp = page.locator('#songRecord .btnComplete').first();
   await expect(btnComp).toBeVisible();
