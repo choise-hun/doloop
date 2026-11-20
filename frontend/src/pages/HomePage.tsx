@@ -19,6 +19,7 @@ import {
 import { chordLine, filterScope, KIND_LABEL, ORIGIN_LABEL, playHref, seedToDto } from '../components/progressions/model.mts';
 import { pickRandom, tasteStats } from '../lib/chords/stats.mts';
 import { CATEGORY_NAME_MAX, homeCategories, setOpenCategory } from '../lib/categories';
+import { peekStoredUid, readRecentSongCache, writeRecentSongCache, type RecentSongCache } from '../lib/recentSongCache.mts';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { t, type I18nKey } from '../lib/i18n.mts';
 import { CurationRows } from '../components/community/CurationRows';
@@ -348,6 +349,13 @@ export function HomePage(): React.ReactElement {
   const [songs, setSongs] = useState<SongDto[]>([]);
   const [songsLoading, setSongsLoading] = useState<boolean>(false);
   const [songsError, setSongsError] = useState<string>('');
+  const [songsReady, setSongsReady] = useState<boolean>(false); // 이번 uid의 서버 곡 목록이 성공으로 도착했는가
+  // 세션 복원 전에도 같은 사용자의 마지막 최근 곡을 먼저 보여 준다(ulp:auth의 uid 기준, 다른 uid 값은 읽지 않음)
+  const [recentCache, setRecentCache] = useState<{ uid: string; song: RecentSongCache } | null>(() => {
+    const uid = peekStoredUid();
+    const song = readRecentSongCache(uid);
+    return uid && song ? { uid, song } : null;
+  });
   const [activeDates, setActiveDates] = useState<string[]>([]);
   const [localSongs, setLocalSongs] = useState<LocalSongRecord[]>(() => apiClient.listLocalSongs());
   const [recentNote, setRecentNote] = useState<NoteSummaryDto | null>(null);
@@ -367,6 +375,7 @@ export function HomePage(): React.ReactElement {
       setLocalSongs(locals);
       setSongs([]);
       setSongsLoading(false);
+      setSongsReady(false);
       setSongsError('');
       setActiveDates(locals.map((it) => it.date || '').filter(Boolean));
       setRecentNote(null);
@@ -377,6 +386,7 @@ export function HomePage(): React.ReactElement {
     }
 
     setSongsLoading(true);
+    setSongsReady(false);
     setSongsError('');
 
     // 곡 목록 조회
@@ -384,8 +394,24 @@ export function HomePage(): React.ReactElement {
       .list()
       .then((list) => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
-        setSongs(Array.isArray(list) ? list : []);
+        const safeList = Array.isArray(list) ? list : [];
+        setSongs(safeList);
         setSongsLoading(false);
+        setSongsReady(true);
+        const first = safeList[0];
+        const summary: RecentSongCache | null = first
+          ? {
+              videoId: first.videoId,
+              title: first.title,
+              a: first.a,
+              b: first.b,
+              pos: first.pos,
+              rate: first.rate,
+              memo: (first.memo || '').trim(),
+            }
+          : null;
+        writeRecentSongCache(myUid, summary); // 성공 0곡이면 캐시도 지운다
+        setRecentCache(summary ? { uid: myUid, song: summary } : null);
       })
       .catch((err: any) => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
@@ -450,15 +476,18 @@ export function HomePage(): React.ReactElement {
   const streak = computeWeeklyStreak(mergedDates);
 
   // 최근 연습 곡 결정
-  const recentSong: {
-    videoId: string;
-    title: string;
-    a: number | null;
-    b: number | null;
-    pos: number | null;
-    rate: number | null;
-    memo: string;
-  } | null = activeUid
+  // 캐시는 (1) 서버 목록이 아직 성공으로 오지 않았을 때(로딩·실패), (2) 세션 복원 전(activeUid=null)이면서 저장된 세션 uid와 같을 때만 쓴다.
+  // 서버가 성공으로 0곡을 돌려주면(songsReady) 캐시를 버리고 빈 상태를 보인다.
+  const cachedRecent: RecentSongCache | null = recentCache
+    ? activeUid
+      ? recentCache.uid === activeUid && !songsReady
+        ? recentCache.song
+        : null
+      : recentCache.uid === peekStoredUid()
+        ? recentCache.song
+        : null
+    : null;
+  const recentSong: RecentSongCache | null = activeUid
     ? songs[0]
       ? {
           videoId: songs[0].videoId,
@@ -469,18 +498,20 @@ export function HomePage(): React.ReactElement {
           rate: songs[0].rate,
           memo: (songs[0].memo || '').trim(),
         }
-      : null
-    : localSongs[0]
-      ? {
-          videoId: localSongs[0].videoId,
-          title: t('home.recentLocalSongTitle', { videoId: localSongs[0].videoId }),
-          a: localSongs[0].a,
-          b: localSongs[0].b,
-          pos: localSongs[0].pos,
-          rate: localSongs[0].rate,
-          memo: '',
-        }
-      : null;
+      : cachedRecent
+    : cachedRecent
+      ? cachedRecent
+      : localSongs[0]
+        ? {
+            videoId: localSongs[0].videoId,
+            title: t('home.recentLocalSongTitle', { videoId: localSongs[0].videoId }),
+            a: localSongs[0].a,
+            b: localSongs[0].b,
+            pos: localSongs[0].pos,
+            rate: localSongs[0].rate,
+            memo: '',
+          }
+        : null;
 
   // 노션 바로가기 링크 — 노션 연동은 동결·은닉(계획/앱_명세.md §5). 설정 고급 메뉴에 주소를 넣은 사용자에게만 보인다
   const nlPracticeUrl = safeUrl(raw.get('ulp:notion-practice'));
