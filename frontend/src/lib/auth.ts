@@ -353,6 +353,7 @@ function createAuthModule() {
     profileSeq++;
     profilePatchQueue = Promise.resolve();
     clearKeysCache();
+    try { localStorage.removeItem('ulp:recentSong'); } catch { /* 저장 불가 무시 */ } // lib/recentSongCache.mts: 홈 RECENT 캐시
     syncLangFromProfile(null);
     currentMe = null;
     currentSession = null;
