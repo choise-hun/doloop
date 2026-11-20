@@ -199,6 +199,17 @@
   max-width: none;
 }
 
+/* UF-1 D2: 홈은 큰 화면에서 플레이어 틀 상한(--player-max)까지 넓어진다. 1120px 이하 창은 그대로 */
+.homeShell {
+  max-width: var(--player-max);
+}
+
+.homeShell .siteNav,
+.homeShell .siteFoot,
+.homeShell .mainDefault {
+  max-width: none;
+}
+
 /* W-1: 좁은 폭(≤820px) 하단 탭 바 — 명세 개발산출물/명세/W-1_구현명세.md §1 */
 .tabBar {
   display: none;

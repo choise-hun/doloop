@@ -217,14 +217,21 @@ test('P1 비로그인: CHORDS 메뉴 활성, 기본 시드 범위 토글, 진행
   await expect(nav).toHaveAttribute('href', 'progressions.html');
   await expect(nav).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#progSeedNote')).toBeVisible();
+  // UF-1 D4: 탭 순서 합산 → 레퍼런스 → 분석, 기본 합산(주소에 scope 없음)
+  expect(await page.locator('#progScope [data-scope]').evaluateAll((els) => els.map((el) => el.getAttribute('data-scope')))).toEqual(['all', 'reference', 'analysis']);
+  await expect(page.locator('#progScope [data-scope="all"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows(page)).toHaveCount(10);
+  await page.locator('#progScope [data-scope="reference"]').click();
   await expect(rows(page)).toHaveCount(5);
   await expect(rows(page).first()).toHaveAttribute('data-kind', 'reference');
+  expect(page.url()).toContain('scope=reference');
   await page.locator('#progScope [data-scope="analysis"]').click();
   await expect(rows(page)).toHaveCount(5);
   await expect(rows(page).first()).toHaveAttribute('data-kind', 'analysis');
   expect(page.url()).toContain('scope=analysis');
   await page.locator('#progScope [data-scope="all"]').click();
   await expect(rows(page)).toHaveCount(10);
+  expect(page.url()).not.toContain('scope=');
   // 시드도 연습실 링크는 있고 수정은 없다
   await rows(page).first().locator('button[aria-expanded]').click();
   await expect(rows(page).first().locator('[data-act="play"]')).toHaveAttribute('href', /^chords\.html#prog\?c=/);
@@ -348,7 +355,8 @@ test('P5 코드 진행 영상: 분석 요청 → 작업 줄 → 완료 시 "2개
   await expect(page.locator('#progVideoMsg')).toContainText('분석을 요청했어요');
   const req = store.calls.find((c) => c.path === '/api/v1/progressions/analyze');
   expect(req.body).toEqual({ url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', memo: '후렴 위주', pace: 'normal' });
-  await expect(page.locator('#progScope [data-scope="analysis"]')).toHaveAttribute('aria-pressed', 'true');
+  // UF-1 D4: 기본 합산은 분석 행도 보이므로 범위를 바꾸지 않는다(레퍼런스에서 요청했을 때만 분석으로 옮김)
+  await expect(page.locator('#progScope [data-scope="all"]')).toHaveAttribute('aria-pressed', 'true');
   // 노트 작업(kind=note)은 이 화면에 안 나온다
   await expect(page.locator('#progJobs li')).toHaveCount(1);
   await expect(page.locator('#progJobs li')).toContainText('대기 중');
@@ -531,7 +539,7 @@ const TASTE_ROWS = [
 ];
 
 test('P9 비로그인 취향: 시드 통계 + 랜덤 꺼내보기 → 연주하기, 범위 따라 바뀜', async ({ page }) => {
-  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  test.skip(!(await open(page, '/progressions.html?scope=reference')), 'legacy 모드: React 화면 아님');
   const taste = page.locator('#progTaste');
   await expect(taste.locator('#tasteSummary')).toHaveText('레퍼런스 · 진행 5개 · 코드 20개');
   await expect(taste.locator('#tasteChords li').first()).toBeVisible();
@@ -548,7 +556,7 @@ test('P9 비로그인 취향: 시드 통계 + 랜덤 꺼내보기 → 연주하�
 test('P10 로그인 취향: 두 곡의 I - V - vi - IV가 자주 나오는 진행, 코드 이동·Mood·Genre', async ({ page }) => {
   const store = fakeStore(TASTE_ROWS);
   await setupLoggedIn(page, store);
-  test.skip(!(await open(page)), 'legacy 모드: React 화면 아님');
+  test.skip(!(await open(page, '/progressions.html?scope=reference')), 'legacy 모드: React 화면 아님');
   const taste = page.locator('#progTaste');
   await expect(taste.locator('#tasteSummary')).toHaveText('레퍼런스 · 진행 2개 · 코드 8개');
   await expect(taste.locator('#tastePatterns li').first()).toContainText('I - V - vi - IV');

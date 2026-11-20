@@ -58,7 +58,7 @@
   background: var(--paper);
   border: 1px solid var(--seam-hairline);
   border-radius: var(--radius-block);
-  box-shadow: 3px 4px 0 var(--relief-bottom-mid), 8px 12px 20px var(--shadow-ambient);
+  box-shadow: var(--card-shadow);
 }
 
 /* 공용 .inpField·.ghostBtn 본체는 DS2-4. 홈에서는 모듈 클래스로 형태만 바꾼다(글자 크기·높이는 공용 값 유지 — #goUrl 16px는 iOS 확대 방지) */
@@ -103,16 +103,11 @@
 }
 
 .widgetCard {
-  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  background: var(--paper);
   border: 1px solid var(--seam-hairline);
-  border-left: 12px solid var(--section-spine);
+  border-left: var(--spine-width) solid var(--section-spine);
   border-radius: var(--radius-block);
-  box-shadow:
-    inset 1px 0 0 var(--seam-hairline),
-    2px 2px 0 var(--surface2),
-    4px 5px 0 var(--relief-bottom-mid),
-    10px 14px 22px var(--shadow-ambient),
-    inset 0 1px 0 var(--seam-highlight);
+  box-shadow: var(--card-shadow);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -527,16 +522,11 @@
 }
 
 .frame {
-  background: linear-gradient(145deg, var(--paper) 0%, var(--cream) 100%);
+  background: var(--paper);
   border: 1px solid var(--seam-hairline);
-  border-left: 12px solid var(--section-spine);
+  border-left: var(--spine-width) solid var(--section-spine);
   border-radius: var(--radius-block);
-  box-shadow:
-    inset 1px 0 0 var(--seam-hairline),
-    2px 2px 0 var(--surface2),
-    4px 5px 0 var(--relief-bottom-mid),
-    10px 14px 22px var(--shadow-ambient),
-    inset 0 1px 0 var(--seam-highlight);
+  box-shadow: var(--card-shadow);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -545,17 +535,13 @@
   min-height: 400px;
 }
 
-/* 카드 스파인 색(명세 D3): 모듈 클래스가 --section-spine만 지역으로 덮는다. 안쪽 강조(.curItem)도 같은 색 */
+/* 카드 스파인 색(UF-1: WEEKLY만 fill1, 나머지 fill2로 통일): 모듈 클래스가 --section-spine만 지역으로 덮는다. 안쪽 강조(.curItem)도 같은 색 */
 .toneFill1 {
   --section-spine: var(--fill1);
 }
 
 .toneFill2 {
   --section-spine: var(--fill2);
-}
-
-.toneFill3 {
-  --section-spine: var(--fill3);
 }
 
 .frameHead {
@@ -670,6 +656,8 @@
 
 .curItem a {
   padding-left: 10px;
+  /* UF-1: '이어서'가 오른쪽 끝에 붙지 않게 왼쪽 강조 여백과 균형 */
+  padding-right: 14px;
 }
 
 .curItem .itemMeta {

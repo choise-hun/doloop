@@ -90,12 +90,12 @@ test('DS23-L1 요약·달력 스파인 fill1, 탭 세그먼트, 달력 칸 3px, 
   await expect(cards).toHaveCount(2);
   for (const c of await cards.all()) {
     const b = await c.evaluate(lgBox);
-    expect(b.left).toBe('12px');
+    expect(b.left).toBe('3px'); // UF-1 D1
     expect(b.leftColor).toBe(tk.fill1);
     expect(b.radius).toBe('3px');
   }
   const cal = await page.locator('#calGrid').evaluate(lgCardOf);
-  expect(cal).toEqual({ left: '12px', leftColor: tk.fill1, radius: '3px' });
+  expect(cal).toEqual({ left: '3px', leftColor: tk.fill1, radius: '3px' });
   expect(await page.locator('#logTabs').evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
   for (const id of ['#tab-log', '#tab-songs']) {
     expect(await page.locator(id).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('0px');

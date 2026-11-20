@@ -25,9 +25,10 @@ import { AppSelect } from '../components/common/AppSelect';
 import styles from './ProgressionsPage.module.css';
 
 const SCOPES: ReadonlyArray<readonly [ProgressionScope, I18nKey]> = [
+  // UF-1 D4: 홈과 같은 순서(합산 → 레퍼런스 → 분석), 기본은 합산
+  ['all', 'prog.scopeAll'],
   ['reference', 'prog.scopeReference'],
   ['analysis', 'prog.scopeAnalysis'],
-  ['all', 'prog.scopeAll'],
 ];
 
 type AddTab = 'video' | 'manual' | 'paste';
@@ -41,7 +42,7 @@ const SEEDS: ProgressionDto[] = [...DEFAULT_REFERENCE_PROGRESSIONS, ...DEFAULT_A
 
 function initialScope(): ProgressionScope {
   const q = new URLSearchParams(window.location.search).get('scope');
-  return q === 'analysis' || q === 'all' || q === 'reference' ? q : 'reference';
+  return q === 'analysis' || q === 'all' || q === 'reference' ? q : 'all';
 }
 
 // 연습실에서 돌아올 때(#p-<id>) 또는 ?id= 로 그 행을 펼친다. id는 UUID 또는 시드 id(ref-seed-1)
@@ -159,7 +160,7 @@ export function ProgressionsPage(): React.ReactElement {
     setScope(s);
     setTasteFilter('');
     const url = new URL(window.location.href);
-    if (s === 'reference') url.searchParams.delete('scope');
+    if (s === 'all') url.searchParams.delete('scope');
     else url.searchParams.set('scope', s);
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
   };

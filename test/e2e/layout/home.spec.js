@@ -85,7 +85,7 @@ test('UIUX-R T1 홈 분할 대시보드 검증: splitFrames 그리드 16px 간�
   const horizontalGap = vaultBox.x - (betterBox.x + betterBox.width);
   expect(Math.abs(horizontalGap - 16)).toBeLessThanOrEqual(1);
 
-  // 개별 프레임 카드의 테두리 독립 분리 검증 (DS2-2: 왼쪽 12px 스파인, 나머지 세 변 1px)
+  // 개별 프레임 카드의 테두리 독립 분리 검증 (UF-1 D1: 왼쪽 3px 스파인, 나머지 세 변 1px)
   const betterSides = await better.evaluate((el) => {
     const s = window.getComputedStyle(el);
     return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
@@ -94,8 +94,8 @@ test('UIUX-R T1 홈 분할 대시보드 검증: splitFrames 그리드 16px 간�
     const s = window.getComputedStyle(el);
     return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
   });
-  expect(betterSides).toEqual(['1px', '1px', '1px', '12px']);
-  expect(vaultSides).toEqual(['1px', '1px', '1px', '12px']);
+  expect(betterSides).toEqual(['1px', '1px', '1px', '3px']);
+  expect(vaultSides).toEqual(['1px', '1px', '1px', '3px']);
 });
 
 async function resolveTokenColors(page) {
@@ -118,18 +118,18 @@ async function resolveTokenColors(page) {
       accentInk: readColor('color', 'var(--accent-ink)'),
       fill1: readColor('color', 'var(--fill1)'),
       fill2: readColor('color', 'var(--fill2)'),
-      fill3: readColor('color', 'var(--fill3)'),
       seamHairline: readColor('color', 'var(--seam-hairline)'),
       panelFrosted: readColor('backgroundColor', 'var(--panel-frosted)'),
       streakDone: readColor('backgroundColor', 'var(--streak-done)'),
       paper: readColor('backgroundColor', 'var(--paper)'),
       reliefBottomMid: readColor('color', 'var(--relief-bottom-mid)'),
-      fill3Tint: readColor('backgroundColor', 'color-mix(in srgb, var(--fill3) 12%, transparent)'),
+      shadowAmbient: readColor('color', 'var(--shadow-ambient)'),
+      fill2Tint: readColor('backgroundColor', 'color-mix(in srgb, var(--fill2) 12%, transparent)'),
     };
   });
 }
 
-// DS2-2(2026-11-19 승인): 상단 3px 바 → 왼쪽 12px 스파인 + 3px 블록 + 릴리프. 스파인 색은 카드마다 다르다(명세 D3)
+// UF-1(2026-11-20 승인, 시안 UF D1=C): 왼쪽 3px 스파인 + 3px 블록 + 그림자 1겹(두께 릴리프 없음). WEEKLY만 fill1, 나머지 fill2
 const rgbOf = (c) => (c.match(/\d+(?:\.\d+)?/g) || []).slice(0, 3).map(Number).join(',');
 
 test('DS22-1 스파인·블록 (1280)', async ({ page }) => {
@@ -142,7 +142,7 @@ test('DS22-1 스파인·블록 (1280)', async ({ page }) => {
   for (const [sel, spine] of [
     ['#weeklyStreakCard', colors.fill1],
     ['#recentSongCard', colors.fill2],
-    ['#betterFrame', colors.fill3],
+    ['#betterFrame', colors.fill2],
     ['#vaultFrame', colors.fill2],
   ]) {
     const b = await page.locator(sel).evaluate((el) => {
@@ -153,13 +153,14 @@ test('DS22-1 스파인·블록 (1280)', async ({ page }) => {
         radius: s.borderTopLeftRadius, shadow: s.boxShadow,
       };
     });
-    expect(b.leftW, `${sel} borderLeftWidth`).toBe('12px');
+    expect(b.leftW, `${sel} borderLeftWidth`).toBe('3px');
     expect(b.leftC, `${sel} borderLeftColor`).toBe(spine);
     expect(b.topW, `${sel} borderTopWidth`).toBe('1px');
     expect(b.topC, `${sel} borderTopColor`).toBe(colors.seamHairline);
     expect(b.radius, `${sel} radius`).toBe('3px');
     const shadowRgbs = (b.shadow.match(/rgba?\([^)]*\)|color\([^)]*\)/g) || []).map(rgbOf);
-    expect(shadowRgbs, `${sel} box-shadow 릴리프`).toContain(rgbOf(colors.reliefBottomMid));
+    expect(shadowRgbs, `${sel} box-shadow 그림자`).toContain(rgbOf(colors.shadowAmbient));
+    expect(shadowRgbs, `${sel} 두께 릴리프 없음`).not.toContain(rgbOf(colors.reliefBottomMid));
   }
 });
 
@@ -307,11 +308,13 @@ test('DS22-5 이어서 줄', async ({ page }) => {
     return { shadow: s.boxShadow, bg: s.backgroundColor };
   });
   expect(cur.shadow).toContain('inset');
-  expect(cur.shadow).toContain(colors.fill3);
-  expect(cur.bg).toBe(colors.fill3Tint);
+  expect(cur.shadow).toContain(colors.fill2);
+  expect(cur.bg).toBe(colors.fill2Tint);
 
   const curPadLeft = await curItem.locator('a').evaluate((el) => window.getComputedStyle(el).paddingLeft);
   expect(curPadLeft).toBe('10px');
+  // UF-1: '이어서'가 오른쪽 끝에 붙지 않는다
+  expect(await curItem.locator('a').evaluate((el) => window.getComputedStyle(el).paddingRight)).toBe('14px');
 
   const otherShadows = await page
     .locator('#modes li:not(.cur)')
@@ -519,6 +522,34 @@ test('DS22-8 다크 (1280)', async ({ page }) => {
 
   const leftC = (sel) => page.locator(sel).evaluate((el) => window.getComputedStyle(el).borderLeftColor);
   expect(await leftC('#weeklyStreakCard')).toBe('rgb(255, 107, 43)');
-  expect(await leftC('#vaultFrame')).toBe('rgb(212, 178, 106)');
+  // UF-1: 다크 회색 띠는 노랑 → 화이트(#ECECE4), BETTER도 같은 색
+  expect(await leftC('#vaultFrame')).toBe('rgb(236, 236, 228)');
+  expect(await leftC('#betterFrame')).toBe('rgb(236, 236, 228)');
   expect(await page.locator('#progScope [data-scope="all"]').evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(36, 36, 34)');
+});
+
+// UF-1(2026-11-20 승인): 홈 최대 폭 1760(D2)·취향 칸 순서(취향 → 진행)
+test('UF1-1 홈 틀은 넓은 창에서 1760px까지, 1280에선 창 폭을 따른다', async ({ page }) => {
+  await mockApp(page, STATES.guest);
+  for (const [vw, want] of [[3600, 1760], [1280, null]]) {
+    await page.setViewportSize({ width: vw, height: 1000 });
+    await page.goto('/index.html', { waitUntil: 'load' });
+    await page.locator('#weeklyStreakCard').waitFor();
+    const w = await page.locator('[data-shell-variant="home"]').evaluate((el) => el.getBoundingClientRect().width);
+    if (want) expect(Math.round(w)).toBe(want);
+    else expect(w).toBeGreaterThan(1120 - 80);
+    const nav = await page.locator('nav.site-nav').evaluate((el) => el.getBoundingClientRect().width);
+    expect(Math.abs(nav - w)).toBeLessThanOrEqual(1);
+  }
+});
+
+test('UF1-2 취향 코드 진행: 취향 칸이 왼쪽, 뽑힌 진행 칸이 오른쪽 (1280)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApp(page, STATES.guest);
+  await page.goto('/index.html', { waitUntil: 'load' });
+  await page.locator('#progScope').waitFor();
+  const arch = await page.locator('#progArchBox').boundingBox();
+  const ref = await page.locator('#progRefBox').boundingBox();
+  expect(arch.x).toBeLessThan(ref.x);
+  expect(Math.abs(arch.y - ref.y)).toBeLessThanOrEqual(1);
 });

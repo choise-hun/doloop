@@ -58,6 +58,9 @@
   --radius-pill: 9999px;
   --radius-block: 3px;
   --radius-card: 0px;
+  /* UF-1 D1: 카드·패널 띠 굵기와 그림자 1겹(두께 릴리프 제거) */
+  --spine-width: 3px;
+  --card-shadow: 0 6px 18px var(--shadow-ambient);
 
   /* 8. 레이아웃 정렬 규격 */
   --container-max: 1120px;
@@ -121,7 +124,7 @@
     --surface3: #3A3935;
     --ink-strong: #ECECE4;
     --fill1: #FF6B2B;
-    --fill2: #D4B26A;
+    --fill2: #ECECE4;
     --fill3: #6C7D72;
     --section-spine: var(--fill1);
     --panel-frosted: #1E1E1D;
@@ -172,7 +175,7 @@
   --surface3: #3A3935;
   --ink-strong: #ECECE4;
   --fill1: #FF6B2B;
-  --fill2: #D4B26A;
+  --fill2: #ECECE4;
   --fill3: #6C7D72;
   --section-spine: var(--fill1);
   --panel-frosted: #1E1E1D;

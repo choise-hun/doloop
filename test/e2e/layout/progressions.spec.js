@@ -49,9 +49,9 @@ layoutSuite({
     { name: 'userData', mock: { ...STATES.userData, routes: [progRoute(rows())] } },
   ],
   ready: async (page, state) => {
-    // 기본 범위(레퍼런스)는 진행 2개. 비로그인은 예시 진행(seed) 목록
+    // 기본 범위(합산)는 진행 3개(D4 A). 비로그인은 예시 진행(seed) 목록
     if (state === 'user') await page.locator('#progEmpty').waitFor();
-    else if (state === 'userData') await expect(page.locator('#progList > li')).toHaveCount(2);
+    else if (state === 'userData') await expect(page.locator('#progList > li')).toHaveCount(3);
     else await page.locator('#progList > li').first().waitFor();
   },
   dark: 'userData',

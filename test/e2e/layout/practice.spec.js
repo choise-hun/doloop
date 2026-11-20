@@ -387,6 +387,7 @@ async function ds23Tokens(page) {
       fill2: read('color', 'var(--fill2)'),
       seamHairline: read('color', 'var(--seam-hairline)'),
       reliefBottomMid: read('color', 'var(--relief-bottom-mid)'),
+      shadowAmbient: read('color', 'var(--shadow-ambient)'),
       accent: read('backgroundColor', 'var(--accent)'),
     };
   });
@@ -400,7 +401,7 @@ const ds23Box = (el) => {
   };
 };
 
-test('DS23-P1 스파인 카드: 재생·구간·폴더·곡 기록 fill2 12px, 머리 막대·영상 제외 (1280)', async ({ page }) => {
+test('DS23-P1 스파인 카드: 재생·구간·폴더·곡 기록 fill2 3px(UF-1), 머리 막대·영상 제외 (1280)', async ({ page }) => {
   await mockApp(page, USER_DATA_SR);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
@@ -409,12 +410,13 @@ test('DS23-P1 스파인 카드: 재생·구간·폴더·곡 기록 fill2 12px, �
   const tk = await ds23Tokens(page);
   for (const sel of ['#ppPlayCard', '#ppCtl', '#ppFolderPanel', '#songRecord .panel:visible']) {
     const b = await page.locator(sel).first().evaluate(ds23Box);
-    expect(b.left, sel).toBe('12px');
+    expect(b.left, sel).toBe('3px');
     expect(b.leftColor, sel).toBe(tk.fill2);
     expect(b.top, sel).toBe('1px');
     expect(b.topColor, sel).toBe(tk.seamHairline);
     expect(b.radius, sel).toBe('3px');
-    expect(b.shadow, sel).toContain(tk.reliefBottomMid);
+    expect(b.shadow, sel).toContain(tk.shadowAmbient);
+    expect(b.shadow, sel).not.toContain(tk.reliefBottomMid);
   }
   const head = await page.locator('header.pp-head').evaluate(ds23Box);
   expect(head.radius).toBe('3px');
@@ -493,16 +495,16 @@ test('DS23-P3 영상 없음: #urlForm 열기만 필, 서랍 열기는 3px, 입�
   expect(tNow.transform).toBe('uppercase');
 });
 
-test('DS23-P4 다크: 스파인 fill2 다크 값·릴리프 그라데이션 (1280)', async ({ page }) => {
+test('DS23-P4 다크: 스파인 fill2 다크 값(UF-1 화이트)·평면 배경 (1280)', async ({ page }) => {
   await mockApp(page, USER_DATA_SR);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#seekRow').waitFor();
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
   const ctl = await page.locator('#ppCtl').evaluate(ds23Box);
-  expect(ctl.leftColor).toBe('rgb(212, 178, 106)');
+  expect(ctl.leftColor).toBe('rgb(236, 236, 228)');
   const play = await page.locator('#ppPlayCard').evaluate(ds23Box);
-  expect(play.bgImage).toContain('linear-gradient');
+  expect(play.bgImage).toBe('none'); // UF-1 D1: 그라데이션 두께감 제거
 });
 
 test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검증', async ({ page }) => {
