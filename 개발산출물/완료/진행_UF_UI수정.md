@@ -1,5 +1,6 @@
 # 진행 — UF UI 수정 묶음 (홈·LEARN·CHORDS·SETTING·PROFILE)
 
+> **완료 2026-11-20** — 마지막 PR #예정
 > 시작 2026-11-20 / Mac / Claude 시니어. step ID 접두어 `UF-`.
 
 ## 1. 목표와 근거
@@ -32,7 +33,7 @@
 | UF-1 | 카드 3px 띠+그림자(전 페이지), 홈 띠 색 통일·다크 화이트·이어서 여백·1760px·취향 칸 교환, CHORDS 합산 우선 | `feat/UF-1-box-home` | [결과/UF-1.md](결과/UF-1.md) | 4단계 검증 완료(PR 머지 대기) |
 | UF-2 | LEARN 4·5번 한글 혼입 i18n, 재생 줄(D3-A) 6개 탭 | `feat/UF-2-learn` | `결과/UF-2.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
 | UF-3 | SETTING 위쪽 목록·접이식 중복 제거 | `feat/UF-3-setting-profile` | `결과/UF-3.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
-| UF-4 | PROFILE 보기 전용(와이어프레임형)·표시 이름 수정 폼 SETTING 계정 칸 이전 | `feat/UF-4-profile` | `결과/UF-4.md`(주니어) | 시니어 구현·push 완료(2026-11-20), 주니어 4단계 대기 |
+| UF-4 | PROFILE 보기 전용(와이어프레임형)·표시 이름 수정 폼 SETTING 계정 칸 이전 | `feat/UF-4-profile` | [결과/UF-4.md](../결과/UF-4.md) | 4단계 검증 완료(PR 머지 대기) |
 
 ### 3.1 시니어 표적 검증 (2026-11-20, Mac, 3000번 = 이 저장소 `dist/`)
 
