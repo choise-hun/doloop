@@ -542,6 +542,7 @@ export const KO = {
   'privacy.secCommunityStatsOnly': "좋아요·팔로우 수는 개수만 공개됩니다. 신고 내용은 운영자만 봅니다. 유료 플랜이 끝나면 공개 폴더와 학습 기록 공유가 멈춥니다.",
   // chords
   'chords.reintDropTwoHint': "Gmaj7 — 1·3·5·7에서 위에서 둘째 음을 한 옥타브 내림",
+  'chords.reintQuartalLabel': "Quartal · 4도 쌓기",
   'chords.reintQuartalHint': "A–D–G–C 완전4도 쌓기 — D7sus4·Am7(11)",
   'chords.reintRootlessNineHint': "Eb7(9) 근음 없는 보이싱 — 아래부터 3·b7·9·5",
   'chords.reintRootlessThirteenHint': "B7(9,13) 근음 없는 보이싱 — 아래부터 b7·3·13·9",

@@ -208,9 +208,44 @@
 }
 
 /* 폼 그리드 안 재생 버튼: 칸을 채우지 않고 입력칸 아랫선에 맞춤(FT-3-chords, 재해석 탭) */
-.controls > .playbtn {
-  align-self: end;
-  justify-self: start;
+/* UF-2 D3-A: 재생 줄 — 설정 칸과 가는 선으로 나누고, 왼쪽 상태 문구 · 오른쪽 큰 재생(대표 버튼 규격 48px/17px) */
+.playBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--seam-hairline);
+}
+
+.playBar > .playbtn {
+  margin-left: auto;
+  min-height: 48px;
+  min-width: 160px;
+  padding: 0 28px;
+  font-size: 17px;
+}
+
+.playStatus {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .playBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playBar > .playbtn {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .playStatus {
+    flex: 0 0 auto;
+  }
 }
 
 .playbtn[aria-pressed="true"] {
@@ -703,12 +738,9 @@
 .scField .chips .chip { white-space: nowrap; align-items: center; justify-content: center; }
 .scField .selectField, .scField .numField { width: auto; min-width: 120px; }
 .scCheck { min-height: 44px; align-self: flex-end; align-items: center; padding-bottom: 0; }
-.scRow .playbtn { min-height: 44px; }
-.scStatus { flex: 1 1 200px; min-width: 0; align-self: center; }
 @media (max-width: 767px) {
   .scRow { flex-direction: column; align-items: stretch; }
   .scField .selectField, .scField .numField { width: 100%; }
-  .scStatus { flex: 0 0 auto; }
 }
 
 .riLayout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }

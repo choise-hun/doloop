@@ -1558,6 +1558,12 @@ export function ChordsPage(): React.ReactElement {
                 />
                 {t('chords.rootOnlyMem')}
               </label>
+            </div>
+            <div className={styles.playBar}>
+              <span id="sc-status" className={`${styles.status} ${styles.playStatus}`}>
+                {isKeyboard ? t('chords.keyboardScaleCount', { from: `${CT.NAMES[scCurrentKey.root]}3`, to: `${CT.NAMES[scCurrentKey.root]}${scRange === 'oct' ? 4 : 5}`, count: new Set(scSeqNotes.map((note) => note.pitch)).size })
+                  : t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
+              </span>
               <button
                 id="sc-play"
                 type="button"
@@ -1567,10 +1573,6 @@ export function ChordsPage(): React.ReactElement {
               >
                 {scPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
               </button>
-              <span id="sc-status" className={`${styles.status} ${styles.scStatus}`}>
-                {isKeyboard ? t('chords.keyboardScaleCount', { from: `${CT.NAMES[scCurrentKey.root]}3`, to: `${CT.NAMES[scCurrentKey.root]}${scRange === 'oct' ? 4 : 5}`, count: new Set(scSeqNotes.map((note) => note.pitch)).size })
-                  : t('chords.scaleVisibleCount', { lo: scWinLo, hi: scWinHi, count: scBoardNotes.length })}
-              </span>
             </div>
           </div>
         </div>
@@ -1678,6 +1680,8 @@ export function ChordsPage(): React.ReactElement {
                 </button>
               ))}
             </div>
+          </div>
+          <div className={styles.playBar}>
             <button
               id="tone-play"
               type="button"
@@ -1845,7 +1849,10 @@ export function ChordsPage(): React.ReactElement {
             </div>
           </div>
 
-          <div className={styles.row}>
+          <div className={styles.playBar}>
+            <span id="mx-count" className={`${styles.status} ${styles.playStatus}`}>
+              {t('chords.matrixCombinations', { name: CT.NAMES[mxRoot], span: mxSpan + 1, count: mxCounts.ok })}
+            </span>
             <button
               id="mx-play"
               type="button"
@@ -1855,9 +1862,6 @@ export function ChordsPage(): React.ReactElement {
             >
               {mxPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
-            <span id="mx-count" className={styles.status}>
-              {t('chords.matrixCombinations', { name: CT.NAMES[mxRoot], span: mxSpan + 1, count: mxCounts.ok })}
-            </span>
           </div>
         </div>
 
@@ -1939,7 +1943,7 @@ export function ChordsPage(): React.ReactElement {
                 Top: {ccCurrentStep?.deg} ({CT.NAMES[ccCurrentStep?.topPc]})
               </div>
               <div id="cc-where" className={styles.status}>
-                {t('chords.circleTopFretFixed', { str: CT.strName(ccStr), fret: ccTopFret })}
+                {t('chords.circleTopFretFixed', { str: t('chords.stringNum', { n: 6 - ccStr }), fret: ccTopFret })}
               </div>
               <div id="cc-next" className={styles.note}>
                 {t('chords.nextPrefix')}: {ccNextStep?.name} · Top {ccNextStep?.deg}
@@ -1948,15 +1952,6 @@ export function ChordsPage(): React.ReactElement {
             <div className={styles.row}>
               <button id="cc-prev" type="button" className={styles.ghost} onClick={() => ccMove(-1)}>
                 {t('chords.btnPrev')}
-              </button>
-              <button
-                id="cc-play"
-                type="button"
-                className={styles.playbtn}
-                aria-pressed={ccPlaying}
-                onClick={toggleCcPlay}
-              >
-                {ccPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
               </button>
               <button id="cc-nextb" type="button" className={styles.ghost} onClick={() => ccMove(1)}>
                 {t('chords.btnNext')}
@@ -2065,6 +2060,17 @@ export function ChordsPage(): React.ReactElement {
               {t('chords.skipDissonant')}
             </label>
           </div>
+          <div className={styles.playBar}>
+            <button
+              id="cc-play"
+              type="button"
+              className={styles.playbtn}
+              aria-pressed={ccPlaying}
+              onClick={toggleCcPlay}
+            >
+              {ccPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
+            </button>
+          </div>
         </div>
 
         <div className={styles.panel}>
@@ -2152,7 +2158,7 @@ export function ChordsPage(): React.ReactElement {
                     setRiPick(0);
                   }}
                 >
-                  {p.label}
+                  {p.labelKey ? t(p.labelKey) : p.label}
                 </button>
               ))}
               <button
@@ -2296,6 +2302,8 @@ export function ChordsPage(): React.ReactElement {
                     onChange={(e) => setRiBpm(+e.target.value)}
                   />
                 </div>
+              </div>
+              <div className={styles.playBar}>
                 <button
                   id="ri-play"
                   type="button"
@@ -2732,6 +2740,11 @@ export function ChordsPage(): React.ReactElement {
                 </button>
               ))}
             </div>
+          </div>
+          <div className={styles.playBar}>
+            <span id="ds-status" className={`${styles.status} ${styles.playStatus}`}>
+              {t('chords.dsDiatonicSteps', { count: dsStepsList.length })}
+            </span>
             <button
               id="ds-play"
               type="button"
@@ -2741,9 +2754,6 @@ export function ChordsPage(): React.ReactElement {
             >
               {dsPlaying ? t('chords.scalePlayStop') : t('chords.scalePlayStart')}
             </button>
-            <span id="ds-status" className={styles.status}>
-              {t('chords.dsDiatonicSteps', { count: dsStepsList.length })}
-            </span>
           </div>
         </div>
 

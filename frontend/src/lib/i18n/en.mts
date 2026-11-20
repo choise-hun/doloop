@@ -530,6 +530,7 @@ export const EN: Record<I18nKey, string> = {
   'privacy.secCommunityStrictPrivate': 'AI study notes and chord progressions are never shared. Audio recordings stay private too, except a copy of the one recording you choose to attach to a practice log card, which signed-in users can hear.',
   'privacy.secCommunityStatsOnly': "Only total counts of likes and follows are shown publicly. Reports are visible only to moderators. When a paid plan ends, public folders and practice log sharing are paused.",
   'chords.reintDropTwoHint': "Gmaj7 — Drop the 2nd voice from the top down an octave (1·3·5·7)",
+  'chords.reintQuartalLabel': "Quartal · 4th stack",
   'chords.reintQuartalHint': "A–D–G–C perfect 4th stack — D7sus4 · Am7(11)",
   'chords.reintRootlessNineHint': "Eb7(9) rootless voicing — from bottom: 3·b7·9·5",
   'chords.reintRootlessThirteenHint': "B7(9,13) rootless voicing — from bottom: b7·3·13·9",

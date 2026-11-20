@@ -530,6 +530,7 @@ export const JA: Record<I18nKey, string> = {
   'privacy.secCommunityStrictPrivate': 'AI学習ノートとコード進行は公開されません。録音ファイルも公開されませんが、練習記録カードに自分で選んで添付した録音1件のコピーのみ、ログインユーザーに公開されます。',
   'privacy.secCommunityStatsOnly': "いいね・フォロー数は件数のみ公開されます。通報内容は運営のみ閲覧します。有料プラン終了時は公開フォルダと練習記録の共有が停止します。",
   'chords.reintDropTwoHint': "Gmaj7 — 1・3・5・7の上から2番目の音を1オクターブ下げる",
+  'chords.reintQuartalLabel': "Quartal · 4度堆積",
   'chords.reintQuartalHint': "A–D–G–C 完全4度堆積 — D7sus4・Am7(11)",
   'chords.reintRootlessNineHint': "Eb7(9) ルートレスボイシング — 下から 3・b7・9・5",
   'chords.reintRootlessThirteenHint': "B7(9,13) ルートレスボイシング — 下から b7・3・13・9",
