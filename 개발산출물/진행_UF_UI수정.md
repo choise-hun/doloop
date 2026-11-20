@@ -32,7 +32,7 @@
 | UF-1 | 카드 3px 띠+그림자(전 페이지), 홈 띠 색 통일·다크 화이트·이어서 여백·1760px·취향 칸 교환, CHORDS 합산 우선 | `feat/UF-1-box-home` | [결과/UF-1.md](결과/UF-1.md) | 4단계 검증 완료(PR 머지 대기) |
 | UF-2 | LEARN 4·5번 한글 혼입 i18n, 재생 줄(D3-A) 6개 탭 | `feat/UF-2-learn` | `결과/UF-2.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
 | UF-3 | SETTING 위쪽 목록·접이식 중복 제거 | `feat/UF-3-setting-profile` | `결과/UF-3.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
-| UF-4 | PROFILE 보기 전용(와이어프레임형)·표시 이름 수정 폼 SETTING 계정 칸 이전·탭 선택창 hidden | `feat/UF-4-profile`(새로) | `결과/UF-4.md` | 대기(시니어) — UF-3 머지 뒤 시작 |
+| UF-4 | PROFILE 보기 전용(와이어프레임형)·표시 이름 수정 폼 SETTING 계정 칸 이전 | `feat/UF-4-profile` | `결과/UF-4.md`(주니어) | 시니어 구현·push 완료(2026-11-20), 주니어 4단계 대기 |
 
 ### 3.1 시니어 표적 검증 (2026-11-20, Mac, 3000번 = 이 저장소 `dist/`)
 
@@ -72,6 +72,8 @@
 
 ## 5. 다음 세션 시작 지시
 
-- 주니어: UF-1·UF-2·UF-3 각 브랜치에서 4단계(전체 회귀·4폭+다크 스크린샷·PR base main·CI·`결과/UF-n.md`). 세 PR은 서로 독립.
-- 시니어: UF-3 머지 뒤 main에서 `feat/UF-4-profile` — 시안 §6. 표시 이름 폼(`ProfilePage.tsx` `saveDisplay`·`acquireSave` 경합 방어)을 컴포넌트로 떼어 SETTING 계정 칸으로 옮기고, 프로필은 아바타 첫 글자·이름·이메일·'설정에서 편집 →'만. 로그아웃은 SETTING `#btnLogout`이 이미 있다. `profile.spec.js` PF1·PF2 단언을 새 위치로 옮긴다. 커뮤니티 블록(`communityEnabled()`)은 그대로 둔다. 나라·자기소개는 만들지 않는다(D5·D6).
-- 마지막 Step(UF-4) PR에서 이 파일을 `완료/`로 옮긴다.
+UF-1(#62)·UF-2(#63)·UF-3(#64)은 main에 머지됨. 남은 것은 UF-4 4단계뿐.
+
+- UF-4 시니어 구현 내용(2026-11-20, `feat/UF-4-profile`): 표시 이름 폼을 `frontend/src/components/account/DisplayNameForm.tsx`로 분리해 SETTING 계정 칸(`#accUser` 안, `#accQuota` 위)에 넣음(id `accDisplayName*`, 경합 방어·identity 잠금 유지). PROFILE은 보기 전용: 아바타 첫 글자 `#profileAvatar`·`#profileDisplayName`·`#profileEmail`·`#profileSettingsLink`('설정에서 편집 →', href `settings.html#account`). `#profileLogout`·`#profileAuthMsg` 삭제(로그아웃은 SETTING `#btnLogout`). `#profileNames`(공개 이름 폼)는 `communityEnabled()`일 때만 그려짐. i18n `profile.editInSettings` 추가(ko/en/ja). 나라·자기소개 없음(D5·D6), 탭 선택창 hidden은 커뮤니티 재설계 때 넣기로 하고 이번엔 코드 미추가.
+- 테스트 변경: `profile.spec.js`에서 PF1-10/11/12(PROFILE 로그아웃 경합 가드)·`logoutSuccess` 상태 삭제, PF1-05는 SETTING 로그아웃으로 이전, PF2-02/03·PF2-07 표시 이름 단언은 `/settings.html#account`로 이전, PF2-09/11의 두 폼 상호 잠금 삭제(페이지 분리). `ui-polish.spec.js` UP-1·DS24-C1·DS24-P1 갱신.
+- 주니어 4단계: `feat/UF-4-profile`에서 전체 회귀(`npm test`, `npx playwright test`)·4폭+다크 스크린샷(PROFILE 보기 전용, SETTING 계정 칸 이름 폼)·PR base main·CI·`결과/UF-4.md`. 마지막 Step이므로 같은 PR에서 이 파일을 `git mv`로 `개발산출물/완료/`에 옮기고 제목 아래 `> **완료 YYYY-MM-DD** — 마지막 PR #n` 한 줄을 넣고, 인수인계 메모 "진행 파일" 줄을 맞춘다.

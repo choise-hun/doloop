@@ -8,6 +8,7 @@ export const KO = {
   'settings.groups.advancedData': "고급·백업·데이터 관리",
   'settings.groups.operations': "운영자",
   'profile.namesTitle': "내 이름",
+  'profile.editInSettings': "설정에서 편집 →",
   'profile.shareConsent.title': '커뮤니티 공유 동의',
   'profile.shareConsent.on': '동의함 ({date})',
   'profile.shareConsent.recordingOff': '녹음 첨부 중단됨 ({date})',

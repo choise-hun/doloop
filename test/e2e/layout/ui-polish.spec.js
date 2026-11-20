@@ -18,8 +18,8 @@ test('UP-1: 커뮤니티 숨김 기본값 — 위 메뉴·탭 바·홈 배너·�
   await expect(page.locator('section#community')).toHaveCount(0);
 
   await page.goto('/profile.html', { waitUntil: 'load' });
-  await page.locator('#profileNames').waitFor();
-  await expect(page.locator('#profilePublicNameInput')).toHaveCount(0);
+  await page.locator('#profileSettingsLink').waitFor(); // UF-4: 보기 전용 — 이름 섹션은 커뮤니티 켜졌을 때만
+  await expect(page.locator('#profileNames, #profilePublicNameInput')).toHaveCount(0);
   await expect(page.locator('#profileSummary, #profileFolders')).toHaveCount(0);
 
   await page.goto('/community.html', { waitUntil: 'load' });
@@ -171,8 +171,7 @@ test('DS24-C1 공용 본체 .ghostBtn·.inpField = 3px 블록, 크기 불변 (12
   await logout.hover();
   await expect.poll(() => logout.evaluate((el) => window.getComputedStyle(el).borderTopColor)).toBe(colors.ink);
 
-  await page.goto('/profile.html', { waitUntil: 'load' });
-  const inp = page.locator('#profileDisplayNameInput');
+  const inp = page.locator('#accDisplayNameInput'); // UF-4: 표시 이름 폼은 SETTING 계정 칸
   await inp.waitFor();
   const i = await ds24Box(inp);
   expect(i.radius).toBe('3px');
@@ -338,11 +337,8 @@ test('DS24-P1 Profile: 계정 카드 스파인 fill3 · guest 필 1 / user 필 0
 
   await mockApp(page, { ...STATES.user, community: false });
   await page.goto('/profile.html', { waitUntil: 'load' });
-  await page.locator('#profileLogout').waitFor();
+  await page.locator('#profileSettingsLink').waitFor(); // UF-4: 보기 전용(글자 링크만)
   expect(await visiblePills(page)).toEqual([]);
-  expect(await page.locator('#profileLogout').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
-  await expectSpine(page.locator('#profileNames'), colors.fill3, colors, '#profileNames');
-  expect(await page.locator('#profileNamesTitle').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('300');
 });
 
 test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
