@@ -24,14 +24,36 @@
 
 ## 3. 단계 표
 
-| Step | 내용 | 입력 → 결과 | 완료 기준 | 상태 |
-| --- | --- | --- | --- | --- |
-| UF-0 | 시안·결정 | 시안 → 이 파일 §4 결정 기록 | D1~D6 확정 | 사용자 결정 대기 |
-| UF-1 | 공통 박스 형태 + 홈(띠 색·이어서·폭·취향 칸) + CHORDS 순서 | §4 → `결과/UF-1.md` | 표적 layout spec·`npm test` | 대기 |
-| UF-2 | LEARN i18n·정렬·재생 버튼 | §4 → `결과/UF-2.md` | i18n-lang spec 3개 언어·practice/chords layout | 대기 |
-| UF-3 | SETTING 통합 + PROFILE 재설계(+D5-A면 V15 country) | §4 → `결과/UF-3.md` | settings/profile spec·Kotlin 테스트(D5-A) | 대기 |
+브랜치는 모두 base main, 서로 쌓지 않는다. 시니어 원스톱 구현(표적 테스트·커밋·push까지, PR 없음) → 전체 회귀·PR·CI·결과 파일은 주니어 4단계.
 
-기본 배정: 시니어 원스톱 구현(표적 테스트·커밋·push), 전체 회귀·PR·CI는 주니어 4단계.
+| Step | 내용 | 브랜치 | 결과 파일 | 상태 |
+| --- | --- | --- | --- | --- |
+| UF-0 | 시안·결정 | (UF-1에 포함) | §4 | 완료 2026-11-20 |
+| UF-1 | 카드 3px 띠+그림자(전 페이지), 홈 띠 색 통일·다크 화이트·이어서 여백·1760px·취향 칸 교환, CHORDS 합산 우선 | `feat/UF-1-box-home` | `결과/UF-1.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
+| UF-2 | LEARN 4·5번 한글 혼입 i18n, 재생 줄(D3-A) 6개 탭 | `feat/UF-2-learn` | `결과/UF-2.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
+| UF-3 | SETTING 위쪽 목록·접이식 중복 제거 | `feat/UF-3-setting-profile` | `결과/UF-3.md`(주니어) | 시니어 구현·push 완료, 주니어 4단계 대기 |
+| UF-4 | PROFILE 보기 전용(와이어프레임형)·표시 이름 수정 폼 SETTING 계정 칸 이전·탭 선택창 hidden | `feat/UF-4-profile`(새로) | `결과/UF-4.md` | 대기(시니어) — UF-3 머지 뒤 시작 |
+
+### 3.1 시니어 표적 검증 (2026-11-20, Mac, 3000번 = 이 저장소 `dist/`)
+
+| Step | 명령 | 결과 |
+| --- | --- | --- |
+| UF-1 | `npm run build`·`npm test` / `npx playwright test layout/home progressions layout/chords layout/log layout/ui-polish layout/practice progression-play` | 549 pass / **271 passed** |
+| UF-2 | `npm test` / `layout.spec layout/chords chords_* i18n-lang theme-footer layout/shell layout/chords_instruments` + 일·영 화면 한글 스캔 | 549 pass / **217 passed**, LEARN 1~7 탭 한글 0(시드 진행 제목 `prog`만 남음 — 범위 밖) |
+| UF-3 | `npm test` / `layout/settings theme-footer ops i18n-lang layout/ui-polish layout/profile` | 549 pass / **190 passed + ops 12 passed** |
+
+미실행: 전체 Playwright 회귀, `LAYOUT_SHOTS=1` 4폭+다크 Q1~Q9, PR·CI.
+
+### 3.2 바뀐 단언(명세 변경에 따른 것)
+
+- UF-1: 스파인 `12px`→`3px`, 릴리프 포함→그림자(`--shadow-ambient`) 포함·릴리프 없음, 다크 `--fill2` `rgb(212,178,106)`→`rgb(236,236,228)`, 홈 BETTER `fill3`→`fill2`, 연습 재생 카드 그라데이션→`none`, CHORDS 기본 `reference`→`all`(P1·P5, P9·P10은 `?scope=reference`로 진입). 추가: `UF1-1` 홈 폭, `UF1-2` 취향 칸 순서, '이어서' `padding-right 14px`.
+- UF-3: `#settingsGroups` 링크 클릭 → 해시 이동, ST1-01은 summary `strong` 제목 검사, DS24-S1·D1 `#account`는 1px 카드, ops `#hOps` 문구 `운영자`.
+
+### 3.3 주의
+
+- UF-1과 UF-3은 `SettingsPage.module.css`·`ui-polish.spec.js`의 다른 부분을 고친다. 뒤에 머지하는 PR은 main 반영 후 충돌·단언(특히 `DS24-D1`)을 다시 확인한다.
+- UF-1 머지 뒤 UF-3 화면: `.setSec`는 3px 띠가 되지만 `.serviceSection`이 1px로 덮으므로 SETTING은 띠 없는 카드가 맞다.
+- UF-2는 2-5-1 탐색(`a-vplay`, 결과 패널 머리)의 재생 버튼은 설정과 섞이지 않아 그대로 뒀다. 스케일 390폭의 '근음만 보기' 체크가 오른쪽 정렬되는 것은 이번 변경 전부터다.
 
 ## 4. 결정 기록
 
@@ -50,4 +72,6 @@
 
 ## 5. 다음 세션 시작 지시
 
-이 파일과 [명세/UF_시안.html](명세/UF_시안.html)을 읽고, §4 결정이 채워졌으면 UF-1부터 이어 간다.
+- 주니어: UF-1·UF-2·UF-3 각 브랜치에서 4단계(전체 회귀·4폭+다크 스크린샷·PR base main·CI·`결과/UF-n.md`). 세 PR은 서로 독립.
+- 시니어: UF-3 머지 뒤 main에서 `feat/UF-4-profile` — 시안 §6. 표시 이름 폼(`ProfilePage.tsx` `saveDisplay`·`acquireSave` 경합 방어)을 컴포넌트로 떼어 SETTING 계정 칸으로 옮기고, 프로필은 아바타 첫 글자·이름·이메일·'설정에서 편집 →'만. 로그아웃은 SETTING `#btnLogout`이 이미 있다. `profile.spec.js` PF1·PF2 단언을 새 위치로 옮긴다. 커뮤니티 블록(`communityEnabled()`)은 그대로 둔다. 나라·자기소개는 만들지 않는다(D5·D6).
+- 마지막 Step(UF-4) PR에서 이 파일을 `완료/`로 옮긴다.
