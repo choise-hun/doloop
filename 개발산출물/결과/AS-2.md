@@ -52,4 +52,8 @@
 
 ## 4. PR·CI
 
-- 브랜치 `feat/AS-2-ab-select` | PR·CI·리뷰 확인: (신규 PR 생성 후 갱신)
+- PR: [#57](https://github.com/choise-hun/doloop/pull/57) (base `main`, head `feat/AS-2-ab-select`)
+- CI (run [44641798227](https://github.com/choise-hun/doloop/actions/runs/44641798227), head `b63c034`):
+  - 통과: `CI/Detect code changes` (9s), `CI/Test (Node 22)` (27s), `CI/Docker build & smoke test` (2m8s) (`CI/Kotlin test` skipped — 서버 변경 없음)
+  - 실패(차단): `CI/E2E XSS & CSP (Playwright, spa)` 10건 (`community.spec.js:47` CM-2, `xss.spec.js` E1~E6·E8~E10) — 모두 `style-src` 인라인 스타일 CSP 위반(`sha256-88QphsXJQwxKP9xXR175ZSMzpaq6Swzj9u3QQ+G2Wig=` 요구 vs `'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='`). 기준 `main` `9c51dda`(run [44631595271](https://github.com/choise-hun/doloop/actions/runs/44631595271))에서도 동일하게 실패하던 기존 결함이며, AS-2 변경 범위(`AppSelect.tsx`·`SongRecordParts.*`)에는 인라인 스타일이 없어 AS-2 회귀가 아님. 범위 밖 CSP/서버 수정은 보류하고 사용자·시니어에게 보고.
+- 리뷰 코멘트: `chatgpt-codex-connector`가 Codex usage limits 초과로 자동 리뷰 실패([코멘트](https://github.com/choise-hun/doloop/pull/57#issuecomment-7025655579)), 그 외 리뷰 코멘트 없음.
