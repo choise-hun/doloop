@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { apiClient, AdminUserDto } from '../../lib/apiClient';
 import { tierLabel } from '../../lib/jobError.mts';
+import { t } from '../../lib/i18n.mts';
 import s from '../../pages/SettingsPage.module.css';
 import o from './Ops.module.css';
 import { OpsFolders } from './OpsFolders';
@@ -109,7 +110,7 @@ export function OpsPanel(): React.ReactElement {
   return (
     <section className={`set-sec ${s.setSec} ${s.serviceSection}`} data-align-group="col: left; secs: right" id="ops" aria-labelledby="hOps">
       <details className={`${s.advanced} ${s.serviceDisclosure}`} id="opsDetails" data-setting-disclosure="operations" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary className={s.serviceSummary} data-align-group="operationsDisclosure: left,right" id="hOps">운영 (owner 전용)</summary>
+        <summary className={s.serviceSummary} data-align-group="operationsDisclosure: left,right" id="hOps"><strong className={s.sumTitle}>{t('settings.groups.operations')}</strong></summary>
         <div className={`${s.advBody} ${s.serviceBody}`} data-align-group="operationsDisclosure: left,right">
           <p className="hint">모든 변경은 사유와 함께 감사 기록에 남아요.</p>
           {forbidden ? (

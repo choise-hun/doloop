@@ -413,6 +413,21 @@ export function SettingsPage(): React.ReactElement {
     return txt;
   };
 
+  // UF-3: 옛 위쪽 목록(#settingsGroups)의 카드 모양을 접이식 제목줄로 합친다 — 제목 + 보이는 하위 항목 줄
+  const groupSummary = (groupId: string): React.ReactElement | null => {
+    const group = SETTINGS_GROUPS.find(g => g.id === groupId);
+    if (!group) return null;
+    const items = group.items.filter(item => item.availability === 'always' ||
+      (item.availability === 'signedIn' && signedIn) ||
+      (item.availability === 'owner' && signedIn && authState.me?.id === activeUid && authState.me?.role === 'owner'));
+    return (
+      <>
+        <strong className={styles.sumTitle}>{t(group.titleKey as I18nKey)}</strong>
+        <span className={styles.sumSub}>{items.map(item => t(item.titleKey as I18nKey)).join(' · ')}</span>
+      </>
+    );
+  };
+
   return (
     <AppShell variant="narrow" activeNav="settings" showThemeToggle>
       <div className={styles.headerBlock} data-align-group="col: left">
@@ -422,27 +437,10 @@ export function SettingsPage(): React.ReactElement {
         </p>
       </div>
 
-      <nav id="settingsGroups" className={styles.settingGroups} aria-label={t('settings.groups.navigation')} data-align-group="col: left; secs: right">
-        {SETTINGS_GROUPS.map(group => {
-          const items = group.items.filter(item => item.availability === 'always' ||
-            (item.availability === 'signedIn' && signedIn) ||
-            (item.availability === 'owner' && signedIn && authState.me?.id === activeUid && authState.me?.role === 'owner'));
-          if (!items.length) return null;
-          return (
-            <a key={group.id} href={`#${items[0].targetId}`} data-setting-group={group.id}
-              className={styles.settingGroup} data-align-group="settingGroups: left,right"
-              onClick={() => { if (window.location.hash === `#${items[0].targetId}`) navigateHashRef.current(); }}>
-              <strong>{t(group.titleKey as I18nKey)}</strong>
-              <span>{items.map(item => t(item.titleKey as I18nKey)).join(' · ')}</span>
-            </a>
-          );
-        })}
-      </nav>
-
       {/* 1. 계정 및 Google Drive 저장소 */}
       <section className={`set-sec ${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right" id="account" data-setting-render-key="account" aria-labelledby="hAccount">
         <details className={styles.serviceDisclosure} data-setting-disclosure="account">
-          <summary className={styles.serviceSummary} data-align-group="accountDisclosure:left,right"><span>{t('settings.groups.accountStorage')}</span></summary>
+          <summary className={styles.serviceSummary} data-align-group="accountDisclosure:left,right">{groupSummary('accountStorage')}</summary>
           <div className={styles.serviceBody} data-align-group="accountDisclosure:left,right">
         <h2 id="hAccount">{t('settings.secAccount')}</h2>
         <p id="accDesc">{t('settings.accDesc')}</p>
@@ -679,7 +677,7 @@ export function SettingsPage(): React.ReactElement {
       {/* 3. AI 분석 크레딧 (M1-3c — Gemini는 서버 키 + 크레딧, BYOK 칸 삭제) */}
       <section className={`set-sec ${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right" id="credits" data-setting-render-key="credits" aria-labelledby="hCredits">
         <details className={styles.serviceDisclosure} data-setting-disclosure="credits">
-          <summary className={styles.serviceSummary} data-align-group="creditsDisclosure:left,right"><span>{t('settings.groups.subscriptionCredits')}</span></summary>
+          <summary className={styles.serviceSummary} data-align-group="creditsDisclosure:left,right">{groupSummary('subscriptionCredits')}</summary>
           <div className={styles.serviceBody} data-align-group="creditsDisclosure:left,right">
         <h2 id="hCredits">{t('settings.secCredits')}</h2>
         <p>{t('settings.creditsDesc')}</p>
@@ -737,7 +735,7 @@ export function SettingsPage(): React.ReactElement {
           aria-labelledby="hCommunity"
         >
           <details className={styles.serviceDisclosure} data-setting-disclosure="community">
-            <summary className={styles.serviceSummary} data-align-group="communityDisclosure:left,right"><span>{t('settings.groups.publicIntegration')}</span></summary>
+            <summary className={styles.serviceSummary} data-align-group="communityDisclosure:left,right">{groupSummary('publicIntegration')}</summary>
             <div className={styles.serviceBody} data-align-group="communityDisclosure:left,right">
           <h2 id="hCommunity">{t('community.settingsTitle')}</h2>
           <div className={styles.panel}>
@@ -805,7 +803,7 @@ export function SettingsPage(): React.ReactElement {
       {/* 화면·언어 — 본문을 마운트한 채 그룹 단위로 접는다. */}
       <div className={`${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right">
         <details className={styles.serviceDisclosure} data-setting-disclosure="appearanceLanguage">
-          <summary className={styles.serviceSummary} data-align-group="appearanceDisclosure: left,right">{t('settings.groups.appearanceLanguage')}</summary>
+          <summary className={styles.serviceSummary} data-align-group="appearanceDisclosure: left,right">{groupSummary('appearanceLanguage')}</summary>
           <div className={styles.serviceBody} data-align-group="appearanceDisclosure: left,right">
       <section className={`set-sec ${styles.groupItem}`} id="screen" data-setting-render-key="screen" aria-labelledby="hScreen">
         <h2 id="hScreen">{t('settings.secScreen')}</h2>
@@ -860,7 +858,7 @@ export function SettingsPage(): React.ReactElement {
       {/* 고급·백업·데이터 관리 — 기존 상세 기능과 요청 수명은 유지한다. */}
       <div className={`${styles.setSec} ${styles.serviceSection}`} data-align-group="col: left; secs: right">
         <details className={styles.serviceDisclosure} data-setting-disclosure="advancedData">
-          <summary className={styles.serviceSummary} data-align-group="advancedDisclosure: left,right">{t('settings.groups.advancedData')}</summary>
+          <summary className={styles.serviceSummary} data-align-group="advancedDisclosure: left,right">{groupSummary('advancedData')}</summary>
           <div className={styles.serviceBody} data-align-group="advancedDisclosure: left,right">
       <section className={`set-sec ${styles.groupItem}`} id="nx" data-setting-render-key="backup" aria-labelledby="hNx">
         <h2 id="hNx">{t('settings.secNx')}</h2>

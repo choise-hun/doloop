@@ -276,13 +276,18 @@ async function openAllDisclosures(page) {
   }
 }
 
-test('DS24-S1 Settings 계정: 섹션 스파인 fill3 · T1 제목 · 안쪽 상자 (1280)', async ({ page }) => {
+test('DS24-S1 Settings 계정: 섹션은 띠 없는 1px 카드(UF-3) · T1 제목 · 안쪽 상자 (1280)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, { ...STATES.user, community: false });
   await page.goto('/settings.html#account', { waitUntil: 'load' });
   await expect(page.locator('#accEmail')).toHaveText('a@example.com');
   const colors = await ds24Colors(page);
-  await expectSpine(page.locator('#account'), colors.fill3, colors, '#account');
+  // UF-3: 옛 위쪽 목록 카드 모양 — 네 변 1px 줄눈, 띠·그림자 없음, 표면 --paper
+  const sec = await ds24Box(page.locator('#account'));
+  expect([sec.leftW, sec.topW]).toEqual(['1px', '1px']);
+  expect(sec.leftC).toBe(colors.seamHairline);
+  expect(sec.shadow).toBe('none');
+  expect(sec.radius).toBe('3px');
   const h = await ds24Box(page.locator('#hAccount'));
   expect(h.fontSize).toBe('24px');
   expect(h.fontWeight).toBe('300');
@@ -355,7 +360,7 @@ test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
   await page.goto('/settings.html#account', { waitUntil: 'load' });
   await expect(page.locator('#btnLogout')).toBeVisible();
   await dark();
-  expect(await leftC('#account')).toBe('rgb(108, 125, 114)');
+  expect(await leftC('#account')).toBe('rgb(48, 48, 46)'); // UF-3: 띠 없음 — 다크 --seam-hairline
   expect(await page.locator('#btnLogout').evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(32, 32, 30)');
 
   await mockApp(page, { ...STATES.guest, community: false });

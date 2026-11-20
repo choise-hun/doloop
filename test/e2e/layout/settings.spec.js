@@ -225,12 +225,13 @@ test('ST3-02 hashes and identities: outer groups and stale hash', async ({ page 
   await expect(page.locator('#advanced')).toBeFocused();
   await page.goForward();
   await expect(page.locator('#hAdvanced')).toBeFocused();
+  // UF-3: 위쪽 목록 링크(#settingsGroups)는 없앴다. 닫힌 그룹도 해시로 들어오면 다시 열린다
   await advanced.locator(':scope > summary').click();
-  await page.locator('#settingsGroups a[href="#nx"]').click();
+  await page.evaluate(() => { location.hash = 'nx'; });
   await expect(page.locator('#nx')).toBeFocused();
   await advanced.locator(':scope > summary').click();
-  await page.locator('#settingsGroups a[href="#nx"]').click();
-  await expect(page.locator('#nx')).toBeFocused();
+  await page.evaluate(() => { location.hash = 'hNx'; });
+  await expect(page.locator('#hNx')).toBeFocused();
   await advanced.locator(':scope > summary').click();
   const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/me');
   await page.evaluate(() => window.ULAuth.fetchMe());
@@ -328,12 +329,12 @@ test('ST2-01-03 native disclosure, canonical hashes and mounted input', async ({
       }
       for (const id of ids) {
         await page.locator(`#${id} > details[open] > summary`).click();
-        await page.locator(`#settingsGroups a[href="#${id}"]`).click();
+        await page.evaluate(id => { location.hash = ''; location.hash = id; }, id);
         await expect(page.locator(`#${id}`)).toBeFocused();
         await expect(page.locator(`#${id} > details`)).toHaveAttribute('open', '');
         await expect(page.locator(`#${id} h2`)).toBeInViewport();
         await page.locator(`#${id} > details > summary`).click();
-        await page.locator(`#settingsGroups a[href="#${id}"]`).click();
+        await page.evaluate(id => { location.hash = ''; location.hash = id; }, id);
         await expect(page.locator(`#${id} h2`)).toBeVisible();
       }
       expect(mutations).toEqual([]);
@@ -1011,8 +1012,8 @@ test('ST1-01 role DOM, group navigation, keyboard and hash focus', async ({ brow
       page.on('pageerror', error => errors.push(error.message));
       await page.goto('/settings.html');
       await settingsReady(page, entry.role === 'guest' ? 'guest' : 'user');
-      const nav = page.locator('#settingsGroups');
-      await expect(nav).toHaveAttribute('aria-label', dictionaries[entry.lang]['settings.groups.navigation']);
+      // UF-3: 위쪽 목록(#settingsGroups)은 없앴다 — 같은 내용(제목 + 하위 항목 줄)을 접이식 제목줄이 보여 준다
+      await expect(page.locator('#settingsGroups')).toHaveCount(0);
       const dom = await page.locator('[data-setting-render-key]').evaluateAll(nodes => nodes.map(node => {
         const section = node.tagName === 'SECTION' ? node : node.querySelector('section');
         return { key: node.dataset.settingRenderKey, target: section.id, descendants: [...section.querySelectorAll('[id]')].map(el => el.id) };
@@ -1031,30 +1032,23 @@ test('ST1-01 role DOM, group navigation, keyboard and hash focus', async ({ brow
         const metadata = groups.flatMap(group => group.items).find(candidate => candidate.renderKey === item.key);
         expect(metadata.targetId).toBe(item.target);
       }
-      const links = nav.locator('a');
-      await expect(links).toHaveCount(entry.targets.length);
-      const bounds = await nav.evaluate(node => {
-        const rect = node.getBoundingClientRect(), account = document.getElementById('account').getBoundingClientRect();
-        return { left: rect.left - account.left, right: rect.right - account.right, gap: account.top - rect.bottom };
-      });
-      expect(bounds).toEqual({ left: 0, right: 0, gap: 16 });
+      const summaries = page.locator('[data-setting-disclosure] > summary');
+      await expect(summaries).toHaveCount(entry.targets.length);
+      const go = (target) => page.evaluate(target => { location.hash = ''; location.hash = target; }, target);
       for (let index = 0; index < entry.targets.length; index++) {
-        const link = links.nth(index), target = entry.targets[index];
-        await expect(link).toHaveAttribute('href', `#${target}`);
-        const groupId = await link.getAttribute('data-setting-group');
-        const group = groups.find(group => group.id === groupId);
-        await expect(link.locator('strong')).toHaveText(dictionaries[entry.lang][group.titleKey]);
-        await link.focus();
-        await page.keyboard.press('Enter');
+        const target = entry.targets[index];
+        const group = groups.find(group => group.items.some(item => item.targetId === target));
+        await expect(summaries.nth(index).locator('strong')).toHaveText(dictionaries[entry.lang][group.titleKey]);
+        await go(target);
         await expect(page.locator(`#${target}`)).toBeFocused();
         await expect(page.locator(`#${target}`)).toBeInViewport();
       }
       const audio = page.locator('#chkExportAudio');
       await audio.uncheck();
-      await links.first().click();
+      await go('account');
       await expect(page.locator('#account')).toBeFocused();
       await page.locator('h1').evaluate(node => { node.tabIndex = -1; node.focus(); });
-      await links.first().click(); // Same hash must still move focus.
+      await go('account'); // Same hash must still move focus.
       await expect(page.locator('#account')).toBeFocused();
       for (const hash of ['langSec', 'links', 'hAdvanced']) {
         await page.evaluate(hash => { location.hash = hash; }, hash);
