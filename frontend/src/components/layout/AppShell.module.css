@@ -193,8 +193,9 @@
   min-width: 0;
 }
 
-/* WF-2: 플레이어 화면은 머리 메뉴도 넓어진 틀 폭을 따른다 */
-.playerShell .siteNav {
+/* WF-2: 플레이어 화면은 머리 메뉴·꼬리(라이트|다크)도 넓어진 틀 폭을 따른다 */
+.playerShell .siteNav,
+.playerShell .siteFoot {
   max-width: none;
 }
 

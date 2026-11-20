@@ -613,7 +613,7 @@ for (const [w, h, minVideo] of [[1920, 1080, 1200], [1440, 900, 900], [2560, 144
     await page.locator('#seekRow').waitFor();
     const r = await page.evaluate(() => {
       const b = (sel) => document.querySelector(sel).getBoundingClientRect();
-      return { shell: b('[data-shell-variant="player"]'), nav: b('nav.site-nav'), video: b('#videoBox'), play: b('#ppPlayCard'), ctl: b('#ppCtl') };
+      return { shell: b('[data-shell-variant="player"]'), nav: b('nav.site-nav'), foot: b('footer'), video: b('#videoBox'), play: b('#ppPlayCard'), ctl: b('#ppCtl') };
     });
     expect(r.video.width).toBeGreaterThanOrEqual(minVideo);
     expect(r.shell.width).toBeLessThanOrEqual(1760);
@@ -621,6 +621,9 @@ for (const [w, h, minVideo] of [[1920, 1080, 1200], [1440, 900, 900], [2560, 144
     expect(Math.abs(r.nav.left - r.video.left)).toBeLessThanOrEqual(1);
     expect(Math.abs(r.nav.right - r.ctl.right)).toBeLessThanOrEqual(1);
     expect(Math.round(r.ctl.width)).toBe(360); // 오른쪽 열은 그대로
+    // 꼬리(라이트|다크 줄)도 머리 메뉴처럼 넓어진 틀 폭을 따른다
+    expect(Math.abs(r.foot.left - r.nav.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.foot.right - r.nav.right)).toBeLessThanOrEqual(1);
   });
 }
 
