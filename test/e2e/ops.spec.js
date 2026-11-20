@@ -93,7 +93,7 @@ test('M2-4a owner: 펼치기 전에는 /admin 요청 없음, 접힌 채로 보�
     if (isAdmin(new URL(req.url()))) adminCalls.push(req.url());
   });
   await open(page, { ...STATES.user, me: { role: 'owner' } });
-  await expect(page.locator('#hOps')).toHaveText('운영 (owner 전용)');
+  await expect(page.locator('#hOps')).toHaveText('운영자'); // UF-3: 다른 그룹과 같은 i18n 그룹 제목
   await expect(page.locator('#opsDetails')).not.toHaveAttribute('open', '');
   await expect(page.locator('#opsEmail')).toBeHidden();
   expect(adminCalls).toEqual([]);
