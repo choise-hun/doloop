@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UF 수정 시안</title>
+<style>
+/* 시안 전용 — 값은 frontend/src/styles/tokens.css 현재 값 그대로 */
+.lt{--bg:#ECEEF0;--paper:#F1F4F7;--cream:#EDF0F3;--surface2:#DCE0E5;--ink:#1d1d1f;--muted:#61656C;--line:#C7CCD3;--seam:#CBCDCF;--relief:#BCBFC4;--amb:rgba(24,28,36,.11);--frost:#EFF1F4;--fill1:#E64D01;--gray:#7F93A8;--accent:#1d1d1f;--accent-ink:#F1F4F7;--hl:#F1F4F7BF}
+.dk{--bg:#171716;--paper:#242422;--cream:#20201E;--surface2:#2b2a27;--ink:#ecece4;--muted:#9c9a92;--line:#3a3935;--seam:#30302E;--relief:#444340;--amb:rgba(0,0,0,.35);--frost:#1E1E1D;--fill1:#FF6B2B;--gray:#ECECE4;--accent:#ecece4;--accent-ink:#171716;--hl:#242422BF}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;background:#E4E6E9;color:#1d1d1f;line-height:1.5}
+main{max-width:1400px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:32px;margin:0 0 4px}
+h2.sec{font-size:24px;font-weight:300;margin:48px 0 8px;padding-top:16px;border-top:2px solid #1d1d1f}
+h3{font-size:16px;margin:24px 0 8px}
+p,li{font-size:14px}
+.note{font-size:13px;color:#61656C}
+.tag{display:inline-block;font:500 12px ui-monospace,Menlo,monospace;letter-spacing:.08em;padding:1px 6px;border:1px solid #1d1d1f;border-radius:3px;margin-right:6px;vertical-align:middle}
+.tag.ok{background:#1d1d1f;color:#F1F4F7}
+.rec{background:#E64D01;color:#F1F4F7;border-color:#E64D01}
+table.d{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+table.d th,table.d td{border:1px solid #C7CCD3;padding:6px 8px;text-align:left;vertical-align:top}
+table.d th{background:#DCE0E5}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,620px),1fr));gap:20px;margin-top:12px}
+.opt{border:1px solid #C7CCD3;background:#F1F4F7;padding:14px;border-radius:3px}
+.opt>b{font-size:15px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media (max-width:700px){.pair{grid-template-columns:1fr}}
+.stage{padding:14px;background:var(--bg);color:var(--ink);border-radius:3px}
+
+/* ── 미니 홈 ── */
+.mh{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--paper);border:1px solid var(--seam);border-radius:3px;padding:12px;min-height:84px;display:flex;flex-direction:column;gap:8px}
+.card h4{margin:0;font-weight:300;font-size:18px;letter-spacing:-.02em;display:flex;justify-content:space-between;align-items:baseline}
+.card h4 small{font-size:11px;font-weight:700}
+.cells{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cells i{display:block;height:24px;border:1px solid var(--seam);border-radius:3px;background:var(--frost)}
+.cells i.today{border-color:var(--fill1);box-shadow:inset 0 0 0 1px var(--fill1)}
+.row{height:10px;border-bottom:1px solid var(--seam)}
+.row.cur{box-shadow:inset 3px 0 0 var(--spine);background:color-mix(in srgb,var(--spine) 12%,transparent)}
+.ph{height:34px;background:var(--surface2);border-radius:3px}
+.weekly{--spine:var(--fill1)}
+.other{--spine:var(--gray)}
+/* 변형 */
+.vA .weekly{border-left:3px solid var(--spine)}               /* A 평면 */
+.vB .card{border-left:3px solid var(--spine);background:linear-gradient(145deg,var(--paper),var(--cream));box-shadow:inset 1px 0 0 var(--seam),2px 2px 0 var(--surface2),4px 5px 0 var(--relief),10px 14px 22px var(--amb),inset 0 1px 0 var(--hl)}
+.vC .card{border-left:3px solid var(--spine);box-shadow:0 6px 18px var(--amb)}
+.vD .card{box-shadow:0 6px 18px var(--amb)}
+.vD .weekly{border-left:3px solid var(--spine)}
+.vNow .card{border-left:12px solid var(--spine);background:linear-gradient(145deg,var(--paper),var(--cream));box-shadow:inset 1px 0 0 var(--seam),2px 2px 0 var(--surface2),4px 5px 0 var(--relief),10px 14px 22px var(--amb),inset 0 1px 0 var(--hl)}
+.vNow .weekly{--spine:var(--fill1)} .vNow .r1{--spine:#7F93A8} .vNow .r2{--spine:#8BA1A8}
+.dk.vNow .r1{--spine:#D4B26A} .dk.vNow .r2{--spine:#6C7D72}
+
+/* ── 이어서 여백 ── */
+.list{width:280px;border-top:1px solid var(--seam);font-size:13px}
+.list div{display:flex;justify-content:space-between;align-items:center;min-height:38px;border-bottom:1px solid var(--seam);padding-left:2px;font-weight:700}
+.list div.cur{box-shadow:inset 4px 0 0 #7F93A8;background:color-mix(in srgb,#7F93A8 12%,transparent);padding-left:10px}
+.list div span{font:700 12px ui-monospace,Menlo,monospace}
+.list.after div.cur{padding-right:14px}
+.list.before div.cur{padding-right:2px}
+
+/* ── 취향 칸 ── */
+.seg{display:inline-flex;border:1px solid var(--seam);border-radius:3px;overflow:hidden;font-size:12px}
+.seg span{padding:5px 12px;border-right:1px solid var(--seam)}
+.seg span:last-child{border-right:0}
+.seg .on{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.pc{border:1px solid var(--seam);background:var(--frost);border-radius:3px;padding:10px;font-size:12px;min-height:90px}
+.pc b{display:block;margin-bottom:6px}
+.pc code{font:700 12px ui-monospace,Menlo,monospace}
+
+/* ── 폭 ── */
+.vp{position:relative;height:120px;background:var(--bg);border:1px solid #C7CCD3;border-radius:3px;margin-top:6px}
+.vp .box{position:absolute;top:14px;bottom:14px;left:50%;transform:translateX(-50%);background:repeating-linear-gradient(90deg,#F1F4F7 0 48%,transparent 48% 52%);border:1px dashed #61656C;display:flex;align-items:center;justify-content:center;font:700 12px ui-monospace,Menlo,monospace;color:#1d1d1f}
+.vp .lab{position:absolute;right:8px;bottom:2px;font:12px ui-monospace,Menlo,monospace;color:#61656C}
+
+/* ── LEARN ── */
+.lp{background:var(--paper);border:1px solid var(--seam);border-radius:3px;padding:14px;font-size:12px}
+.ctrls{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px 10px}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld em{font-style:normal;color:var(--muted)}
+.fld u{text-decoration:none;display:block;height:30px;border:1px solid var(--seam);border-radius:3px;background:var(--cream)}
+.pbtn{border:0;border-radius:9999px;background:var(--accent);color:var(--accent-ink);font:700 14px inherit;padding:8px 18px}
+.pbig{border:0;border-radius:9999px;background:var(--accent);color:var(--accent-ink);font:700 17px inherit;min-height:48px;min-width:160px;padding:0 28px}
+.playbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--seam)}
+.stat{color:var(--muted);font-size:13px}
+.lhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.board{height:56px;margin-top:10px;background:repeating-linear-gradient(90deg,var(--surface2) 0 1px,transparent 1px 40px),var(--frost);border:1px solid var(--seam);border-radius:3px}
+.sticky{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:10px 14px;border:1px solid var(--seam);background:var(--cream);border-radius:3px;box-shadow:0 -4px 14px var(--amb)}
+
+/* ── SETTING ── */
+.sg{display:flex;flex-direction:column;gap:10px;max-width:560px}
+.sgi{border:1px solid var(--seam);background:var(--paper);border-radius:3px;padding:10px 14px;font-size:13px}
+.sgi b{display:flex;justify-content:space-between}
+.sgi span{color:var(--muted)}
+.sgi .body{margin-top:10px;padding-top:10px;border-top:1px solid var(--seam);display:grid;gap:6px}
+.sgi .body u{display:block;text-decoration:none;height:28px;border:1px solid var(--seam);border-radius:3px;background:var(--cream)}
+
+/* ── PROFILE ── */
+.pf{max-width:360px;margin:0 auto;background:var(--paper);border:1px solid var(--seam);border-radius:3px;padding:24px 16px;text-align:center;font-size:13px}
+.av{width:72px;height:72px;border-radius:50%;background:var(--surface2);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font:700 28px inherit;color:var(--muted)}
+.pf .nm{font-size:18px;font-weight:700}
+.pf .ct{color:var(--muted);font-size:12px}
+.pf .bio{margin:14px 0 4px}
+.pf .em{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.pf .lnk{display:inline-block;margin-top:14px;font-weight:700;font-size:12px}
+.hid{margin-top:18px;border:1px dashed var(--muted);padding:8px;font-size:12px;color:var(--muted);text-align:left}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--seam);margin-top:6px;opacity:.5}
+.tabs span{text-align:center;padding:6px 0}
+.tabs .on{border-bottom:2px solid var(--ink)}
+</style>
+</head>
+<body>
+<main>
+<h1>UF 수정 시안</h1>
+<p class="note">2026-11-20 · 사용자 수정 요청 정리. <span class="tag ok">확정</span>은 요청대로 바로 구현할 항목, <span class="tag">선택</span>은 고르실 항목, <span class="tag rec">추천</span>은 시니어 추천안입니다. 색은 현재 <code>tokens.css</code> 값 그대로입니다.</p>
+
+<h3>결정이 필요한 항목 (답은 "D1 C, D2 B …"처럼 주시면 됩니다)</h3>
+<table class="d">
+<tr><th>ID</th><th>무엇</th><th>선택지</th><th>추천</th></tr>
+<tr><td>D1</td><td>박스 형태 (전 페이지 공통 카드·패널)</td><td>A 평면(이전 박스) / B 얇은 띠+두께 / C 얇은 띠+그림자 / D WEEKLY만 띠+그림자</td><td>C</td></tr>
+<tr><td>D2</td><td>홈 최대 폭 (4K 전체화면)</td><td>A 1440px / B 1760px / C 1760px + 큰 화면에서 글자 단계 확대</td><td>B</td></tr>
+<tr><td>D3</td><td>LEARN 재생 버튼 위치</td><td>A 설정 아래 재생 줄 / B 패널 머리 오른쪽 / C 지판 아래 고정 줄</td><td>A</td></tr>
+<tr><td>D4</td><td>CHORDS(코드 진행 모음) 첫 진입 기본 탭</td><td>A 합산(홈과 같게) / B 레퍼런스 유지(순서만 변경)</td><td>A</td></tr>
+<tr><td>D5</td><td>PROFILE 나라 저장</td><td>A 서버에 <code>country</code> 칸 추가(DB V15 + <code>/me</code> 필드, 계약 변경) / B 이번엔 화면 자리만, 입력은 커뮤니티 재설계 때</td><td>A</td></tr>
+<tr><td>D6</td><td>PROFILE 자기소개 한 줄(와이어프레임의 "안녕 나는…")</td><td>A 표시(기존 <code>creator_bio</code> 재사용, 비면 숨김) / B 표시 안 함</td><td>B</td></tr>
+</table>
+
+<!-- ───────────── 1 박스 형태 ───────────── -->
+<h2 class="sec">1. 박스 형태·띠 <span class="tag">선택 D1</span></h2>
+<p>공통 확정: <b>WEEKLY만 주황, 나머지 3개(RECENT·BETTER·VAULT)는 같은 회색</b>(라이트 <code>#7F93A8</code>). <b>다크의 회색 띠는 노랑 <code>#D4B26A</code> → 화이트 <code>#ECECE4</code></b>(다크 본문 글자색 <code>--ink</code>와 같은 값). 띠 굵기 <b>12px → 3px</b>. 폰트·제목·간격·안쪽 요소는 전부 유지하고 바깥 상자만 바꿉니다. 고른 안은 다른 페이지(SETTING·LEARN·NOTES 등)의 같은 카드에도 똑같이 적용합니다.</p>
+<p class="note">구현 방식: <code>--fill2</code>/<code>--fill3</code>로 갈리던 홈 스파인을 하나(<code>--fill2</code>)로 묶고, 다크 <code>--fill2</code> 토큰 값을 <code>#ECECE4</code>로 바꿉니다(토큰 값 변경 = 디자인 결정이라 이 시안으로 승인받음). 안쪽 '이어서' 강조선도 같은 색을 따라갑니다.</p>
+
+<div class="opt" style="margin-top:12px"><b>현재 (비교용)</b> — 12px 띠 + 두께(릴리프) + 3색
+  <div class="pair">
+    <div class="stage lt vNow"><div class="mh">
+      <div class="card weekly"><h4>WEEKLY<small>기록 보기 →</small></h4><div class="cells"><i></i><i></i><i></i><i></i><i class="today"></i><i></i><i></i></div></div>
+      <div class="card r1"><h4>RECENT</h4><div class="ph"></div></div>
+      <div class="card r1"><h4>BETTER<small>연습실</small></h4><div class="row"></div><div class="row cur"></div><div class="row"></div></div>
+      <div class="card r2"><h4>VAULT<small>학습</small></h4><div class="ph"></div></div>
+    </div></div>
+    <div class="stage dk vNow"><div class="mh">
+      <div class="card weekly"><h4>WEEKLY<small>기록 보기 →</small></h4><div class="cells"><i></i><i></i><i></i><i></i><i class="today"></i><i></i><i></i></div></div>
+      <div class="card r1"><h4>RECENT</h4><div class="ph"></div></div>
+      <div class="card r1"><h4>BETTER<small>연습실</small></h4><div class="row"></div><div class="row cur"></div><div class="row"></div></div>
+      <div class="card r2"><h4>VAULT<small>학습</small></h4><div class="ph"></div></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="opts" id="boxOpts"></div>
+
+<!-- ───────────── 2 홈 ───────────── -->
+<h2 class="sec">2. 홈</h2>
+<h3>2-1. BETTER CHORDS '이어서' 오른쪽 여백 <span class="tag ok">확정</span></h3>
+<div class="pair">
+  <div class="stage lt"><p class="note">지금 — 오른쪽 끝에 붙음</p><div class="list before"><div>6 · 2-5-1 탐색<span></span></div><div class="cur">7 · 더블 스탑 연습<span>이어서</span></div></div></div>
+  <div class="stage lt"><p class="note">수정 — 활성 줄 오른쪽 안쪽 여백 14px (왼쪽 10px과 균형)</p><div class="list after"><div>6 · 2-5-1 탐색<span></span></div><div class="cur">7 · 더블 스탑 연습<span>이어서</span></div></div></div>
+</div>
+
+<h3>2-2. 취향 코드 진행 — 아래 두 칸 자리 바꾸기 <span class="tag ok">확정</span></h3>
+<p class="note">요청 문구대로 두 칸의 좌우만 맞바꿉니다. 내용·버튼은 그대로입니다. (참고: 왼쪽 칸 머리표는 지금 뽑힌 진행의 종류(분석/레퍼런스)라서 '합산'일 땐 매번 바뀝니다. 의도와 다르면 알려 주세요.)</p>
+<div class="pair">
+  <div class="stage lt"><p class="note">지금</p><div class="seg"><span class="on">합산</span><span>레퍼런스</span><span>분석</span></div>
+    <div class="pg"><div class="pc"><b>분석 · E Major</b><code>F#m7(9) - B7(b9,13) - EM7(9)</code><br>랜덤 ↻ · 연주하기 →</div><div class="pc"><b>취향 · 진행 8개</b><code>iim7(9) - V7(b9,13) - IM7(9)</code><br>취향 통계 보기 →</div></div></div>
+  <div class="stage lt"><p class="note">수정</p><div class="seg"><span class="on">합산</span><span>레퍼런스</span><span>분석</span></div>
+    <div class="pg"><div class="pc"><b>취향 · 진행 8개</b><code>iim7(9) - V7(b9,13) - IM7(9)</code><br>취향 통계 보기 →</div><div class="pc"><b>분석 · E Major</b><code>F#m7(9) - B7(b9,13) - EM7(9)</code><br>랜덤 ↻ · 연주하기 →</div></div></div>
+</div>
+
+<h3>2-3. 홈 최대 폭 <span class="tag">선택 D2</span></h3>
+<p class="note">지금 홈 틀 최대 폭은 <code>--container-max</code> 1120px. 그림은 4K 전체화면(약 3600px 폭) 비율로 줄인 것입니다. 홈 화면에만 적용하고 다른 페이지 폭은 그대로 둡니다. 1120px 아래 화면에서는 지금과 똑같습니다.</p>
+<div class="opts">
+  <div class="opt"><b>지금 1120px</b><div class="vp"><div class="box" style="width:31%">1120</div><span class="lab">viewport 3600</span></div></div>
+  <div class="opt"><b>A 1440px</b><div class="vp"><div class="box" style="width:40%">1440</div><span class="lab">viewport 3600</span></div><p class="note">노트북~QHD에서 체감 큼, 4K에선 여전히 여백 많음.</p></div>
+  <div class="opt"><b>B 1760px <span class="tag rec">추천</span></b><div class="vp"><div class="box" style="width:49%">1760</div><span class="lab">viewport 3600</span></div><p class="note">플레이어 틀 상한(<code>--player-max</code> 1760)과 같은 값 — 메뉴로 오갈 때 폭이 튀지 않음. 1120~1760 사이는 창 폭 따라 자연스럽게 늘어남.</p></div>
+  <div class="opt"><b>C 1760px + 글자 단계 확대</b><div class="vp"><div class="box" style="width:49%;font-size:15px">1760 · 글자↑</div><span class="lab">viewport 3600</span></div><p class="note">1600px 이상 창에서 카드 안 글자를 한 단계씩 키움(13→14, 24→32 등). 4K에서 꽉 차 보이지만 손댈 곳이 많고 정렬 검사 범위가 커짐.</p></div>
+</div>
+
+<!-- ───────────── 3 LEARN ───────────── -->
+<h2 class="sec">3. LEARN</h2>
+<h3>3-1. 4·5번(탑노트 5도권·코드 재해석) 일본어/영어에서 한글 섞임 <span class="tag ok">확정</span></h3>
+<p class="note">원인: 엔진(<code>lib/engine/theory.mjs</code>)이 '1번줄', '근음', '경과' 같은 한글을 직접 만들고, 재해석 프리셋 라벨 'Quartal · 4도 쌓기'가 한글 고정. → 화면에 내보내는 문구만 i18n 키로 바꿉니다(엔진 계산은 그대로). 3개 언어로 4·5번 탭 전체를 확인합니다.</p>
+
+<h3>3-2. 스케일 연습 '0–12프렛 · 보이는 스케일 음 35개' 정렬 <span class="tag ok">확정</span></h3>
+<p class="note">재생 버튼과 세로 가운데를 맞춥니다. D3에서 고른 재생 줄 안으로 함께 옮겨 정렬합니다.</p>
+
+<h3>3-3. 재생 버튼을 설정 박스들과 분리·크게 <span class="tag">선택 D3</span></h3>
+<p class="note">모든 LEARN 탭(1~7) 공통으로 같은 자리·같은 크기(높이 48px, 글자 17px, 최소 폭 160px — 대표 버튼 규격)로 맞춥니다. 재생 중엔 지금처럼 '정지'로 바뀝니다.</p>
+<div class="opts">
+  <div class="opt"><b>지금</b>
+    <div class="stage lt" style="margin-top:8px"><div class="lp"><div class="ctrls">
+      <div class="fld"><em>연습 모드</em><u></u></div><div class="fld"><em>루트 음</em><u></u></div><div class="fld"><em>스케일 종류</em><u></u></div><div class="fld"><em>음표 라벨</em><u></u></div><div class="fld"><em>손잡이</em><u></u></div><div class="fld"><em>재생 범위</em><u></u></div><div class="fld"><em>BPM</em><u></u></div>
+      <div style="display:flex;align-items:flex-end;gap:8px"><button class="pbtn">재생</button></div><div class="stat" style="align-self:start">0–12프렛 · 보이는 스케일 음 35개</div>
+    </div></div></div>
+  </div>
+  <div class="opt"><b>A 설정 아래 '재생 줄' <span class="tag rec">추천</span></b>
+    <div class="stage lt" style="margin-top:8px"><div class="lp"><div class="ctrls">
+      <div class="fld"><em>연습 모드</em><u></u></div><div class="fld"><em>루트 음</em><u></u></div><div class="fld"><em>스케일 종류</em><u></u></div><div class="fld"><em>음표 라벨</em><u></u></div><div class="fld"><em>손잡이</em><u></u></div><div class="fld"><em>재생 범위</em><u></u></div><div class="fld"><em>BPM</em><u></u></div>
+    </div>
+    <div class="playbar"><span class="stat">0–12프렛 · 보이는 스케일 음 35개</span><button class="pbig">▶ 재생</button></div></div></div>
+    <p class="note">설정 칸이 끝난 뒤 가는 선으로 나누고, 왼쪽 상태 문구 · 오른쪽 큰 재생. 모바일(390)에선 상태 문구 위, 버튼 전체 폭.</p>
+  </div>
+  <div class="opt"><b>B 패널 머리 오른쪽</b>
+    <div class="stage lt" style="margin-top:8px"><div class="lp"><div class="lhead"><span class="stat">0–12프렛 · 보이는 스케일 음 35개</span><button class="pbig">▶ 재생</button></div><div class="ctrls">
+      <div class="fld"><em>연습 모드</em><u></u></div><div class="fld"><em>루트 음</em><u></u></div><div class="fld"><em>스케일 종류</em><u></u></div><div class="fld"><em>음표 라벨</em><u></u></div><div class="fld"><em>손잡이</em><u></u></div><div class="fld"><em>재생 범위</em><u></u></div><div class="fld"><em>BPM</em><u></u></div>
+    </div></div></div>
+    <p class="note">들어오자마자 보이지만, 설정을 다 고른 뒤 다시 위로 손이 가야 함.</p>
+  </div>
+  <div class="opt"><b>C 지판 아래 고정 줄</b>
+    <div class="stage lt" style="margin-top:8px"><div class="lp"><div class="ctrls">
+      <div class="fld"><em>연습 모드</em><u></u></div><div class="fld"><em>루트 음</em><u></u></div><div class="fld"><em>스케일 종류</em><u></u></div><div class="fld"><em>BPM</em><u></u></div>
+    </div><div class="board"></div>
+    <div class="sticky"><span class="stat">0–12프렛 · 보이는 스케일 음 35개</span><button class="pbig">▶ 재생</button></div></div></div>
+    <p class="note">스크롤해도 화면 아래에 붙어 있음. 지판 보면서 누르기 좋지만 모바일 하단 탭 바와 겹치는 처리가 추가로 필요.</p>
+  </div>
+</div>
+
+<!-- ───────────── 4 CHORDS ───────────── -->
+<h2 class="sec">4. CHORDS (코드 진행 모음) <span class="tag ok">확정 순서</span> <span class="tag">선택 D4</span></h2>
+<div class="pair">
+  <div class="stage lt"><p class="note">지금</p><div class="seg"><span class="on">레퍼런스</span><span>분석</span><span>합산</span></div></div>
+  <div class="stage lt"><p class="note">수정 — 홈과 같은 순서 (D4-A면 '합산'이 기본 선택)</p><div class="seg"><span class="on">합산</span><span>레퍼런스</span><span>분석</span></div></div>
+</div>
+
+<!-- ───────────── 5 SETTING ───────────── -->
+<h2 class="sec">5. SETTING — 중복 박스 하나로 <span class="tag ok">확정</span></h2>
+<p class="note">위쪽 목록 박스 모양(제목 + 회색 하위 항목 줄)을 남기고, 그 박스를 누르면 바로 아래로 내용이 펼쳐지게 합칩니다. 아래쪽 '▶ 계정·저장소' 접이식 박스 줄은 없앱니다. 링크(<code>settings.html#account</code> 등)로 들어오면 해당 박스가 펼쳐진 채 열리는 동작은 유지합니다.</p>
+<div class="pair">
+  <div class="stage lt"><p class="note">닫힘</p><div class="sg">
+    <div class="sgi"><b>계정·저장소<span>⌄</span></b><span>계정 · 이름 · 나라 · 로그아웃</span></div>
+    <div class="sgi"><b>구독·크레딧<span>⌄</span></b><span>AI 분석 크레딧</span></div>
+    <div class="sgi"><b>화면·언어<span>⌄</span></b><span>화면 · 언어</span></div>
+    <div class="sgi"><b>고급·백업·데이터 관리<span>⌄</span></b><span>데이터 백업 · 고급 설정</span></div>
+  </div></div>
+  <div class="stage lt"><p class="note">계정·저장소 펼침 — 프로필에서 옮겨 온 이름 수정·로그아웃 포함</p><div class="sg">
+    <div class="sgi"><b>계정·저장소<span>⌃</span></b><span>계정 · 이름 · 나라 · 로그아웃</span>
+      <div class="body"><span>이메일 · 저장 공간</span><span>표시 이름</span><u></u><span>나라 (선택, D5-A일 때)</span><u></u><span>로그아웃 · 계정 삭제</span></div></div>
+    <div class="sgi"><b>구독·크레딧<span>⌄</span></b><span>AI 분석 크레딧</span></div>
+  </div></div>
+</div>
+
+<!-- ───────────── 6 PROFILE ───────────── -->
+<h2 class="sec">6. PROFILE — 와이어프레임형 <span class="tag ok">확정 배치</span> <span class="tag">선택 D5·D6</span></h2>
+<p class="note">보기 전용 화면으로 바꿉니다. 이름·로그아웃 등 편집은 전부 SETTING 계정 칸으로 옮기고, 프로필에는 '설정에서 편집 →' 글자 버튼만 둡니다. 나라가 비어 있으면 그 줄을 아예 그리지 않습니다. 팔로워·게시물·팔로잉 숫자 줄 대신 와이어프레임 아래의 탭 선택창(격자/…)을 <b>코드에만 두고 <code>hidden</code></b>으로 숨겨, 커뮤니티 재설계 때 켭니다. 사진은 현재 저장된 것이 없어 이름 첫 글자 원으로 둡니다.</p>
+<div class="pair">
+  <div class="stage lt"><div class="pf">
+    <div class="av">전</div>
+    <div class="nm">전지은</div>
+    <div class="ct">대한민국</div>
+    <p class="bio" style="opacity:.45">(D6-A일 때만) 안녕 나는 대한민국에 사는 전지은이야.</p>
+    <div class="em">svs4316@example.com</div>
+    <a class="lnk">설정에서 편집 →</a>
+    <div class="hid">hidden — 향후 커뮤니티용 탭 선택창 (화면에 안 보임)<div class="tabs"><span class="on">▦</span><span>♡</span><span>▶</span></div></div>
+  </div></div>
+  <div class="stage dk"><div class="pf">
+    <div class="av">전</div>
+    <div class="nm">전지은</div>
+    <div class="em">나라 미입력 → 줄 없음</div>
+    <div class="em" style="margin-top:6px">svs4316@example.com</div>
+    <a class="lnk" style="color:var(--ink)">설정에서 편집 →</a>
+  </div></div>
+</div>
+<p class="note">로그아웃 상태에서 프로필로 오면 지금처럼 'Google로 로그인' 대표 버튼 하나만 보여 줍니다.</p>
+</main>
+
+<script>
+// 박스 형태 4안을 라이트/다크 쌍으로 그린다
+const variants = [
+  ['vA','A 평면 (이전 박스로 복귀)','1px 테두리만. 띠·두께·그림자 없음. WEEKLY만 3px 주황 선으로 포인트. 가장 미니멀.'],
+  ['vB','B 얇은 띠 + 두께 유지','띠만 3px로 줄이고 지금의 두께(릴리프) 그림자는 유지.'],
+  ['vC','C 얇은 띠 + 그림자만 ★추천','두께 제거, 부드러운 그림자 1겹만. 섹션 구분은 3px 회색 띠가 맡음.'],
+  ['vD','D WEEKLY만 띠 + 그림자','두께 제거, 그림자 유지. 띠는 WEEKLY 주황 3px뿐, 나머지는 띠 없음.'],
+];
+const mini = () => `<div class="mh">
+  <div class="card weekly"><h4>WEEKLY<small>기록 보기 →</small></h4><div class="cells"><i></i><i></i><i></i><i></i><i class="today"></i><i></i><i></i></div></div>
+  <div class="card other"><h4>RECENT</h4><div class="ph"></div></div>
+  <div class="card other"><h4>BETTER<small>연습실</small></h4><div class="row"></div><div class="row cur"></div><div class="row"></div></div>
+  <div class="card other"><h4>VAULT<small>학습</small></h4><div class="ph"></div></div></div>`;
+document.getElementById('boxOpts').innerHTML = variants.map(([c,t,d]) =>
+  `<div class="opt"><b>${t}</b><p class="note">${d}</p><div class="pair">
+   <div class="stage lt ${c}">${mini()}</div><div class="stage dk ${c}">${mini()}</div></div></div>`).join('');
+</script>
+</body>
+</html>
