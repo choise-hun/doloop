@@ -56,7 +56,7 @@ async function profileReady(page, state) {
     await page.locator('#profileGuest').waitFor();
   } else {
     await page.locator('#profileUser').waitFor();
-    if (['userWithNames', 'userLongText', 'logoutSuccess'].includes(state)) {
+    if (['userWithNames', 'userLongText'].includes(state)) {
       await expect(page.locator('#profileDisplayName')).toBeVisible();
     }
     if (['userWithNames', 'consentWithdrawAsk'].includes(state)) {
@@ -65,10 +65,6 @@ async function profileReady(page, state) {
     if (state === 'consentWithdrawAsk') {
       await page.locator('#shareConsentWithdraw').click();
       await expect(page.locator('#withdrawRemoveAll')).toBeFocused();
-    }
-    if (state === 'logoutSuccess') {
-      await page.locator('#profileLogout').click();
-      await expect(page.locator('#profileAuthMsg')).toHaveText('✓ 로그아웃했어요');
     }
     if (state === 'userEmptyNames') {
       await expect(page.locator('#profileEmail')).toContainText('tester@example.com');
@@ -90,7 +86,6 @@ layoutSuite({
     { name: 'userWithNames', mock: USER_WITH_NAMES },
     { name: 'userLongText', mock: USER_LONG_TEXT },
     { name: 'userEmptyNames', mock: { ...USER_WITH_NAMES, me: { ...USER_WITH_NAMES.me, displayName: '', publicName: null } } },
-    { name: 'logoutSuccess', mock: USER_WITH_NAMES },
     { name: 'consentWithdrawAsk', mock: USER_WITH_NAMES },
   ],
   ready: profileReady,
@@ -197,15 +192,14 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
 
     const settingsLink = page.locator('#profileSettingsLink');
     await expect(settingsLink).toBeVisible();
-    await expect(settingsLink).toHaveAttribute('href', 'settings.html');
+    await expect(settingsLink).toHaveAttribute('href', 'settings.html#account');
+    await expect(settingsLink).toHaveText('설정에서 편집 →');
     await settingsLink.click();
 
     await expect(page).toHaveURL(/.*settings\.html/);
-    for (const id of ['account', 'community']) {
-      await expect(page.locator(`#${id} > details > div`)).toBeHidden();
-      await page.locator(`#${id} > details > summary`).click();
-      await expect(page.locator(`#${id} > details`)).toHaveAttribute('open', '');
-    }
+    await expect(page.locator('#account > details')).toHaveAttribute('open', '');
+    await page.locator('#community > details > summary').click();
+    await expect(page.locator('#community > details')).toHaveAttribute('open', '');
     // Locked Contracts 셀렉터 유지 확인
     for (const id of [
       '#account',
@@ -218,6 +212,7 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
       '#quotaBar',
       '#driveStoragePanel',
       '#btnLogout',
+      '#accDisplayNameInput',
       '#community',
       '#hCommunity',
       '#settingsProfileLink',
@@ -232,7 +227,7 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await expect(page.locator('#accEmail')).toBeVisible();
   });
 
-  test('PF1-05 logout: 로그아웃 성공 시 scope=local, ulp:keys 제거, guest 전환 및 성공 메시지', async ({ page }) => {
+  test('PF1-05 logout(UF-4: SETTING 이전): 로그아웃 성공 시 ulp:keys 제거·guest 전환, PROFILE에는 로그아웃 버튼 없음', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockApp(page, {
       ...STATES.user,
@@ -244,31 +239,23 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
 
     await page.goto('/profile.html', { waitUntil: 'load' });
     test.skip((await page.locator('#root').count()) === 0, 'legacy 모드: React 화면 아님');
-
-    // ulp:keys 존재 확인
+    await expect(page.locator('#profileUser')).toBeVisible();
+    await expect(page.locator('#profileLogout, #profileAuthMsg')).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem('ulp:keys'))).toBeTruthy();
 
-    const logoutBtn = page.locator('#profileLogout');
-    await expect(logoutBtn).toBeVisible();
-    await expect(page.locator('#profileUser')).toBeVisible();
-
-    await logoutBtn.click();
-
-    // 로그아웃 후 guest 동선 표시 및 성공 메시지
-    await expect(page.locator('#profileGuest')).toBeVisible();
-    await expect(page.locator('#profileUser')).toHaveCount(0);
-    const authMsg = page.locator('#profileAuthMsg');
-    await expect(authMsg).toHaveText('✓ 로그아웃했어요');
-    await expect(authMsg).toHaveClass(/msg ok/);
-
-    // navAuth 비로그인 복귀 확인
-    const navAuth = page.locator('#navAuth');
-    await expect(navAuth).toHaveAttribute('data-auth-state', 'signed-out');
-    await expect(navAuth).toHaveAttribute('href', 'settings.html#account');
-
-    // keys 캐시 제거 확인, 다른 로컬 데이터(ulp:v:demo)는 보존
+    await page.goto('/settings.html#account', { waitUntil: 'load' });
+    await page.locator('#btnLogout').click();
+    await expect(page.locator('#accGuest')).toBeVisible();
+    await expect(page.locator('#accMsg')).toHaveText('✓ 로그아웃했어요');
     expect(await page.evaluate(() => localStorage.getItem('ulp:keys'))).toBeNull();
     expect(await page.evaluate(() => localStorage.getItem('ulp:v:demo'))).toBeTruthy();
+
+    await page.evaluate(() => {
+      history.pushState(null, '', '/profile.html');
+      dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(page.locator('#profileGuest')).toBeVisible();
+    await expect(page.locator('#navAuth')).toHaveAttribute('data-auth-state', 'signed-out');
   });
 
   test('PF1-06 A→B continuation & unmount guard: 계정 전환 시 이전 메시지 폐기 및 unmount 안전성', async ({ page }) => {
@@ -292,26 +279,6 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     // 계정이 바뀌었으므로 이전 A 계정의 이름이나 메시지가 남지 않아야 함
     await expect(page.locator('#profileEmail')).toHaveText(/b@example\.com/);
     await expect(page.locator('#profileDisplayName')).toHaveCount(0);
-    await expect(page.locator('#profileAuthMsg')).toHaveText('');
-
-    // 문서 reload 대신 React 라우트만 바꾸고 같은 JS realm에서 지연 실패 완료.
-    await page.evaluate(() => {
-      window.ULAuth.signOut = () => new Promise((resolve, reject) => { window.__rejectUnmount = reject; });
-    });
-    await page.locator('#profileLogout').click();
-    await page.evaluate(() => {
-      history.pushState(null, '', '/privacy.html');
-      dispatchEvent(new PopStateEvent('popstate'));
-    });
-    await expect(page.locator('#profileTitle')).toHaveCount(0);
-    await page.evaluate(() => {
-      history.pushState(null, '', '/profile.html');
-      dispatchEvent(new PopStateEvent('popstate'));
-    });
-    await expect(page.locator('#profileLogout')).toBeEnabled();
-    await page.evaluate(() => window.__rejectUnmount(new Error('UNMOUNTED_ERROR')));
-    await expect(page.locator('#profileAuthMsg')).toHaveText('');
-
   });
 
   test('PF1-07 null/error/empty: /me 500 에러 또는 빈 이름 시 안전한 폴백', async ({ page }) => {
@@ -334,7 +301,6 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await expect(page.locator('#profileEmail')).toHaveText(/a@example\.com/);
     await expect(page.locator('#profileDisplayName')).toHaveCount(0);
     await expect(page.locator('#profilePublicName')).toHaveCount(0);
-    await expect(page.locator('#profileLogout')).toBeVisible();
     await expect(page.locator('#profileSettingsLink')).toBeVisible();
   });
 
@@ -364,21 +330,19 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await expect(page.locator('#profileEmail')).toContainText(XSS_PAYLOAD);
 
     // 키보드 탭 네비게이션
-    await page.locator('#profileLogout').focus();
-    await expect(page.locator('#profileLogout')).toBeFocused();
-    await page.keyboard.press('Tab');
+    await page.locator('#profileSettingsLink').focus();
     await expect(page.locator('#profileSettingsLink')).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/settings\.html$/);
+    await expect(page).toHaveURL(/settings\.html#account$/);
   });
 
   test('PF1-09 다국어 (ko, en, ja) 문구 렌더링 검증', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     const checks = [
-      { lang: 'ko', secTitle: '계정', logoutBtn: '로그아웃', emailLabel: '로그인 계정:' },
-      { lang: 'en', secTitle: 'Account', logoutBtn: 'Sign out', emailLabel: 'Signed in as:' },
-      { lang: 'ja', secTitle: 'アカウント', logoutBtn: 'ログアウト', emailLabel: 'ログイン中:' },
+      { lang: 'ko', secTitle: '계정', logoutBtn: '설정에서 편집 →', emailLabel: '로그인 계정:' },
+      { lang: 'en', secTitle: 'Account', logoutBtn: 'Edit in Settings →', emailLabel: 'Signed in as:' },
+      { lang: 'ja', secTitle: 'アカウント', logoutBtn: '設定で編集 →', emailLabel: 'ログイン中:' },
     ];
 
     for (const { lang, secTitle, logoutBtn, emailLabel } of checks) {
@@ -391,86 +355,10 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
 
       await expect(page.locator('html')).toHaveAttribute('lang', lang);
       await expect(page.locator('#profileAccountTitle')).toHaveText(secTitle);
-      await expect(page.locator('#profileLogout')).toHaveText(logoutBtn);
+      await expect(page.locator('#profileSettingsLink')).toHaveText(logoutBtn);
       await expect(page.locator('#profileEmail')).toContainText(emailLabel);
     }
   });
-  // auth.signOut 경계의 예외는 SDK가 삼키는 네트워크 예외와 별도로 주입한다.
-  test('PF1-10 logout rejection: 원시 오류 대신 고정 실패 문구', async ({ page }) => {
-    await mockApp(page, USER_WITH_NAMES);
-    await page.goto('/profile.html');
-    await expect(page.locator('#profileDisplayName')).toHaveText('홍길동');
-    await page.evaluate(() => {
-      window.__logoutCalls = 0;
-      window.ULAuth.signOut = () => {
-        window.__logoutCalls++;
-        return new Promise((resolve, reject) => { window.__rejectLogout = reject; });
-      };
-      const button = document.querySelector('#profileLogout');
-      button.click();
-    });
-    await expect(page.locator('#profileLogout')).toBeDisabled();
-    expect(await page.evaluate(() => window.__logoutCalls)).toBe(1);
-    await page.evaluate(() => window.__rejectLogout(new Error('PRIVATE_RAW_ERROR')));
-    await expect(page.locator('#profileAuthMsg')).toHaveText('로그아웃 중 오류가 발생했어요.');
-    await expect(page.locator('#profileAuthMsg')).toHaveClass(/msg err/);
-    await expect(page.locator('#profileLogout')).toBeEnabled();
-  });
-
-  test('PF1-11 stale rejection/finally: 같은 uid 재로그인 후 새 작업 보호', async ({ page }) => {
-    await mockApp(page, USER_WITH_NAMES);
-    await page.goto('/profile.html');
-    await expect(page.locator('#profileDisplayName')).toHaveText('홍길동');
-    await page.evaluate(() => {
-      window.__pendingLogouts = [];
-      window.ULAuth.signOut = () => new Promise((resolve, reject) => {
-        window.__pendingLogouts.push({ resolve, reject });
-      });
-    });
-    await page.locator('#profileLogout').click();
-    await page.evaluate(() => {
-      const session = window.ULAuth.getSession();
-      window.__supabaseAuthListener('SIGNED_OUT', null);
-      window.__supabaseAuthListener('SIGNED_IN', session);
-    });
-    await expect(page.locator('#profileLogout')).toBeEnabled();
-    await page.locator('#profileLogout').click();
-    await page.evaluate(() => window.__pendingLogouts[0].reject(new Error('OLD_ACCOUNT_ERROR')));
-    await expect(page.locator('#profileAuthMsg')).toHaveText('');
-    await expect(page.locator('#profileLogout')).toBeDisabled();
-    await page.evaluate(() => window.__pendingLogouts[1].reject(new Error('CURRENT_ERROR')));
-    await expect(page.locator('#profileAuthMsg')).toHaveText('로그아웃 중 오류가 발생했어요.');
-    await expect(page.locator('#profileLogout')).toBeEnabled();
-  });
-
-  test('PF1-12 SDK delayed logout: local 1회, A→B 후 A 완료 폐기', async ({ page }) => {
-    await mockApp(page, USER_WITH_NAMES);
-    await page.goto('/profile.html');
-    await expect(page.locator('#profileDisplayName')).toHaveText('홍길동');
-    await page.evaluate(() => {
-      window.__sdkCalls = [];
-      window.ULAuth.getClient().auth.signOut = (opts) => {
-        window.__sdkCalls.push(opts);
-        return new Promise(resolve => { window.__resolveSdkLogout = resolve; });
-      };
-      const button = document.querySelector('#profileLogout');
-      button.click();
-      button.click();
-    });
-    await expect(page.locator('#profileGuest')).toBeVisible();
-    expect(await page.evaluate(() => window.__sdkCalls)).toEqual([{ scope: 'local' }]);
-    await page.evaluate(() => {
-      const session = { access_token: 'b-token', user: { id: '00000000-0000-4000-8000-000000000002', email: 'b@example.com' } };
-      window.ULAuth.getClient().auth.getSession = async () => ({ data: { session } });
-      window.__supabaseAuthListener('SIGNED_IN', session);
-      window.__resolveSdkLogout({ error: null });
-    });
-    await expect(page.locator('#profileEmail')).toContainText('b@example.com');
-    await expect(page.locator('#profileDisplayName')).toHaveCount(0);
-    await expect(page.locator('#profileAuthMsg')).toHaveText('');
-    await expect(page.locator('#profileLogout')).toBeEnabled();
-  });
-
   test('PF1-13 delayed /me: B 전환 뒤 늦은 A 응답 폐기', async ({ page }) => {
     let releaseA;
     const pendingA = new Promise(resolve => { releaseA = resolve; });
@@ -495,7 +383,6 @@ test.describe('PF1: 프로필 진입과 인증 동선', () => {
     await (await responseA).finished();
     await expect(page.locator('#profileEmail')).toContainText('b@example.com');
     await expect(page.locator('#profileDisplayName, #profilePublicName')).toHaveCount(0);
-    await expect(page.locator('#profileLogout')).toBeEnabled();
   });
 
 });
@@ -526,8 +413,15 @@ test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저�
       creatorBadge: 'Creator', creatorBio: '소개', followerCount: 0,
     } });
   });
-  await page.goto('/settings.html');
+  // UF-4: 표시 이름은 SETTING 계정 칸에서 저장한다
+  await page.goto('/settings.html#account');
   await expect(page.locator('#settingsPublicNameInput, #settingsPublicNameSave')).toHaveCount(0);
+  await page.locator('#accDisplayNameInput').fill('  내 이름  ');
+  await page.locator('#accDisplayNameInput').press('Enter');
+  await expect(page.locator('#accDisplayNameMsg')).toHaveText('저장했어요.');
+  await expect(page.locator('#accDisplayNameInput')).toHaveValue('내 이름');
+  expect(patches).toEqual([{ displayName: '내 이름' }]);
+  expect(await page.evaluate(() => window.ULAuth.getMe().displayName)).toBe('내 이름');
   await page.locator('#community > details > summary').click();
   await page.locator('#settingsProfileLink').click();
   await expect(page).toHaveURL(/profile\.html#profileNames$/);
@@ -535,13 +429,7 @@ test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저�
   await expect(page.locator('#profileSummary')).toHaveAttribute('data-align-group', 'profileCol:left; profileEdges:right');
   await expect(page.locator('#profileFollowers')).toHaveText('팔로워 0명');
   await expect(page.locator('#profileTier')).toContainText('Pro');
-  await page.locator('#profileDisplayNameInput').fill('  내 이름  ');
-  await page.locator('#profileDisplayNameInput').press('Enter');
-  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('저장했어요.');
   await expect(page.locator('#profileDisplayName')).toHaveText('내 이름');
-  await expect(page.locator('#profileDisplayNameInput')).toHaveValue('내 이름');
-  expect(patches).toEqual([{ displayName: '내 이름' }]);
-  expect(await page.evaluate(() => window.ULAuth.getMe().displayName)).toBe('내 이름');
   expect(summaries).toBe(1);
   await page.locator('#profilePublicNameSave').click(); // 같은 이름 no-op도 요약은 한 번만 재확인
   await expect.poll(() => summaries).toBe(2);
@@ -557,7 +445,7 @@ test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저�
   });
   await page.locator('#profilePublicNameInput').fill('oldName');
   await page.locator('#profilePublicNameSave').click();
-  await expect(page.locator('#profileDisplayNameSave')).toBeDisabled();
+  await expect(page.locator('#profilePublicNameInput')).toBeDisabled();
   await page.evaluate(() => {
     const session = window.ULAuth.getSession();
     window.__supabaseAuthListener('SIGNED_OUT', null);
@@ -568,7 +456,6 @@ test('PF2-07 이동·요약·동일 uid 재로그인: 이전 finally가 새 저�
   await page.locator('#profilePublicNameSave').click();
   await page.evaluate(() => window.__saves[0].reject(new Error('OLD_PRIVATE_ERROR')));
   await expect(page.locator('#profilePublicNameSave')).toBeDisabled();
-  await expect(page.locator('#profileDisplayNameInput')).toBeDisabled();
   await expect(page.locator('#profileNames [role=alert]')).toHaveCount(0);
   await page.evaluate(() => window.__saves[1].reject(new Error('CURRENT_ERROR')));
   await expect(page.locator('#profilePublicNameSave')).toBeEnabled();
@@ -639,23 +526,23 @@ test('PF2-02/03 표시 이름 빈 값·101자 가드 및 공개 이름 형식·�
     }
     return route.fulfill({ json: { publicName: body.publicName } });
   });
-  await page.goto('/profile.html#profileNames');
-  await page.locator('#profileDisplayNameInput').fill('');
-  await page.locator('#profileDisplayNameSave').click();
-  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('저장했어요.');
-  await expect(page.locator('#profileDisplayName')).toHaveCount(0);
+  await page.goto('/settings.html#account');
+  await page.locator('#accDisplayNameInput').fill('');
+  await page.locator('#accDisplayNameSave').click();
+  await expect(page.locator('#accDisplayNameMsg')).toHaveText('저장했어요.');
   expect(patches[0]).toEqual({ displayName: '' });
 
-  await page.locator('#profileDisplayNameInput').evaluate(el => el.removeAttribute('maxLength'));
-  await page.locator('#profileDisplayNameInput').fill('a'.repeat(101));
-  await page.locator('#profileDisplayNameSave').click();
-  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('표시 이름은 100자 이내로 입력해 주세요.');
+  await page.locator('#accDisplayNameInput').evaluate(el => el.removeAttribute('maxLength'));
+  await page.locator('#accDisplayNameInput').fill('a'.repeat(101));
+  await page.locator('#accDisplayNameSave').click();
+  await expect(page.locator('#accDisplayNameMsg')).toHaveText('표시 이름은 100자 이내로 입력해 주세요.');
   expect(patches.length).toBe(1);
 
-  await page.locator('#profileDisplayNameInput').fill('fail500');
-  await page.locator('#profileDisplayNameSave').click();
-  await expect(page.locator('#profileDisplayNameMsg')).toHaveText('이름을 저장하지 못했어요. 다시 시도해 주세요.');
-  await expect(page.locator('#profileDisplayNameInput')).toHaveValue('fail500');
+  await page.locator('#accDisplayNameInput').fill('fail500');
+  await page.locator('#accDisplayNameSave').click();
+  await expect(page.locator('#accDisplayNameMsg')).toHaveText('이름을 저장하지 못했어요. 다시 시도해 주세요.');
+  await expect(page.locator('#accDisplayNameInput')).toHaveValue('fail500');
+  await page.goto('/profile.html#profileNames');
 
   for (const bad of ['a', 'a'.repeat(21), 'bad name']) {
     await page.locator('#profilePublicNameInput').fill(bad);
@@ -731,7 +618,7 @@ test('PF2-04/05/06 요약 경계·null/500 재시도 및 PUT 후 /me 실패 가�
   await expect(page.locator('#profileNames [role=alert]')).toHaveText('이름은 저장했지만 최신 정보를 확인하지 못했어요. 다시 불러와 주세요.');
 });
 
-test('PF2-09/11 XSS 방어 및 두 폼 동시 제출 상호 잠금', async ({ page }) => {
+test('PF2-09/11 XSS 방어(이름 폼 상호 잠금은 UF-4에서 페이지 분리로 불필요)', async ({ page }) => {
   const xssUser = {
     ...USER_WITH_NAMES,
     me: { ...USER_WITH_NAMES.me, displayName: '<script>alert(1)</script>', publicName: 'safeName' },
@@ -747,17 +634,6 @@ test('PF2-09/11 XSS 방어 및 두 폼 동시 제출 상호 잠금', async ({ pa
   await expect(page.locator('#profileCreator')).toHaveText('<img src=x onerror=alert(2)>');
   await expect(page.locator('#profileBio')).toHaveText('<b id="injected">bio</b>');
   await expect(page.locator('#profileDisplayName')).toHaveText('<script>alert(1)</script>');
-
-  await page.evaluate(() => {
-    window.__pendingPatches = [];
-    window.ULAuth.updateProfile = () => new Promise(resolve => window.__pendingPatches.push(resolve));
-  });
-  await page.locator('#profileDisplayNameInput').fill('newName');
-  await page.locator('#profileDisplayNameSave').click();
-  await expect(page.locator('#profilePublicNameSave')).toBeDisabled();
-  await expect(page.locator('#profilePublicNameInput')).toBeDisabled();
-  await page.evaluate(() => window.__pendingPatches[0]({ displayName: 'newName' }));
-  await expect(page.locator('#profilePublicNameSave')).toBeEnabled();
 });
 
 test('PF2-11 다국어 (en, ja) 이름 및 요약 렌더링', async ({ page }) => {

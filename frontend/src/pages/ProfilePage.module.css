@@ -81,3 +81,31 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* UF-4: 보기 전용 — 아바타 첫 글자 원·이름·'설정에서 편집 →' 글자 링크 */
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--fill3);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 32px;
+}
+
+.accountCard .viewName {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.editLink {
+  align-self: flex-start;
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

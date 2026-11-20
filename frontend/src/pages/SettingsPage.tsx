@@ -13,6 +13,7 @@ import { drive } from '../lib/drive';
 import { getTheme, raw, safeUrl, setTheme, THEME_EVENT } from '../lib/security';
 import commStyles from '../components/community/Community.module.css';
 import { communityEnabled } from '../lib/features';
+import { DisplayNameForm } from '../components/account/DisplayNameForm';
 import styles from './SettingsPage.module.css';
 
 // 노션 DB 링크를 그대로 붙여넣어도 DB ID만 꺼낸다. ID는 마지막 경로 끝에 있고 ?v= 뒤는 보기 ID라 보지 않는다.
@@ -482,6 +483,7 @@ export function SettingsPage(): React.ReactElement {
               {nameSuffix}
             </span>
           </p>
+          <DisplayNameForm />
           <div className={styles.field} id="accQuota">
             <span className={styles.lab}>
               {t('settings.quotaTitle')} (<span id="quotaText">{quotaText}</span>)

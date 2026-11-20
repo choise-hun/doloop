@@ -10,6 +10,7 @@ export const JA: Record<I18nKey, string> = {
   'settings.groups.advancedData': "詳細・バックアップ・データ管理",
   'settings.groups.operations': "管理者",
   'profile.namesTitle': "自分の名前",
+  'profile.editInSettings': "設定で編集 →",
   'profile.shareConsent.title': 'コミュニティ共有の同意',
   'profile.shareConsent.on': '同意済み ({date})',
   'profile.shareConsent.recordingOff': '録音の添付を停止中 ({date})',

@@ -10,6 +10,7 @@ export const EN: Record<I18nKey, string> = {
   'settings.groups.advancedData': "Advanced, backup & data",
   'settings.groups.operations': "Administration",
   'profile.namesTitle': "My names",
+  'profile.editInSettings': "Edit in Settings →",
   'profile.shareConsent.title': 'Community sharing consent',
   'profile.shareConsent.on': 'Agreed ({date})',
   'profile.shareConsent.recordingOff': 'Recording attachments stopped ({date})',

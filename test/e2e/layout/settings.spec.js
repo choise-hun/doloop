@@ -1024,7 +1024,8 @@ test('ST1-01 role DOM, group navigation, keyboard and hash focus', async ({ brow
         expect(item.target).toBe(contract.targetId);
         // Dynamic server rows belong to OpsPanel; the registry owns only its fixed host.
         if (contract.kind === 'fixed') {
-          expect(item.descendants.filter(id => !contract.descendantIds.includes(id))).toEqual([]);
+          // UF-4: 표시 이름 폼(accDisplayName*, accMeStatus/Retry)은 로그인 상태에서만 붙는 추가 요소
+          expect(item.descendants.filter(id => !contract.descendantIds.includes(id) && !/^(accDisplayName|accMe(Status|Retry))/.test(id))).toEqual([]);
           // These IDs depend on tier/error state; all other baseline IDs must remain mounted.
           const conditional = ['creditTier', 'creditMsg', 'creditTotal', 'creditBuckets', 'creditNext', 'creditExpire', 'commProNotice', 'commNameRequiredNotice', 'commErrMsg'];
           expect(item.descendants).toEqual(expect.arrayContaining(contract.descendantIds.filter(id => !conditional.includes(id))));
