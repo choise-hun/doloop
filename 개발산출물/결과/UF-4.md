@@ -42,4 +42,4 @@
 ## 3. 남은 항목 / 시안 대조 메모
 
 - `UF_시안.html` §6의 나라(D5-B)·자기소개(D6-B)는 폐기되어 미표시, 숨겨 둔 탭 선택창(`hidden`)은 커뮤니티 재설계 때 추가하기로 하고 이번 범위에서 제외(`진행_UF_UI수정.md` §5).
-- PR·CI 상태: PR 생성 후 확인.
+- PR·CI 상태: [PR #65](https://github.com/choise-hun/doloop/pull/65) 생성, CI 확인 진행 중.

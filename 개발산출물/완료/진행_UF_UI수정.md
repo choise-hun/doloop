@@ -1,6 +1,6 @@
 # 진행 — UF UI 수정 묶음 (홈·LEARN·CHORDS·SETTING·PROFILE)
 
-> **완료 2026-11-20** — 마지막 PR #예정
+> **완료 2026-11-20** — 마지막 PR #65
 > 시작 2026-11-20 / Mac / Claude 시니어. step ID 접두어 `UF-`.
 
 ## 1. 목표와 근거
