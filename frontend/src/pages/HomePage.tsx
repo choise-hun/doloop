@@ -524,7 +524,7 @@ export function HomePage(): React.ReactElement {
   const progScopeLabel = t(PROG_SCOPES.find(([s]) => s === progScope)?.[1] || 'home.scopeReference');
   const progTasteTop = progStats.patterns[0] || progStats.moves[0] || null;
   const progTasteKind = progStats.patterns[0] ? t('home.tasteFrequentPattern') : progStats.moves[0] ? t('home.tasteMostMove') : '';
-  const progTasteHref = 'progressions.html' + (progScope === 'reference' ? '' : '?scope=' + progScope) + '#progTaste';
+  const progTasteHref = 'progressions.html?scope=' + progScope + '#progTaste';
 
   // 빈 상태에서만 CHORDS·PLAYER 목록 아랫선을 맞춘다(안내 칸이 높이를 채움) — 프론트_정렬규격.md §3
   const songsEmpty = !activeUid || songs.length === 0;
@@ -539,7 +539,7 @@ export function HomePage(): React.ReactElement {
   };
 
   return (
-    <AppShell variant="default" activeNav="home">
+    <AppShell variant="home" activeNav="home">
       <div className={styles.hero}>
         <h1 className={`wordmark ${styles.wordmark}`}>
           <BrandLogo variant="wordmark" className={styles.wordmarkSvg} />
@@ -720,7 +720,7 @@ export function HomePage(): React.ReactElement {
       {/* 하단 메인 분할 대시보드: 좌측 BETTER (연습실) | 우측 VAULT (학습) */}
       <div className={`frames ${styles.splitFrames}`}>
         <section
-          className={`frame ${styles.frame} ${styles.toneFill3}`}
+          className={`frame ${styles.frame} ${styles.toneFill2}`}
           id="betterFrame"
           aria-labelledby="fBetter"
           data-align-group="frames:top,bottom@821"
@@ -933,6 +933,28 @@ export function HomePage(): React.ReactElement {
               ))}
             </div>
             <div className={styles.progGrid}>
+              <div className={styles.progCard} id="progArchBox" data-align-group="prog:top,bottom@821">
+                <div className={styles.progHead}>
+                  <span className={styles.progBadge}>{t('home.badgeTaste')}</span>
+                  <span className={styles.progKey} id="progArchKey">
+                    {t('home.progCount', { count: progStats.total })}
+                  </span>
+                </div>
+                <SafeLink href={progTasteHref} className={styles.progChordsLink} id="progArchChords">
+                  {progTasteTop ? progTasteTop.label : t('home.noOverlapProg')}
+                </SafeLink>
+                <p className={styles.progSub} id="progArchTitle">
+                  {progTasteTop ? t('home.tasteSummaryCount', { kind: progTasteKind, count: progTasteTop.count }) : t('home.tasteSummaryEmpty')}
+                  <span className={styles.progSource}>
+                    {t('home.topKeyPrefix')} {progStats.keys[0] ? progStats.keys[0].label : '—'}
+                  </span>
+                </p>
+                <div className={styles.progActs}>
+                  <SafeLink href={progTasteHref} className={styles.randBtn} id="progTasteLink">
+                    {t('home.btnViewTasteStats')}
+                  </SafeLink>
+                </div>
+              </div>
               <div className={styles.progCard} id="progRefBox" data-align-group="prog:top,bottom@821; vaultBtm:bottom@821">
                 <div className={styles.progHead}>
                   <span className={styles.progBadge}>{progCurrent ? KIND_LABEL[progCurrent.kind] : progScopeLabel}</span>
@@ -983,28 +1005,6 @@ export function HomePage(): React.ReactElement {
                 )}
               </div>
 
-              <div className={styles.progCard} id="progArchBox" data-align-group="prog:top,bottom@821">
-                <div className={styles.progHead}>
-                  <span className={styles.progBadge}>{t('home.badgeTaste')}</span>
-                  <span className={styles.progKey} id="progArchKey">
-                    {t('home.progCount', { count: progStats.total })}
-                  </span>
-                </div>
-                <SafeLink href={progTasteHref} className={styles.progChordsLink} id="progArchChords">
-                  {progTasteTop ? progTasteTop.label : t('home.noOverlapProg')}
-                </SafeLink>
-                <p className={styles.progSub} id="progArchTitle">
-                  {progTasteTop ? t('home.tasteSummaryCount', { kind: progTasteKind, count: progTasteTop.count }) : t('home.tasteSummaryEmpty')}
-                  <span className={styles.progSource}>
-                    {t('home.topKeyPrefix')} {progStats.keys[0] ? progStats.keys[0].label : '—'}
-                  </span>
-                </p>
-                <div className={styles.progActs}>
-                  <SafeLink href={progTasteHref} className={styles.randBtn} id="progTasteLink">
-                    {t('home.btnViewTasteStats')}
-                  </SafeLink>
-                </div>
-              </div>
             </div>
           </div>
         </section>

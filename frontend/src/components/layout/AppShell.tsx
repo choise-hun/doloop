@@ -8,7 +8,7 @@ import { BetaBadge } from '../common/BetaBadge';
 import { BrandLogo } from '../common/BrandLogo';
 import { communityEnabled } from '../../lib/features';
 
-export type AppShellVariant = 'default' | 'narrow' | 'player';
+export type AppShellVariant = 'default' | 'narrow' | 'player' | 'home';
 export type ActiveNavKey = 'home' | 'learn' | 'play' | 'trails' | 'community' | 'chords' | 'notes' | 'settings' | 'privacy' | 'profile';
 
 // 좌측 기능 메뉴. href가 null이면 페이지가 아직 없어 비활성으로 보인다
@@ -102,7 +102,8 @@ export function AppShell({
     setThemeState(nextVal);
   };
 
-  const shellClass = variant === 'player' ? styles.playerShell : styles.shell;
+  const shellClass =
+    variant === 'player' ? styles.playerShell : variant === 'home' ? `${styles.shell} ${styles.homeShell}` : styles.shell;
   const mainClass =
     variant === 'narrow'
       ? styles.mainNarrow

@@ -55,10 +55,7 @@
   background: var(--paper);
   border: 1px solid var(--seam-hairline);
   border-radius: var(--radius-block);
-  box-shadow:
-    2px 2px 0 var(--surface2),
-    4px 5px 0 var(--relief-bottom-mid),
-    10px 14px 22px var(--shadow-ambient);
+  box-shadow: var(--card-shadow);
 }
 
 .list:focus-visible {
