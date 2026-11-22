@@ -418,7 +418,8 @@ class ProfileService(private val db: Database?) {
 
         val usedBytes = serverTakeBytes(userId)
         val tier = effectiveTier(row)
-        val limits = TierLimits.of(tier)
+        val role = row[ProfilesTable.role]
+        val limits = if (role == "owner") TierLimits.ownerLimits(tier) else TierLimits.of(tier)
 
         val integrationRows = IntegrationsTable
             .select(

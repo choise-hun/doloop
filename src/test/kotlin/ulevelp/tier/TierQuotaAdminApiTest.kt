@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.sum
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -169,8 +170,8 @@ class TierQuotaAdminApiTest {
         assertTrue(me["tierOverrideUntil"] is JsonNull)
         assertEquals(5_242_880L, me["takeQuotaBytes"]!!.jsonPrimitive.long)
         val limits = me["limits"]!!.jsonObject
-        assertEquals(10, limits["songs"]!!.jsonPrimitive.int)
-        assertEquals(2, limits["categories"]!!.jsonPrimitive.int)
+        assertEquals(100, limits["songs"]!!.jsonPrimitive.int)
+        assertEquals(5, limits["categories"]!!.jsonPrimitive.int)
         assertEquals(2, limits["takeSongs"]!!.jsonPrimitive.int)
         assertEquals(120, limits["takeDurationSec"]!!.jsonPrimitive.int)
         assertEquals(false, limits["drive"]!!.jsonPrimitive.boolean)
@@ -188,33 +189,78 @@ class TierQuotaAdminApiTest {
         val meP = client.me(tokenP)
         assertEquals("pro_plus", meP["tier"]!!.jsonPrimitive.content)
         assertEquals("free", meP["billingTier"]!!.jsonPrimitive.content)
-        assertEquals(150, meP["limits"]!!.jsonObject["songs"]!!.jsonPrimitive.int)
+        assertEquals(2000, meP["limits"]!!.jsonObject["songs"]!!.jsonPrimitive.int)
+        assertEquals(30, meP["limits"]!!.jsonObject["categories"]!!.jsonPrimitive.int)
         assertTrue(meP["limits"]!!.jsonObject["takeSongs"] is JsonNull)
         assertEquals(209_715_200L, meP["takeQuotaBytes"]!!.jsonPrimitive.long)
+
+        // owner: 크레딧을 제외한 곡·분류·녹음·Drive·AI 제약 전면 해제
+        val (ownerId, ownerToken) = client.newUser()
+        TestTier.setRole(db, ownerId, "owner")
+        val meO = client.me(ownerToken)
+        val oLimits = meO["limits"]!!.jsonObject
+        assertTrue(oLimits["songs"] is JsonNull)
+        assertTrue(oLimits["categories"] is JsonNull)
+        assertTrue(oLimits["takeSongs"] is JsonNull)
+        assertTrue(oLimits["takeDurationSec"] is JsonNull)
+        assertEquals(true, oLimits["drive"]!!.jsonPrimitive.boolean)
+        assertEquals(true, oLimits["ai"]!!.jsonPrimitive.boolean)
+        assertEquals(true, oLimits["communityWrite"]!!.jsonPrimitive.boolean)
     }
 
     // ---------------------------------------------------------------- 곡
 
     @Test
-    fun `Q2 곡 한도 - 무료 10곡, 11번째 403·detail, 같은 영상은 한도 안 씀, pro는 통과`() = testApplication {
+    fun `Q2 곡 한도 - 무료 100곡, 101번째 403·detail, 같은 영상은 한도 안 씀, pro·owner는 통과`() = testApplication {
         configureApiTestApp(dbConfig)
-        val (_, token) = client.newUser()
-        for (i in 1..10) assertEquals(HttpStatusCode.Created, client.addSong(token, videoId(i)).status)
+        val (userId, token) = client.newUser()
+        transaction(db) {
+            for (i in 1..100) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = userId
+                    it[videoId] = videoId(i)
+                    it[title] = "Song $i"
+                }
+            }
+        }
 
-        val over = client.addSong(token, videoId(11))
+        val over = client.addSong(token, videoId(101))
         assertEquals(HttpStatusCode.Forbidden, over.status)
         val body = over.bodyAsText()
         assertStandardError(body, 403, "SONG_LIMIT_EXCEEDED")
         assertEquals(
-            buildJsonObject { put("limit", 10); put("used", 10); put("tier", "free"); put("nextTier", "pro"); put("nextLimit", 100) },
+            buildJsonObject { put("limit", 100); put("used", 100); put("tier", "free"); put("nextTier", "pro"); put("nextLimit", 1000) },
             detailOf(body)
         )
         // 이미 있는 영상 = 업서트(200), 한도를 쓰지 않는다
         assertEquals(HttpStatusCode.OK, client.addSong(token, videoId(3)).status)
 
-        // pro: 11번째 통과
-        val (_, tokenPro) = client.newUser("pro")
-        for (i in 1..11) assertEquals(HttpStatusCode.Created, client.addSong(tokenPro, videoId(i)).status)
+        // pro: 101번째 통과
+        val (proId, tokenPro) = client.newUser("pro")
+        transaction(db) {
+            for (i in 1..100) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = proId
+                    it[videoId] = videoId(i)
+                    it[title] = "Song $i"
+                }
+            }
+        }
+        assertEquals(HttpStatusCode.Created, client.addSong(tokenPro, videoId(101)).status)
+
+        // owner(free 티어여도): 101번째 통과
+        val (ownerId, tokenOwner) = client.newUser()
+        TestTier.setRole(db, ownerId, "owner")
+        transaction(db) {
+            for (i in 1..100) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = ownerId
+                    it[videoId] = videoId(i)
+                    it[title] = "Song $i"
+                }
+            }
+        }
+        assertEquals(HttpStatusCode.Created, client.addSong(tokenOwner, videoId(101)).status)
     }
 
     @Test
@@ -236,10 +282,18 @@ class TierQuotaAdminApiTest {
     fun `Q4 migrate-local - 남은 칸보다 많으면 통째 403, 부분 등록 없음`() = testApplication {
         configureApiTestApp(dbConfig)
         val (userId, token) = client.newUser()
-        for (i in 1..9) client.songId(token, videoId(i))
+        transaction(db) {
+            for (i in 1..99) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = userId
+                    it[videoId] = videoId(i)
+                    it[title] = "Song $i"
+                }
+            }
+        }
 
         val items = buildJsonArray {
-            for (i in 20..21) addJsonObject { put("videoId", videoId(i)); put("rate", 1.0) }
+            for (i in 200..201) addJsonObject { put("videoId", videoId(i)); put("rate", 1.0) }
         }
         val res = client.post("/api/v1/songs/migrate-local") {
             header(HttpHeaders.Authorization, "Bearer $token")
@@ -249,7 +303,7 @@ class TierQuotaAdminApiTest {
         assertEquals(HttpStatusCode.Forbidden, res.status)
         assertStandardError(res.bodyAsText(), 403, "SONG_LIMIT_EXCEEDED")
         transaction(db) {
-            assertEquals(9, SongsTable.selectAll().where { SongsTable.userId eq userId }.count())
+            assertEquals(99, SongsTable.selectAll().where { SongsTable.userId eq userId }.count())
             assertNull(ProfilesTable.selectAll().where { ProfilesTable.id eq userId }.single()[ProfilesTable.migratedLocalAt])
         }
 
@@ -257,7 +311,7 @@ class TierQuotaAdminApiTest {
         val ok = client.post("/api/v1/songs/migrate-local") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody("""{"items":[{"videoId":"${videoId(20)}","rate":1.0}]}""")
+            setBody("""{"items":[{"videoId":"${videoId(200)}","rate":1.0}]}""")
         }
         assertEquals(HttpStatusCode.OK, ok.status)
         assertEquals(1, json(ok.bodyAsText())["created"]!!.jsonPrimitive.int)
@@ -266,24 +320,25 @@ class TierQuotaAdminApiTest {
     // ---------------------------------------------------------------- 분류
 
     @Test
-    fun `Q5 분류 한도 - 무료 2개 403·업그레이드 안내, pro_plus 맨 위는 nextTier null`() = testApplication {
+    fun `Q5 분류 한도 - 무료 5개 403·업그레이드 안내, pro_plus 맨 위는 nextTier null`() = testApplication {
         configureApiTestApp(dbConfig)
         val (_, token) = client.newUser()
-        assertEquals(HttpStatusCode.Created, client.addCategory(token, "A").status)
-        assertEquals(HttpStatusCode.Created, client.addCategory(token, "B").status)
-        val over = client.addCategory(token, "C")
+        for (c in listOf("A", "B", "C", "D", "E")) {
+            assertEquals(HttpStatusCode.Created, client.addCategory(token, c).status)
+        }
+        val over = client.addCategory(token, "F")
         assertEquals(HttpStatusCode.Forbidden, over.status)
         assertStandardError(over.bodyAsText(), 403, "CATEGORY_LIMIT_EXCEEDED")
         val d = detailOf(over.bodyAsText())
         assertEquals("pro", d["nextTier"]!!.jsonPrimitive.content)
-        assertEquals(7, d["nextLimit"]!!.jsonPrimitive.int)
+        assertEquals(15, d["nextLimit"]!!.jsonPrimitive.int)
 
         val (_, tokenTop) = client.newUser("pro_plus")
-        for (i in 1..10) assertEquals(HttpStatusCode.Created, client.addCategory(tokenTop, "C$i").status)
-        val top = client.addCategory(tokenTop, "C11")
+        for (i in 1..30) assertEquals(HttpStatusCode.Created, client.addCategory(tokenTop, "C$i").status)
+        val top = client.addCategory(tokenTop, "C31")
         assertEquals(HttpStatusCode.Forbidden, top.status)
         val dTop = detailOf(top.bodyAsText())
-        assertEquals(10, dTop["limit"]!!.jsonPrimitive.int)
+        assertEquals(30, dTop["limit"]!!.jsonPrimitive.int)
         assertTrue(dTop["nextTier"] is JsonNull)
         assertTrue(dTop["nextLimit"] is JsonNull)
     }
@@ -412,7 +467,7 @@ class TierQuotaAdminApiTest {
         val me = client.me(targetToken)
         assertEquals("pro", me["tier"]!!.jsonPrimitive.content)
         assertTrue(me["tierOverrideUntil"] is JsonPrimitive && !(me["tierOverrideUntil"] is JsonNull))
-        assertEquals(100, me["limits"]!!.jsonObject["songs"]!!.jsonPrimitive.int)
+        assertEquals(1000, me["limits"]!!.jsonObject["songs"]!!.jsonPrimitive.int)
 
         for (bad in listOf(
             """{"tier":"gold","reason":"x"}""",
@@ -462,7 +517,15 @@ class TierQuotaAdminApiTest {
         TestTier.setRole(db, ownerId, "owner")
         val (targetId, targetToken) = client.newUser()
         assertEquals(HttpStatusCode.OK, client.putOverride(ownerToken, targetId, """{"tier":"pro","reason":"지정"}""").status)
-        for (i in 1..12) client.songId(targetToken, videoId(i))
+        transaction(db) {
+            for (i in 1..102) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = targetId
+                    it[videoId] = videoId(i)
+                    it[title] = "Song $i"
+                }
+            }
+        }
         transaction(db) {
             ProfilesTable.update({ ProfilesTable.id eq targetId }) {
                 it[sharePracticeLog] = true
@@ -482,9 +545,9 @@ class TierQuotaAdminApiTest {
         assertEquals("free", me["tier"]!!.jsonPrimitive.content)
         assertEquals(false, me["sharePracticeLog"]!!.jsonPrimitive.boolean)
         assertEquals("supabase", me["storageProvider"]!!.jsonPrimitive.content)
-        assertEquals(12, me["usage"]!!.jsonObject["songs"]!!.jsonPrimitive.int, "곡은 지우지 않는다(Q8)")
+        assertEquals(102, me["usage"]!!.jsonObject["songs"]!!.jsonPrimitive.int, "곡은 지우지 않는다(Q8)")
         // 새 추가만 잠김
-        assertEquals(HttpStatusCode.Forbidden, client.addSong(targetToken, videoId(30)).status)
+        assertEquals(HttpStatusCode.Forbidden, client.addSong(targetToken, videoId(300)).status)
     }
 
     @Test

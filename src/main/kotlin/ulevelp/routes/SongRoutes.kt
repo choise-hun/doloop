@@ -174,6 +174,33 @@ fun Route.registerSongRoutes(
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
 
+        // UXP: 곡 제목 일괄 변경. 리터럴 경로라 /{songId}와 겹치지 않는다
+        patch("/titles") {
+            val user = call.requireAuthUser()
+            val body = call.receiveJsonObject()
+            val arr = body.requireArray("items", SongService.MAX_BATCH_TITLES)
+            if (arr.isEmpty()) {
+                throw InvalidInputException("items가 비어 있습니다.")
+            }
+            val seen = HashSet<UUID>(arr.size)
+            val items = arr.map { elem ->
+                val obj = elem as? kotlinx.serialization.json.JsonObject
+                    ?: throw InvalidInputException("items 항목 형식이 올바르지 않습니다.")
+                val id = obj.requireUuid("id")
+                if (!seen.add(id)) {
+                    throw InvalidInputException("items에 같은 곡이 두 번 있습니다.")
+                }
+                val rawTitle = obj.requireString("title", 300)
+                if (rawTitle.isBlank()) {
+                    throw InvalidInputException("title은 비워 둘 수 없습니다.")
+                }
+                id to rawTitle
+            }
+            val list = songService.batchUpdateTitles(user.id, items)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
+        }
+
         get("/{songId}") {
             val user = call.requireAuthUser()
             val songId = parsePathUuid(call.parameters["songId"])

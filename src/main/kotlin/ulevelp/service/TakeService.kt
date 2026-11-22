@@ -216,7 +216,7 @@ class TakeService(
         }
 
         requireTakeSongs(ctx, songsAfterReplace, input.songId)
-        if (usedAfterReplace + input.bytes.size > ctx.limits.takeBytes) {
+        if (!ctx.isOwner && usedAfterReplace + input.bytes.size > ctx.limits.takeBytes) {
             throw takeQuotaExceeded(ctx, usedAfterReplace)
         }
     }

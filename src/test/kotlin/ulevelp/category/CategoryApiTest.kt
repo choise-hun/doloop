@@ -143,16 +143,17 @@ class CategoryApiTest {
         // 20자는 허용
         createId(client, tokenA, "가".repeat(20))
 
-        // 무료 2개(Jazz·20자) → 3번째 403 (M1-2a 티어 한도, 옛 50개 400 대체)
-        val freeOver = create(client, tokenA, """{"name":"c3"}""")
+        // 무료 5개(Jazz·20자·c3..c5) → 6번째 403 (UXP 티어 한도 개정)
+        for (i in 3..5) createId(client, tokenA, "c$i")
+        val freeOver = create(client, tokenA, """{"name":"c6"}""")
         assertEquals(HttpStatusCode.Forbidden, freeOver.status)
         assertStandardError(freeOver.bodyAsText(), 403, "CATEGORY_LIMIT_EXCEEDED")
 
-        // pro_plus 10개까지, 11번째 403
+        // pro_plus 30개까지, 31번째 403
         TestTier.set(db, userA, "pro_plus")
-        for (i in 3..10) createId(client, tokenA, "c$i")
-        assertEquals(10, list(client, tokenA).size)
-        val over = create(client, tokenA, """{"name":"c11"}""")
+        for (i in 6..30) createId(client, tokenA, "c$i")
+        assertEquals(30, list(client, tokenA).size)
+        val over = create(client, tokenA, """{"name":"c31"}""")
         assertEquals(HttpStatusCode.Forbidden, over.status)
         assertStandardError(over.bodyAsText(), 403, "CATEGORY_LIMIT_EXCEEDED")
     }
