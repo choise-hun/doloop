@@ -1501,7 +1501,7 @@ export const EN: Record<I18nKey, string> = {
   'practice.dragHandle': "Reorder: {title}",
   'practice.orderSaveFailed': "Couldn't save the song order.",
   'practice.sortLabel': "Sort",
-  'practice.sortCustom': "Custom order",
+  'practice.sortCustom': "Custom",
   'practice.sortTitle': "Title",
   'practice.sortAddedAsc': "Oldest first",
   'practice.sortAddedDesc': "Newest first",

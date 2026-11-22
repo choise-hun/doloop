@@ -724,10 +724,11 @@
   cursor: default;
 }
 
-/* 전화 폭: 다섯 칸이 좁아 문구가 꺾이지 않게 폰트 축소 */
+/* 전화 폭: 다섯 칸이 좁아 문구가 꺾이지 않게 폰트·여백 축소 */
 @media (max-width: 600px) {
   .ppLoopTransportBtn {
-    font-size: 14px;
+    font-size: 12px;
+    padding: 0 2px;
   }
   /* WF-2: 여섯 칸은 좁다 → 녹음만 둘째 줄 전체 폭으로 내린다 */
   .ppTransport {
@@ -1264,8 +1265,9 @@
 
 .sortSelect {
   flex: 0 0 auto;
-  width: 118px;
+  width: 126px;
   height: 44px;
+  padding: 0 8px;
   background: var(--bg);
   font-size: 13px;
 }
