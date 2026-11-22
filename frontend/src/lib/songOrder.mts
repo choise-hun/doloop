@@ -29,3 +29,35 @@ export function moveId(ids: readonly string[], from: number, to: number): string
   next.splice(to, 0, x);
   return next;
 }
+
+export type SongSortMode = 'custom' | 'title' | 'added_asc' | 'added_desc';
+
+/**
+ * UXP 방식 A 표시 정렬:
+ * - custom: 서버 순서(sort_order) 그대로
+ * - title: 이름순 (숫자 자연 정렬)
+ * - added_asc: 추가순 (createdAt 오래된 것 → 최근, 없으면 원본 역순 fallback)
+ * - added_desc: 추가 역순 (createdAt 최근 → 오래된 것, 없으면 원본 순 fallback)
+ */
+export function sortSongs<T extends { id: string; title: string; createdAt?: string }>(
+  list: readonly T[],
+  mode: SongSortMode
+): T[] {
+  if (mode === 'custom') return list.slice();
+  if (mode === 'title') {
+    return list.slice().sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }
+  const hasTimestamps = list.some((x) => Boolean(x.createdAt));
+  if (!hasTimestamps) {
+    return mode === 'added_asc' ? list.slice().reverse() : list.slice();
+  }
+  const dir = mode === 'added_asc' ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const ta = a.createdAt || '';
+    const tb = b.createdAt || '';
+    if (ta !== tb) return ta < tb ? -1 * dir : 1 * dir;
+    return a.id.localeCompare(b.id) * dir;
+  });
+}

@@ -196,7 +196,7 @@ test('CM-6 가져오기(홈): watch?v=x&list=PL1 입력 → #goImport → 새 �
 
   await expect(page.locator('#playlistImportModal')).toBeVisible();
   await expect(page.locator('#playlistSummary')).toContainText('5곡');
-  await expect(page.locator('#playlistFreeNotice')).toContainText('Free 플랜 사용자는 10곡 이상 가져올 수 없습니다');
+  await expect(page.locator('#playlistFreeNotice')).toContainText('Free 플랜 사용자는 100곡 이상 가져올 수 없습니다');
 
   if (process.env.LAYOUT_SHOTS === '1') {
     const outDir = path.join(process.cwd(), 'test-results/layout-shots');

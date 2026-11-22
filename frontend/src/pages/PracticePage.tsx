@@ -10,7 +10,13 @@ import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto } from '../lib/
 import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { deleteConfirmText } from '../lib/episode.mts';
-import { applySubsetOrder, moveId } from '../lib/songOrder.mts';
+import { applySubsetOrder, moveId, sortSongs, type SongSortMode } from '../lib/songOrder.mts';
+import {
+  DEFAULT_BULK_TITLE_OPTIONS,
+  detectCommonPhrases,
+  transformSongTitle,
+  type BulkTitleOptions,
+} from '../lib/songTitleBulk.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
 import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
@@ -163,6 +169,38 @@ export function PracticePage(): React.ReactElement {
   const [editSongId, setEditSongId] = useState<string | null>(null);
   const [titleDialogOpen, setTitleDialogOpen] = useState(false);
   const [switchingSong, setSwitchingSong] = useState(false);
+  // UXP: 정렬(방식 A), 서랍 EDIT·인라인 제목 수정, 이름 일괄 정리, 디자인 통일 확인 모달
+  const [sortMode, setSortMode] = useState<SongSortMode>('custom');
+  const [drawerEditing, setDrawerEditing] = useState(false);
+  const [inlineEditKey, setInlineEditKey] = useState<string | null>(null);
+  const [inlineEditVal, setInlineEditVal] = useState('');
+  const inlineSavingRef = useRef(false);
+  const [bulkTitleOpen, setBulkTitleOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
+  const confirmModal = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    danger?: boolean;
+  }): Promise<boolean> =>
+    new Promise((resolve) => {
+      setConfirmState((prev) => {
+        if (prev) prev.resolve(false);
+        return {
+          title: opts.title,
+          message: opts.message,
+          confirmLabel: opts.confirmLabel || t('practice.confirmOk'),
+          danger: opts.danger,
+          resolve,
+        };
+      });
+    });
   // SL-2 ⑥: 수정 중 핸들 드래그. orderDraft = 끄는 동안의 화면 순서(보이는 폴더 곡 id), 저장 세대는 목록 세대와 따로 둔다
   const [orderDraft, setOrderDraft] = useState<{ id: string; ids: string[] } | null>(null);
   const [orderSaving, setOrderSaving] = useState(false);
@@ -213,7 +251,16 @@ export function PracticePage(): React.ReactElement {
   const [takeLimitModalOpen, setTakeLimitModalOpen] = useState(false);
   const [takeLimitCount, setTakeLimitCount] = useState<number>(2);
   const [busyDriveConnect, setBusyDriveConnect] = useState(false);
-  useNativeNavigationBlock(recording || uploadingTake || Boolean(take && !take.done) || libOpen || takeLimitModalOpen || presetDialogSongId !== null);
+  useNativeNavigationBlock(
+    recording ||
+      uploadingTake ||
+      Boolean(take && !take.done) ||
+      libOpen ||
+      takeLimitModalOpen ||
+      presetDialogSongId !== null ||
+      bulkTitleOpen ||
+      confirmState !== null
+  );
 
   const [srReloadKey, setSrReloadKey] = useState(0);
 
@@ -767,6 +814,9 @@ export function PracticePage(): React.ReactElement {
     const curVal = which === 'a' ? stRef.current.a : stRef.current.b;
     if (curVal != null) {
       handleSetPoint(which, curVal + delta);
+    } else {
+      // UXP D1: 미지정(--:--) 상태에서 +/- 버튼도 현재 재생 시간 지정으로 동작
+      handleSetPoint(which);
     }
   };
 
@@ -786,9 +836,12 @@ export function PracticePage(): React.ReactElement {
     }
   };
 
-  const handleClearLoop = () => {
+  const handleClearLoop = async () => {
     if (stRef.current.a != null || stRef.current.b != null) {
-      const ok = window.confirm(t('practice.clearLoopConfirm'));
+      const ok = await confirmModal({
+        title: t('practice.confirmClearLoopTitle'),
+        message: t('practice.clearLoopConfirm'),
+      });
       if (!ok) return;
     }
     stRef.current.a = null;
@@ -877,7 +930,10 @@ export function PracticePage(): React.ReactElement {
     const curPreset = presets.find((p) => p.id === selectedPresetId);
     if (!curPreset) return;
     const rangeStr = `${formatPlayerTime(pointA)}–${formatPlayerTime(pointB)}`;
-    const ok = window.confirm(t('practice.presetUpdateConfirm', { range: rangeStr }));
+    const ok = await confirmModal({
+      title: t('practice.confirmPresetUpdateTitle'),
+      message: t('practice.presetUpdateConfirm', { range: rangeStr }),
+    });
     if (!ok) return;
     const token = ++presetReqSeqRef.current;
     try {
@@ -912,7 +968,12 @@ export function PracticePage(): React.ReactElement {
 
   const handleDeletePreset = async () => {
     if (!song || !selectedPresetId) return;
-    const ok = window.confirm(t('practice.presetDeleteConfirm'));
+    const ok = await confirmModal({
+      title: t('practice.confirmPresetDeleteTitle'),
+      message: t('practice.presetDeleteConfirm'),
+      confirmLabel: t('practice.presetDelete'),
+      danger: true,
+    });
     if (!ok) return;
     const token = ++presetReqSeqRef.current;
     try {
@@ -1126,7 +1187,10 @@ export function PracticePage(): React.ReactElement {
     if (
       takeRef.current &&
       !takeRef.current.done &&
-      !window.confirm(t('practice.confirmDiscardUnsavedRec'))
+      !(await confirmModal({
+        title: t('practice.confirmRecDiscardTitle'),
+        message: t('practice.confirmDiscardUnsavedRec'),
+      }))
     ) {
       return;
     }
@@ -1345,6 +1409,8 @@ export function PracticePage(): React.ReactElement {
 
   const closeDrawer = () => {
     setLibOpen(false);
+    setDrawerEditing(false);
+    setInlineEditKey(null);
   };
 
   const toggleFolder = (folderId: string, allIds: string[]) => {
@@ -1423,7 +1489,13 @@ export function PracticePage(): React.ReactElement {
     const myUid = auth.getUser()?.id ?? null;
     const impact = await apiClient.community.shareImpactOrNull({ songId: s.id });
     if (!sameUid(myUid)) return null;
-    if (!window.confirm(deleteConfirmText('song', impact))) return '';
+    const ok = await confirmModal({
+      title: t('practice.confirmDeleteTitle'),
+      message: deleteConfirmText('song', impact),
+      confirmLabel: t('practice.songDelete'),
+      danger: true,
+    });
+    if (!ok || !sameUid(myUid)) return '';
     try {
       await apiClient.songs.remove(s.id);
     } catch (e: any) {
@@ -1739,6 +1811,13 @@ export function PracticePage(): React.ReactElement {
     setFolderNotice('');
     setListEditing(false);
     setEditSongId(null);
+    setDrawerEditing(false);
+    setInlineEditKey(null);
+    setBulkTitleOpen(false);
+    setConfirmState((prev) => {
+      if (prev) prev.resolve(false);
+      return null;
+    });
     setTitleDialogOpen(false);
     setCatEditing(false);
     setCatEditId(null);
@@ -1808,16 +1887,17 @@ export function PracticePage(): React.ReactElement {
   // 분류가 하나라도 있으면 서랍을 분류 폴더로 묶는다. 한 곡이 여러 폴더에 나올 수 있고, 남는 곡은 "미분류"
   const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
   const songCategoryIds = song?.categoryIds || [];
+  const sortedDrawerSongs = songsList ? sortSongs(songsList, sortMode) : null;
   const folders =
-    songsList && sortedCategories.length > 0
+    sortedDrawerSongs && sortedCategories.length > 0
       ? (() => {
           const known = new Set(sortedCategories.map((c) => c.id));
           const out = sortedCategories.map((c) => ({
             id: c.id,
             name: c.name,
-            songs: songsList.filter((x) => (x.categoryIds || []).includes(c.id)),
+            songs: sortedDrawerSongs.filter((x) => (x.categoryIds || []).includes(c.id)),
           }));
-          const rest = songsList.filter((x) => !(x.categoryIds || []).some((id) => known.has(id)));
+          const rest = sortedDrawerSongs.filter((x) => !(x.categoryIds || []).some((id) => known.has(id)));
           if (rest.length > 0) out.push({ id: UNCATEGORIZED_FOLDER, name: t('practice.uncategorized'), songs: rest });
           return out;
         })()
@@ -1838,12 +1918,19 @@ export function PracticePage(): React.ReactElement {
   const listState: ListStatus | 'guest' =
     !activeUid || !apiClient.isLoggedIn() ? 'guest' : listUid !== activeUid ? 'loading' : listStatus;
   const allSongs = listState === 'success' && songsList ? songsList : [];
-  const visibleSongs =
+  const rawVisibleSongs =
     folderId === ALL_FOLDER
       ? allSongs
       : folderId === UNCATEGORIZED_FOLDER
         ? allSongs.filter((x) => !(x.categoryIds || []).some((id) => knownCategoryIds.has(id)))
         : allSongs.filter((x) => (x.categoryIds || []).includes(folderId));
+  const visibleSongs = sortSongs(rawVisibleSongs, sortMode);
+  const sortOptions: Array<{ value: SongSortMode; label: string }> = [
+    { value: 'custom', label: t('practice.sortCustom') },
+    { value: 'title', label: t('practice.sortTitle') },
+    { value: 'added_asc', label: t('practice.sortAddedAsc') },
+    { value: 'added_desc', label: t('practice.sortAddedDesc') },
+  ];
   const folderName =
     folderId === ALL_FOLDER
       ? t('practice.folderAll')
@@ -1883,7 +1970,7 @@ export function PracticePage(): React.ReactElement {
       : null;
   const shownSongs = draftIds ? applySubsetOrder(visibleSongs, draftIds) : visibleSongs;
   const draggingId = draftIds && orderDraft ? orderDraft.id : null;
-  const showDragHandles = editingList && visibleSongs.length >= 2;
+  const showDragHandles = editingList && sortMode === 'custom' && visibleSongs.length >= 2;
   const editSong = editingList && editSongId ? allSongs.find((x) => x.id === editSongId) || null : null;
   const catEditTarget = catPopOpen && catEditing && catEditId ? sortedCategories.find((c) => c.id === catEditId) || null : null;
   const currentNotInFolder =
@@ -2031,6 +2118,20 @@ export function PracticePage(): React.ReactElement {
     }
   };
 
+  const commitInlineTitle = async (s: SongDto, rawVal: string) => {
+    if (inlineSavingRef.current) return;
+    const trimmed = rawVal.trim();
+    setInlineEditKey(null);
+    if (!trimmed || trimmed === s.title) return;
+    inlineSavingRef.current = true;
+    try {
+      const err = await saveSongEdit(s.id, { title: trimmed });
+      if (err) setSyncMsg({ text: err, err: true });
+    } finally {
+      inlineSavingRef.current = false;
+    }
+  };
+
   // folderId: 서랍에서 고른 곡이 속한 폴더(인라인 선택에도 반영). inline: 인라인 목록 항목
   const renderSongItem = (s: SongDto, itemFolderId: string = ALL_FOLDER, inline = false) => {
     const parts: string[] = [];
@@ -2040,10 +2141,13 @@ export function PracticePage(): React.ReactElement {
     if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
     const isCurrent = s.videoId === videoId;
     const withHandle = inline && showDragHandles;
+    const isCardEditing = (inline && editingList) || (!inline && drawerEditing);
+    const cardKey = `${itemFolderId}:${s.id}`;
+    const isInlineTitleEditing = !inline && drawerEditing && inlineEditKey === cardKey;
     return (
       <li
         key={s.id}
-        className={withHandle ? styles.songRow : undefined}
+        className={withHandle || isCardEditing ? styles.songRow : undefined}
         data-song-id={inline ? s.id : undefined}
         data-dragging={(inline && draggingId === s.id) || undefined}
       >
@@ -2060,30 +2164,77 @@ export function PracticePage(): React.ReactElement {
             ⠿
           </button>
         )}
-        <button
-          type="button"
-          className={styles.ppSongBtn}
-          aria-current={isCurrent ? 'true' : undefined}
-          aria-disabled={(switchingSong && !(inline && editingList)) || undefined}
-          aria-haspopup={inline && editingList ? 'dialog' : undefined}
-          onClick={() => {
-            if (inline && editingList) {
-              setEditSongId(s.id);
-              return;
-            }
-            if (!inline) closeDrawer();
-            // 현재 곡 재클릭은 재시작·녹음 중지를 일으키지 않는다. 전환 중에는 중복 클릭을 막는다
-            if (isCurrent || switchingSong) return;
-            if (!inline) {
-              setSelectedFolderId(itemFolderId);
-              setFolderNotice('');
-            }
-            void switchToSong(s);
-          }}
-        >
-          <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
-          <span className={`m ${styles.ppSongMeta}`}>{parts.join(' · ')}</span>
-        </button>
+        <div className={isCardEditing ? styles.cardWrap : styles.cardWrapPlain}>
+          {isInlineTitleEditing ? (
+            <div className={`${styles.ppSongBtn} ${styles.ppSongBtnEditing}`}>
+              <input
+                type="text"
+                className={styles.inlineTitleInput}
+                maxLength={300}
+                autoFocus
+                value={inlineEditVal}
+                aria-label={t('practice.titleLabel')}
+                onChange={(e) => setInlineEditVal(e.target.value)}
+                onBlur={() => void commitInlineTitle(s, inlineEditVal)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void commitInlineTitle(s, inlineEditVal);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setInlineEditKey(null);
+                  }
+                }}
+              />
+              <span className={`m ${styles.ppSongMeta}`}>{t('practice.inlineEditHint')}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`${styles.ppSongBtn} ${isCardEditing ? styles.ppSongBtnEditing : ''}`}
+              aria-current={isCurrent ? 'true' : undefined}
+              aria-disabled={(switchingSong && !isCardEditing) || undefined}
+              aria-haspopup={inline && editingList ? 'dialog' : undefined}
+              onClick={() => {
+                if (inline && editingList) {
+                  setEditSongId(s.id);
+                  return;
+                }
+                if (!inline && drawerEditing) {
+                  setInlineEditKey(cardKey);
+                  setInlineEditVal(s.title);
+                  return;
+                }
+                if (!inline) closeDrawer();
+                // 현재 곡 재클릭은 재시작·녹음 중지를 일으키지 않는다. 전환 중에는 중복 클릭을 막는다
+                if (isCurrent || switchingSong) return;
+                if (!inline) {
+                  setSelectedFolderId(itemFolderId);
+                  setFolderNotice('');
+                }
+                void switchToSong(s);
+              }}
+            >
+              <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
+              <span className={`m ${styles.ppSongMeta}`}>{parts.join(' · ')}</span>
+            </button>
+          )}
+          {isCardEditing && (
+            <button
+              type="button"
+              className={styles.cardDelX}
+              data-card-del=""
+              aria-label={t('practice.ariaDeleteSong', { title: s.title })}
+              onClick={(e) => {
+                e.stopPropagation();
+                void deleteSong(s);
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </li>
     );
   };
@@ -2509,14 +2660,14 @@ export function PracticePage(): React.ReactElement {
               </button>
               <button
                 type="button"
-                className={`pp-tbtn ${styles.ppTbtn} ${styles.ppSaveBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
-                id="saveBtn"
+                className={`pp-tbtn pp-toggle ${styles.ppTbtn} ${styles.ppLoopTransportBtn}`}
+                id="loopBtn"
                 data-align-group="transport:top,bottom,height"
-                aria-label={t('practice.btnSave')}
-                disabled={!videoId}
-                onClick={() => void saveProgressNow('manual')}
+                disabled={!hasBothPoints}
+                aria-pressed={loopOn}
+                onClick={handleToggleLoop}
               >
-                {saveBtnLabel}
+                {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
               </button>
             </div>
             <div className={styles.ppFoot}>
@@ -2598,7 +2749,7 @@ export function PracticePage(): React.ReactElement {
                 <div className={`pp-pt ${styles.ppPt}`}>
                   <button
                     type="button"
-                    className={`pp-nudge ${styles.ppNudge}`}
+                    className={`pp-nudge ${styles.ppNudge} ${pointA == null ? styles.ppNudgeDim : ''}`}
                     data-pt="a"
                     data-d="-0.2"
                     aria-label={t('practice.ariaStepForwardA')}
@@ -2617,7 +2768,7 @@ export function PracticePage(): React.ReactElement {
                   </button>
                   <button
                     type="button"
-                    className={`pp-nudge ${styles.ppNudge}`}
+                    className={`pp-nudge ${styles.ppNudge} ${pointA == null ? styles.ppNudgeDim : ''}`}
                     data-pt="a"
                     data-d="0.2"
                     aria-label={t('practice.ariaStepBackA')}
@@ -2629,7 +2780,7 @@ export function PracticePage(): React.ReactElement {
                 <div className={`pp-pt ${styles.ppPt}`}>
                   <button
                     type="button"
-                    className={`pp-nudge ${styles.ppNudge}`}
+                    className={`pp-nudge ${styles.ppNudge} ${pointB == null ? styles.ppNudgeDim : ''}`}
                     data-pt="b"
                     data-d="-0.2"
                     aria-label={t('practice.ariaStepForwardB')}
@@ -2648,7 +2799,7 @@ export function PracticePage(): React.ReactElement {
                   </button>
                   <button
                     type="button"
-                    className={`pp-nudge ${styles.ppNudge}`}
+                    className={`pp-nudge ${styles.ppNudge} ${pointB == null ? styles.ppNudgeDim : ''}`}
                     data-pt="b"
                     data-d="0.2"
                     aria-label={t('practice.ariaStepBackB')}
@@ -2661,14 +2812,14 @@ export function PracticePage(): React.ReactElement {
               <div className={`pp-looprow ${styles.ppLoopRow}`}>
                 <button
                   type="button"
-                  className={`pp-toggle ${styles.ppToggle}`}
-                  id="loopBtn"
+                  className={`pp-toggle ${styles.ppToggle} ${styles.ppSaveRowBtn} ${dirty ? `dirty ${styles.ppSaveDirty}` : ''}`}
+                  id="saveBtn"
                   data-align-group="looprow:top,bottom,height"
-                  disabled={!hasBothPoints}
-                  aria-pressed={loopOn}
-                  onClick={handleToggleLoop}
+                  aria-label={t('practice.btnSave')}
+                  disabled={!videoId}
+                  onClick={() => void saveProgressNow('manual')}
                 >
-                  {loopOn ? t('practice.btnLooping') : t('practice.btnLoop')}
+                  {saveBtnLabel}
                 </button>
                 <AppSelect
                   id="presetSelect"
@@ -2794,28 +2945,42 @@ export function PracticePage(): React.ReactElement {
                 )}
               </div>
               <div className={styles.folderSelectWrap}>
-                <AppSelect
-                  id="folderSelect"
-                  className={styles.folderSelect}
-                  value={folderId}
-                  disabled={listState !== 'success'}
-                  ariaLabelledBy="folderSelectLabel folderSelect"
-                  options={folderOptions}
-                  onChange={(v) => {
-                    setSelectedFolderId(v);
-                    setFolderNotice('');
-                    cancelDrag();
-                    setOrderErr('');
-                  }}
-                >
-                  <span className={styles.folderName}>{folderName}</span>
-                  {listState === 'success' && (
-                    <span id="folderCount" className={styles.folderCountText}>
-                      {' · '}
-                      {t('practice.folderCount', { count: visibleSongs.length })}
-                    </span>
-                  )}
-                </AppSelect>
+                <div className={styles.folderSelectRow}>
+                  <AppSelect
+                    id="folderSelect"
+                    className={styles.folderSelect}
+                    value={folderId}
+                    disabled={listState !== 'success'}
+                    ariaLabelledBy="folderSelectLabel folderSelect"
+                    options={folderOptions}
+                    onChange={(v) => {
+                      setSelectedFolderId(v);
+                      setFolderNotice('');
+                      cancelDrag();
+                      setOrderErr('');
+                    }}
+                  >
+                    <span className={styles.folderName}>{folderName}</span>
+                    {listState === 'success' && (
+                      <span id="folderCount" className={styles.folderCountText}>
+                        {' · '}
+                        {t('practice.folderCount', { count: visibleSongs.length })}
+                      </span>
+                    )}
+                  </AppSelect>
+                  <AppSelect
+                    id="folderSortSelect"
+                    className={styles.sortSelect}
+                    value={sortMode}
+                    disabled={listState !== 'success'}
+                    ariaLabel={t('practice.sortLabel')}
+                    options={sortOptions}
+                    onChange={(v) => {
+                      setSortMode(v as SongSortMode);
+                      cancelDrag();
+                    }}
+                  />
+                </div>
               </div>
               <div className={styles.folderStatus} aria-live="polite" aria-busy={listState === 'loading'}>
                 {listState === 'guest' && <p className="note">{t('practice.folderLoginPrompt')}</p>}
@@ -2867,18 +3032,44 @@ export function PracticePage(): React.ReactElement {
       </div>
 
       {/* 우측 곡 목록 서랍 */}
-      <aside className={`pp-lib ${styles.ppLib}`} id="lib" hidden={!libOpen}>
+      <aside className={`pp-lib ${styles.ppLib}`} id="lib" hidden={!libOpen} data-editing={drawerEditing || undefined}>
         <div className={`pp-lib-head ${styles.ppLibHead}`}>
           <b>{t('practice.titleSongDrawer')}</b>
-          <button
-            type="button"
-            className={`pp-icon ${styles.ppIcon}`}
-            id="libClose"
-            aria-label={t('practice.ariaClose')}
-            onClick={closeDrawer}
-          >
-            ✕
-          </button>
+          <div className={styles.ppLibHeadActions}>
+            {drawerEditing && songsList && songsList.length > 0 && (
+              <button
+                type="button"
+                className={styles.drawerEditBtn}
+                id="libBulkTitleBtn"
+                onClick={() => setBulkTitleOpen(true)}
+              >
+                {t('practice.bulkTitleBtn')}
+              </button>
+            )}
+            {apiClient.isLoggedIn() && songsList && songsList.length > 0 && (
+              <button
+                type="button"
+                className={styles.drawerEditBtn}
+                id="libEditBtn"
+                aria-pressed={drawerEditing}
+                onClick={() => {
+                  setDrawerEditing((v) => !v);
+                  setInlineEditKey(null);
+                }}
+              >
+                {drawerEditing ? t('practice.editDone') : t('practice.editToggle')}
+              </button>
+            )}
+            <button
+              type="button"
+              className={`pp-icon ${styles.ppIcon}`}
+              id="libClose"
+              aria-label={t('practice.ariaClose')}
+              onClick={closeDrawer}
+            >
+              ✕
+            </button>
+          </div>
         </div>
         <form
           className={`pp-url ${styles.ppUrlForm}`}
@@ -2900,6 +3091,18 @@ export function PracticePage(): React.ReactElement {
             {t('practice.btnOpen')}
           </button>
         </form>
+        {apiClient.isLoggedIn() && songsList && songsList.length > 0 && (
+          <div className={styles.drawerSortRow}>
+            <AppSelect
+              id="drawerSortSelect"
+              className={styles.drawerSortSelect}
+              value={sortMode}
+              ariaLabel={t('practice.sortLabel')}
+              options={sortOptions}
+              onChange={(v) => setSortMode(v as SongSortMode)}
+            />
+          </div>
+        )}
         <ul className={`pp-songs ${styles.ppSongs}`} id="songs">
           {!apiClient.isLoggedIn() ? (
             <li className={`note ${styles.ppSongNote}`}>{t('practice.drawerLoginPrompt')}</li>
@@ -2941,7 +3144,7 @@ export function PracticePage(): React.ReactElement {
               );
             })
           ) : (
-            songsList.map((x) => renderSongItem(x))
+            (sortedDrawerSongs || songsList).map((x) => renderSongItem(x))
           )}
         </ul>
       </aside>
@@ -2982,8 +3185,13 @@ export function PracticePage(): React.ReactElement {
               className="ghostBtn"
               id="btnTakeLimitReplaceOld"
               disabled={busyDriveConnect || uploadingTake}
-              onClick={() => {
-                if (!window.confirm(t('practice.confirmReplaceServerTakes'))) return;
+              onClick={async () => {
+                const ok = await confirmModal({
+                  title: t('practice.confirmReplaceTakesTitle'),
+                  message: t('practice.confirmReplaceServerTakes'),
+                  danger: true,
+                });
+                if (!ok) return;
                 void uploadTakeNow({ replaceOldSongTakes: true });
               }}
             >
@@ -3058,10 +3266,63 @@ export function PracticePage(): React.ReactElement {
             return err;
           }}
           onDelete={async () => {
-            if (!window.confirm(t('practice.catDeleteConfirm', { name: catEditTarget.name }))) return null;
+            const ok = await confirmModal({
+              title: t('practice.confirmCatDeleteTitle'),
+              message: t('practice.catDeleteConfirm', { name: catEditTarget.name }),
+              confirmLabel: t('practice.catDelete'),
+              danger: true,
+            });
+            if (!ok) return null;
             const err = await removeCategory(catEditTarget.id);
             if (!err) setCatEditId(null);
             return err;
+          }}
+        />
+      ) : null}
+
+      {bulkTitleOpen && songsList && songsList.length > 0 ? (
+        <BulkTitleDialog
+          songs={songsList}
+          categories={sortedCategories}
+          initialFolderId={folderId}
+          onCancel={() => setBulkTitleOpen(false)}
+          onApply={async (items) => {
+            const myUid = auth.getUser()?.id ?? null;
+            try {
+              const updated = await apiClient.songs.batchUpdateTitles(items);
+              if (!sameUid(myUid)) return null;
+              setSongsList(updated);
+              if (stRef.current.song) {
+                const match = updated.find((x) => x.id === stRef.current.song?.id);
+                if (match) {
+                  stRef.current.song = match;
+                  setSong(match);
+                }
+              }
+              setBulkTitleOpen(false);
+              return null;
+            } catch (e: any) {
+              return (e && e.message) || t('practice.songSaveFailed');
+            }
+          }}
+        />
+      ) : null}
+
+      {confirmState ? (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          danger={confirmState.danger}
+          onCancel={() => {
+            const st = confirmState;
+            setConfirmState(null);
+            st.resolve(false);
+          }}
+          onConfirm={() => {
+            const st = confirmState;
+            setConfirmState(null);
+            st.resolve(true);
           }}
         />
       ) : null}
@@ -3571,6 +3832,340 @@ function CategoryEditDialog({
       <p className={styles.modalDesc} role="status" aria-live="polite">
         {err ? <span className={styles.presetDialogErr}>{err}</span> : ''}
       </p>
+    </PlayerDialog>
+  );
+}
+
+/** UXP D6: window.confirm을 대체하는 디자인 통일 확인 모달 */
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): React.ReactElement {
+  return (
+    <PlayerDialog
+      id="confirmDialog"
+      title={title}
+      busy={false}
+      small
+      onCancel={onCancel}
+      onSubmit={onConfirm}
+      actions={
+        <>
+          <button type="button" className="ghostBtn" id="confirmDialogCancel" onClick={onCancel}>
+            {t('practice.dlgCancel')}
+          </button>
+          <button
+            type="submit"
+            className={danger ? styles.dangerBtn : 'pillBtn'}
+            id="confirmDialogOk"
+          >
+            {confirmLabel}
+          </button>
+        </>
+      }
+    >
+      <p className={styles.modalDesc}>{message}</p>
+    </PlayerDialog>
+  );
+}
+
+/** UXP D5: 곡 이름 일괄 정리 모달 (원클릭 규칙 + 공통 문구 칩 + 찾기/바꾸기 + 행별 직접 수정) */
+function BulkTitleDialog({
+  songs,
+  categories,
+  initialFolderId,
+  onCancel,
+  onApply,
+}: {
+  songs: SongDto[];
+  categories: CategoryDto[];
+  initialFolderId: string;
+  onCancel: () => void;
+  onApply: (items: Array<{ id: string; title: string }>) => Promise<string | null>;
+}): React.ReactElement {
+  const [scopeId, setScopeId] = useState(initialFolderId);
+  const [opts, setOpts] = useState<BulkTitleOptions>(DEFAULT_BULK_TITLE_OPTIONS);
+  const [findText, setFindText] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [manual, setManual] = useState<Record<string, string>>({});
+  const [excluded, setExcluded] = useState<Record<string, boolean>>({});
+  const [busy, err, run] = useDialogRun();
+
+  const knownCatIds = new Set(categories.map((c) => c.id));
+  const scopedSongs =
+    scopeId === ALL_FOLDER
+      ? songs
+      : scopeId === UNCATEGORIZED_FOLDER
+        ? songs.filter((x) => !(x.categoryIds || []).some((id) => knownCatIds.has(id)))
+        : songs.filter((x) => (x.categoryIds || []).includes(scopeId));
+
+  const commonPhrases = detectCommonPhrases(scopedSongs.map((s) => s.title));
+  const scopeOptions = [
+    { value: ALL_FOLDER, label: t('practice.folderAll') },
+    ...categories.map((c) => ({ value: c.id, label: c.name })),
+    { value: UNCATEGORIZED_FOLDER, label: t('practice.uncategorized') },
+  ];
+
+  const rows = scopedSongs.map((s) => {
+    const computed = manual[s.id] !== undefined ? manual[s.id] : transformSongTitle(s.title, opts);
+    const trimmed = computed.trim();
+    const changed = trimmed.length > 0 && trimmed !== s.title;
+    const checked = !excluded[s.id];
+    return { song: s, next: computed, trimmed, changed, checked };
+  });
+
+  const pendingItems = rows
+    .filter((r) => r.checked && r.changed)
+    .map((r) => ({ id: r.song.id, title: r.trimmed }));
+
+  const toggleRule = (key: 'stripBrackets' | 'stripCoverParen' | 'stripCoverNoise' | 'extractQuotes') => {
+    setOpts((prev) => ({ ...prev, [key]: !prev[key] }));
+    setManual({});
+  };
+
+  const toggleCommonPhrase = (phrase: string) => {
+    setOpts((prev) => {
+      const exists = prev.customRules.some((r) => r.find === phrase && r.replace === '');
+      return {
+        ...prev,
+        customRules: exists
+          ? prev.customRules.filter((r) => !(r.find === phrase && r.replace === ''))
+          : [...prev.customRules, { find: phrase, replace: '' }],
+      };
+    });
+    setManual({});
+  };
+
+  const addCustomRule = () => {
+    if (!findText) return;
+    setOpts((prev) => ({
+      ...prev,
+      customRules: [...prev.customRules, { find: findText, replace: replaceText }],
+    }));
+    setFindText('');
+    setReplaceText('');
+    setManual({});
+  };
+
+  const resetAll = () => {
+    setOpts({
+      stripBrackets: false,
+      stripCoverParen: false,
+      stripCoverNoise: false,
+      extractQuotes: false,
+      customRules: [],
+    });
+    setManual({});
+    setExcluded({});
+  };
+
+  const submit = () => {
+    if (pendingItems.length === 0) {
+      onCancel();
+      return;
+    }
+    void run(() => onApply(pendingItems));
+  };
+
+  return (
+    <PlayerDialog
+      id="bulkTitleDialog"
+      title={t('practice.bulkTitleTitle')}
+      busy={busy}
+      onCancel={onCancel}
+      onSubmit={submit}
+      actions={
+        <>
+          <span className={styles.bulkSummaryText}>
+            {t('practice.bulkSummary', { changed: pendingItems.length, total: scopedSongs.length })}
+          </span>
+          <span className={styles.dlgSpacer} />
+          <button type="button" className="ghostBtn" id="bulkTitleCancel" disabled={busy} onClick={onCancel}>
+            {t('practice.dlgCancel')}
+          </button>
+          <button
+            type="submit"
+            className="pillBtn"
+            id="bulkTitleApply"
+            disabled={busy || pendingItems.length === 0}
+          >
+            {t('practice.bulkApply', { count: pendingItems.length })}
+          </button>
+        </>
+      }
+    >
+      <div className={styles.bulkTopBar}>
+        <AppSelect
+          id="bulkScopeSelect"
+          className={styles.bulkScopeSelect}
+          value={scopeId}
+          disabled={busy}
+          ariaLabel={t('practice.folderChange')}
+          options={scopeOptions}
+          onChange={(v) => {
+            setScopeId(v);
+            setManual({});
+            setExcluded({});
+          }}
+        />
+        <button type="button" className={styles.uBtn} disabled={busy} onClick={resetAll}>
+          {t('practice.bulkTitleReset')}
+        </button>
+      </div>
+
+      <div className={styles.bulkSection}>
+        <span className={styles.bulkSectionLabel}>{t('practice.bulkTitleSecRules')}</span>
+        <div className={styles.bulkChipBar}>
+          <button
+            type="button"
+            className={`${styles.bulkRuleBtn} ${opts.stripBrackets ? styles.bulkRuleBtnOn : ''}`}
+            disabled={busy}
+            onClick={() => toggleRule('stripBrackets')}
+          >
+            {t('practice.bulkRuleBrackets')}
+          </button>
+          <button
+            type="button"
+            className={`${styles.bulkRuleBtn} ${opts.stripCoverParen ? styles.bulkRuleBtnOn : ''}`}
+            disabled={busy}
+            onClick={() => toggleRule('stripCoverParen')}
+          >
+            {t('practice.bulkRuleCoverParen')}
+          </button>
+          <button
+            type="button"
+            className={`${styles.bulkRuleBtn} ${opts.stripCoverNoise ? styles.bulkRuleBtnOn : ''}`}
+            disabled={busy}
+            onClick={() => toggleRule('stripCoverNoise')}
+          >
+            {t('practice.bulkRuleNoise')}
+          </button>
+          <button
+            type="button"
+            className={`${styles.bulkRuleBtn} ${opts.extractQuotes ? styles.bulkRuleBtnOn : ''}`}
+            disabled={busy}
+            onClick={() => toggleRule('extractQuotes')}
+          >
+            {t('practice.bulkRuleQuotes')}
+          </button>
+        </div>
+      </div>
+
+      {commonPhrases.length > 0 && (
+        <div className={styles.bulkSection}>
+          <span className={styles.bulkSectionLabel}>{t('practice.bulkTitleSecCommon')}</span>
+          <div className={styles.bulkChipBar}>
+            {commonPhrases.map((phrase) => {
+              const active = opts.customRules.some((r) => r.find === phrase && r.replace === '');
+              return (
+                <button
+                  key={phrase}
+                  type="button"
+                  className={`${styles.bulkRuleBtn} ${active ? styles.bulkRuleBtnOn : ''}`}
+                  disabled={busy}
+                  onClick={() => toggleCommonPhrase(phrase)}
+                >
+                  {active ? '✓ ' : '+ '}
+                  {phrase}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.bulkSection}>
+        <span className={styles.bulkSectionLabel}>{t('practice.bulkTitleSecFind')}</span>
+        <div className={styles.bulkFindRow}>
+          <input
+            type="text"
+            className={`inpField ${styles.bulkFindInp}`}
+            placeholder={t('practice.bulkFindPh')}
+            value={findText}
+            disabled={busy}
+            onChange={(e) => setFindText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomRule();
+              }
+            }}
+          />
+          <input
+            type="text"
+            className={`inpField ${styles.bulkFindInp}`}
+            placeholder={t('practice.bulkReplacePh')}
+            value={replaceText}
+            disabled={busy}
+            onChange={(e) => setReplaceText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomRule();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="ghostBtn"
+            disabled={busy || !findText}
+            onClick={addCustomRule}
+          >
+            {t('practice.bulkAddRule')}
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.bulkPreviewList}>
+        {rows.length === 0 ? (
+          <p className={`note ${styles.ppSongNote}`}>{t('practice.bulkEmpty')}</p>
+        ) : (
+          rows.map((r) => (
+            <div key={r.song.id} className={styles.bulkPreviewRow}>
+              <input
+                type="checkbox"
+                checked={r.checked}
+                disabled={busy}
+                aria-label={r.song.title}
+                onChange={(e) =>
+                  setExcluded((prev) => ({ ...prev, [r.song.id]: !e.target.checked }))
+                }
+              />
+              <div className={styles.bulkPreviewCol}>
+                <div className={styles.bulkOrigTitle}>
+                  {r.song.title}
+                  {r.changed && <span className={styles.bulkChangedTag}>{t('practice.bulkChangedTag')}</span>}
+                </div>
+                <input
+                  type="text"
+                  className={`inpField ${styles.bulkRowInp}`}
+                  maxLength={300}
+                  value={r.next}
+                  disabled={busy}
+                  onChange={(e) => setManual((prev) => ({ ...prev, [r.song.id]: e.target.value }))}
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {err && (
+        <p className={styles.modalDesc} role="alert">
+          <span className={styles.presetDialogErr}>{err}</span>
+        </p>
+      )}
     </PlayerDialog>
   );
 }

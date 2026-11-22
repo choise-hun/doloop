@@ -334,9 +334,10 @@ test('SR1-5: 무료 녹음 한도 초과(403 FREE_TAKE_SONG_LIMIT_EXCEEDED) 모�
   const replaceBtn = page.locator('#btnTakeLimitReplaceOld');
   await expect(replaceBtn).toHaveText('다른 곡 녹음 지우고 이 곡 녹음 저장');
 
-  // 확인창(SR-Q1) 수락 후 재업로드
-  page.once('dialog', (d) => d.accept());
+  // 확인 모달(UXP D6) 수락 후 재업로드
   await replaceBtn.click();
+  await expect(page.locator('#confirmDialog')).toBeVisible();
+  await page.locator('#confirmDialogOk').click();
 
   await expect(modal).toBeHidden();
   expect(uploadMetas).toHaveLength(2);

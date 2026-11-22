@@ -393,6 +393,10 @@
   border-left: 1px solid var(--seam-hairline);
 }
 
+.ppNudgeDim {
+  opacity: 0.35;
+}
+
 .ppSetPt {
   font: inherit;
   color: var(--ink);
@@ -427,16 +431,21 @@
 
 .ppLoopRow {
   display: grid;
-  /* UXN-A: keep all four controls on one row; shrink only widths in narrow panels. */
+  /* UXP D2: 저장(#saveBtn)이 왼쪽, 반복(#loopBtn)은 재생 줄로 이동 */
   grid-template-columns: clamp(64px, 25cqi, 138px) minmax(0, 1fr) clamp(44px, 15cqi, 84px) 44px;
-  grid-template-areas: "loop preset wait clear";
+  grid-template-areas: "save preset wait clear";
   gap: 6px;
 }
 
-.ppLoopRow > :global(#loopBtn) { grid-area: loop; }
+.ppLoopRow > :global(#saveBtn) { grid-area: save; }
 .ppLoopRow > :global(#presetSelect) { grid-area: preset; }
 .ppLoopRow > :global(#btnWaitTimer) { grid-area: wait; }
 .ppLoopRow > :global(#clearBtn) { grid-area: clear; }
+
+.ppSaveRowBtn {
+  white-space: nowrap;
+  padding: 0 8px;
+}
 
 .ppToggle {
   font: inherit;
@@ -699,14 +708,25 @@
   justify-content: center;
 }
 
-.ppSaveBtn {
+.ppLoopTransportBtn {
   font-size: 16px;
   white-space: nowrap;
 }
 
-/* 전화 폭: 다섯 칸이 좁아 저장 버튼 문구('곡 추가')가 꺾이지 않게 기존 크기로 둔다 */
+.ppLoopTransportBtn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ppLoopTransportBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 전화 폭: 다섯 칸이 좁아 문구가 꺾이지 않게 폰트 축소 */
 @media (max-width: 600px) {
-  .ppSaveBtn {
+  .ppLoopTransportBtn {
     font-size: 14px;
   }
   /* WF-2: 여섯 칸은 좁다 → 녹음만 둘째 줄 전체 폭으로 내린다 */
@@ -763,10 +783,48 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .ppLibHead b {
   font-size: 16px;
+}
+
+.ppLibHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawerEditBtn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.drawerEditBtn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.drawerSortRow {
+  display: flex;
+}
+
+.drawerSortSelect {
+  width: 100%;
+  height: 40px;
+  background: var(--bg);
 }
 
 .ppSongs {
@@ -1191,9 +1249,25 @@
   padding: 2px;
 }
 
+.folderSelectRow {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .folderSelect {
+  flex: 1 1 auto;
+  min-width: 0;
   height: 44px;
   background: var(--bg);
+}
+
+.sortSelect {
+  flex: 0 0 auto;
+  width: 118px;
+  height: 44px;
+  background: var(--bg);
+  font-size: 13px;
 }
 
 .folderName {
@@ -1356,4 +1430,193 @@
 
 .ppLib .ppUrlForm :global(.pillBtn):hover {
   border-color: var(--ink);
+}
+
+/* UXP D3/D4: 카드 편집(우측 상단 ✕ 삭제 + 서랍 인라인 제목 수정) */
+.cardWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cardWrapPlain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ppSongBtnEditing {
+  padding-right: 42px;
+}
+
+.ppLib[data-editing] .ppSongBtn {
+  border-left: 3px solid var(--fill1);
+}
+
+.cardDelX {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-block);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardDelX:hover {
+  color: var(--bad);
+  border-color: var(--seam-hairline);
+  background: var(--surface);
+}
+
+.inlineTitleInput {
+  width: 100%;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-block);
+  padding: 4px 6px;
+}
+
+/* UXP D6: 확인 모달 위험 버튼 */
+.dangerBtn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-block);
+  border: 1px solid var(--bad);
+  background: var(--bad);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+/* UXP D5: 이름 일괄 정리 모달 */
+.bulkTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bulkScopeSelect {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  background: var(--bg);
+}
+
+.bulkSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bulkSectionLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.bulkChipBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bulkRuleBtn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  cursor: pointer;
+}
+
+.bulkRuleBtnOn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.bulkFindRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.bulkFindInp {
+  min-width: 0;
+  width: 100%;
+}
+
+.bulkPreviewList {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.bulkPreviewRow {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--seam-hairline);
+  align-items: start;
+}
+
+.bulkPreviewRow:last-child {
+  border-bottom: 0;
+}
+
+.bulkPreviewCol {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bulkOrigTitle {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.bulkChangedTag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--good);
+  margin-left: 6px;
+}
+
+.bulkRowInp {
+  width: 100%;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.bulkSummaryText {
+  font-size: 12px;
+  color: var(--muted);
 }

@@ -20,6 +20,7 @@ export interface SongDto {
   totalSeconds: number;
   resumeUrl: string;
   durationSec: number;
+  createdAt?: string;
 }
 
 export interface CategoryDto {
@@ -813,6 +814,17 @@ async function reorderSongs(ids: string[]): Promise<SongDto[]> {
     body: JSON.stringify({ ids }),
   });
   if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.orderSaveFailed'));
+  return r.songs;
+}
+
+// UXP: 곡 제목 일괄 변경. 응답 = GET /songs와 같은 전체 목록
+async function batchUpdateSongTitles(items: Array<{ id: string; title: string }>): Promise<SongDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/songs/titles', {
+    method: 'PATCH',
+    body: JSON.stringify({ items }),
+  });
+  if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.songSaveFailed'));
   return r.songs;
 }
 
@@ -1952,6 +1964,7 @@ export const apiClient = {
     get: getSong,
     update: updateSong,
     reorder: reorderSongs,
+    batchUpdateTitles: batchUpdateSongTitles,
     remove: removeSong,
     importPreview: importPlaylistPreview,
     importPlaylist,
