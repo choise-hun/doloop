@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import ulevelp.db.*
+import ulevelp.service.SongService
 import ulevelp.service.VideoMeta
 import ulevelp.support.*
 import java.math.BigDecimal
@@ -104,7 +105,7 @@ class SongApiTest {
 
         val expectedKeys = setOf(
             "id", "title", "artist", "status", "statusCode", "videoId",
-            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl", "durationSec"
+            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl", "durationSec", "createdAt"
         )
         assertEquals(expectedKeys, songObj.keys)
 
@@ -914,7 +915,7 @@ class SongApiTest {
         val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
         val songObj = json["song"]!!.jsonObject
         assertEquals(1560L, songObj["totalSeconds"]!!.jsonPrimitive.long)
-        assertEquals(16, songObj.keys.size)
+        assertEquals(17, songObj.keys.size)
 
         val sessionsArr = json["sessions"]!!.jsonArray
         assertEquals(2, sessionsArr.size)
@@ -1252,7 +1253,7 @@ class SongApiTest {
         val songs = insertOrderedSongs(userA, 2, 'b')
         val before = sortOrders(userA)
 
-        val overLimit = (0 until 1001).joinToString(",") { "\"${UUID.randomUUID()}\"" }
+        val overLimit = (0 until SongService.MAX_ORDER_IDS + 1).joinToString(",") { "\"${UUID.randomUUID()}\"" }
         val payloads = listOf(
             "{}",
             """{"ids":[]}""",
@@ -1370,5 +1371,59 @@ class SongApiTest {
                 .map { it[SharedFolderItemsTable.videoId] }
         }
         assertEquals(expectedVideos, sharedVideos)
+    }
+
+    @Test
+    fun `UXP-T1 PATCH titles 일괄 제목 변경 - 정상 갱신, 잘못된 입력 400, 남의 곡 포함 시 404 및 무변경`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        val userB = UUID.randomUUID()
+        val tokenB = TestJwt.token(userB)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+
+        val songsA = insertOrderedSongs(userA, 2, 'x')
+        val songsB = insertOrderedSongs(userB, 1, 'y')
+
+        // 1. 정상 일괄 변경
+        val okRes = client.patch("/api/v1/songs/titles") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"items":[{"id":"${songsA[0]}","title":"  Flashbacker  "},{"id":"${songsA[1]}","title":"If I Could Be A Constellation"}]}""")
+        }
+        assertEquals(HttpStatusCode.OK, okRes.status, okRes.bodyAsText())
+        val songsArr = Json.parseToJsonElement(okRes.bodyAsText()).jsonObject["songs"]!!.jsonArray
+        val byId = songsArr.associate { it.jsonObject["id"]!!.jsonPrimitive.content to it.jsonObject["title"]!!.jsonPrimitive.content }
+        assertEquals("Flashbacker", byId[songsA[0].toString()])
+        assertEquals("If I Could Be A Constellation", byId[songsA[1].toString()])
+
+        // 2. 남의 곡이 섞이면 전체 404, 내 곡 제목도 바뀌지 않음
+        val crossRes = client.patch("/api/v1/songs/titles") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"items":[{"id":"${songsA[0]}","title":"ShouldNotChange"},{"id":"${songsB[0]}","title":"Hacked"}]}""")
+        }
+        assertEquals(HttpStatusCode.NotFound, crossRes.status)
+        assertStandardError(crossRes.bodyAsText(), 404, "NOT_FOUND")
+        transaction(db) {
+            val titleA0 = SongsTable.select(SongsTable.title).where { SongsTable.id eq songsA[0] }.single()[SongsTable.title]
+            assertEquals("Flashbacker", titleA0)
+        }
+
+        // 3. 잘못된 입력(빈 배열·빈 제목·중복 id) -> 400
+        for (bad in listOf(
+            """{"items":[]}""",
+            """{"items":[{"id":"${songsA[0]}","title":"   "}]}""",
+            """{"items":[{"id":"${songsA[0]}","title":"A"},{"id":"${songsA[0]}","title":"B"}]}"""
+        )) {
+            val res = client.patch("/api/v1/songs/titles") {
+                header(HttpHeaders.Authorization, "Bearer $tokenA")
+                contentType(ContentType.Application.Json)
+                setBody(bad)
+            }
+            assertEquals(HttpStatusCode.BadRequest, res.status, bad)
+            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+        }
     }
 }

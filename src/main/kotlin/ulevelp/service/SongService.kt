@@ -44,7 +44,8 @@ data class SongDto(
     val categoryIds: List<String>,
     val totalSeconds: Long,
     val resumeUrl: String,
-    val durationSec: Int = 0
+    val durationSec: Int = 0,
+    val createdAt: String = ""
 )
 
 @Serializable
@@ -242,6 +243,39 @@ class SongService(
             }
             SharedFolderSync.resyncCategories(this, userId, null) // 공개본 순서도 sort_order를 따른다(E1)
 
+            loadList(userId, null)
+        }
+    }
+
+    /**
+     * 곡 제목 일괄 변경(UXP): 단일 트랜잭션에서 소유권 검증 후 바뀐 곡만 UPDATE.
+     * 하나라도 내 곡이 아니면 404, DB 무변경. 반환 = `GET /songs`와 같은 전체 목록
+     */
+    suspend fun batchUpdateTitles(userId: UUID, items: List<Pair<UUID, String>>): List<SongDto> {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            tierContext(userId, lock = true)
+            val ids = items.map { it.first }
+            val existing = SongsTable.select(SongsTable.id, SongsTable.title)
+                .where { (SongsTable.userId eq userId) and (SongsTable.id inList ids) }
+                .forUpdate()
+                .associate { it[SongsTable.id] to it[SongsTable.title] }
+            if (existing.size != ids.size) {
+                throw NotFoundException("곡을 찾을 수 없습니다.")
+            }
+            var changed = false
+            for ((songId, rawTitle) in items) {
+                val trimmed = rawTitle.trim()
+                if (existing[songId] != trimmed) {
+                    SongsTable.update({ (SongsTable.id eq songId) and (SongsTable.userId eq userId) }) {
+                        it[title] = trimmed
+                    }
+                    changed = true
+                }
+            }
+            if (changed) {
+                SharedFolderSync.resyncCategories(this, userId, null)
+            }
             loadList(userId, null)
         }
     }
@@ -682,15 +716,19 @@ class SongService(
             categoryIds = categoryIds,
             totalSeconds = totalSeconds,
             resumeUrl = resumeUrl(publicAppUrl, videoId, pos, a, b, rate),
-            durationSec = row[SongsTable.durationSec]
+            durationSec = row[SongsTable.durationSec],
+            createdAt = formatTimestamp(row[SongsTable.createdAt])
         )
     }
 
     companion object {
         const val UNTITLED = "(제목 없음)"
 
-        /** 순서 저장 한 번에 보낼 수 있는 곡 수(티어 곡 한도보다 넉넉하게 — 다운그레이드·가져오기 대비) */
-        const val MAX_ORDER_IDS = 1000
+        /** 순서 저장 한 번에 보낼 수 있는 곡 수(티어 곡 한도보다 넉넉하게 — 다운그레이드·가져오기·owner 대비) */
+        const val MAX_ORDER_IDS = 5000
+
+        /** 이름 일괄 변경 한 번에 보낼 수 있는 곡 수 */
+        const val MAX_BATCH_TITLES = 500
 
         /**
          * 곡 목록 순서(SL-2 E1): `sort_order` 작은 값 → 만든 시각 최근 → id(동시 삽입 동점 대비).

@@ -471,7 +471,7 @@ class CommunityApiTest {
         assertStandardError(client.send(HttpMethod.Post, "/api/v1/community/folders/$folderId/clone", free.token).bodyAsText(), 403, "TIER_UPGRADE_REQUIRED")
         assertStandardError(client.send(HttpMethod.Post, "/api/v1/community/folders/$folderId/clone", a.token).bodyAsText(), 400, "INVALID_INPUT")
         val full = client.newUser()
-        repeat(7) { client.addCategory(full.token, "분류$it") } // pro 분류 7개
+        repeat(15) { client.addCategory(full.token, "분류$it") } // pro 분류 15개
         assertStandardError(client.send(HttpMethod.Post, "/api/v1/community/folders/$folderId/clone", full.token).bodyAsText(), 403, "CATEGORY_LIMIT_EXCEEDED")
         assertEquals(0, json(client.send(HttpMethod.Get, "/api/v1/songs", full.token).bodyAsText())["songs"]!!.jsonArray.size)
     }

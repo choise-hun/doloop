@@ -39,9 +39,22 @@ data class TierLimits(
         val TIERS = listOf(FREE, PRO, PRO_PLUS)
 
         private val BY_TIER = mapOf(
-            FREE to TierLimits(10, 2, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false),
-            PRO to TierLimits(100, 7, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170),
-            PRO_PLUS to TierLimits(150, 10, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350)
+            FREE to TierLimits(100, 5, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false),
+            PRO to TierLimits(1000, 15, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170),
+            PRO_PLUS to TierLimits(2000, 30, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350)
+        )
+
+        /** 관리자(role == "owner")용 한도: 크레딧만 기존 티어 정책 유지, 곡·분류·녹음·Drive·AI·커뮤니티 제약 전면 해제 */
+        fun ownerLimits(tier: String): TierLimits = TierLimits(
+            songs = null,
+            categories = null,
+            takeBytes = 10_737_418_240L,
+            takeSongs = null,
+            takeDurationSec = null,
+            drive = true,
+            ai = true,
+            communityWrite = true,
+            monthlyCredits = of(tier).monthlyCredits
         )
 
         fun of(tier: String): TierLimits = BY_TIER[tier] ?: BY_TIER.getValue(FREE)
@@ -112,15 +125,16 @@ fun effectiveTier(row: ResultRow, now: OffsetDateTime = OffsetDateTime.now(ZoneO
     graceTier(baseTier(row, now), row[ProfilesTable.creditCycleTier], row[ProfilesTable.creditCycleNextAt], now)
 
 /** 한도 검사에 쓰는 사용자 티어 문맥. lock=true면 profiles 행을 FOR UPDATE로 잠가 동시 추가를 줄 세운다 */
-data class TierContext(val userId: UUID, val tier: String) {
-    val limits: TierLimits get() = TierLimits.of(tier)
+data class TierContext(val userId: UUID, val tier: String, val role: String = "user") {
+    val isOwner: Boolean get() = role == "owner"
+    val limits: TierLimits get() = if (isOwner) TierLimits.ownerLimits(tier) else TierLimits.of(tier)
 }
 
 fun Transaction.tierContext(userId: UUID, lock: Boolean = false): TierContext {
     val query = ProfilesTable.selectAll().where { ProfilesTable.id eq userId }
     if (lock) query.forUpdate(ForUpdateOption.ForUpdate)
     val row = query.singleOrNull() ?: throw NotFoundException("사용자 프로필을 찾을 수 없습니다.")
-    return TierContext(userId, effectiveTier(row))
+    return TierContext(userId, effectiveTier(row), row[ProfilesTable.role])
 }
 
 // ---------- 사용량 ----------

@@ -122,12 +122,12 @@ class LiveBoundaryTest {
     @Test
     fun `two concurrent clones compete for one remaining category slot`() = live {
         val a = user(); val b = user(); val (_, folder) = publish(a)
-        repeat(6) { category(b, "B slot $it") } // pro has seven slots
+        repeat(14) { category(b, "B slot $it") } // pro has fifteen slots
         val statuses = coroutineScope {
             List(2) { async { request(b, "POST", "/community/folders/$folder/clone").statusCode() } }.awaitAll().sorted()
         }
         assertEquals(listOf(200, 403), statuses)
-        assertEquals(listOf("7"), sql("SELECT count(*) FROM categories WHERE user_id='$b'"))
+        assertEquals(listOf("15"), sql("SELECT count(*) FROM categories WHERE user_id='$b'"))
         assertEquals(listOf("1"), sql("SELECT count(*) FROM songs WHERE user_id='$b'"))
         assertEquals(listOf("1"), sql("SELECT clone_count FROM shared_folders WHERE id='$folder'"))
         val before = snapshot()

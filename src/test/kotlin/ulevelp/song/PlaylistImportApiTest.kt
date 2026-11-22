@@ -9,6 +9,7 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -125,13 +126,21 @@ class PlaylistImportApiTest {
     }
 
     @Test
-    fun `P1 무료 10곡 한도 - 남은 칸까지만 등록, 이미 있는 곡은 분류에만, 비공개·중복은 건너뜀`() = testApplication {
-        // 재생목록: 이미 있는 vid7, 새 곡 vid20~29(10개), 비공개 1, vid20 중복 → 13항목
-        val items = listOf(item(7)) + (20..29).map { item(it) } + item(90, available = false) + item(20)
+    fun `P1 무료 100곡 한도 - 남은 칸까지만 등록, 이미 있는 곡은 분류에만, 비공개·중복은 건너뜀`() = testApplication {
+        // 재생목록: 이미 있는 vid97, 새 곡 vid200~209(10개), 비공개 1, vid200 중복 → 13항목
+        val items = listOf(item(97)) + (200..209).map { item(it) } + item(990, available = false) + item(200)
         val fake = FakePlaylistClient(mutableMapOf(PL to YoutubePlaylist(PL, "My Neo Soul Practice Playlist 2026", 13, items)))
         configureApiTestApp(dbConfig, playlistClient = fake)
-        val (_, token) = client.newUser()
-        for (i in 1..7) client.addSong(token, i)
+        val (userId, token) = client.newUser()
+        transaction(db) {
+            for (i in 1..97) {
+                SongsTable.insert {
+                    it[SongsTable.userId] = userId
+                    it[videoId] = vid(i)
+                    it[title] = "Mine $i"
+                }
+            }
+        }
 
         val res = client.importPlaylist(token, """{"url":"$PL_URL","newCategory":true}""")
         assertEquals(HttpStatusCode.OK, res.status, res.bodyAsText())
@@ -145,18 +154,18 @@ class PlaylistImportApiTest {
         assertEquals(PL to 500, fake.calls.single())
 
         val songs = client.songs(token)
-        assertEquals(10, songs.size)
+        assertEquals(100, songs.size)
         val byVid = songs.associateBy { it["videoId"]!!.jsonPrimitive.content }
-        assertEquals(setOf(20, 21, 22).map { vid(it) }.toSet() + (1..7).map { vid(it) }, byVid.keys)
-        assertEquals("Song 20", byVid[vid(20)]!!["title"]!!.jsonPrimitive.content)
-        assertEquals("Ch 20", byVid[vid(20)]!!["artist"]!!.jsonPrimitive.content)
-        assertEquals("Mine 7", byVid[vid(7)]!!["title"]!!.jsonPrimitive.content, "이미 있는 곡은 그대로")
+        assertEquals(setOf(200, 201, 202).map { vid(it) }.toSet() + (1..97).map { vid(it) }, byVid.keys)
+        assertEquals("Song 200", byVid[vid(200)]!!["title"]!!.jsonPrimitive.content)
+        assertEquals("Ch 200", byVid[vid(200)]!!["artist"]!!.jsonPrimitive.content)
+        assertEquals("Mine 97", byVid[vid(97)]!!["title"]!!.jsonPrimitive.content, "이미 있는 곡은 그대로")
 
         val categoryId = body["categoryId"]!!.jsonPrimitive.content
         val category = client.categories(token).single { it["id"]!!.jsonPrimitive.content == categoryId }
         assertEquals("My Neo Soul Practice", category["name"]!!.jsonPrimitive.content, "제목 앞 20자")
         assertEquals(4, category["songCount"]!!.jsonPrimitive.int)
-        for (v in listOf(7, 20, 21, 22)) {
+        for (v in listOf(97, 200, 201, 202)) {
             assertEquals(listOf(categoryId), byVid[vid(v)]!!["categoryIds"]!!.jsonArray.map { it.jsonPrimitive.content })
         }
 
@@ -166,7 +175,7 @@ class PlaylistImportApiTest {
         assertEquals(0, again["imported"]!!.jsonPrimitive.int)
         assertEquals(4, again["alreadyInLibrary"]!!.jsonPrimitive.int)
         assertEquals(7, again["skippedLimit"]!!.jsonPrimitive.int)
-        assertEquals(10, client.songs(token).size)
+        assertEquals(100, client.songs(token).size)
     }
 
     @Test
@@ -202,14 +211,13 @@ class PlaylistImportApiTest {
         val fake = FakePlaylistClient(mutableMapOf(PL to YoutubePlaylist(PL, "PL", 1, listOf(item(1)))))
         configureApiTestApp(dbConfig, playlistClient = fake)
         val (_, token) = client.newUser()
-        client.addCategory(token, "A")
-        client.addCategory(token, "B")
+        for (c in listOf("A", "B", "C", "D", "E")) client.addCategory(token, c)
 
         val res = client.importPlaylist(token, """{"url":"$PL_URL","newCategory":true}""")
         val err = assertStandardError(res.bodyAsText(), 403, "CATEGORY_LIMIT_EXCEEDED")
         assertEquals("pro", err["detail"]!!.jsonObject["nextTier"]!!.jsonPrimitive.content)
         assertEquals(0, client.songs(token).size)
-        assertEquals(2, client.categories(token).size)
+        assertEquals(5, client.categories(token).size)
     }
 
     @Test
@@ -272,7 +280,7 @@ class PlaylistImportApiTest {
         assertEquals(
             buildJsonObject {
                 put("playlistId", PL); put("title", "Title"); put("itemCount", 42)
-                put("remainingSongSlots", 9); put("remainingCategorySlots", 1)
+                put("remainingSongSlots", 99); put("remainingCategorySlots", 4)
             },
             json(res.bodyAsText())
         )
@@ -280,8 +288,8 @@ class PlaylistImportApiTest {
 
         TestTier.set(db, userId, "pro_plus")
         val pp = json(client.preview(token, PL_URL).bodyAsText())
-        assertEquals(149, pp["remainingSongSlots"]!!.jsonPrimitive.int)
-        assertEquals(9, pp["remainingCategorySlots"]!!.jsonPrimitive.int)
+        assertEquals(1999, pp["remainingSongSlots"]!!.jsonPrimitive.int)
+        assertEquals(29, pp["remainingCategorySlots"]!!.jsonPrimitive.int)
     }
 
     @Test

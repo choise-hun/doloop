@@ -581,25 +581,17 @@ test('T6 (UI-3): ✕ 구간 해제 확인 가드 및 프리셋 덮어쓰기 검�
   const hasHScroll = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHScroll).toBe(false);
 
-  // 덮어쓰기 클릭 시 confirm 호출 검증
-  let confirmCalled = false;
-  page.once('dialog', async (dialog) => {
-    confirmCalled = true;
-    await dialog.accept();
-  });
+  // 덮어쓰기 클릭 시 확인 모달 검증 (UXP D6)
   await page.locator('#btnUpdatePreset').click();
+  await expect(page.locator('#confirmDialog')).toBeVisible();
+  await page.locator('#confirmDialogOk').click();
   await expect.poll(() => putPayload).not.toBeNull();
-  expect(confirmCalled).toBe(true);
   expect(putPayload.merge).toBe(false);
 
-  // ✕ 클릭 시 루프 해제 confirm 가드 호출 검증
-  let clearConfirmCalled = false;
-  page.once('dialog', async (dialog) => {
-    clearConfirmCalled = true;
-    await dialog.accept();
-  });
+  // ✕ 클릭 시 루프 해제 확인 모달 검증 (UXP D6)
   await page.locator('#clearBtn').click();
-  expect(clearConfirmCalled).toBe(true);
+  await expect(page.locator('#confirmDialog')).toBeVisible();
+  await page.locator('#confirmDialogOk').click();
   await expect(page.locator('#aTime')).toHaveText('--:--');
   await expect(page.locator('#bTime')).toHaveText('--:--');
 });
@@ -639,19 +631,20 @@ for (const width of [1280, 1150, 768, 390]) {
     await expect(page.locator('#ppRecCard')).toHaveCount(0);
     const r = await page.evaluate(() => {
       const b = (id) => { const x = document.getElementById(id).getBoundingClientRect(); return { top: x.top, bottom: x.bottom, left: x.left, right: x.right, width: x.width, height: x.height }; };
-      return { card: b('ppPlayCard'), start: b('startBtn'), fwd: b('fwdBtn'), rec: b('recBtn'), save: b('saveBtn'), inCard: document.getElementById('ppPlayCard').contains(document.getElementById('recBtn')) };
+      // UXP D2: 재생 줄 맨 오른쪽은 반복(#loopBtn)
+      return { card: b('ppPlayCard'), start: b('startBtn'), fwd: b('fwdBtn'), rec: b('recBtn'), endBtn: b('loopBtn'), inCard: document.getElementById('ppPlayCard').contains(document.getElementById('recBtn')) };
     });
     expect(r.inCard).toBe(true);
     if (width > 600) {
       expect(Math.abs(r.rec.top - r.fwd.top)).toBeLessThanOrEqual(1);
       expect(Math.abs(r.rec.bottom - r.fwd.bottom)).toBeLessThanOrEqual(1);
       expect(r.rec.left).toBeGreaterThanOrEqual(r.fwd.right);
-      expect(r.save.left).toBeGreaterThanOrEqual(r.rec.right); // 저장이 맨 오른쪽
+      expect(r.endBtn.left).toBeGreaterThanOrEqual(r.rec.right); // 반복이 맨 오른쪽
       expect(r.rec.width).toBeLessThan(150); // 예전 녹음 상자보다 좁다
     } else {
-      expect(r.rec.top).toBeGreaterThanOrEqual(r.save.bottom); // 둘째 줄
+      expect(r.rec.top).toBeGreaterThanOrEqual(r.endBtn.bottom); // 둘째 줄
       expect(Math.abs(r.rec.left - r.start.left)).toBeLessThanOrEqual(1); // PR-1: 첫 칸은 ⏮
-      expect(Math.abs(r.rec.right - r.save.right)).toBeLessThanOrEqual(1);
+      expect(Math.abs(r.rec.right - r.endBtn.right)).toBeLessThanOrEqual(1);
       expect(r.rec.height).toBeGreaterThanOrEqual(44);
     }
   });
@@ -710,7 +703,7 @@ for (const width of [1280, 1150, 768, 390]) {
     await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
     await page.locator('#seekRow').waitFor();
     const info = await page.evaluate(() => {
-      const ids = ['backBtn', 'startBtn', 'playBtn', 'fwdBtn', 'saveBtn'];
+      const ids = ['backBtn', 'startBtn', 'playBtn', 'fwdBtn', 'loopBtn'];
       const els = ids.map((i) => document.getElementById(i));
       const cs = (el) => getComputedStyle(el);
       const rects = els.map((el) => el.getBoundingClientRect());
@@ -1222,7 +1215,7 @@ for (const width of [390, 768, 1150, 1280]) {
     await expect(page.locator('#loopBtn')).toBeVisible();
     await expect(page.locator('#waitSelect')).toHaveCount(0);
     const rects = await page.evaluate(() => {
-      const ids = ['loopBtn','presetSelect','btnWaitTimer','clearBtn'];
+      const ids = ['saveBtn','presetSelect','btnWaitTimer','clearBtn'];
       const row = document.querySelector('.pp-looprow');
       const save = document.getElementById('presetSection');
       return {
@@ -1307,13 +1300,14 @@ test('SL1-01 1280: ①버튼 크기 ②라벨 13px ④⑦폴더 박스·목록 �
   // ⑦ 제목 줄·펼치기 없음, 박스 안 "이름 · N곡"
   await expect(page.locator('#folderToggle')).toHaveCount(0);
   await expect(page.locator('#folderSelect')).toHaveText(/전체 곡\s*·\s*3곡/);
-  // ④ 박스 가로 = 곡 카드 가로, ▾ 오른쪽 여백 = 글자 왼쪽 여백, 목록은 박스 아래 8px
+  // ④ 폴더+정렬 줄 가로 = 곡 카드 가로, ▾ 오른쪽 여백 = 글자 왼쪽 여백, 목록은 박스 아래 8px
   const g = await page.evaluate(() => {
     const box = document.getElementById('folderSelect').getBoundingClientRect();
+    const sortBox = document.getElementById('folderSortSelect').getBoundingClientRect();
     const card = document.querySelector('#folderList li button').getBoundingClientRect();
     const val = document.querySelector('#folderSelect > span').getBoundingClientRect();
     const chev = document.querySelector('#folderSelect > span:last-child').getBoundingClientRect();
-    return { bl: box.left, br: box.right, cl: card.left, cr: card.right, gap: card.top - box.bottom,
+    return { bl: box.left, br: sortBox.right, cl: card.left, cr: card.right, gap: card.top - box.bottom,
       padL: val.left - box.left, padR: box.right - chev.right };
   });
   expect(Math.abs(g.bl - g.cl)).toBeLessThanOrEqual(1);
@@ -1447,8 +1441,8 @@ test('SL1-02: ⑨제목 수정·⑧목록 EDIT 곡 수정 창·③분류 EDIT �
   await expect(dlg).toHaveCount(0);
   expect(calls.at(-1)).toEqual({ method: 'PATCH', path: `/songs/${UX3_SONGS[1].id}`, body: { categoryIds: [CAT_JAZZ, CAT_POP] } });
   await pickOption(page, 'folderSelect', CAT_POP);
-  // SL-2 ⑥: 수정 중에는 곡 카드 왼쪽에 순서 이동 핸들(data-drag-id)이 붙으므로 카드 버튼만 센다
-  await expect(page.locator('#folderList li button:not([data-drag-id])')).toHaveText([/새 제목/, /Song 2/]);
+  // SL-2 ⑥ + UXP D3: 수정 중에는 드래그 핸들(data-drag-id)과 삭제 ✕(data-card-del)가 붙으므로 카드 버튼만 센다
+  await expect(page.locator('#folderList li button:not([data-drag-id]):not([data-card-del])')).toHaveText([/새 제목/, /Song 2/]);
   await page.locator('#folderEditBtn').click();
   await expect(panel).not.toHaveAttribute('data-editing', /.*/);
 
@@ -1478,9 +1472,11 @@ test('SL1-02: ⑨제목 수정·⑧목록 EDIT 곡 수정 창·③분류 EDIT �
   expect(calls.at(-1)).toEqual({ method: 'PATCH', path: `/api/v1/categories/${CAT_POP}`, body: { name: 'Pop 2' } });
   await expect(page.locator('#folderSelect')).toHaveText(/Pop 2\s*·\s*2곡/);
 
-  // 삭제: 확인 뒤 DELETE, 곡은 남고 이 분류에서만 빠진다 → 지운 폴더를 보던 목록은 전체 곡
+  // 삭제: 확인 모달 뒤 DELETE, 곡은 남고 이 분류에서만 빠진다 → 지운 폴더를 보던 목록은 전체 곡
   await pop.locator(`[data-category="${CAT_POP}"] button`).click();
   await page.locator('#catEditDelete').click();
+  await expect(page.locator('#confirmDialog')).toBeVisible();
+  await page.locator('#confirmDialogOk').click();
   await expect(one).toHaveCount(0);
   expect(calls.at(-1)).toEqual({ method: 'DELETE', path: `/api/v1/categories/${CAT_POP}`, body: null });
   await expect(pop.locator(`[data-category="${CAT_POP}"]`)).toHaveCount(0);
@@ -1811,4 +1807,100 @@ test('SL2-08: 세션 삭제 실패 500 → 카드 유지·오류 문구', async 
   await expect(card).toContainText('삭제 실패(테스트)');
   await expect(card).toHaveCount(1);
   await expect(page.locator(`#sessionDelete-player-${SL2_SESSION}`)).toBeEnabled();
+});
+
+test('UXP-E1: --:-- +/- 시간 지정, 정렬 전환, EDIT 카드 ✕ 모달 삭제, 서랍 EDIT 인라인 제목 수정 및 이름 일괄 정리', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const songs = [
+    { ...UX3_SONGS[0], a: null, b: null, title: 'Bocchi The Rock! - Flashbacker (guitar cover with tabs & chords)', createdAt: '2026-11-20T01:00:00Z' },
+    { ...UX3_SONGS[1], title: '【TAB譜】勇者 YOASOBI ギター 弾いてみた', createdAt: '2026-11-22T01:00:00Z' },
+    { ...UX3_SONGS[2], title: 'Bocchi The Rock! - Constellation (slow tempo guitar cover with tab)', createdAt: '2026-11-21T01:00:00Z' },
+  ];
+  let liveSongs = songs.slice();
+  const patchCalls = [];
+  const delCalls = [];
+  let bulkItems = null;
+  const mock = ux3Mock({ songs: liveSongs });
+  mock.routes = [
+    [
+      (url) => url.pathname === '/api/v1/songs/titles',
+      async (route) => {
+        if (route.request().method() !== 'PATCH') return route.fallback();
+        bulkItems = route.request().postDataJSON().items;
+        const map = new Map(bulkItems.map((x) => [x.id, x.title]));
+        liveSongs = liveSongs.map((s) => (map.has(s.id) ? { ...s, title: map.get(s.id) } : s));
+        return UX3_JSON(route, { songs: liveSongs });
+      },
+    ],
+    [
+      (url) => /^\/api\/v1\/songs\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith('/titles'),
+      async (route) => {
+        const m = route.request().method();
+        const id = route.request().url().split('/').pop();
+        if (m === 'PATCH') {
+          const body = route.request().postDataJSON();
+          patchCalls.push({ id, body });
+          liveSongs = liveSongs.map((s) => (s.id === id ? { ...s, ...body } : s));
+          return UX3_JSON(route, { song: liveSongs.find((s) => s.id === id) });
+        }
+        if (m === 'DELETE') {
+          delCalls.push(id);
+          liveSongs = liveSongs.filter((s) => s.id !== id);
+          return UX3_JSON(route, { ok: true });
+        }
+        return route.fallback();
+      },
+    ],
+    ...mock.routes,
+  ];
+  await mockApp(page, mock);
+  await page.route(/https:\/\/(www\.)?youtube\.com\/.*/, (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: `window.YT={PlayerState:{PLAYING:1,PAUSED:2},Player:function(el,opts){
+        const api={getCurrentTime:()=>20,getDuration:()=>100,getAvailablePlaybackRates:()=>[1],setPlaybackRate(){},seekTo(){},
+        playVideo(){},pauseVideo(){},destroy(){}};
+        queueMicrotask(()=>opts.events.onReady());return api;}};window.onYouTubeIframeAPIReady?.();`,
+    })
+  );
+  await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
+  await page.locator('#seekRow').waitFor();
+
+  // D1: --:-- 상태에서 - 버튼 클릭해도 현재 재생 시간(0:20.0)으로 시작 시간이 지정된다
+  await expect(page.locator('#aTime')).toHaveText('--:--');
+  await page.locator('button[data-pt="a"][data-d="-0.2"]').click();
+  await expect(page.locator('#aTime')).toHaveText('0:20.0');
+
+  // D3: 정렬 전환(이름순 → 추가순)
+  await pickOption(page, 'folderSortSelect', 'added_asc');
+  await expect(page.locator('#folderList li[data-song-id]')).toHaveCount(3);
+  const ascIds = await songRowIds(page);
+  expect(ascIds).toEqual([songs[0].id, songs[2].id, songs[1].id]);
+
+  // D4 + D5: 서랍 열고 EDIT → 이름 일괄 정리 모달 실행
+  await page.locator('#libBtn').click();
+  await expect(page.locator('#libEditBtn')).toBeVisible();
+  await page.locator('#libEditBtn').click();
+  await expect(page.locator('#libBulkTitleBtn')).toBeVisible();
+  await page.locator('#libBulkTitleBtn').click();
+  await expect(page.locator('#bulkTitleDialog')).toBeVisible();
+  await page.locator('#bulkTitleApply').click();
+  await expect(page.locator('#bulkTitleDialog')).toHaveCount(0);
+  expect(bulkItems).not.toBeNull();
+  expect(bulkItems.find((x) => x.id === songs[1].id)?.title).toBe('勇者 YOASOBI');
+
+  // D4: 서랍 EDIT 중 카드 제목 클릭 → 인라인 수정 Enter 저장
+  await page.locator('#songs button', { hasText: '勇者 YOASOBI' }).first().click();
+  const inlineInp = page.locator('#songs input[type="text"]');
+  await expect(inlineInp).toBeVisible();
+  await inlineInp.fill('勇者');
+  await inlineInp.press('Enter');
+  await expect.poll(() => patchCalls.length).toBeGreaterThanOrEqual(1);
+  expect(patchCalls.at(-1)).toEqual({ id: songs[1].id, body: { title: '勇者' } });
+
+  // D4 + D6: 서랍 카드 우측 상단 ✕ 클릭 → 커스텀 확인 모달 후 삭제
+  await page.locator('#songs [data-card-del]').first().click();
+  await expect(page.locator('#confirmDialog')).toBeVisible();
+  await page.locator('#confirmDialogOk').click();
+  await expect.poll(() => delCalls.length).toBe(1);
 });

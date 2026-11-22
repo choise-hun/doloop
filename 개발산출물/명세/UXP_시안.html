@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>UXP 편의성 패치 시안 — RE:DO</title>
+<style>
+  :root {
+    --bg: #ECEEF0;
+    --surface: #F1F4F7;
+    --surface2: #DCE0E5;
+    --paper: #F1F4F7;
+    --cream: #EDF0F3;
+    --ink: #1d1d1f;
+    --muted: #61656C;
+    --line: #C7CCD3;
+    --seam-hairline: #CBCDCF;
+    --accent: #1d1d1f;
+    --accent-ink: #F1F4F7;
+    --accent-text: #1f3fc3;
+    --fill1: #E64D01;
+    --fill2: #7F93A8;
+    --bad: #b3261e;
+    --good: #2f6b3a;
+    --scrim: rgba(0, 0, 0, 0.45);
+    --radius-block: 3px;
+    --radius-pill: 9999px;
+    --spine-width: 3px;
+    --card-shadow: 0 6px 18px rgba(24, 28, 36, 0.11);
+    --font-body: "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 24px 16px 80px;
+  }
+  .page { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+  h1 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
+  h2 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
+  h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--muted); }
+  p { margin: 0 0 10px; }
+  .note { font-size: 12px; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: var(--radius-block);
+    background: var(--surface2);
+    color: var(--ink);
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge.rec { background: var(--accent); color: var(--accent-ink); }
+  .sec {
+    background: var(--paper);
+    border: 1px solid var(--seam-hairline);
+    border-left: var(--spine-width) solid var(--fill2);
+    border-radius: var(--radius-block);
+    box-shadow: var(--card-shadow);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .optBox {
+    background: var(--bg);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .specLine {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--cream);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    padding: 6px 8px;
+  }
+
+  /* ===== D1 & D2: 구간 반복 / 재생 줄 ===== */
+  .ppAb { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ppPt {
+    display: grid;
+    grid-template-columns: 36px 1fr 36px;
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .ppPt.merged { grid-template-columns: 1fr; }
+  .ppNudge {
+    font: inherit; font-size: 18px; min-height: 52px; color: var(--muted);
+    background: transparent; border: 0; cursor: pointer;
+  }
+  .ppNudge.dim { opacity: 0.35; }
+  .ppNudge:first-child { border-right: 1px solid var(--seam-hairline); }
+  .ppNudge:last-child { border-left: 1px solid var(--seam-hairline); }
+  .ppSetPt {
+    font: inherit; color: var(--ink); background: transparent; border: 0;
+    min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.15; cursor: pointer;
+  }
+  .ppSetPt small { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .ppSetPt span { font-family: var(--font-mono); font-weight: 700; font-size: 15px; }
+  .ppSetPt.active { background: var(--surface2); }
+
+  .ppTransport {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .ppTbtn {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+    min-height: 76px; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .ppTbtn.play { font-size: 28px; }
+  .ppTbtn.loopOn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ppLoopRow {
+    display: grid;
+    grid-template-columns: minmax(72px, 110px) 1fr 56px 44px;
+    gap: 6px;
+  }
+  .ppToggle, .ppSelect, .ppIcon {
+    font: inherit; font-size: 14px; font-weight: 700; height: 44px; min-height: 44px;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 10px; white-space: nowrap;
+  }
+  .ppToggle.dirty { border-color: var(--accent); color: var(--accent-text); }
+  .ppSelect { justify-content: space-between; font-size: 13px; font-weight: 500; }
+  .ppIcon { min-width: 44px; padding: 0; color: var(--muted); }
+  .mobileFrame { max-width: 358px; display: flex; flex-direction: column; gap: 6px; }
+  .mobileTransport { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .mobileTransport .recFull { grid-column: 1 / -1; min-height: 48px; }
+
+  /* ===== D3 & D4: 곡 리스트 & 서랍 EDIT ===== */
+  .panelMock {
+    background: var(--paper);
+    border: 1px solid var(--seam-hairline);
+    border-left: var(--spine-width) solid var(--fill2);
+    border-radius: var(--radius-block);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .panelMock.editing { border-left-color: var(--fill1); }
+  .labRow { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
+  .uBtn {
+    border: 0; background: transparent; padding: 0; font: inherit; font-size: 13px; font-weight: 700;
+    color: var(--ink); text-decoration: underline; text-underline-offset: 4px; cursor: pointer;
+  }
+  .selectRow { display: flex; gap: 6px; align-items: stretch; }
+  .selectRow .folderSel { flex: 1; min-width: 0; }
+  .selectRow .sortSel { flex: none; width: 120px; }
+
+  .songList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .songRow { position: relative; display: flex; gap: 6px; align-items: stretch; }
+  .dragHandle {
+    flex: none; width: 40px; min-height: 54px; font-size: 18px; color: var(--muted);
+    background: var(--cream); border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+    cursor: grab; display: flex; align-items: center; justify-content: center;
+  }
+  .cardWrap { position: relative; flex: 1; min-width: 0; }
+  .songBtn {
+    width: 100%; text-align: left; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+    padding: 10px 12px; min-height: 56px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .editing .songBtn { border-left: 3px solid var(--fill1); padding-right: 40px; }
+  .songTitle { font-weight: 700; overflow-wrap: anywhere; }
+  .songMeta { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+  .cardDelX {
+    position: absolute; top: 4px; right: 4px;
+    width: 32px; height: 32px;
+    border: 1px solid transparent; border-radius: var(--radius-block);
+    background: transparent; color: var(--muted); font-size: 15px; font-weight: 700;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .cardDelX:hover { color: var(--bad); border-color: var(--seam-hairline); background: var(--surface); }
+
+  /* 서랍 시안 */
+  .drawerMock {
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .drawerHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .drawerHeadActions { display: flex; align-items: center; gap: 6px; }
+  .drawerEditBtn {
+    font: inherit; font-size: 13px; font-weight: 700; height: 44px; min-height: 44px;
+    padding: 0 12px; background: var(--bg); color: var(--ink);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); cursor: pointer;
+  }
+  .drawerEditBtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .inlineInput {
+    width: 100%; font: inherit; font-weight: 700; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--accent);
+    border-radius: var(--radius-block); padding: 4px 6px;
+  }
+
+  /* ===== D5: 이름 일괄 정리 모달 (인터랙티브) ===== */
+  .bulkModal {
+    background: var(--surface);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .chipBar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ruleBtn {
+    font: inherit; font-size: 12px; font-weight: 700; min-height: 34px; padding: 0 10px;
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); cursor: pointer;
+  }
+  .ruleBtn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .findRow { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+  .inp {
+    width: 100%; font: inherit; font-size: 13px; height: 38px; padding: 0 10px;
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+  }
+  .previewList {
+    max-height: 420px; overflow-y: auto;
+    border: 1px solid var(--seam-hairline); border-radius: var(--radius-block);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+  }
+  .previewRow {
+    display: grid; grid-template-columns: 24px 1fr; gap: 8px;
+    padding: 8px 10px; border-bottom: 1px solid var(--seam-hairline); align-items: start;
+  }
+  .previewRow:last-child { border-bottom: 0; }
+  .origTxt { font-size: 11px; color: var(--muted); word-break: break-all; margin-bottom: 4px; }
+  .changedTag { font-size: 11px; font-weight: 700; color: var(--good); margin-left: 6px; }
+  .modalFoot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  .pillBtn {
+    font: inherit; font-size: 14px; font-weight: 700; min-height: 44px; padding: 0 18px;
+    border-radius: var(--radius-pill); border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-ink); cursor: pointer;
+  }
+  .ghostBtn {
+    font: inherit; font-size: 14px; font-weight: 700; min-height: 44px; padding: 0 14px;
+    border-radius: var(--radius-block); border: 1px solid var(--seam-hairline);
+    background: var(--cream); color: var(--ink); cursor: pointer;
+  }
+  .dangerBtn {
+    font: inherit; font-size: 14px; font-weight: 700; min-height: 44px; padding: 0 16px;
+    border-radius: var(--radius-block); border: 1px solid var(--bad);
+    background: var(--bad); color: var(--accent-ink); cursor: pointer;
+  }
+
+  /* ===== D6: 확인 모달 ===== */
+  .confirmCard {
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--seam-hairline);
+    border-radius: var(--radius-block);
+    box-shadow: var(--card-shadow);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>UXP 편의성 패치 HTML 시안</h1>
+    <p class="note">선택지 D1~D6을 검토·확정해 주시면 제품 코드 구현으로 진행합니다. D5는 올려주신 실제 18곡으로 직접 눌러 테스트할 수 있습니다.</p>
+  </header>
+
+  <!-- D1 -->
+  <section class="sec">
+    <h2>D1. 구간 반복 미지정(--:--) 상태에서 `+` / `-` 버튼 동작 및 표시</h2>
+    <div class="specLine">적용 대상: .ppPt (높이 52px 유지, 좌우 36px / 중앙 1fr, 글자 15px 유지 — 가로/세로/글자 크기 변동 없음)</div>
+    <div class="grid2">
+      <div class="optBox">
+        <h3><span class="badge rec">A안 (추천)</span>구분선 유지 + 어디를 눌러도 현재 시간 지정</h3>
+        <div class="ppAb">
+          <div class="ppPt">
+            <button class="ppNudge dim" title="현재 시간으로 시작 지정">−</button>
+            <button class="ppSetPt"><small>시작</small><span>--:--</span></button>
+            <button class="ppNudge dim" title="현재 시간으로 시작 지정">+</button>
+          </div>
+          <div class="ppPt">
+            <button class="ppNudge">−</button>
+            <button class="ppSetPt active"><small>끝</small><span>1:24.3</span></button>
+            <button class="ppNudge">+</button>
+          </div>
+        </div>
+        <p class="note">레이아웃이 값이 들어간 뒤에도 흔들리지 않고, `--:--`일 때 `-`/`+`만 살짝 흐리게(opacity 0.35) 두되 클릭 시 현재 시간 지정으로 동작합니다.</p>
+      </div>
+      <div class="optBox">
+        <h3><span class="badge">B안</span>`--:--`일 때 `-`/`+` 숨기고 1칸 큰 버튼으로 병합</h3>
+        <div class="ppAb">
+          <div class="ppPt merged">
+            <button class="ppSetPt"><small>시작 지정</small><span>--:--</span></button>
+          </div>
+          <div class="ppPt">
+            <button class="ppNudge">−</button>
+            <button class="ppSetPt active"><small>끝</small><span>1:24.3</span></button>
+            <button class="ppNudge">+</button>
+          </div>
+        </div>
+        <p class="note">처음 눌렀을 때 범위가 시각적으로 가장 명확합니다. 값이 지정되는 순간 `- | 시간 | +` 3칸으로 바뀝니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- D2 -->
+  <section class="sec">
+    <h2>D2. `저장` 버튼 ↔ `반복` 버튼 위치 맞교환</h2>
+    <div class="specLine">
+      • 반복(#loopBtn): 우측 44px → 재생 줄 76px (가로 1fr, 글자 16px / 600px 이하 14px)<br>
+      • 저장(#saveBtn): 재생 줄 76px → 우측 44px (가로 clamp(64px, 25cqi, 138px), 글자 14px)
+    </div>
+    <div class="grid2">
+      <div class="optBox">
+        <h3>데스크톱 / 태블릿 (601px 이상)</h3>
+        <div class="ppTransport">
+          <button class="ppTbtn">⏮</button>
+          <button class="ppTbtn">−5</button>
+          <button class="ppTbtn play">▶</button>
+          <button class="ppTbtn">+5</button>
+          <button class="ppTbtn">녹음</button>
+          <button class="ppTbtn loopOn">반복 중</button>
+        </div>
+        <div class="ppLoopRow" style="margin-top:6px;">
+          <button class="ppToggle dirty">저장</button>
+          <div class="ppSelect"><span>프리셋 선택</span><span>▾</span></div>
+          <button class="ppToggle">대기</button>
+          <button class="ppIcon">✕</button>
+        </div>
+      </div>
+      <div class="optBox">
+        <h3>모바일 (390px)</h3>
+        <div class="mobileFrame">
+          <div class="mobileTransport">
+            <button class="ppTbtn" style="font-size:14px;">⏮</button>
+            <button class="ppTbtn" style="font-size:14px;">−5</button>
+            <button class="ppTbtn play">▶</button>
+            <button class="ppTbtn" style="font-size:14px;">+5</button>
+            <button class="ppTbtn loopOn" style="font-size:14px;">반복</button>
+            <button class="ppTbtn recFull">녹음</button>
+          </div>
+          <div class="ppLoopRow">
+            <button class="ppToggle dirty" style="font-size:13px;">곡 추가</button>
+            <div class="ppSelect"><span>프리셋</span><span>▾</span></div>
+            <button class="ppToggle" style="font-size:13px;">대기</button>
+            <button class="ppIcon">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- D3 -->
+  <section class="sec">
+    <h2>D3. 메인 곡 리스트: 정렬 선택(방식 A) + EDIT 시 우측 상단 `✕` 삭제</h2>
+    <div class="specLine">
+      • 정렬 드롭다운: 사용자 순서(기본) / 이름순 / 추가순 / 추가 역순 (높이 44px, 폴더 선택과 동일)<br>
+      • 카드 삭제 ✕: 우측 상단 32×32px, 편집 중 카드 우측 padding-right: 40px 확보
+    </div>
+    <div class="grid2">
+      <div class="optBox">
+        <h3><span class="badge rec">A안 (추천)</span>폴더 선택과 같은 줄 우측에 정렬 선택 배치</h3>
+        <div class="panelMock editing">
+          <div class="labRow">
+            <span>폴더 바꾸기 · <b>수정 중</b></span>
+            <button class="uBtn">완료</button>
+          </div>
+          <div class="selectRow">
+            <div class="ppSelect folderSel"><span><b>ANI GTR</b> · 35곡</span><span>▾</span></div>
+            <div class="ppSelect sortSel"><span>사용자 순서</span><span>▾</span></div>
+          </div>
+          <ul class="songList">
+            <li class="songRow">
+              <div class="dragHandle">⠿</div>
+              <div class="cardWrap">
+                <button class="songBtn">
+                  <span class="songTitle">Bocchi The Rock! - Flashbacker</span>
+                  <span class="songMeta">연습 중 · 1×</span>
+                </button>
+                <button class="cardDelX" title="곡 삭제">✕</button>
+              </div>
+            </li>
+            <li class="songRow">
+              <div class="dragHandle">⠿</div>
+              <div class="cardWrap">
+                <button class="songBtn">
+                  <span class="songTitle">Idol (アイドル) / YOASOBI</span>
+                  <span class="songMeta">연습 중 · 1×</span>
+                </button>
+                <button class="cardDelX" title="곡 삭제">✕</button>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <p class="note">세로 공간을 쓰지 않아 곡 목록 높이가 줄어들지 않습니다. 이름순/추가순 선택 시 드래그 핸들(`⠿`)은 자동 숨김됩니다.</p>
+      </div>
+      <div class="optBox">
+        <h3><span class="badge">B안</span>폴더 선택 아래 별도 줄에 정렬 칩 배치</h3>
+        <div class="panelMock">
+          <div class="labRow"><span>폴더 바꾸기</span><button class="uBtn">EDIT</button></div>
+          <div class="ppSelect"><span><b>ANI GTR</b> · 35곡</span><span>▾</span></div>
+          <div class="chipBar">
+            <button class="ruleBtn on">사용자순</button>
+            <button class="ruleBtn">이름순</button>
+            <button class="ruleBtn">추가순</button>
+            <button class="ruleBtn">추가 역순</button>
+          </div>
+          <p class="note">원클릭 전환은 빠르지만 세로 공간이 약 42px 추가로 쓰입니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- D4 -->
+  <section class="sec">
+    <h2>D4. `곡 목록` 서랍 헤더 `[EDIT]` + 인라인 제목 수정 & 카드 `✕` 삭제</h2>
+    <div class="specLine">
+      • 서랍 헤더 우측: [이름 정리](EDIT 중) + [EDIT/완료](높이 44px, #libClose와 동일 곡률·테두리) + [✕](44×44px)<br>
+      • 카드 제목 클릭 → 그 자리에서 input 전환 (Enter/포커스 아웃 저장, Esc 취소) + 우측 상단 ✕ 바로 삭제
+    </div>
+    <div class="drawerMock editing">
+      <div class="drawerHead">
+        <b style="font-size:16px;">연습 곡</b>
+        <div class="drawerHeadActions">
+          <button class="drawerEditBtn" title="이름 일괄 정리">이름 정리</button>
+          <button class="drawerEditBtn" aria-pressed="true">완료</button>
+          <button class="ppIcon">✕</button>
+        </div>
+      </div>
+      <div class="selectRow">
+        <div class="ppSelect sortSel" style="width:100%;"><span>정렬: 사용자 순서</span><span>▾</span></div>
+      </div>
+      <div style="font-weight:700; border-bottom:1px solid var(--seam-hairline); padding:6px 0; display:flex; justify-content:space-between;">
+        <span>▾ ANI GTR</span><span class="note">35</span>
+      </div>
+      <ul class="songList">
+        <li class="songRow">
+          <div class="cardWrap">
+            <div class="songBtn" style="cursor:text;">
+              <input class="inlineInput" value="星座になれたら If I Could Be A Constellation" />
+              <span class="songMeta">Enter 저장 · Esc 취소</span>
+            </div>
+            <button class="cardDelX" title="곡 삭제">✕</button>
+          </div>
+        </li>
+        <li class="songRow">
+          <div class="cardWrap">
+            <button class="songBtn">
+              <span class="songTitle">World Is Mine CPK! Remix</span>
+              <span class="songMeta">연습 중 · 1×</span>
+            </button>
+            <button class="cardDelX" title="곡 삭제">✕</button>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- D5: 실제 18곡 인터랙티브 평가 -->
+  <section class="sec">
+    <h2>D5. 이름 일괄 정리 모달 — 스크린샷 18곡 실데이터 테스트</h2>
+    <p class="note">아래 규칙 토글·공통 문구 칩·찾아바꾸기를 직접 눌러보세요. 규칙 적용 후에도 각 행의 입력칸에서 남은 예외(3~4곡)를 바로 다듬어 한 번에 저장할 수 있습니다.</p>
+    <div class="bulkModal">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <b style="font-size:16px;">이름 일괄 정리 (ANI GTR · 18곡)</b>
+        <button class="uBtn" id="btnResetBulk">초기화</button>
+      </div>
+
+      <div>
+        <div class="note" style="margin-bottom:4px;">1) 원클릭 정리 규칙</div>
+        <div class="chipBar">
+          <button class="ruleBtn" id="rBrackets">[…] · 【…】 태그 제거</button>
+          <button class="ruleBtn" id="rCoverParen">커버/탭 소괄호 (…) 제거</button>
+          <button class="ruleBtn" id="rNoise">커버 상투어 · #해시태그 제거</button>
+          <button class="ruleBtn" id="rQuotes">『…』/「…」 따옴표 안쪽 추출</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="note" style="margin-bottom:4px;">2) 폴더 내 공통 문구 자동 감지 (클릭 시 제거 추가)</div>
+        <div class="chipBar" id="commonChips"></div>
+      </div>
+
+      <div>
+        <div class="note" style="margin-bottom:4px;">3) 직접 찾기 / 바꾸기 (바꿀 문구를 비우면 삭제)</div>
+        <div class="findRow">
+          <input class="inp" id="findInp" placeholder="찾을 문구 (예: Bocchi The Rock! - )" />
+          <input class="inp" id="replInp" placeholder="바꿀 문구 (비우면 삭제)" />
+          <button class="ghostBtn" id="btnAddRule" style="min-height:38px; height:38px;">적용</button>
+        </div>
+      </div>
+
+      <div class="previewList" id="previewList"></div>
+
+      <div class="modalFoot">
+        <span class="note" id="changeSummary" style="margin-right:auto;"></span>
+        <button class="ghostBtn">취소</button>
+        <button class="pillBtn" id="btnApplyBulk">일괄 적용</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- D6 -->
+  <section class="sec">
+    <h2>D6. 디자인 통일 확인 모달 (`window.confirm` 전면 대체)</h2>
+    <div class="specLine">기존 PlayerDialog(small, 폭 min(360px, 100%)) 재사용 · Esc/바깥 클릭 취소 · 플레이어 단축키 차단</div>
+    <div class="grid2">
+      <div class="confirmCard">
+        <h2 style="font-size:17px; margin:0;">곡 삭제</h2>
+        <p style="margin:0; font-size:14px; color:var(--muted);">
+          이 곡과 연습 기록·녹음이 모두 삭제됩니다. 되돌릴 수 없습니다.
+        </p>
+        <div class="modalFoot" style="margin-top:6px;">
+          <button class="ghostBtn">취소</button>
+          <button class="dangerBtn">삭제</button>
+        </div>
+      </div>
+      <div class="confirmCard">
+        <h2 style="font-size:17px; margin:0;">구간 초기화</h2>
+        <p style="margin:0; font-size:14px; color:var(--muted);">
+          설정한 A–B 구간을 지울까요?
+        </p>
+        <div class="modalFoot" style="margin-top:6px;">
+          <button class="ghostBtn">취소</button>
+          <button class="pillBtn">초기화</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const RAW_SONGS = [
+    "Bocchi The Rock! - 星座になれたら If I Could Be A Constellation (slow tempo guitar cover with tab)",
+    "ryo (supercell) - World Is Mine CPK! Remix (guitar cover with tabs & chords)",
+    "[🎸TABS] Idol (アイドル) / YOASOBI | Oshi no Ko 【推しの子】 Full OP Guitar cover",
+    "【TAB譜】ちゅ、多様性。 ano ギター 弾いてみた",
+    "【TAB譜】勇者 YOASOBI ギター 弾いてみた",
+    "【TAB譜】残響散歌 Zankyou Sanka / Aimer ギターカバー Guitar Cover 【練習用にも】",
+    "結束バンド『忘れてやらない』のギターが一番かっこいいので徹底解説してみた！【TAB譜】",
+    "ヨルシカ『アポリア』のピアノパートをギターで弾くと革命が起きる",
+    "【TABS】JANE DOE / 米津玄師, 宇多田ヒカル Kenshi Yonezu, Hikaru Utada ギターカバー Guitar Cover 【チェンソーマン レゼ篇 ED】【アレンジ】",
+    "Kenshi Yonezu, Hikaru Utada - JANE DOE (guitar cover with tabs & chords)",
+    "【TAB譜】KICK BACK 米津玄師 ギター 弾いてみた",
+    "【TABS】Kick Back / 米津 玄師 Kenshi Yonezu ソロギターアレンジ Solo Guitar Cover 【練習用にも】 #弾いてみた",
+    "【TABS】IRIS OUT / 米津玄師 Kenshi Yonezu ギターカバー Guitar Cover 【チェンソーマン レゼ篇 OP】【アレンジ】",
+    "米津玄師「IRIS OUT」にギターを入れてTAB譜付きで徹底解説してみた【チェンソーマン レゼ篇 主題歌】",
+    "[🎸TABS] ぼっち・ざ・ろっく！『UNITE (結束バンド) // Kessoku Band』 Bocchi The Rock! (Guitar Cover)",
+    "Bocchi The Rock! - Flashbacker (guitar cover with tabs & chords)",
+    "【TAB譜】前前前世 RADWIMPS ギター 弾いてみた",
+    "「Akaza's Love Theme」 Demon Slayer: Infinity Castle Movie OST 『劇場版「鬼滅の刃」無限城編』 (Guitar Cover and TAB)"
+  ];
+
+  const state = {
+    brackets: true,
+    coverParen: true,
+    noise: true,
+    quotes: false,
+    customRules: [], // { find, repl }
+    manual: {}, // idx -> string
+    checked: RAW_SONGS.map(() => true),
+  };
+
+  function detectCommonChips(list) {
+    const candidates = [
+      "Bocchi The Rock! - ",
+      "ギター 弾いてみた",
+      "ギターカバー Guitar Cover",
+      "Solo Guitar Cover"
+    ];
+    return candidates.filter(c => list.filter(t => t.includes(c)).length >= 2);
+  }
+
+  function transformTitle(orig) {
+    let s = orig;
+    if (state.brackets) {
+      s = s.replace(/\[[^\]]*\]|【[^】]*】/g, ' ');
+    }
+    if (state.coverParen) {
+      s = s.replace(/\(([^)]*(?:cover|tab|chord|slow|guitar|bass|piano|arrange|ver\.?)[^)]*)\)/gi, ' ');
+    }
+    if (state.noise) {
+      s = s.replace(/#\S+/g, ' ');
+      s = s.replace(/(?:Full\s+(?:OP|ED)\s*)?(?:Solo\s+)?Guitar\s+Cover(?:\s+and\s+TAB)?/gi, ' ');
+      s = s.replace(/ソロギターアレンジ|ギターカバー|ギター\s*弾いてみた|弾いてみた/g, ' ');
+    }
+    if (state.quotes) {
+      const m = s.match(/[『「]([^』」]+)[』」]/);
+      if (m && m[1].trim()) s = m[1].trim();
+    }
+    for (const r of state.customRules) {
+      if (r.find) s = s.split(r.find).join(r.repl);
+    }
+    s = s.replace(/\s{2,}/g, ' ').replace(/^[\s\-/|·]+|[\s\-/|·]+$/g, '').trim();
+    return s || orig;
+  }
+
+  function render() {
+    document.getElementById('rBrackets').classList.toggle('on', state.brackets);
+    document.getElementById('rCoverParen').classList.toggle('on', state.coverParen);
+    document.getElementById('rNoise').classList.toggle('on', state.noise);
+    document.getElementById('rQuotes').classList.toggle('on', state.quotes);
+
+    const chipsEl = document.getElementById('commonChips');
+    chipsEl.innerHTML = '';
+    for (const chip of detectCommonChips(RAW_SONGS)) {
+      const active = state.customRules.some(r => r.find === chip && r.repl === '');
+      const btn = document.createElement('button');
+      btn.className = 'ruleBtn' + (active ? ' on' : '');
+      btn.textContent = (active ? '✓ ' : '+ ') + `"${chip}" 제거`;
+      btn.onclick = () => {
+        if (active) state.customRules = state.customRules.filter(r => !(r.find === chip && r.repl === ''));
+        else state.customRules.push({ find: chip, repl: '' });
+        state.manual = {};
+        render();
+      };
+      chipsEl.appendChild(btn);
+    }
+
+    const listEl = document.getElementById('previewList');
+    listEl.innerHTML = '';
+    let changedCount = 0;
+    RAW_SONGS.forEach((orig, i) => {
+      const next = state.manual[i] !== undefined ? state.manual[i] : transformTitle(orig);
+      const changed = next !== orig;
+      if (changed && state.checked[i]) changedCount++;
+
+      const row = document.createElement('div');
+      row.className = 'previewRow';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = state.checked[i];
+      cb.style.marginTop = '4px';
+      cb.onchange = () => { state.checked[i] = cb.checked; render(); };
+
+      const col = document.createElement('div');
+      const origDiv = document.createElement('div');
+      origDiv.className = 'origTxt';
+      origDiv.textContent = orig;
+      if (changed) {
+        const tag = document.createElement('span');
+        tag.className = 'changedTag';
+        tag.textContent = '변경됨';
+        origDiv.appendChild(tag);
+      }
+      const inp = document.createElement('input');
+      inp.className = 'inp';
+      inp.value = next;
+      inp.oninput = () => { state.manual[i] = inp.value; };
+
+      col.appendChild(origDiv);
+      col.appendChild(inp);
+      row.appendChild(cb);
+      row.appendChild(col);
+      listEl.appendChild(row);
+    });
+
+    document.getElementById('changeSummary').textContent = `변경 예정: ${changedCount} / ${RAW_SONGS.length}곡`;
+    document.getElementById('btnApplyBulk').textContent = `${changedCount}곡 일괄 적용`;
+  }
+
+  document.getElementById('rBrackets').onclick = () => { state.brackets = !state.brackets; state.manual = {}; render(); };
+  document.getElementById('rCoverParen').onclick = () => { state.coverParen = !state.coverParen; state.manual = {}; render(); };
+  document.getElementById('rNoise').onclick = () => { state.noise = !state.noise; state.manual = {}; render(); };
+  document.getElementById('rQuotes').onclick = () => { state.quotes = !state.quotes; state.manual = {}; render(); };
+  document.getElementById('btnAddRule').onclick = () => {
+    const f = document.getElementById('findInp').value;
+    const r = document.getElementById('replInp').value;
+    if (!f) return;
+    state.customRules.push({ find: f, repl: r });
+    document.getElementById('findInp').value = '';
+    document.getElementById('replInp').value = '';
+    state.manual = {};
+    render();
+  };
+  document.getElementById('btnResetBulk').onclick = () => {
+    state.brackets = false; state.coverParen = false; state.noise = false; state.quotes = false;
+    state.customRules = []; state.manual = {};
+    render();
+  };
+  render();
+</script>
+</body>
+</html>
