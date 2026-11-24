@@ -20,3 +20,9 @@ test-results/
 dist/
 playwright-report/
 dist-app/
+
+# AI 작업 규칙 · 하네스 문서 (~/config/redo 에서 동기화, 미커밋 유지)
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/.team_docs/

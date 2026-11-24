@@ -97,7 +97,7 @@ def prompt(state, stage):
         "implement": "승인 명세대로 허용 파일만 구현한다. 관련 규칙과 기존 참조 코드를 직접 읽는다. 명세 불일치나 범위 밖 계약 결정이 필요하면 구현을 확대하지 말고 이유를 보고한다. 기존 부분 구현이 있으면 확인 후 이어간다.",
         "audit": "명세와 실제 코드·diff·검증 로그를 독립적으로 검토한다. 재현 조건과 file:line을 갖춘 결함, 미검증, 잔여 위험을 보고한다. 정적 가드-단언 추적을 실제 변이 검사라고 부르지 않는다. 결론은 검토 보고서이며 자동 머지 허가가 아니다.",
     }[stage]
-    inputs = ["AGENTS.md", "docs/문서_운영.md", "개발산출물/인수인계_메모.md", *task["references"]]
+    inputs = ["AGENTS.md", ".team_docs/문서_운영.md", "개발산출물/인수인계_메모.md", *task["references"]]
     if stage != "explore":
         inputs.append(files["explore"])
     if stage in ("implement", "audit"):
