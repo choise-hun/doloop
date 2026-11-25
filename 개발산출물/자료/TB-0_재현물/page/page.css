@@ -1,0 +1,4 @@
+html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+#bar { height: 40px; display: flex; gap: 8px; align-items: center; padding: 0 8px; border-bottom: 1px solid #ccc; }
+#host { position: absolute; top: 41px; left: 0; right: 0; bottom: 0; overflow: auto; }
+.tb-player { min-height: 100%; }

@@ -1,0 +1,9 @@
+{
+  "name": "tb0-spike",
+  "private": true,
+  "type": "module",
+  "description": "TB-0 격리 재현물 — 제품 소스와 분리",
+  "dependencies": {
+    "@coderline/alphatab": "1.9.0"
+  }
+}

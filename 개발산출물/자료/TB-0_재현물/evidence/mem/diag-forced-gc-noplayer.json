@@ -1,0 +1,167 @@
+[
+ {
+  "label": "start",
+  "renMB": 54.6,
+  "jsHeapMB": 3.59,
+  "nodes": 34,
+  "listeners": 17,
+  "elements": 13,
+  "head": "META,META,META,TITLE,LINK",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 1
+ },
+ {
+  "label": "after close 1",
+  "renMB": 67.1,
+  "jsHeapMB": 6.01,
+  "nodes": 36,
+  "listeners": 17,
+  "elements": 14,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 7
+ },
+ {
+  "label": "after close 2",
+  "renMB": 71.9,
+  "jsHeapMB": 6.46,
+  "nodes": 38,
+  "listeners": 17,
+  "elements": 15,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 13
+ },
+ {
+  "label": "after close 3",
+  "renMB": 73.4,
+  "jsHeapMB": 6.6,
+  "nodes": 40,
+  "listeners": 17,
+  "elements": 16,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 19
+ },
+ {
+  "label": "after close 4",
+  "renMB": 75.2,
+  "jsHeapMB": 6.68,
+  "nodes": 42,
+  "listeners": 17,
+  "elements": 17,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 25
+ },
+ {
+  "label": "after close 5",
+  "renMB": 76.9,
+  "jsHeapMB": 6.76,
+  "nodes": 44,
+  "listeners": 17,
+  "elements": 18,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 31
+ },
+ {
+  "label": "after close 6",
+  "renMB": 80.5,
+  "jsHeapMB": 6.82,
+  "nodes": 46,
+  "listeners": 17,
+  "elements": 19,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 37
+ },
+ {
+  "label": "after close 7",
+  "renMB": 80.8,
+  "jsHeapMB": 6.87,
+  "nodes": 48,
+  "listeners": 17,
+  "elements": 20,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 43
+ },
+ {
+  "label": "after close 8",
+  "renMB": 75.6,
+  "jsHeapMB": 6.9,
+  "nodes": 50,
+  "listeners": 17,
+  "elements": 21,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 49
+ },
+ {
+  "label": "after close 9",
+  "renMB": 78.1,
+  "jsHeapMB": 7.16,
+  "nodes": 52,
+  "listeners": 17,
+  "elements": 22,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 55
+ },
+ {
+  "label": "after close 10",
+  "renMB": 79.7,
+  "jsHeapMB": 7.18,
+  "nodes": 54,
+  "listeners": 17,
+  "elements": 23,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 61
+ }
+]

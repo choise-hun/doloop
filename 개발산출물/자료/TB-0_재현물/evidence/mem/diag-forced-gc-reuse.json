@@ -1,0 +1,167 @@
+[
+ {
+  "label": "start",
+  "renMB": 54,
+  "jsHeapMB": 3.59,
+  "nodes": 34,
+  "listeners": 17,
+  "elements": 13,
+  "head": "META,META,META,TITLE,LINK",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 1
+ },
+ {
+  "label": "after close 1",
+  "renMB": 125.5,
+  "jsHeapMB": 7.66,
+  "nodes": 64,
+  "listeners": 23,
+  "elements": 39,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 12
+ },
+ {
+  "label": "after close 2",
+  "renMB": 138.5,
+  "jsHeapMB": 11.88,
+  "nodes": 83,
+  "listeners": 23,
+  "elements": 59,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 19
+ },
+ {
+  "label": "after close 3",
+  "renMB": 136.9,
+  "jsHeapMB": 8.58,
+  "nodes": 63,
+  "listeners": 23,
+  "elements": 39,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 26
+ },
+ {
+  "label": "after close 4",
+  "renMB": 145.3,
+  "jsHeapMB": 12.3,
+  "nodes": 83,
+  "listeners": 23,
+  "elements": 59,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 33
+ },
+ {
+  "label": "after close 5",
+  "renMB": 127.3,
+  "jsHeapMB": 8.96,
+  "nodes": 63,
+  "listeners": 23,
+  "elements": 39,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 40
+ },
+ {
+  "label": "after close 6",
+  "renMB": 127.4,
+  "jsHeapMB": 12.57,
+  "nodes": 83,
+  "listeners": 23,
+  "elements": 59,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 47
+ },
+ {
+  "label": "after close 7",
+  "renMB": 128,
+  "jsHeapMB": 9.32,
+  "nodes": 63,
+  "listeners": 23,
+  "elements": 39,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 54
+ },
+ {
+  "label": "after close 8",
+  "renMB": 129.2,
+  "jsHeapMB": 12.85,
+  "nodes": 83,
+  "listeners": 23,
+  "elements": 59,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 61
+ },
+ {
+  "label": "after close 9",
+  "renMB": 125.4,
+  "jsHeapMB": 9.54,
+  "nodes": 63,
+  "listeners": 23,
+  "elements": 39,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared,STYLE#alphaTabStyle",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 68
+ },
+ {
+  "label": "after close 10",
+  "renMB": 95.6,
+  "jsHeapMB": 7.14,
+  "nodes": 36,
+  "listeners": 18,
+  "elements": 14,
+  "head": "META,META,META,TITLE,LINK,STYLE#alphaTabStyleShared",
+  "bodyChildren": [
+   "DIV#bar",
+   "DIV#host",
+   "SCRIPT"
+  ],
+  "timeline": 76
+ }
+]

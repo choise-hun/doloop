@@ -1,0 +1,939 @@
+{
+ "tag": "run2-msedge-html5",
+ "run": "2",
+ "policy": "candidate",
+ "engine": "html5",
+ "hash": "sha256-EIR5s3Qp1PxPxW4Koopu9nVN+I2chNMT0ImH3VG/s+c=,sha256-ago6aunBhfAMrD80tguQXUt95n6srkO3pzX2dUHs0gs=",
+ "channel": "msedge",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
+ "settleMs": 30000,
+ "startedAt": "2026-11-25T06:41:11.493Z",
+ "host": {
+  "os": "Windows_NT 10.0.26200",
+  "cpu": "Intel(R) Core(TM) i7-14650HX",
+  "ramBytes": 16868626432
+ },
+ "metric": "ren = 탭 렌더러 프로세스 PrivatePageCount 합(bytes), tot = 해당 브라우저 인스턴스 전체 합",
+ "B0": {
+  "ren": 76955648,
+  "tot": 283553792,
+  "jsHeap": 6255600,
+  "nodes": 36
+ },
+ "warm": {
+  "file": "A.gp",
+  "ok": true,
+  "timeout": false,
+  "readyMs": 282,
+  "rms": 0.29022,
+  "peak": 154124288,
+  "peakTot": 391487488,
+  "samplesInWindow": 11
+ },
+ "cycles": [
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 155,
+   "rms": 0.28691,
+   "peak": 144879616,
+   "peakTot": 353177600,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "B.mxl",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 172,
+   "rms": 0.29022,
+   "peak": 166006784,
+   "peakTot": 379174912,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 141,
+   "rms": 0.29022,
+   "peak": 150970368,
+   "peakTot": 375463936,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "B.mxl",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 298,
+   "rms": 0.29165,
+   "peak": 166174720,
+   "peakTot": 382914560,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 143,
+   "rms": 0.28691,
+   "peak": 159449088,
+   "peakTot": 369905664,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "B.mxl",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 171,
+   "rms": 0.2884,
+   "peak": 171974656,
+   "peakTot": 386097152,
+   "samplesInWindow": 10
+  },
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 140,
+   "rms": 0.28691,
+   "peak": 164884480,
+   "peakTot": 382771200,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "B.mxl",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 188,
+   "rms": 0.29165,
+   "peak": 185921536,
+   "peakTot": 398438400,
+   "samplesInWindow": 10
+  },
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 157,
+   "rms": 0.28691,
+   "peak": 174071808,
+   "peakTot": 394973184,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "B.mxl",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 171,
+   "rms": 0.28691,
+   "peak": 186449920,
+   "peakTot": 395059200,
+   "samplesInWindow": 11
+  },
+  {
+   "file": "A.gp",
+   "ok": true,
+   "timeout": false,
+   "readyMs": 158,
+   "rms": 0.29022,
+   "peak": 179412992,
+   "peakTot": 401014784,
+   "samplesInWindow": 11
+  }
+ ],
+ "R": [
+  {
+   "label": "R1",
+   "ren": 76206080,
+   "tot": 277454848,
+   "jsHeap": 6479196,
+   "nodes": 38,
+   "counters": {
+    "gen": 2,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 2,
+     "contexts": 2,
+     "worklets": 2
+    }
+   }
+  },
+  {
+   "label": "R2",
+   "ren": 102289408,
+   "tot": 323252224,
+   "jsHeap": 6830632,
+   "nodes": 40,
+   "counters": {
+    "gen": 3,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 3,
+     "contexts": 3,
+     "worklets": 3
+    }
+   }
+  },
+  {
+   "label": "R3",
+   "ren": 84152320,
+   "tot": 283897856,
+   "jsHeap": 6908968,
+   "nodes": 42,
+   "counters": {
+    "gen": 4,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 4,
+     "contexts": 4,
+     "worklets": 4
+    }
+   }
+  },
+  {
+   "label": "R4",
+   "ren": 89522176,
+   "tot": 262361088,
+   "jsHeap": 7022056,
+   "nodes": 44,
+   "counters": {
+    "gen": 5,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 5,
+     "contexts": 5,
+     "worklets": 5
+    }
+   }
+  },
+  {
+   "label": "R5",
+   "ren": 91951104,
+   "tot": 290291712,
+   "jsHeap": 6951756,
+   "nodes": 46,
+   "counters": {
+    "gen": 6,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 6,
+     "contexts": 6,
+     "worklets": 6
+    }
+   }
+  },
+  {
+   "label": "R6",
+   "ren": 97128448,
+   "tot": 304025600,
+   "jsHeap": 7034312,
+   "nodes": 48,
+   "counters": {
+    "gen": 7,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 7,
+     "contexts": 7,
+     "worklets": 7
+    }
+   }
+  },
+  {
+   "label": "R7",
+   "ren": 100610048,
+   "tot": 300007424,
+   "jsHeap": 7054988,
+   "nodes": 50,
+   "counters": {
+    "gen": 8,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 8,
+     "contexts": 8,
+     "worklets": 8
+    }
+   }
+  },
+  {
+   "label": "R8",
+   "ren": 124678144,
+   "tot": 342495232,
+   "jsHeap": 7340148,
+   "nodes": 52,
+   "counters": {
+    "gen": 9,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 9,
+     "contexts": 9,
+     "worklets": 9
+    }
+   }
+  },
+  {
+   "label": "R9",
+   "ren": 106749952,
+   "tot": 279519232,
+   "jsHeap": 7349360,
+   "nodes": 54,
+   "counters": {
+    "gen": 10,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 10,
+     "contexts": 10,
+     "worklets": 10
+    }
+   }
+  },
+  {
+   "label": "R10",
+   "ren": 109895680,
+   "tot": 327598080,
+   "jsHeap": 7362532,
+   "nodes": 56,
+   "counters": {
+    "gen": 11,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 11,
+     "contexts": 11,
+     "worklets": 11
+    }
+   }
+  }
+ ],
+ "Rend": {
+  "ren": 113905664,
+  "tot": 311410688,
+  "jsHeap": 7364624,
+  "nodes": 58,
+  "counters": {
+   "gen": 12,
+   "liveWorkers": 0,
+   "openContexts": 0,
+   "contextsCloseCalledNotResolved": 0,
+   "workletNodesOnOpenContext": 0,
+   "outstandingBlobUrls": 0,
+   "playerDom": 0,
+   "surfaces": 0,
+   "activeSubs": 0,
+   "pendingFetch": 0,
+   "totals": {
+    "workers": 12,
+    "contexts": 12,
+    "worklets": 12
+   }
+  }
+ },
+ "verdict": {
+  "peakDeltaMB": 109.494272,
+  "peakPass": true,
+  "residualLimitMB": 10,
+  "residuals": [
+   {
+    "label": "R1",
+    "deltaMB": -0.749568
+   },
+   {
+    "label": "R2",
+    "deltaMB": 25.33376
+   },
+   {
+    "label": "R3",
+    "deltaMB": 7.196672
+   },
+   {
+    "label": "R4",
+    "deltaMB": 12.566528
+   },
+   {
+    "label": "R5",
+    "deltaMB": 14.995456
+   },
+   {
+    "label": "R6",
+    "deltaMB": 20.1728
+   },
+   {
+    "label": "R7",
+    "deltaMB": 23.6544
+   },
+   {
+    "label": "R8",
+    "deltaMB": 47.722496
+   },
+   {
+    "label": "R9",
+    "deltaMB": 29.794304
+   },
+   {
+    "label": "R10",
+    "deltaMB": 32.940032
+   },
+   {
+    "label": "R_end",
+    "deltaMB": 36.950016
+   }
+  ],
+  "residualPass": false,
+  "driftMB": 25.74336,
+  "driftPass": false,
+  "counterLeftovers": 0,
+  "countersPass": true,
+  "timeouts": 0,
+  "silentCycles": 0,
+  "pass": false
+ },
+ "events": [
+  {
+   "ts": 1795588873486,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795588881124,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 282,
+   "rms": 0.29022
+  },
+  {
+   "ts": 1795588881147,
+   "e": "closed",
+   "counters": {
+    "gen": 1,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 1,
+     "contexts": 1,
+     "worklets": 1
+    }
+   }
+  },
+  {
+   "ts": 1795588923007,
+   "e": "settle",
+   "label": "B0"
+  },
+  {
+   "ts": 1795588923007,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795588930497,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 155,
+   "rms": 0.28691
+  },
+  {
+   "ts": 1795588930521,
+   "e": "closed",
+   "counters": {
+    "gen": 2,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 2,
+     "contexts": 2,
+     "worklets": 2
+    }
+   }
+  },
+  {
+   "ts": 1795588972378,
+   "e": "settle",
+   "label": "R1"
+  },
+  {
+   "ts": 1795588972378,
+   "e": "open",
+   "file": "B.mxl"
+  },
+  {
+   "ts": 1795588979888,
+   "e": "played",
+   "file": "B.mxl",
+   "ok": true,
+   "readyMs": 172,
+   "rms": 0.29022
+  },
+  {
+   "ts": 1795588979912,
+   "e": "closed",
+   "counters": {
+    "gen": 3,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 3,
+     "contexts": 3,
+     "worklets": 3
+    }
+   }
+  },
+  {
+   "ts": 1795589021765,
+   "e": "settle",
+   "label": "R2"
+  },
+  {
+   "ts": 1795589021766,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795589029262,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 141,
+   "rms": 0.29022
+  },
+  {
+   "ts": 1795589029285,
+   "e": "closed",
+   "counters": {
+    "gen": 4,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 4,
+     "contexts": 4,
+     "worklets": 4
+    }
+   }
+  },
+  {
+   "ts": 1795589071134,
+   "e": "settle",
+   "label": "R3"
+  },
+  {
+   "ts": 1795589071134,
+   "e": "open",
+   "file": "B.mxl"
+  },
+  {
+   "ts": 1795589078770,
+   "e": "played",
+   "file": "B.mxl",
+   "ok": true,
+   "readyMs": 298,
+   "rms": 0.29165
+  },
+  {
+   "ts": 1795589078793,
+   "e": "closed",
+   "counters": {
+    "gen": 5,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 5,
+     "contexts": 5,
+     "worklets": 5
+    }
+   }
+  },
+  {
+   "ts": 1795589120635,
+   "e": "settle",
+   "label": "R4"
+  },
+  {
+   "ts": 1795589120635,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795589128140,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 143,
+   "rms": 0.28691
+  },
+  {
+   "ts": 1795589128165,
+   "e": "closed",
+   "counters": {
+    "gen": 6,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 6,
+     "contexts": 6,
+     "worklets": 6
+    }
+   }
+  },
+  {
+   "ts": 1795589170017,
+   "e": "settle",
+   "label": "R5"
+  },
+  {
+   "ts": 1795589170017,
+   "e": "open",
+   "file": "B.mxl"
+  },
+  {
+   "ts": 1795589177532,
+   "e": "played",
+   "file": "B.mxl",
+   "ok": true,
+   "readyMs": 171,
+   "rms": 0.2884
+  },
+  {
+   "ts": 1795589177555,
+   "e": "closed",
+   "counters": {
+    "gen": 7,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 7,
+     "contexts": 7,
+     "worklets": 7
+    }
+   }
+  },
+  {
+   "ts": 1795589219412,
+   "e": "settle",
+   "label": "R6"
+  },
+  {
+   "ts": 1795589219412,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795589226894,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 140,
+   "rms": 0.28691
+  },
+  {
+   "ts": 1795589226916,
+   "e": "closed",
+   "counters": {
+    "gen": 8,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 8,
+     "contexts": 8,
+     "worklets": 8
+    }
+   }
+  },
+  {
+   "ts": 1795589268769,
+   "e": "settle",
+   "label": "R7"
+  },
+  {
+   "ts": 1795589268769,
+   "e": "open",
+   "file": "B.mxl"
+  },
+  {
+   "ts": 1795589276326,
+   "e": "played",
+   "file": "B.mxl",
+   "ok": true,
+   "readyMs": 188,
+   "rms": 0.29165
+  },
+  {
+   "ts": 1795589276348,
+   "e": "closed",
+   "counters": {
+    "gen": 9,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 9,
+     "contexts": 9,
+     "worklets": 9
+    }
+   }
+  },
+  {
+   "ts": 1795589318201,
+   "e": "settle",
+   "label": "R8"
+  },
+  {
+   "ts": 1795589318201,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795589325728,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 157,
+   "rms": 0.28691
+  },
+  {
+   "ts": 1795589325750,
+   "e": "closed",
+   "counters": {
+    "gen": 10,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 10,
+     "contexts": 10,
+     "worklets": 10
+    }
+   }
+  },
+  {
+   "ts": 1795589367606,
+   "e": "settle",
+   "label": "R9"
+  },
+  {
+   "ts": 1795589367606,
+   "e": "open",
+   "file": "B.mxl"
+  },
+  {
+   "ts": 1795589375128,
+   "e": "played",
+   "file": "B.mxl",
+   "ok": true,
+   "readyMs": 171,
+   "rms": 0.28691
+  },
+  {
+   "ts": 1795589375151,
+   "e": "closed",
+   "counters": {
+    "gen": 11,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 11,
+     "contexts": 11,
+     "worklets": 11
+    }
+   }
+  },
+  {
+   "ts": 1795589417006,
+   "e": "settle",
+   "label": "R10"
+  },
+  {
+   "ts": 1795589417006,
+   "e": "open",
+   "file": "A.gp"
+  },
+  {
+   "ts": 1795589424520,
+   "e": "played",
+   "file": "A.gp",
+   "ok": true,
+   "readyMs": 158,
+   "rms": 0.29022
+  },
+  {
+   "ts": 1795589424543,
+   "e": "closed",
+   "counters": {
+    "gen": 12,
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 12,
+     "contexts": 12,
+     "worklets": 12
+    }
+   }
+  },
+  {
+   "ts": 1795589466387,
+   "e": "settle",
+   "label": "R_end"
+  }
+ ]
+}

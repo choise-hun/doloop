@@ -1,0 +1,111 @@
+{
+ "tag": "candidate-html5-A.gp",
+ "policy": "candidate",
+ "engine": "html5",
+ "hash": "",
+ "file": "A.gp",
+ "channel": "msedge",
+ "bootOk": true,
+ "readyOk": true,
+ "peakRms": 0.26745,
+ "ready": {
+  "score": {
+   "bars": 32,
+   "tracks": [
+    "Guitar",
+    "Bass",
+    "Drums"
+   ]
+  },
+  "render": true,
+  "soundFont": true,
+  "player": true
+ },
+ "pos": {
+  "time": 2944,
+  "tick": 5653
+ },
+ "violations": {
+  "style-src-elem | inline | http://127.0.0.1:5179/at/alphaTab.core.mjs:45755": 1,
+  "style-src-elem | inline | http://127.0.0.1:5179/at/alphaTab.core.mjs:45695": 1
+ },
+ "errors": [],
+ "fonts": [],
+ "styleTexts": [
+  {
+   "id": "alphaTabStyleShared",
+   "text": "\n                .at-surface * {\n                    cursor: default;\n                    vertical-align: top;\n                    overflow: visible;\n                }\n                .at-surface-svg text {\n                    dominant-baseline: alphabetic;\n                    white-space:pre;\n                }"
+  },
+  {
+   "id": "alphaTabStyle",
+   "text": "\n            @font-face {\n                font-display: block;\n                font-family: 'alphaTab';\n                src: url(\"/at/font/Bravura.woff2\") format('woff2'),url(\"/at/font/Bravura.woff\") format('woff'),url(\"/at/font/Bravura.otf\") format('opentype');\n                font-weight: normal;\n                font-style: normal;\n            }\n            .at-surface.at .at {\n                font-family: 'alphaTab';\n                speak: none;\n                font-style: normal;\n                font-weight: normal;\n                font-variant: normal;\n                text-transform: none;\n                line-height: 1;\n                line-height: 1;\n                -webkit-font-smoothing: antialiased;\n                -moz-osx-font-smoothing: grayscale;\n                font-size: 36px;\n                overflow: visible !important;\n            }"
+  }
+ ],
+ "svgText": 0,
+ "canvases": 8,
+ "surfaceChildren": 9,
+ "workers": [
+  "http://127.0.0.1:5179/at/alphaTab.worker.mjs"
+ ],
+ "counters": {
+  "liveWorkers": 1,
+  "openContexts": 1,
+  "contextsCloseCalledNotResolved": 0,
+  "workletNodesOnOpenContext": 1,
+  "outstandingBlobUrls": 0,
+  "playerDom": 1,
+  "surfaces": 1,
+  "activeSubs": 7,
+  "pendingFetch": 0,
+  "totals": {
+   "workers": 1,
+   "contexts": 1,
+   "worklets": 1
+  }
+ },
+ "crossOriginIsolated": true,
+ "console": [
+  "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "error: Applying inline style violates the following Content Security Policy directive 'style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw=' 'sha256-88QphsXJQwxKP9xXR175ZSMzpaq6Swzj9u3QQ+G2Wig=''. Either the 'unsafe-inline' keyword, a hash ('sha256-EIR5s3Qp1PxP",
+  "error: Applying inline style violates the following Content Security Policy directive 'style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw=' 'sha256-88QphsXJQwxKP9xXR175ZSMzpaq6Swzj9u3QQ+G2Wig=''. Either the 'unsafe-inline' keyword, a hash ('sha256-ago6aunBhfAM",
+  "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "responses": [
+  {
+   "url": "/?policy=candidate&engine=html5",
+   "status": 200
+  },
+  {
+   "url": "/page.css",
+   "status": 200
+  },
+  {
+   "url": "/app.mjs",
+   "status": 200
+  },
+  {
+   "url": "/at/alphaTab.mjs",
+   "status": 200
+  },
+  {
+   "url": "/at/alphaTab.core.mjs",
+   "status": 200
+  },
+  {
+   "url": "/fixtures/A.gp",
+   "status": 200
+  },
+  {
+   "url": "/at/alphaTab.worker.mjs",
+   "status": 200
+  },
+  {
+   "url": "/at/alphaTab.core.mjs",
+   "status": 200
+  },
+  {
+   "url": "/at/soundfont/sonivox.sf2",
+   "status": 200
+  }
+ ]
+}
