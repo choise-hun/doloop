@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class FakeStorageClient : StorageClient {
     val objects = ConcurrentHashMap<String, ByteArray>()
     val deleted = CopyOnWriteArrayList<String>()
+    val contentTypes = ConcurrentHashMap<String, String>()
     val downloadCount = AtomicInteger(0)
     @Volatile var failUpload = false
     @Volatile var failSign = false
@@ -28,6 +29,7 @@ class FakeStorageClient : StorageClient {
             throw StorageException("Fake upload failure")
         }
         objects[key] = bytes
+        contentTypes[key] = contentType
         onUploadSuccess?.invoke(key)
     }
 

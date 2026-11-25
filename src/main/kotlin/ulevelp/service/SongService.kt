@@ -34,7 +34,8 @@ data class SongDto(
     val artist: String,
     val status: String,
     val statusCode: String,
-    val videoId: String,
+    /** 유튜브 곡만 값이 있다. TAB 곡은 null(TB-1 명세 §8) */
+    val videoId: String?,
     val pos: Double?,
     val a: Double?,
     val b: Double?,
@@ -45,7 +46,13 @@ data class SongDto(
     val totalSeconds: Long,
     val resumeUrl: String,
     val durationSec: Int = 0,
-    val createdAt: String = ""
+    val createdAt: String = "",
+    /** "youtube" | "tab" (V15) */
+    val mediaType: String = SongsTable.MEDIA_YOUTUBE,
+    val tabFileName: String? = null,
+    /** "gp" | "xml" | "mxl" */
+    val tabFormat: String? = null,
+    val tabFileSize: Long? = null
 )
 
 @Serializable
@@ -184,15 +191,19 @@ class SongService(
         return rowToDto(row, totalSec, categoryIds)
     }
 
-    suspend fun list(userId: UUID, statusCode: String?): List<SongDto> {
+    /** [includeTab]=false면 유튜브 곡만(옛 클라이언트 보호, TB-1 명세 T4) */
+    suspend fun list(userId: UUID, statusCode: String?, includeTab: Boolean = false): List<SongDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
-            loadList(userId, statusCode)
+            loadList(userId, statusCode, includeTab)
         }
     }
 
-    private fun Transaction.loadList(userId: UUID, statusCode: String?): List<SongDto> {
+    private fun Transaction.loadList(userId: UUID, statusCode: String?, includeTab: Boolean): List<SongDto> {
         val query = SongsTable.selectAll().where { SongsTable.userId eq userId }
+        if (!includeTab) {
+            query.andWhere { SongsTable.mediaType eq SongsTable.MEDIA_YOUTUBE }
+        }
         if (statusCode != null) {
             query.andWhere { SongsTable.status eq statusCode }
         }
@@ -218,8 +229,9 @@ class SongService(
      * SL-2 곡 순서 저장(명세 §5.2). [ids] = 화면에 보이는 폴더의 곡을 새 순서대로(중복 없음은 라우트가 검사).
      * 전체 순서에서 [ids] 곡들이 차지한 자리에 [ids] 순서대로 다시 넣고 나머지는 제자리, 전체를 0..n-1로 다시 매긴다.
      * 하나라도 내 곡이 아니면(없음·다른 사용자) 404, DB 무변경. 반환 = `GET /songs`와 같은 전체 목록
+     * 자리 계산은 TAB 곡까지 포함한 전체 순서 위에서 한다. 유튜브 곡만 보낸 옛 클라이언트도 TAB 곡 자리를 바꾸지 않는다
      */
-    suspend fun reorder(userId: UUID, ids: List<UUID>): List<SongDto> {
+    suspend fun reorder(userId: UUID, ids: List<UUID>, includeTab: Boolean = false): List<SongDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
             tierContext(userId, lock = true) // 곡 생성·삭제·다른 순서 저장과 직렬화(새 곡 트리거의 MIN 계산 경합 방지)
@@ -243,7 +255,7 @@ class SongService(
             }
             SharedFolderSync.resyncCategories(this, userId, null) // 공개본 순서도 sort_order를 따른다(E1)
 
-            loadList(userId, null)
+            loadList(userId, null, includeTab)
         }
     }
 
@@ -251,7 +263,7 @@ class SongService(
      * 곡 제목 일괄 변경(UXP): 단일 트랜잭션에서 소유권 검증 후 바뀐 곡만 UPDATE.
      * 하나라도 내 곡이 아니면 404, DB 무변경. 반환 = `GET /songs`와 같은 전체 목록
      */
-    suspend fun batchUpdateTitles(userId: UUID, items: List<Pair<UUID, String>>): List<SongDto> {
+    suspend fun batchUpdateTitles(userId: UUID, items: List<Pair<UUID, String>>, includeTab: Boolean = false): List<SongDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
             tierContext(userId, lock = true)
@@ -276,7 +288,7 @@ class SongService(
             if (changed) {
                 SharedFolderSync.resyncCategories(this, userId, null)
             }
-            loadList(userId, null)
+            loadList(userId, null, includeTab)
         }
     }
 
@@ -446,8 +458,13 @@ class SongService(
                 .where { (TakesTable.userId eq userId) and (TakesTable.songId eq songId) and (TakesTable.storage eq "supabase") }
                 .map { it[TakesTable.storageKey] }
 
+            // TB-1: TAB 곡이면 그 파일 키도 같은 트랜잭션에서 휴지통에 넣는다(라우트가 커밋 뒤 purge)
+            val tabStorageKey = SongsTable.select(SongsTable.tabStorageKey)
+                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                .single()[SongsTable.tabStorageKey]
+
             val trashIds = mutableListOf<Long>()
-            for (storageKey in supabaseStorageKeys) {
+            for (storageKey in supabaseStorageKeys + listOfNotNull(tabStorageKey)) {
                 val trashId = StorageTrashTable.insert {
                     it[StorageTrashTable.storageKey] = storageKey
                 } get StorageTrashTable.id
@@ -691,7 +708,7 @@ class SongService(
             updatedAt = DateTimeFormatter.ISO_INSTANT.format(row[SongPresetsTable.updatedAt].toInstant())
         )
 
-    private fun rowToDto(row: ResultRow, totalSeconds: Long, categoryIds: List<String>): SongDto {
+    internal fun rowToDto(row: ResultRow, totalSeconds: Long, categoryIds: List<String>): SongDto {
         val statusCode = row[SongsTable.status]
         val statusLabel = STATUS_LABELS[statusCode] ?: statusCode
         val pos = row[SongsTable.pos]
@@ -715,9 +732,13 @@ class SongService(
             memo = row[SongsTable.memo],
             categoryIds = categoryIds,
             totalSeconds = totalSeconds,
-            resumeUrl = resumeUrl(publicAppUrl, videoId, pos, a, b, rate),
+            resumeUrl = resumeUrl(publicAppUrl, videoId, row[SongsTable.id], pos, a, b, rate),
             durationSec = row[SongsTable.durationSec],
-            createdAt = formatTimestamp(row[SongsTable.createdAt])
+            createdAt = formatTimestamp(row[SongsTable.createdAt]),
+            mediaType = row[SongsTable.mediaType],
+            tabFileName = row[SongsTable.tabFileName],
+            tabFormat = row[SongsTable.tabFormat],
+            tabFileSize = row[SongsTable.tabFileSize]
         )
     }
 
@@ -766,9 +787,11 @@ class SongService(
             }
         }
 
+        /** 유튜브 곡은 `?v=<videoId>`(기존 그대로), TAB 곡(videoId null)은 `?song=<songId>`. 뒤의 t·a·b·r은 같다 */
         fun resumeUrl(
             publicAppUrl: String,
-            videoId: String,
+            videoId: String?,
+            songId: UUID,
             pos: BigDecimal?,
             a: BigDecimal?,
             b: BigDecimal?,
@@ -787,7 +810,8 @@ class SongService(
             val bParam = b?.let { "b=${formatPlain(it)}" }
             val rParam = if (rate.compareTo(BigDecimal.ONE) != 0) "r=${formatPlain(rate)}" else null
 
-            val params = listOfNotNull("v=$videoId", tParam, aParam, bParam, rParam)
+            val head = if (videoId != null) "v=$videoId" else "song=$songId"
+            val params = listOfNotNull(head, tParam, aParam, bParam, rParam)
             return "${base}practice.html?${params.joinToString("&")}"
         }
 

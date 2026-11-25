@@ -166,9 +166,9 @@ CREATE UNIQUE INDEX songs_tab_storage_key_uq ON songs (tab_storage_key) WHERE ta
 | `SharedFolderSync.copyCategory` | 조회 조건에 `SongsTable.mediaType eq "youtube"`를 더한다. 분류에 TAB 곡이 있어도 공개본에는 들어가지 않는다(D3) |
 | `EpisodeLogService.snapshot` | `video_id`가 null이면 `episodeConflict("SESSION_NOT_SHAREABLE")`(P19). TAB 연습 기록은 연습 카드로 공유되지 않는다 |
 | `PracticeLogService.todayVideos` | `SongsTable.videoId.isNotNull()` 조건을 더한다. 공개 연습 기록 "오늘 곡"에 TAB 곡은 나오지 않는다(합계 초·연속일 집계는 기존대로 모든 세션을 센다) |
-| `SessionService`(`GET /sessions`) | `SessionWithSongDto.videoId: String?`와 `mediaType: String = "youtube"`를 둔다. `include=tab`이 없으면 TAB 곡 세션을 빼고, 날짜별 합계도 응답에 실린 세션 기준으로 계산한다(T4) |
+| `SessionService`(`GET /sessions`) | `SessionWithSongDto.videoId: String?`와 `mediaType: String = "youtube"`를 둔다. `include=tab`이 없으면 세션 목록에서 TAB 곡 세션을 뺀다(T4). 주간·월간 합계와 달력은 실제 연습량이라 곡 종류와 상관없이 모든 세션을 센다(구현 중 정정, 2026-11-25) |
 | `ExportImportService` 내보내기 | `media_type = 'youtube'`인 곡과 그 세션·녹음만 내보낸다. README에 한 줄을 넣는다(T5). 가져오기는 변경 없음(유튜브 링크가 있는 행만 곡이 된다) |
-| `CommunityService`·`PlaylistImportService` | 변경 없음(유튜브 곡만 넣는다, P18) |
+| `CommunityService`·`PlaylistImportService` | 동작 변경 없음(유튜브 곡만 넣는다, P18). `video_id inList …` 결과를 맵으로 만드는 한 줄이 nullable 타입 때문에 컴파일되지 않아 `!!`를 붙인다(구현 중 추가, 2026-11-25) |
 | `NotionPushWorker.pushSongUpsert`·ZIP 외 폐기 기능 코드 | 기능 변경 없이 **컴파일만 맞춘다**: `video_id`가 null인 행은 지금의 "행 없음"과 같은 경로(`return null`)로 처리한다. 새 TAB 경로에는 outbox 호출을 넣지 않는다 |
 
 ## 8. `SongDto` 하위 호환
@@ -204,10 +204,10 @@ data class SongDto(
 | 수정 | `db/Tables.kt`(SongsTable) | ① |
 | 수정 | `service/SongService.kt`(DTO·rowToDto·resumeUrl·list/reorder/titles `includeTab`·delete 휴지통) | ①(delete는 ②) |
 | 수정 | `routes/SongRoutes.kt`(`include` 쿼리, `POST /tab`, `GET /{songId}/tab-file`) | ①·② |
-| 수정 | `service/SharedFolderSync.kt`, `service/EpisodeLogService.kt`, `service/PracticeLogService.kt`, `service/SessionService.kt`, `routes/SessionRoutes.kt`, `service/ExportImportService.kt`, `notion/NotionPushWorker.kt`(컴파일만) | ① |
+| 수정 | `service/SharedFolderSync.kt`, `service/EpisodeLogService.kt`, `service/PracticeLogService.kt`, `service/SessionService.kt`, `routes/SessionRoutes.kt`, `service/ExportImportService.kt`, `notion/NotionPushWorker.kt`(컴파일만), `service/CommunityService.kt`·`service/PlaylistImportService.kt`(컴파일만, 구현 중 추가) | ① |
 | 신규 | `service/TabSongService.kt`, `service/TabFileValidator.kt` | ② |
 | 수정 | `service/TierService.kt`(한도·사용량·DTO), `service/ProfileService.kt`(deleteMe), `Main.kt`(서비스 생성·라우트 인자) | ② |
-| 테스트 | `db/DatabaseMigrationAndIntegrityTest.kt`(버전 15 + V15 검사), `song/SongApiTest.kt`(하위 호환·`include`), 신규 `song/TabSongApiTest.kt`, 신규 `song/TabFileValidatorTest.kt`, `support/ApiTestSupport.kt`(필요할 때만 인자 추가), `src/test/resources/tab/`(TB-0 fixture 4개 복사, 자체 제작이라 권리 문제 없음) | ①·② |
+| 테스트 | `db/DatabaseMigrationAndIntegrityTest.kt`(버전 15 + V15 검사), `song/SongApiTest.kt`(하위 호환·`include`), `session/SessionApiTest.kt`·`community/CommunityApiTest.kt`·`community/EpisodeLogApiTest.kt`·`community/CurationApiTest.kt`·`nx/ExportImportApiTest.kt`(C2~C6과 키 집합 단언, 구현 중 추가), 신규 `song/TabSongApiTest.kt`, 신규 `song/TabFileValidatorTest.kt`, `support/ApiTestSupport.kt`(TAB 곡 직접 넣기 도우미 `TestTab`), `support/FakeStorageClient.kt`(업로드 Content-Type 기록, 구현 중 추가), `src/test/resources/tab/`(TB-0 fixture 4개 복사, 자체 제작이라 권리 문제 없음) | ①·② |
 
 합계 약 20개. 이 표 밖의 파일을 고쳐야 하면 먼저 묻는다.
 
@@ -245,7 +245,7 @@ data class SongDto(
 
 ### 11.2 그 밖
 
-- `./gradlew test` 전체 통과(기존 수 + 새 테스트). 기존 단언 수정은 버전 "14"→"15" 1건만 예상한다. 그 밖의 기존 단언이 깨지면 고치기 전에 이유를 결과 문서에 적는다.
+- `./gradlew test` 전체 통과(기존 수 + 새 테스트). 기존 단언 수정은 버전 "14"→"15" 1건만 예상했으나, 응답 키 집합·개수를 정확히 단언하는 테스트 3건(SongApiTest S1·S13, SessionApiTest L3)도 새 칸만큼 늘렸다(구현 중 확인). 그 밖의 기존 단언이 깨지면 고치기 전에 이유를 결과 문서에 적는다.
 - 프런트 코드는 바꾸지 않으므로 `npm test`는 회귀 확인으로만 돌린다(주니어 4단계).
 - 운영 반영: 머지 뒤 일반 배포. V15는 앞으로만 적용되는 변경이다. 되돌릴 때는 TAB 곡이 0건일 때만 역마이그레이션을 수동으로 적용할 수 있다(결과 문서에 SQL을 남긴다).
 

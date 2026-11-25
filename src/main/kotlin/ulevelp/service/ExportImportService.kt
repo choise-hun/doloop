@@ -197,8 +197,9 @@ class ExportImportService(
     suspend fun loadExportData(userId: UUID): ExportBundleData {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
+            // TB-1 T5: 1차 내보내기는 유튜브 곡과 그 세션·녹음만 담는다(TAB 파일은 ZIP에 들어가지 않아 되살릴 수 없다)
             val songs = SongsTable.selectAll()
-                .where { SongsTable.userId eq userId }
+                .where { (SongsTable.userId eq userId) and (SongsTable.mediaType eq SongsTable.MEDIA_YOUTUBE) }
                 .orderBy(SongsTable.lastDate to SortOrder.DESC_NULLS_LAST, SongsTable.updatedAt to SortOrder.DESC)
                 .toList()
 
@@ -217,7 +218,13 @@ class ExportImportService(
                 .orderBy(NotesTable.createdAt to SortOrder.DESC)
                 .toList()
 
-            ExportBundleData(songs, sessions, takes, notes)
+            val youtubeSongIds = songs.map { it[SongsTable.id] }.toHashSet()
+            ExportBundleData(
+                songs,
+                sessions.filter { it[SessionsTable.songId] in youtubeSongIds },
+                takes.filter { it[TakesTable.songId] in youtubeSongIds },
+                notes
+            )
         }
     }
 
@@ -239,6 +246,8 @@ class ExportImportService(
                     4. 녹음/*
                        - 연습 기록별 녹음 파일입니다.
 
+                    TAB 악보 곡과 그 연습 기록은 이 파일에 포함되지 않습니다.
+
                     RE:DO 설정 화면(settings.html)의 '가져오기 미리보기'를 통해 언제든지 다시 복원할 수 있습니다.
                 """.trimIndent()
                 zip.putNextEntry(ZipEntry("읽어주세요.txt"))
@@ -254,13 +263,13 @@ class ExportImportService(
                         val artist = row[SongsTable.artist]
                         val rawStatus = row[SongsTable.status]
                         val status = SongService.STATUS_LABELS[rawStatus] ?: "연습 중"
-                        val videoId = row[SongsTable.videoId]
+                        val videoId = row[SongsTable.videoId]!! // 유튜브 곡만 내보낸다(loadExportData)
                         val ytLink = "https://www.youtube.com/watch?v=$videoId"
                         val pos = row[SongsTable.pos]
                         val a = row[SongsTable.a]
                         val b = row[SongsTable.b]
                         val rate = row[SongsTable.rate]
-                        val resume = SongService.resumeUrl(publicAppUrl, videoId, pos, a, b, rate)
+                        val resume = SongService.resumeUrl(publicAppUrl, videoId, row[SongsTable.id], pos, a, b, rate)
                         val posStr = pos?.stripTrailingZeros()?.toPlainString() ?: ""
                         val aStr = a?.stripTrailingZeros()?.toPlainString() ?: ""
                         val bStr = b?.stripTrailingZeros()?.toPlainString() ?: ""

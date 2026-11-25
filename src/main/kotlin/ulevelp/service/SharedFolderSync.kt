@@ -55,12 +55,14 @@ object SharedFolderSync {
             .select(SongsTable.id, SongsTable.videoId, SongsTable.a, SongsTable.b, SongsTable.rate, SongsTable.sortOrder, SongsTable.createdAt)
             .where {
                 (SongCategoriesTable.categoryId eq categoryId) and (SongCategoriesTable.userId eq userId) and
-                    (SongsTable.userId eq userId)
+                    (SongsTable.userId eq userId) and
+                    // TB-1(D3): TAB 곡은 개인 보관함 전용이라 공개본에 넣지 않는다(유튜브 곡만 video_id가 있다)
+                    (SongsTable.mediaType eq SongsTable.MEDIA_YOUTUBE)
             }
             .toList()
             .sortedWith(SongService.LIST_ORDER)
 
-        val videoIds = songs.map { it[SongsTable.videoId] }
+        val videoIds = songs.map { it[SongsTable.videoId]!! }
         val removed = if (videoIds.isEmpty()) {
             SharedFolderItemsTable.deleteWhere { SharedFolderItemsTable.folderId eq folderId }
         } else {
@@ -74,7 +76,7 @@ object SharedFolderSync {
 
         var contentChanged = removed > 0
         songs.forEachIndexed { index, song ->
-            val videoId = song[SongsTable.videoId]
+            val videoId = song[SongsTable.videoId]!!
             val a = song[SongsTable.a]
             val b = song[SongsTable.b]
             val rate = song[SongsTable.rate]

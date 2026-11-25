@@ -69,7 +69,7 @@ fun Route.registerSessionRoutes(
                 throw InvalidInputException("조회 기간은 최대 366일까지 가능합니다.")
             }
 
-            val response = sessionService.list(user.id, from, to, today)
+            val response = sessionService.list(user.id, from, to, today, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, response)
         }

@@ -37,6 +37,7 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import ulevelp.service.applyCredit
 import kotlin.test.assertEquals
@@ -415,6 +416,44 @@ object TestCredits {
                 bucketRows.lastOrNull()?.let {
                     assertEquals(balance, it[ulevelp.db.CreditLedgerTable.balanceAfter], "마지막 balance_after = 잔액 ($bucket)")
                 }
+            }
+        }
+    }
+}
+
+/** TB-1: TAB 곡을 DB에 직접 만든다(업로드 API 없이 하위 호환·제외 규칙을 검사할 때) */
+object TestTab {
+    fun insertTabSong(
+        db: org.jetbrains.exposed.sql.Database,
+        userId: UUID,
+        title: String = "TAB 곡",
+        format: String = "gp"
+    ): UUID = org.jetbrains.exposed.sql.transactions.transaction(db) {
+        val id = UUID.randomUUID()
+        ulevelp.db.SongsTable.insert {
+            it[ulevelp.db.SongsTable.id] = id
+            it[ulevelp.db.SongsTable.userId] = userId
+            it[ulevelp.db.SongsTable.title] = title
+            it[ulevelp.db.SongsTable.mediaType] = ulevelp.db.SongsTable.MEDIA_TAB
+            it[ulevelp.db.SongsTable.videoId] = null
+            it[ulevelp.db.SongsTable.tabStorageKey] = "tabs/$userId/$id.$format"
+            it[ulevelp.db.SongsTable.tabFileName] = "$title.$format"
+            it[ulevelp.db.SongsTable.tabFileSize] = 1234L
+            it[ulevelp.db.SongsTable.tabFormat] = format
+        }
+        id
+    }
+
+    /** 이미 있는 유튜브 곡을 TAB 곡으로 바꾼다(세션·공유 같은 하위 데이터를 기존 도우미로 만든 뒤) */
+    fun convertToTab(db: org.jetbrains.exposed.sql.Database, songId: UUID) {
+        org.jetbrains.exposed.sql.transactions.transaction(db) {
+            ulevelp.db.SongsTable.update({ ulevelp.db.SongsTable.id eq songId }) {
+                it[ulevelp.db.SongsTable.mediaType] = ulevelp.db.SongsTable.MEDIA_TAB
+                it[ulevelp.db.SongsTable.videoId] = null
+                it[ulevelp.db.SongsTable.tabStorageKey] = "tabs/converted/$songId.gp"
+                it[ulevelp.db.SongsTable.tabFileName] = "converted.gp"
+                it[ulevelp.db.SongsTable.tabFileSize] = 1234L
+                it[ulevelp.db.SongsTable.tabFormat] = "gp"
             }
         }
     }

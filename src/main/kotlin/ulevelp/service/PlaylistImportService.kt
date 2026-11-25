@@ -103,7 +103,7 @@ class PlaylistImportService(
             val existing: Map<String, UUID> = if (availableIds.isEmpty()) emptyMap() else
                 SongsTable.select(SongsTable.videoId, SongsTable.id)
                     .where { (SongsTable.userId eq userId) and (SongsTable.videoId inList availableIds) }
-                    .associate { it[SongsTable.videoId] to it[SongsTable.id] }
+                    .associate { it[SongsTable.videoId]!! to it[SongsTable.id] } // inList 조건이라 null 없음
 
             var remaining = remainingSongSlots(ctx) // null = 제한 없음
             var imported = 0

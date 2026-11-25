@@ -50,7 +50,9 @@ class EpisodeLogService(private val db: Database?, private val communityService:
     }
 
     private fun Transaction.snapshot(session: ResultRow): PublicSessionSnapshot {
+        // TB-1: TAB 곡(video_id 없음) 연습 기록은 공개 카드로 공유하지 않는다
         val videoId = SongsTable.select(SongsTable.videoId).where { SongsTable.id eq session[SessionsTable.songId] }.single()[SongsTable.videoId]
+            ?: episodeConflict("SESSION_NOT_SHAREABLE")
         // Unknown private part keys are discarded; required values never receive a fallback.
         val parts = try {
             val raw = session[SessionsTable.partStats] as? JsonArray ?: episodeConflict("SESSION_NOT_SHAREABLE")

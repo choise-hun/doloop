@@ -1,9 +1,14 @@
 package ulevelp.routes
 
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.application.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.CancellationException
+import kotlinx.io.readByteArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -22,7 +27,8 @@ fun Route.registerSongRoutes(
     profileService: ProfileService,
     songService: SongService,
     storageTrashService: StorageTrashService,
-    playlistImportService: PlaylistImportService
+    playlistImportService: PlaylistImportService,
+    tabSongService: TabSongService
 ) {
     route("/songs") {
         install(SupabaseAuthPlugin) {
@@ -38,7 +44,7 @@ fun Route.registerSongRoutes(
                     ?: throw InvalidInputException("status 값이 올바르지 않습니다.")
             } else null
 
-            val list = songService.list(user.id, statusCode)
+            val list = songService.list(user.id, statusCode, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -72,6 +78,84 @@ fun Route.registerSongRoutes(
 
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(status, SongEnvelope(song = result.song))
+        }
+
+        // TB-1: TAB 파일 업로드로 곡 만들기(명세 §5). 리터럴 경로라 /{songId} 계열과 겹치지 않는다
+        post("/tab") {
+            val user = call.requireAuthUser()
+            if (!tabSongService.isStorageConfigured) {
+                throw ApiException(HttpStatusCode.ServiceUnavailable, "STORAGE_UNAVAILABLE", "파일 저장소가 설정되어 있지 않습니다.")
+            }
+            val tooLarge = ApiException(HttpStatusCode.PayloadTooLarge, "TAB_TOO_LARGE", "악보 파일은 10MB 이하만 올릴 수 있습니다.")
+            val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+            if (contentLength != null && contentLength > TabFileValidator.MAX_REQUEST_BYTES) throw tooLarge
+            if (!call.request.isMultipart()) throw InvalidInputException("multipart/form-data 요청이어야 합니다.")
+
+            var fileName: String? = null
+            var fileBytes: ByteArray? = null
+            var title: String? = null
+            var artist: String? = null
+            suspend fun PartData.readText(): String = when (this) {
+                is PartData.FormItem -> value.also {
+                    if (it.toByteArray(Charsets.UTF_8).size > TabFileValidator.MAX_TEXT_PART_BYTES) throw InvalidInputException("$name 값이 너무 깁니다.")
+                }
+                is PartData.FileItem -> {
+                    val b = provider().readRemaining(TabFileValidator.MAX_TEXT_PART_BYTES + 1).readByteArray()
+                    if (b.size > TabFileValidator.MAX_TEXT_PART_BYTES) throw InvalidInputException("$name 값이 너무 깁니다.")
+                    b.toString(Charsets.UTF_8)
+                }
+                else -> throw InvalidInputException("$name 형식이 올바르지 않습니다.")
+            }
+            try {
+                val multipart = call.receiveMultipart(formFieldLimit = TabFileValidator.MAX_REQUEST_BYTES)
+                multipart.forEachPart { part ->
+                    try {
+                        when (part.name) {
+                            "file" -> {
+                                val item = part as? PartData.FileItem ?: throw InvalidInputException("file 파트가 필요합니다.")
+                                fileName = item.originalFileName
+                                fileBytes = item.provider().readRemaining(TabFileValidator.MAX_FILE_BYTES + 1).readByteArray()
+                            }
+                            "title" -> title = part.readText()
+                            "artist" -> artist = part.readText()
+                            else -> {}
+                        }
+                    } finally {
+                        part.dispose()
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                throw e
+            } catch (e: Exception) {
+                throw InvalidInputException("multipart 본문을 읽지 못했습니다.")
+            }
+
+            val bytes = fileBytes ?: throw InvalidInputException("file 파트가 필요합니다.")
+            if (bytes.size > TabFileValidator.MAX_FILE_BYTES) throw tooLarge
+            if (bytes.isEmpty()) throw InvalidInputException("악보 파일이 비어 있습니다.")
+            val cleanName = TabFileValidator.sanitizeFileName(fileName)
+            val format = TabFileValidator.detect(cleanName, bytes)
+
+            val cleanTitle = title?.trim().orEmpty()
+            if (cleanTitle.codePointCount(0, cleanTitle.length) > TabSongService.MAX_TITLE) throw InvalidInputException("title은 300자 이하여야 합니다.")
+            val cleanArtist = artist?.trim().orEmpty()
+            if (cleanArtist.codePointCount(0, cleanArtist.length) > TabSongService.MAX_ARTIST) throw InvalidInputException("artist는 200자 이하여야 합니다.")
+            val finalTitle = cleanTitle.ifEmpty { TabFileValidator.baseName(cleanName).take(TabSongService.MAX_TITLE) }.ifEmpty { SongService.UNTITLED }
+
+            val song = tabSongService.create(user.id, TabUploadInput(cleanName, format, bytes, finalTitle, cleanArtist))
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.Created, SongEnvelope(song = song))
+        }
+
+        // TB-1: 본인 TAB 곡 파일의 서명 주소(명세 §6)
+        get("/{songId}/tab-file") {
+            val user = call.requireAuthUser()
+            val songId = parsePathUuid(call.parameters["songId"])
+            val res = tabSongService.fileUrl(user.id, songId)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, res)
         }
 
         get("/by-video/{videoId}") {
@@ -169,7 +253,7 @@ fun Route.registerSongRoutes(
                 throw InvalidInputException("ids에 같은 곡이 두 번 있습니다.")
             }
 
-            val list = songService.reorder(user.id, ids)
+            val list = songService.reorder(user.id, ids, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -196,7 +280,7 @@ fun Route.registerSongRoutes(
                 }
                 id to rawTitle
             }
-            val list = songService.batchUpdateTitles(user.id, items)
+            val list = songService.batchUpdateTitles(user.id, items, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -343,4 +427,14 @@ fun Route.registerSongRoutes(
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
     }
+}
+
+/**
+ * TB-1 명세 T4: 목록 응답은 `?include=tab`일 때만 TAB 곡을 넣는다(이미 설치된 옛 앱은 videoId를 문자열로 가정).
+ * 없으면 false, 정확히 "tab"이면 true, 그 밖의 값은 400
+ */
+internal fun ApplicationCall.includeTabParam(): Boolean {
+    val raw = request.queryParameters["include"] ?: return false
+    if (raw != "tab") throw InvalidInputException("include 값이 올바르지 않습니다.")
+    return true
 }

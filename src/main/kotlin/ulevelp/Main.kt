@@ -73,6 +73,7 @@ import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
 import ulevelp.service.StorageTrashService
+import ulevelp.service.TabSongService
 import ulevelp.service.TakeService
 import ulevelp.service.SessionService
 import ulevelp.service.VideoMetaClient
@@ -208,6 +209,7 @@ fun Application.module(
     val communityService = CommunityService(db, videoMetaClient)
     val practiceLogService = PracticeLogService(db, communityService)
     val storageTrashService = StorageTrashService(db, storageClient)
+    val tabSongService = TabSongService(db, storageClient, songService)
     val shareAttachmentService = ulevelp.service.ShareAttachmentService(db, storageClient, storageTrashService)
     val episodeLogService = ulevelp.service.EpisodeLogService(db, communityService, shareAttachmentService)
     val playlistImportService = PlaylistImportService(db, playlistClient)
@@ -358,7 +360,7 @@ fun Application.module(
         route("/api/v1") {
             registerShareLifecycleRoutes(jwtVerifier, profileService, shareAttachmentService)
             registerMeRoutes(jwtVerifier, profileService)
-            registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService)
+            registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService, playlistImportService, tabSongService)
             registerCategoryRoutes(jwtVerifier, profileService, categoryService, communityService)
             registerCommunityRoutes(jwtVerifier, profileService, communityService, practiceLogService, episodeLogService)
             registerCurationRoutes(jwtVerifier, profileService, communityService)

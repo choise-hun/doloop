@@ -30,7 +30,11 @@ data class TierLimits(
     val ai: Boolean,
     val communityWrite: Boolean,
     /** 30일 주기 월 지급 크레딧(Q4, `결과/M1-3a_크레딧수치.md` §5, 주기는 M1-3d) */
-    val monthlyCredits: Int = 0
+    val monthlyCredits: Int = 0,
+    /** TB-1 T1: TAB 곡 수. null = 제한 없음(곡 한도 안) */
+    val tabSongs: Int? = null,
+    /** TB-1 T2: TAB 파일 총량(bytes). null = 제한 없음 */
+    val tabBytes: Long? = null
 ) {
     companion object {
         const val FREE = "free"
@@ -39,9 +43,12 @@ data class TierLimits(
         val TIERS = listOf(FREE, PRO, PRO_PLUS)
 
         private val BY_TIER = mapOf(
-            FREE to TierLimits(100, 5, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false),
-            PRO to TierLimits(1000, 15, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170),
-            PRO_PLUS to TierLimits(2000, 30, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350)
+            FREE to TierLimits(100, 5, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false,
+                tabSongs = 5, tabBytes = 20_971_520L),
+            PRO to TierLimits(1000, 15, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170,
+                tabSongs = null, tabBytes = 524_288_000L),
+            PRO_PLUS to TierLimits(2000, 30, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350,
+                tabSongs = null, tabBytes = 1_073_741_824L)
         )
 
         /** 관리자(role == "owner")용 한도: 크레딧만 기존 티어 정책 유지, 곡·분류·녹음·Drive·AI·커뮤니티 제약 전면 해제 */
@@ -79,7 +86,9 @@ data class TierLimitsDto(
     val takeDurationSec: Int?,
     val drive: Boolean,
     val ai: Boolean,
-    val communityWrite: Boolean
+    val communityWrite: Boolean,
+    val tabSongs: Int? = null,
+    val tabBytes: Long? = null
 )
 
 @Serializable
@@ -87,13 +96,15 @@ data class TierUsageDto(
     val songs: Long,
     val categories: Long,
     val takeBytes: Long,
-    val takeSongs: Long
+    val takeSongs: Long,
+    val tabSongs: Long = 0,
+    val tabBytes: Long = 0
 )
 
 @Serializable
 data class CreditsDto(val monthly: Int, val purchased: Int)
 
-fun TierLimits.toDto() = TierLimitsDto(songs, categories, takeBytes, takeSongs, takeDurationSec, drive, ai, communityWrite)
+fun TierLimits.toDto() = TierLimitsDto(songs, categories, takeBytes, takeSongs, takeDurationSec, drive, ai, communityWrite, tabSongs, tabBytes)
 
 /**
  * 실제 티어 = 기한 안의 tier_override, 아니면 billing_tier (§1-1). 서버 코드는 이 함수로만 계산한다
@@ -141,6 +152,18 @@ fun Transaction.tierContext(userId: UUID, lock: Boolean = false): TierContext {
 
 fun Transaction.songCount(userId: UUID): Long =
     SongsTable.selectAll().where { SongsTable.userId eq userId }.count()
+
+/** TB-1: TAB 곡 수 */
+fun Transaction.tabSongCount(userId: UUID): Long =
+    SongsTable.selectAll().where { (SongsTable.userId eq userId) and (SongsTable.mediaType eq SongsTable.MEDIA_TAB) }.count()
+
+/** TB-1: TAB 파일 총량(bytes) */
+fun Transaction.tabBytesUsed(userId: UUID): Long {
+    val sumExpr = SongsTable.tabFileSize.sum()
+    return SongsTable.select(sumExpr)
+        .where { (SongsTable.userId eq userId) and (SongsTable.mediaType eq SongsTable.MEDIA_TAB) }
+        .singleOrNull()?.get(sumExpr) ?: 0L
+}
 
 fun Transaction.categoryCount(userId: UUID): Long =
     CategoriesTable.selectAll().where { CategoriesTable.userId eq userId }.count()
@@ -212,6 +235,40 @@ fun Transaction.requireCategorySlot(ctx: TierContext) {
             "CATEGORY_LIMIT_EXCEEDED",
             "분류는 ${limit}개까지 만들 수 있습니다.",
             detail = limitDetail(used, limit, ctx.tier, nextLimitOf(ctx.tier) { it.categories })
+        )
+    }
+}
+
+/** TB-1 T1: TAB 곡을 하나 더 넣을 수 있는지. 넘으면 403 `TAB_LIMIT_EXCEEDED` */
+fun Transaction.requireTabSlots(ctx: TierContext) {
+    val limit = ctx.limits.tabSongs ?: return
+    val used = tabSongCount(ctx.userId)
+    if (used + 1 > limit) {
+        throw ApiException(
+            HttpStatusCode.Forbidden,
+            "TAB_LIMIT_EXCEEDED",
+            "TAB 악보 곡은 ${limit}곡까지 등록할 수 있습니다.",
+            detail = limitDetail(used, limit, ctx.tier, nextLimitOf(ctx.tier) { it.tabSongs })
+        )
+    }
+}
+
+/** TB-1 T2: TAB 파일 [adding]바이트를 더 넣을 수 있는지. 넘으면 413 `TAB_QUOTA_EXCEEDED` */
+fun Transaction.requireTabBytes(ctx: TierContext, adding: Long) {
+    val limit = ctx.limits.tabBytes ?: return
+    val used = tabBytesUsed(ctx.userId)
+    if (used + adding > limit) {
+        throw ApiException(
+            HttpStatusCode.PayloadTooLarge,
+            "TAB_QUOTA_EXCEEDED",
+            "TAB 악보 저장 한도(${limit / 1_048_576}MB)를 넘습니다. 쓰지 않는 TAB 곡을 지운 뒤 다시 올려 주세요.",
+            detail = buildJsonObject {
+                put("limitBytes", limit)
+                put("usedBytes", used)
+                put("tier", ctx.tier)
+                put("nextTier", TierLimits.nextTier(ctx.tier))
+                put("nextLimit", nextLimitOf(ctx.tier) { it.tabBytes })
+            }
         )
     }
 }

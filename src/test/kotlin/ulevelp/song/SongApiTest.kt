@@ -105,7 +105,9 @@ class SongApiTest {
 
         val expectedKeys = setOf(
             "id", "title", "artist", "status", "statusCode", "videoId",
-            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl", "durationSec", "createdAt"
+            "pos", "a", "b", "rate", "lastDate", "memo", "categoryIds", "totalSeconds", "resumeUrl", "durationSec", "createdAt",
+            // TB-1(V15): 새 칸 4개만 늘어난다
+            "mediaType", "tabFileName", "tabFormat", "tabFileSize"
         )
         assertEquals(expectedKeys, songObj.keys)
 
@@ -915,7 +917,7 @@ class SongApiTest {
         val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
         val songObj = json["song"]!!.jsonObject
         assertEquals(1560L, songObj["totalSeconds"]!!.jsonPrimitive.long)
-        assertEquals(17, songObj.keys.size)
+        assertEquals(21, songObj.keys.size) // TB-1(V15): mediaType·tabFileName·tabFormat·tabFileSize 4칸 추가
 
         val sessionsArr = json["sessions"]!!.jsonArray
         assertEquals(2, sessionsArr.size)
@@ -1425,5 +1427,115 @@ class SongApiTest {
             assertEquals(HttpStatusCode.BadRequest, res.status, bad)
             assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
         }
+    }
+
+    // ============================================================
+    // TB-1 하위 호환(명세 §8·T4) — TAB 곡은 DB에 직접 넣는다
+    // ============================================================
+
+    private suspend fun io.ktor.client.HttpClient.addYoutube(token: String, videoId: String, title: String): String {
+        val res = post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("videoId", videoId); put("title", title) }.toString())
+        }
+        assertEquals(HttpStatusCode.Created, res.status, res.bodyAsText())
+        return Json.parseToJsonElement(res.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+    }
+
+    private suspend fun io.ktor.client.HttpClient.songIds(token: String, path: String): List<String> {
+        val res = get(path) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.OK, res.status, res.bodyAsText())
+        return Json.parseToJsonElement(res.bodyAsText()).jsonObject["songs"]!!.jsonArray.map { it.jsonObject["id"]!!.jsonPrimitive.content }
+    }
+
+    @Test
+    fun `TB1-C1 유튜브 곡 응답은 기존 칸 그대로에 mediaType youtube와 null 칸 3개가 붙는다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val user = UUID.randomUUID(); val token = TestJwt.token(user)
+        ensureUser(client, token)
+        client.addYoutube(token, "dQw4w9WgXcQ", "Autumn")
+        val res = client.get("/api/v1/songs") { header(HttpHeaders.Authorization, "Bearer $token") }
+        val song = Json.parseToJsonElement(res.bodyAsText()).jsonObject["songs"]!!.jsonArray.single().jsonObject
+        assertEquals("dQw4w9WgXcQ", song["videoId"]!!.jsonPrimitive.content)
+        assertEquals("youtube", song["mediaType"]!!.jsonPrimitive.content)
+        assertTrue(song["tabFileName"] is JsonNull && song["tabFormat"] is JsonNull && song["tabFileSize"] is JsonNull)
+        assertEquals("https://choise-hun.github.io/ULevelP/practice.html?v=dQw4w9WgXcQ", song["resumeUrl"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `TB1-C2 목록 응답은 include=tab일 때만 TAB 곡과 TAB 세션을 넣는다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val user = UUID.randomUUID(); val token = TestJwt.token(user)
+        ensureUser(client, token)
+        val yt = client.addYoutube(token, "dQw4w9WgXcQ", "YT")
+        val tab = TestTab.insertTabSong(db, user, "Tab Song").toString()
+        val today = LocalDate.now(ZoneOffset.UTC)
+        transaction(db) {
+            for (sid in listOf(yt, tab)) SessionsTable.insert {
+                it[userId] = user; it[songId] = UUID.fromString(sid); it[date] = today; it[seconds] = 60
+            }
+        }
+
+        assertEquals(listOf(yt), client.songIds(token, "/api/v1/songs"))
+        assertEquals(setOf(yt, tab), client.songIds(token, "/api/v1/songs?include=tab").toSet())
+
+        val tabJson = Json.parseToJsonElement(client.get("/api/v1/songs?include=tab") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText())
+            .jsonObject["songs"]!!.jsonArray.map { it.jsonObject }.single { it["id"]!!.jsonPrimitive.content == tab }
+        assertTrue(tabJson["videoId"] is JsonNull)
+        assertEquals("tab", tabJson["mediaType"]!!.jsonPrimitive.content)
+        assertEquals("gp", tabJson["tabFormat"]!!.jsonPrimitive.content)
+        assertEquals("Tab Song.gp", tabJson["tabFileName"]!!.jsonPrimitive.content)
+        assertEquals(1234L, tabJson["tabFileSize"]!!.jsonPrimitive.long)
+        assertEquals("https://choise-hun.github.io/ULevelP/practice.html?song=$tab", tabJson["resumeUrl"]!!.jsonPrimitive.content)
+        assertFalse(tabJson.toString().contains("tabs/"), "저장소 키가 응답에 나오면 안 된다")
+
+        suspend fun listAfter(method: HttpMethod, path: String, body: String): List<String> {
+            val r = client.request(path) {
+                this.method = method
+                header(HttpHeaders.Authorization, "Bearer $token")
+                contentType(ContentType.Application.Json); setBody(body)
+            }
+            assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+            return Json.parseToJsonElement(r.bodyAsText()).jsonObject["songs"]!!.jsonArray.map { it.jsonObject["id"]!!.jsonPrimitive.content }
+        }
+        assertEquals(listOf(yt), listAfter(HttpMethod.Put, "/api/v1/songs/order", """{"ids":["$yt"]}"""))
+        assertEquals(setOf(yt, tab), listAfter(HttpMethod.Put, "/api/v1/songs/order?include=tab", """{"ids":["$yt"]}""").toSet())
+        assertEquals(listOf(yt), listAfter(HttpMethod.Patch, "/api/v1/songs/titles", """{"items":[{"id":"$yt","title":"YT2"}]}"""))
+        assertEquals(setOf(yt, tab), listAfter(HttpMethod.Patch, "/api/v1/songs/titles?include=tab", """{"items":[{"id":"$tab","title":"Tab2"}]}""").toSet())
+
+        fun sessionSongs(body: String) = Json.parseToJsonElement(body).jsonObject["sessions"]!!.jsonArray.map { it.jsonObject["songId"]!!.jsonPrimitive.content }
+        val sOld = client.get("/api/v1/sessions?today=$today") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText()
+        assertEquals(listOf(yt), sessionSongs(sOld))
+        // 달력 합계는 실제 연습량이라 TAB 세션도 센다
+        assertEquals(120L, Json.parseToJsonElement(sOld).jsonObject["calendar"]!!.jsonArray.single().jsonObject["totalSeconds"]!!.jsonPrimitive.long)
+        val sNew = client.get("/api/v1/sessions?today=$today&include=tab") { header(HttpHeaders.Authorization, "Bearer $token") }.bodyAsText()
+        assertEquals(setOf(yt, tab), sessionSongs(sNew).toSet())
+        val tabSession = Json.parseToJsonElement(sNew).jsonObject["sessions"]!!.jsonArray.map { it.jsonObject }.single { it["songId"]!!.jsonPrimitive.content == tab }
+        assertTrue(tabSession["videoId"] is JsonNull)
+        assertEquals("tab", tabSession["mediaType"]!!.jsonPrimitive.content)
+
+        for (path in listOf("/api/v1/songs?include=foo", "/api/v1/sessions?include=tabs")) {
+            val r = client.get(path) { header(HttpHeaders.Authorization, "Bearer $token") }
+            assertStandardError(r.bodyAsText(), 400, "INVALID_INPUT")
+        }
+    }
+
+    @Test
+    fun `TB1-C3 include 없이 유튜브 곡만 보낸 순서 저장은 TAB 곡 자리를 바꾸지 않는다`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val user = UUID.randomUUID(); val token = TestJwt.token(user)
+        ensureUser(client, token)
+        val y1 = client.addYoutube(token, "aaaaaaaaaaa", "Y1")
+        val t = TestTab.insertTabSong(db, user).toString()
+        val y2 = client.addYoutube(token, "bbbbbbbbbbb", "Y2")
+        // 새 곡은 맨 위: [y2, t, y1]
+        assertEquals(listOf(y2, t, y1), client.songIds(token, "/api/v1/songs?include=tab"))
+        val r = client.put("/api/v1/songs/order") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json); setBody("""{"ids":["$y1","$y2"]}""")
+        }
+        assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+        assertEquals(listOf(y1, t, y2), client.songIds(token, "/api/v1/songs?include=tab"))
     }
 }

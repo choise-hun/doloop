@@ -69,7 +69,8 @@ object SongsTable : Table("songs") {
     val title = text("title")
     val artist = text("artist").default("")
     val status = text("status").default("practicing")
-    val videoId = text("video_id")
+    /** V15(TB-1): 유튜브 곡만 값이 있다. TAB 곡은 null */
+    val videoId = text("video_id").nullable()
     val pos = decimal("pos", 8, 1).nullable()
     val a = decimal("a", 8, 1).nullable()
     val b = decimal("b", 8, 1).nullable()
@@ -79,15 +80,24 @@ object SongsTable : Table("songs") {
     val durationSec = integer("duration_sec").default(0)
     /** V14(SL-2): 작은 값이 위. 삽입 때 값을 안 보내면 DB 트리거가 그 사용자 최솟값-1(맨 위)로 채운다 */
     val sortOrder = integer("sort_order").databaseGenerated()
+    /** V15(TB-1): "youtube" | "tab". 칸 모양은 DB CHECK `songs_media_shape_check`가 강제한다 */
+    val mediaType = text("media_type").default(MEDIA_YOUTUBE)
+    val tabStorageKey = text("tab_storage_key").nullable()
+    val tabFileName = text("tab_file_name").nullable()
+    val tabFileSize = long("tab_file_size").nullable()
+    val tabFormat = text("tab_format").nullable()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
     override val primaryKey = PrimaryKey(id)
 
+    // (user_id, video_id) 유일성은 V15의 부분 유니크 인덱스(songs_user_video_uq, video_id IS NOT NULL)가 소유한다
     init {
-        uniqueIndex(userId, videoId)
         uniqueIndex(userId, id)
     }
+
+    const val MEDIA_YOUTUBE = "youtube"
+    const val MEDIA_TAB = "tab"
 }
 
 /**
