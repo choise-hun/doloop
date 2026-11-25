@@ -124,7 +124,7 @@ CREATE UNIQUE INDEX songs_tab_storage_key_uq ON songs (tab_storage_key) WHERE ta
 3. 내용 검사(확장자와 일치해야 한다):
    - **`gp`**: ZIP 로컬 헤더 `50 4B 03 04`로 시작하고, `Content/score.gpif` 항목이 있어야 한다.
    - **`mxl`**: ZIP 시그니처가 있고 `META-INF/container.xml` 항목이 있어야 한다. container의 `rootfile full-path`가 가리키는 항목도 있어야 한다. container는 `<!DOCTYPE`·`<!ENTITY`가 없을 때만 문자열로 찾는다(XML 파서를 쓰지 않는다).
-   - **`xml`**: UTF-8이어야 한다(BOM 허용, 앞 64KB를 엄격 디코딩). 앞 64KB 안에서 처음 나오는 요소가 `<score-partwise` 또는 `<score-timewise`여야 한다. 그 앞의 프롤로그에는 XML 선언, 주석, 처리 명령, 내부 부분집합 없는 `<!DOCTYPE …>`만 허용한다. `<!ENTITY` 또는 `[`(내부 부분집합)가 있으면 거부한다.
+   - **`xml`**: UTF-8이어야 한다(BOM 허용, 앞 64KB를 엄격 디코딩하되 64KB 경계에서 다중 바이트 UTF-8 문자가 잘리면 그 문자 시작 앞까지 물려 디코딩한다). 앞 64KB 안에서 처음 나오는 요소가 `<score-partwise` 또는 `<score-timewise`여야 한다. 그 앞의 프롤로그에는 XML 선언, 주석, 처리 명령, 내부 부분집합 없는 `<!DOCTYPE …>`만 허용한다. `<!ENTITY` 또는 `[`(내부 부분집합)가 있으면 거부한다.
 4. ZIP 안전 장치(`gp`·`mxl`): `java.util.zip.ZipInputStream`으로 끝까지 읽되 항목 수 ≤ 200, 압축 해제 합계 ≤ 50MB를 넘으면 바로 거부한다. 항목 이름에 `..`이 있거나 `/`로 시작해도 거부한다. 잘린 ZIP(`broken.gp`, P20)은 여기서 `TAB_FORMAT_INVALID(content)`가 된다. 서버는 파일을 풀어서 저장하지 않고, 원본 바이트를 그대로 올린다.
 5. 서버는 XML을 DOM/SAX로 파싱하지 않는다. XXE와 엔티티 폭탄을 서버 쪽에서 원천적으로 막기 위해서다. 악보 내용이 맞는지(렌더 가능 여부)는 클라이언트 alphaTab이 판정한다(TB-0 PLAY-04 손상 입력 경로).
 
@@ -133,9 +133,9 @@ CREATE UNIQUE INDEX songs_tab_storage_key_uq ON songs (tab_storage_key) WHERE ta
 기존 `TakeService.upload`(P11)와 같은 3단계다. 새 파일 `service/TabSongService.kt`에 둔다(`SongService`가 이미 841줄이고 스토리지 의존이 없기 때문이다).
 
 1. **트랜잭션 A(읽기)**: `tierContext(userId)` → `requireSongSlots(ctx, 1)` → `requireTabSlots(ctx)` → `requireTabBytes(ctx, size)`. 빨리 실패하게 하는 사전 검사다.
-2. **트랜잭션 밖**: `songId = UUID.randomUUID()`, `key = "tabs/$userId/$songId.$ext"`, `storageClient.upload(key, bytes, "application/octet-stream")`. `StorageException`이면 502.
+2. **트랜잭션 밖**: `songId = UUID.randomUUID()`, `key = "tabs/$userId/$songId.$ext"`, `storageClient.upload(key, bytes, "application/octet-stream")`. 업로드 중 `Throwable`(전송 오류 `StorageException`·요청 취소 `CancellationException` 등)로 끝나면 서버에 이미 바이트가 저장되었을 수 있으므로 4의 보상 정리(`NonCancellable`)를 거친 뒤 `StorageException`이면 502, 그 밖의 예외·취소는 그대로 다시 던진다.
 3. **트랜잭션 B**: `tierContext(userId, lock = true)`로 프로필을 잠근 뒤 1의 검사 3개를 **다시** 한다(동시 업로드 대비). 그다음 `SongsTable.insert`(`id = songId`, `media_type = 'tab'`, `video_id = NULL`, `tab_*`, `title`, `artist`, `rate = 1.00`, `duration_sec = 0`, `sort_order`는 트리거가 채운다). 그 행으로 `rowToDto`를 만든다. **outbox 호출은 넣지 않는다.**
-4. **보상 정리**(backend-kotlin §3): 3이 `Throwable`로 끝나면 `withContext(NonCancellable)`에서 `SongsTable.tabStorageKey eq key`인 행이 있는지 확인한다. 커밋되지 않았으면 `delete(key)`를 하고, 삭제도 실패하면 `storage_trash`에 넣는다. 그 뒤 원래 예외를 다시 던진다. 확인 쿼리 자체가 실패하면 "커밋 안 됨"으로 보지 **않고** 파일을 지우지 않은 채 `storage_trash`에도 넣지 않는다. 커밋된 파일을 잘못 지우는 것보다 고아 파일 하나가 낫기 때문이다. 이 경우에는 로그를 남긴다(P11 원형은 `getOrDefault(false)`라 반대로 동작한다. TAB에서는 커밋 직후 취소를 더 안전하게 막으려고 이렇게 바꾼다).
+4. **보상 정리**(backend-kotlin §3): 2 또는 3이 `Throwable`로 끝나면 `withContext(NonCancellable)`에서 `SongsTable.tabStorageKey eq key`인 행이 있는지 확인한다. 커밋되지 않았으면 `delete(key)`를 하고, 삭제도 실패하면 `storage_trash`에 넣는다. 그 뒤 원래 예외를 다시 던진다. 확인 쿼리 자체가 실패하면 "커밋 안 됨"으로 보지 **않고** 파일을 지우지 않은 채 `storage_trash`에도 넣지 않는다. 커밋된 파일을 잘못 지우는 것보다 고아 파일 하나가 낫기 때문이다. 이 경우에는 로그를 남긴다(P11 원형은 `getOrDefault(false)`라 반대로 동작한다. TAB에서는 커밋 직후 취소를 더 안전하게 막으려고 이렇게 바꾼다).
 5. `CancellationException`은 어느 catch에서도 삼키지 않는다(backend-kotlin §2).
 
 ### 5.4 한도 함수 (`TierService.kt`에 추가)
@@ -232,7 +232,7 @@ data class SongDto(
 | TB1-U4 | 크기: 10MB + 1바이트 → 413 `TAB_TOO_LARGE`, Content-Length 11MB 초과 → 413(본문을 읽기 전에), 빈 파일 → 400. ZIP 폭탄(압축 해제 50MB 초과)·항목 201개 → 400 | ② |
 | TB1-U5 | 한도: 무료 TAB 5곡 뒤 6번째 → 403 `TAB_LIMIT_EXCEEDED`(detail `limit:5, used:5, tier:"free", nextTier:"pro", nextLimit:null`). 곡 한도가 다 찼으면 403 `SONG_LIMIT_EXCEEDED`. 총량 초과 → 413 `TAB_QUOTA_EXCEEDED`. owner는 한도 없음. 다운그레이드한 사용자의 기존 TAB 곡은 남고 새 업로드만 막힌다 | ② |
 | TB1-U6 | 동시성: 무료 사용자가 4곡 상태에서 동시 업로드 2건 → 정확히 1건 201, 1건 403. 실패한 쪽의 저장소 파일은 지워진다(`FakeStorageClient.deleted`) | ② |
-| TB1-U7 | 보상 정리: 트랜잭션 B 실패 주입 → 파일 삭제, 원래 오류 응답. 삭제도 실패(`failDelete`) → `storage_trash`에 그 키 1행. 업로드 실패(`failUpload`) → 502, DB 행 0 | ② |
+| TB1-U7 | 보상 정리: 트랜잭션 B 실패 주입 → 파일 삭제, 원래 오류 응답. 삭제도 실패(`failDelete`) → `storage_trash`에 그 키 1행. 업로드 실패(`failUpload`) 또는 저장 직후 예외/취소 → `delete(key)` 시도(실패 시 `storage_trash`)·502, DB 행 0 | ② |
 | TB1-U8 | 취소: 트랜잭션 B 커밋 직후 취소(업로드 지연·요청 취소 주입) → 행이 있으면 파일을 지우지 않는다. 커밋 전 취소 → 파일 삭제 | ② |
 | TB1-F1 | `GET /{id}/tab-file`: 본인 TAB 곡 → 200, `expiresIn:300`, `url`은 Fake 서명 형식, 응답에 저장소 키가 없음, `no-store`. 남의 TAB 곡·유튜브 곡·없는 id·잘못된 UUID → 404. `failSign` → 502. 저장소 미설정 → 503 | ② |
 | TB1-D1 | TAB 곡 삭제 → `storage_trash` 삽입 후 `purge`로 Fake에서 삭제, 행 없음. 삭제 실패 → `storage_trash` 행이 남고 `attempts=1` | ② |
@@ -260,6 +260,6 @@ data class SongDto(
 
 | U# | 항목 | 확인 방법 | 영향 |
 | --- | --- | --- | --- |
-| U1 | 운영 `takes` 버킷의 `allowed_mime_types`·`file_size_limit`. 오디오 MIME만 허용한다면 `application/octet-stream` 업로드가 거부된다. 이 세션의 Supabase 연결 계정에는 doloop 프로젝트(`vefrfhafmiiivpgjhqiu`)가 없어서 확인하지 못했다 | Supabase 대시보드 Storage › `takes` 설정, 또는 `select allowed_mime_types, file_size_limit from storage.buckets where id = 'takes'` | 허용 목록이 있으면 `application/octet-stream`을 추가해야 한다(사람 작업). 크기 제한이 10MB보다 작으면 T2 단건 한도를 낮춘다 |
+| U1 | 운영 `takes` 버킷의 `allowed_mime_types`·`file_size_limit`. `allowed_mime_types`는 `ANY`(제한 없음) 확인됨(2026-11-25 사용자 확인). `file_size_limit` ≥ 10MB 여부는 배포 전 확인 필요 | Supabase 대시보드 Storage › `takes` 설정, 또는 `select allowed_mime_types, file_size_limit from storage.buckets where id = 'takes'` | MIME은 차단 없음 확인. 크기 제한이 10MB보다 작으면 T2 단건 한도를 낮춘다 |
 | U2 | 운영 DB의 유일성 제약 실제 이름이 `songs_user_id_video_id_key`인지 | `\d songs` 또는 `pg_constraint` 조회 | 다르면 V15의 `DROP CONSTRAINT` 이름을 바꾼다 |
 | U3 | Ktor `PartData.FileItem.originalFileName`의 비ASCII(한국어) 파일 이름 디코딩(RFC 5987 `filename*`) | 테스트 TB1-U2에 한국어 이름을 넣어 확인한다 | 깨지면 `filename*`을 우선 읽는 처리를 추가한다 |
