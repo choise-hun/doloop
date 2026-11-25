@@ -34,7 +34,7 @@
 | Step | 입력 → 결과 | 완료 기준 | 상태 | 권장 effort |
 |---|---|---|---|---|
 | TB-0 스파이크 | 명세/TB-0 → 결과/TB-0 | 사용자 승인 조건부 통과(R1~R4 이월) | **완료** 2026-11-25 · PR [#68](https://github.com/choise-hun/doloop/pull/68) | — |
-| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → 결과/TB-1 | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **시니어 구현 완료** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) · 브랜치 `feat/TB-1-tab-songs`(PR 없음, 주니어 4단계 대기) | high |
+| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → [결과/TB-1](결과/TB-1.md) | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **4단계 회귀·PR·CI 통과 / 리뷰 1건 시니어 대기** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) 머지 · 구현 PR [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs`) | high |
 | TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → 시안 → 결과/TB-2 | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환 §5 합격선 통과 | 대기 | high |
 | TB 출시 전 관문 | 결과/TB-0 §0 R1·R3·R4 | 실기기 확인, SF2 근거·교체, 포맷 4종 검증 | 대기(`상용_서비스_계획.md` §4) | — |
 
@@ -84,18 +84,23 @@
 
 ## 다음 행동
 
-1. 주니어 4단계: `origin/feat/TB-1-tab-songs`의 보완 커밋과 `main` 기준 이력을 확인하고, 전체 회귀·PR·CI·`결과/TB-1.md`를 만든다(아래 멘트).
+1. 시니어 핀포인트 수정(3-P): PR [#70](https://github.com/choise-hun/doloop/pull/70) Codex Review P2 1건(`TabFileValidator.kt:115` 중복 ZIP 엔트리 이름 시 `MAX_ZIP_ENTRIES` 우회 방지 — 별도 엔트리 카운터) 수정·표적 테스트·push 후 CI 통과 확인.
 2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다. `allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됐다.
 3. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다.
 4. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
 
+## TB-1 주니어 4단계 기록 (2026-11-25 Mac)
+
+- 선행 확인: PR #69(`main` `5942b5a`) 머지 및 `origin/feat/TB-1-tab-songs` `5ffed9c` 확인.
+- 전체 검증(제품 코드 무수정): `./gradlew clean test -Pkotlin.incremental=false` **432 passed / 0 failed / 0 skipped**(`TabFileValidatorTest` 6건, `TabSongApiTest` 17건 포함), `npm test` **551 pass / 0 fail**(`58 suites`), `npm run build` 오류 0(`195 modules`).
+- PR 및 CI·리뷰: PR [#70](https://github.com/choise-hun/doloop/pull/70) 생성(`base: main`, `head: feat/TB-1-tab-songs`). `5ffed9c` 기준 CI **6/6 통과**. Codex Review P2 1건(`TabFileValidator.kt:115` ZIP 엔트리 수 카운팅) 타당 확인 → 제품 코드 무수정 규칙에 따라 시니어 핀포인트 수정 인계. 상세는 [결과/TB-1](결과/TB-1.md).
+
 ## 다음 세션 시작 멘트
 
 ```text
-# Gemini(주니어) — TB-1 4단계 최종 검증·문서·PR 마무리
-AGENTS.md, 개발산출물/진행_TB_악보플레이어.md의 시니어 보완 기록, 개발산출물/명세/TB-1_구현명세.md §10·§11·§13, .team_docs/주니어_체크리스트.md를 읽는다.
-선행 조건: 기존 변경을 보존하고 PR #69가 main에 머지됐으며 origin/feat/TB-1-tab-songs에 리베이스된 구현과 보완 커밋이 있는지 확인한다. 완료된 리베이스와 보완 구현은 반복하지 않는다.
-범위: 시니어 보완 diff 및 TB1-U7 결과를 검토하고 ./gradlew clean test -Pkotlin.incremental=false, npm test, npm run build를 실행한다. 운영 버킷 file_size_limit ≥ 10MB가 미확인이면 PR에 배포 전 확인 항목으로 기록한다.
-Git 처리: 허용된 문서 정리를 커밋·push하고 base main 구현 PR을 생성한다. 최신 head CI 및 리뷰를 확인하고 제품 코드 추가 수정·머지·운영 배포는 하지 않는다.
-완료 기준: 최종 코드와 대조한 회귀 결과·PR·최신 CI·리뷰 상태를 결과/TB-1.md와 진행 파일에 기록한다.
+# 시니어 (3-P 핀포인트 리뷰 반영) - TB-1 PR #70 리뷰 1건 처리
+AGENTS.md, 개발산출물/진행_TB_악보플레이어.md, 개발산출물/결과/TB-1.md §6을 읽고 PR #70(feat/TB-1-tab-songs) Codex Review P2 지적 1건을 처리한다.
+- 이번 세션 범위: src/main/kotlin/ulevelp/service/TabFileValidator.kt:115의 ZIP 엔트리 수 카운팅(names.size 대신 별도 엔트리 카운터로 중복 엔트리 이름 201개 우회 차단) 수정, TabFileValidatorTest에 중복 엔트리 201개 거부 테스트 추가 및 표적 테스트(./gradlew test --tests '*Tab*') 통과, 결과/TB-1.md·인수인계_메모.md 갱신 후 feat/TB-1-tab-songs에 커밋·push한다.
+- 금지 범위: 전체 회귀 반복, 승인 밖 계약 변경, PR 머지, 운영 배포.
+- 완료 조건: TabFileValidator 수정 및 표적 테스트 통과, push 후 최신 커밋 CI 통과 확인.
 ```
