@@ -80,4 +80,7 @@ ALTER TABLE songs
 - PR: [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs` → `main`)
 - CI (`5ffed9c`): **6/6 통과** (`Detect code changes` 7s, `Test (Node 22)` 28s, `Kotlin test (JDK 21)` 2m21s, `Docker build & smoke` 2m1s, `E2E XSS & CSP (Playwright)` 11m5s, `CI ok` 2s)
 - 리뷰 (`5ffed9c`, `chatgpt-codex-connector[bot]` P2 1건):
-  - **`src/main/kotlin/ulevelp/service/TabFileValidator.kt:115` — Count ZIP entries independently of unique entry names**: `HashSet` 크기(`names.size >= MAX_ZIP_ENTRIES`)만 검사해 동일 항목 이름이 201개 이상 반복된 ZIP이 200개 상한을 우회할 수 있다는 지적. 실제 `TabFileValidator.kt:113-115` 대조 결과 **타당함**. 주니어 4단계 제품 코드 무수정 규칙에 따라 시니어 핀포인트 수정(3-P)으로 인계.
+  - **반영** [Count ZIP entries independently of unique entry names](https://github.com/choise-hun/doloop/pull/70#discussion_r4694772548). 기존 `names.size`는 고유 이름만 세므로 명세 §5.2의 200개 제한을 적용하지 못했다. `src/main/kotlin/ulevelp/service/TabFileValidator.kt:112-117`에서 `nextEntry`가 반환할 때마다 별도 카운터를 올려 201번째 항목의 본문을 읽기 전에 거부한다. 이름 집합은 GP·MXL 필수 항목 조회에 사용한다.
+  - **Red** `df5291b` 격리 워크트리에 테스트만 추가한 뒤 `./gradlew test -Pkotlin.incremental=false --tests '*TabFileValidatorTest.*이름이 중복돼도*'` 실행. 200개는 통과했고 201개는 `ApiException` 기대 단언에서 실패했다.
+  - **Green** JDK 21로 `./gradlew test --tests '*Tab*'` 실행. 중복 이름을 포함한 200개는 통과, 201개는 400 `TAB_FORMAT_INVALID`(`reason=content`)로 거부됐다. 검증기 7건과 업로드 API 17건 총 **24건 통과, 실패·건너뜀 0건**(`TabFileValidatorTest.kt:89-102`).
+  - **3-P 검증 범위** 로컬 전체 회귀·프런트 빌드·Playwright 재실행과 운영 확인은 미실행. 3-P 변경 커밋의 CI 결과는 [PR #70 Checks](https://github.com/choise-hun/doloop/pull/70/checks)에 있다. 머지 전 해당 커밋의 `CI ok` 성공을 확인한다.

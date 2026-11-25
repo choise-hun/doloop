@@ -87,6 +87,21 @@ class TabFileValidatorTest {
     }
 
     @Test
+    fun `ZIP 한도는 이름이 중복돼도 전체 항목을 센다`() {
+        fun archive(entryCount: Int): ByteArray {
+            val entries = (1 until entryCount).map { "extra-${it.toString().padStart(3, '0')}.txt" to ByteArray(0) }
+            val bytes = zip("Content/score.gpif" to minimalXml, *entries.toTypedArray())
+            // ZipOutputStream은 중복 이름을 거부하므로 생성 후 ZIP 헤더에 같은 길이의 이름을 쓴다.
+            return bytes.toString(Charsets.ISO_8859_1)
+                .replace(Regex("extra-[0-9]{3}\\.txt"), "extra-000.txt")
+                .toByteArray(Charsets.ISO_8859_1)
+        }
+
+        assertEquals(TabFormat.GP, TabFileValidator.detect("a.gp", archive(200)))
+        assertEquals("content", reason("a.gp", archive(201)))
+    }
+
+    @Test
     fun `xml 앞 64KB 경계에서 다중 바이트 문자가 잘려도 정상 판정`() {
         val head = "<?xml version=\"1.0\"?><score-partwise><work-title>".toByteArray()
         val body = "가".repeat(30_000).toByteArray()   // 3바이트 × 30000 = 90KB

@@ -2,9 +2,10 @@
 
 ## 목표와 입력
 
-- **현재 단계** TB-1 **명세 승인**(2026-11-25, [명세/TB-1](명세/TB-1_구현명세.md) §3 T1~T7 추천안 승인), **시니어 구현 및 업로드 보상 정리 보완 완료**(`feat/TB-1-tab-songs`), 다음은 주니어 4단계다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
+- **현재 단계** TB-1 주니어 4단계와 시니어 3-P 수정 반영. [PR #70](https://github.com/choise-hun/doloop/pull/70)의 최신 CI 성공 및 사용자 머지 확인 뒤 TB-2를 착수한다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
 - **근거** [기능확장.md](../기능확장.md) §2.3·§5·§6 및 [TB-0 스파이크 명세](명세/TB-0_스파이크명세.md).
 - **승인 범위**
+  - 2026-11-25 3-P: PR #70 ZIP 항목 수 P2 수정, 회귀 테스트 추가 및 `./gradlew test --tests '*Tab*'`, 결과·인수인계 갱신, `feat/TB-1-tab-songs` 커밋·push와 최신 CI 확인을 사용자 승인. 로컬 전체 회귀 반복·승인 범위 밖 계약 변경·머지·운영 배포는 제외한다.
   - 2026-11-25 보완 구현: PR #69 Codex Review P2 중 업로드 실패·취소 보상 정리와 TB1-U7을 구현하고, `./gradlew test --tests '*Tab*'` 통과 후 작업 브랜치에 push하도록 사용자 승인. 전체 회귀·PR·CI는 주니어 4단계에 인계하고, 머지·운영 배포는 하지 않는다.
   - 2026-11-25 1차: TB-0 격리 재현물 실행을 요청받았다. 제품 소스·DB 마이그레이션·main 반영은 금지였다.
   - 2026-11-25 4차(TB-1 구현): T1~T7 추천안 승인과 "진행" 지시. 명세 §10 파일만 구현하고, `./gradlew test` 뒤 push한다. 머지·운영 배포는 하지 않는다.
@@ -34,7 +35,7 @@
 | Step | 입력 → 결과 | 완료 기준 | 상태 | 권장 effort |
 |---|---|---|---|---|
 | TB-0 스파이크 | 명세/TB-0 → 결과/TB-0 | 사용자 승인 조건부 통과(R1~R4 이월) | **완료** 2026-11-25 · PR [#68](https://github.com/choise-hun/doloop/pull/68) | — |
-| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → [결과/TB-1](결과/TB-1.md) | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **4단계 회귀·PR·CI 통과 / 리뷰 1건 시니어 대기** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) 머지 · 구현 PR [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs`) | high |
+| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → [결과/TB-1](결과/TB-1.md) | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **4단계 통과 / 3-P 수정 반영** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) 머지 · 구현 PR [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs`) · 최신 CI는 [Checks](https://github.com/choise-hun/doloop/pull/70/checks) 참조 | high |
 | TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → 시안 → 결과/TB-2 | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환 §5 합격선 통과 | 대기 | high |
 | TB 출시 전 관문 | 결과/TB-0 §0 R1·R3·R4 | 실기기 확인, SF2 근거·교체, 포맷 4종 검증 | 대기(`상용_서비스_계획.md` §4) | — |
 
@@ -84,7 +85,7 @@
 
 ## 다음 행동
 
-1. 시니어 핀포인트 수정(3-P): PR [#70](https://github.com/choise-hun/doloop/pull/70) Codex Review P2 1건(`TabFileValidator.kt:115` 중복 ZIP 엔트리 이름 시 `MAX_ZIP_ENTRIES` 우회 방지 — 별도 엔트리 카운터) 수정·표적 테스트·push 후 CI 통과 확인.
+1. PR [#70](https://github.com/choise-hun/doloop/pull/70)의 최신 CI 성공과 실제 머지를 확인하고, 사용자 변경을 보존한 상태에서 `main`을 fast-forward로 동기화한 뒤 TB-2 시안·명세를 시작한다.
 2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다. `allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됐다.
 3. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다.
 4. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
@@ -98,9 +99,9 @@
 ## 다음 세션 시작 멘트
 
 ```text
-# 시니어 (3-P 핀포인트 리뷰 반영) - TB-1 PR #70 리뷰 1건 처리
-AGENTS.md, 개발산출물/진행_TB_악보플레이어.md, 개발산출물/결과/TB-1.md §6을 읽고 PR #70(feat/TB-1-tab-songs) Codex Review P2 지적 1건을 처리한다.
-- 이번 세션 범위: src/main/kotlin/ulevelp/service/TabFileValidator.kt:115의 ZIP 엔트리 수 카운팅(names.size 대신 별도 엔트리 카운터로 중복 엔트리 이름 201개 우회 차단) 수정, TabFileValidatorTest에 중복 엔트리 201개 거부 테스트 추가 및 표적 테스트(./gradlew test --tests '*Tab*') 통과, 결과/TB-1.md·인수인계_메모.md 갱신 후 feat/TB-1-tab-songs에 커밋·push한다.
-- 금지 범위: 전체 회귀 반복, 승인 밖 계약 변경, PR 머지, 운영 배포.
-- 완료 조건: TabFileValidator 수정 및 표적 테스트 통과, push 후 최신 커밋 CI 통과 확인.
+# 시니어 (Codex) - TB-2-1 명세 및 계약 작성
+AGENTS.md, 개발산출물/진행_TB_악보플레이어.md, 개발산출물/결과/TB-0_스파이크.md §0·§2.3·§3·§5, 개발산출물/명세/TB-1_구현명세.md를 읽고 TB-2-1 명세 및 계약 작성을 진행한다.
+- 이번 세션 범위: PR #70의 실제 머지를 확인한 뒤 사용자 변경을 보존하고 main을 fast-forward로 동기화한다. TB-2 프론트 HTML 시안과 선택지, 상세 명세 초안을 작성한다.
+- 금지 범위: 제품 소스·테스트 구현, 빌드·테스트 실행, 커밋·push·PR 게시, 머지·운영 배포. TB-1 검증은 반복하지 않는다.
+- 완료 조건: 시안과 명세를 검토에 제시한다. 명세에 목록 include=tab, CSP diff, 플레이어 인스턴스 재사용 및 데스크톱 10회 전환 합격선을 포함한다.
 ```

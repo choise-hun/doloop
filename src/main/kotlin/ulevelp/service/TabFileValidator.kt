@@ -102,6 +102,7 @@ object TabFileValidator {
      */
     private fun zipCheck(bytes: ByteArray, captureContainer: Boolean = false, check: (Set<String>, String?) -> Boolean): Boolean {
         val names = HashSet<String>()
+        var entryCount = 0
         var container: String? = null
         var total = 0L
         val buf = ByteArray(8192)
@@ -109,8 +110,9 @@ object TabFileValidator {
             ZipInputStream(ByteArrayInputStream(bytes)).use { zin ->
                 while (true) {
                     val entry = zin.nextEntry ?: break
+                    entryCount++
+                    if (entryCount > MAX_ZIP_ENTRIES) return false
                     val name = entry.name
-                    if (names.size >= MAX_ZIP_ENTRIES) return false
                     if (name.startsWith("/") || name.startsWith("\\") || name.split('/', '\\').any { it == ".." }) return false
                     names.add(name)
                     val keep = captureContainer && name == MXL_CONTAINER_ENTRY
