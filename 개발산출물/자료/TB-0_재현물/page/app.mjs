@@ -85,8 +85,14 @@ function buildSettings(el) {
   };
 }
 
+// 작업 순번: open/close 호출마다 증가한다. 비동기 정리(AudioContext close 대기) 중에
+// 더 나중의 open/close가 들어오면 앞선 open은 정리 후 재개하지 않고 폐기한다.
+let opSeq = 0;
+
 async function open(file, { delay = 0 } = {}) {
-  await close();
+  const op = ++opSeq;
+  await teardown();
+  if (op !== opSeq) { state.discardedLate++; mark('superseded-open', { file }); return { discarded: true, superseded: true }; }
   const gen = ++currentGen;
   const el = document.createElement('div');
   el.className = 'tb-player';
@@ -124,6 +130,11 @@ async function open(file, { delay = 0 } = {}) {
 }
 
 async function close() {
+  ++opSeq; // 정리 대기 중인 open을 무효화
+  return teardown();
+}
+
+async function teardown() {
   const cur = state.cur;
   if (!cur) return null;
   state.cur = null;

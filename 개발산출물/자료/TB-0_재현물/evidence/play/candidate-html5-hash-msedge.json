@@ -5,7 +5,7 @@
  "hash": "sha256-EIR5s3Qp1PxPxW4Koopu9nVN+I2chNMT0ImH3VG/s+c=,sha256-ago6aunBhfAMrD80tguQXUt95n6srkO3pzX2dUHs0gs=",
  "channel": "msedge",
  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
- "startedAt": "2026-11-25T06:24:24.667Z",
+ "startedAt": "2026-11-25T07:48:54.263Z",
  "csp03": {
   "crossOriginWorker": "throw:SecurityError",
   "blobWorker": "error-event",
@@ -18,7 +18,7 @@
  "play01": {
   "A.gp": {
    "ok": true,
-   "ms": 297,
+   "ms": 419,
    "ready": {
     "score": {
      "bars": 32,
@@ -32,18 +32,18 @@
     "soundFont": true,
     "player": true
    },
-   "peakRms": 0.2884,
+   "peakRms": 0.29165,
    "cursorFrom": 0,
-   "cursorTo": 5088,
+   "cursorTo": 5099,
    "cursorX": [
     117.32344055175781,
-    683.81396484375
+    685.5444946289062
    ],
    "canvases": 8
   },
   "B.xml": {
    "ok": true,
-   "ms": 172,
+   "ms": 170,
    "ready": {
     "score": {
      "bars": 136,
@@ -59,16 +59,16 @@
    },
    "peakRms": 0.29022,
    "cursorFrom": 0,
-   "cursorTo": 5141,
+   "cursorTo": 5109,
    "cursorX": [
     117.32344055175781,
-    689.6614990234375
+    687.5369873046875
    ],
    "canvases": 8
   },
   "B.mxl": {
    "ok": true,
-   "ms": 176,
+   "ms": 163,
    "ready": {
     "score": {
      "bars": 136,
@@ -82,12 +82,12 @@
     "soundFont": true,
     "player": true
    },
-   "peakRms": 0.2762,
+   "peakRms": 0.28691,
    "cursorFrom": 0,
-   "cursorTo": 5120,
+   "cursorTo": 5131,
    "cursorX": [
     117.32344055175781,
-    687.2670288085938
+    689.2564086914062
    ],
    "canvases": 8
   },
@@ -110,7 +110,7 @@
  },
  "play02": {
   "ok": true,
-  "ms": 168,
+  "ms": 182,
   "ready": {
    "score": {
     "bars": 136,
@@ -144,11 +144,11 @@
   "playAfterClick": {
    "peakRms": 0.28047,
    "cursorFrom": 196667,
-   "cursorTo": 199557
+   "cursorTo": 199568
   },
   "pauseHeld": true,
   "resume": {
-   "peakRms": 0.28724,
+   "peakRms": 0.25751,
    "cursorFrom": 199333,
    "cursorTo": 201851
   },
@@ -158,19 +158,19 @@
  "play03": {
   "A.gp": {
    "rms": {
-    "all": 0.29022,
-    "solo Guitar": 0.07957,
-    "unsolo Guitar": 0.27434,
-    "mute Bass": 0.23907,
-    "unmute Bass": 0.26927,
+    "all": 0.28691,
+    "solo Guitar": 0.08362,
+    "unsolo Guitar": 0.26477,
+    "mute Bass": 0.24766,
+    "unmute Bass": 0.27617,
     "Drums vol 0": 0.19308,
-    "Drums vol 1": 0.28304,
-    "solo Bass only": 0.17931,
-    "solo Drums only": 0.22509,
+    "Drums vol 1": 0.28776,
+    "solo Bass only": 0.18198,
+    "solo Drums only": 0.20724,
     "mute all": 0,
     "mute all + metronome": 0.04955,
-    "restore": 0.29067,
-    "after display toggle (mixer unchanged)": 0.29716
+    "restore": 0.28695,
+    "after display toggle (mixer unchanged)": 0.2853
    },
    "display": {
     "afterShowOnlyBass": [
@@ -185,19 +185,19 @@
   },
   "B.mxl": {
    "rms": {
-    "all": 0.26745,
-    "solo Guitar": 0.08027,
-    "unsolo Guitar": 0.27434,
-    "mute Bass": 0.24766,
-    "unmute Bass": 0.26317,
-    "Drums vol 0": 0.19272,
+    "all": 0.28691,
+    "solo Guitar": 0.08221,
+    "unsolo Guitar": 0.25696,
+    "mute Bass": 0.23907,
+    "unmute Bass": 0.25144,
+    "Drums vol 0": 0.19416,
     "Drums vol 1": 0.29339,
-    "solo Bass only": 0.18047,
+    "solo Bass only": 0.18198,
     "solo Drums only": 0.22509,
     "mute all": 0,
-    "mute all + metronome": 0.04955,
+    "mute all + metronome": 0.04958,
     "restore": 0.29067,
-    "after display toggle (mixer unchanged)": 0.29716
+    "after display toggle (mixer unchanged)": 0.28643
    },
    "display": {
     "afterShowOnlyBass": [
@@ -240,6 +240,32 @@
    "playerDom": 1,
    "openB": true
   },
+  "race3": {
+   "cur": "B.mxl",
+   "playerDom": 1,
+   "openContexts": 1,
+   "liveWorkers": 1,
+   "firstOpenOk": true
+  },
+  "race4": {
+   "cur": null,
+   "counters": {
+    "liveWorkers": 0,
+    "openContexts": 0,
+    "contextsCloseCalledNotResolved": 0,
+    "workletNodesOnOpenContext": 0,
+    "outstandingBlobUrls": 0,
+    "playerDom": 0,
+    "surfaces": 0,
+    "activeSubs": 0,
+    "pendingFetch": 0,
+    "totals": {
+     "workers": 10,
+     "contexts": 9,
+     "worklets": 9
+    }
+   }
+  },
   "broken": {
    "ready": {
     "error": "Unexpected end of data within reader",
@@ -251,9 +277,9 @@
   },
   "recover": {
    "ok": true,
-   "peakRms": 0.26086,
+   "peakRms": 0.27246,
    "cursorFrom": 0,
-   "cursorTo": 1909
+   "cursorTo": 1931
   }
  },
  "finalCounters": {
@@ -267,9 +293,9 @@
   "activeSubs": 0,
   "pendingFetch": 0,
   "totals": {
-   "workers": 10,
-   "contexts": 9,
-   "worklets": 8
+   "workers": 12,
+   "contexts": 11,
+   "worklets": 10
   }
  },
  "violationsTotal": 2,
@@ -292,7 +318,7 @@
  "pageErrors": [],
  "console": [
   "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
-  "error: Creating a worker from 'blob:http://127.0.0.1:5179/024fd7dd-982c-4555-a0c8-863a2c63d75c' violates the following Content Security Policy directive: \"worker-src 'self'\". The action has been blocked.",
+  "error: Creating a worker from 'blob:http://127.0.0.1:5179/54633229-1d9e-4ccf-8e74-a8d62319de95' violates the following Content Security Policy directive: \"worker-src 'self'\". The action has been blocked.",
   "error: Loading the font 'http://127.0.0.1:5180/x-font.woff2' violates the following Content Security Policy directive: \"font-src 'self' https://fonts.gstatic.com\". The action has been blocked.",
   "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
   "error: [AlphaTab][ScoreLoader] Score import failed due to unexpected error:  EndOfReaderError: Unexpected end of data within reader\n    at ThrowingReadable._requireBytes (http://127.0.0.1:5179/at/alphaTab.core.mjs:15932:50)\n    at ThrowingReadable",

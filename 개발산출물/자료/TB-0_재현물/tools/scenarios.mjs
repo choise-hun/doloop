@@ -179,6 +179,17 @@ for (const f of ['A.gp', 'B.mxl']) {
   await sleep(3000);
   const race2 = await ev(() => ({ cur: tb.state.cur?.file, bars: tb.state.cur?.ready.score?.bars, playerDom: document.querySelectorAll('.tb-player').length }));
   await ev(() => tb.close());
+  // 경합 3(리뷰 지적): 재생 중인 곡(AudioContext 살아 있음)의 정리 대기 중에 open 두 번 → 마지막 open만 남아야 한다
+  const rA = await openReady('A.gp');
+  await ev(() => tb.play()); await sleep(500);
+  await ev(() => { tb.open('A.gp'); tb.open('B.mxl'); });
+  await sleep(5000);
+  const race3 = await ev(() => ({ cur: tb.state.cur?.file, playerDom: document.querySelectorAll('.tb-player').length, openContexts: tb.counters().openContexts, liveWorkers: tb.counters().liveWorkers }));
+  // 경합 4: 정리 대기 중 open 뒤 close → 아무 곡도 남지 않아야 한다
+  await ev(() => tb.play()); await sleep(500);
+  await ev(() => { tb.open('A.gp'); tb.close(); });
+  await sleep(5000);
+  const race4 = await ev(() => ({ cur: tb.state.cur ? tb.state.cur.file : null, counters: tb.counters() }));
   // 손상 입력
   await ev(() => tb.open('broken.gp'));
   await sleep(3000);
@@ -189,7 +200,7 @@ for (const f of ['A.gp', 'B.mxl']) {
   const recover = await openReady('A.gp');
   const recoverPlay = await playFor(2000);
   await ev(() => tb.close());
-  out.play04 = { race: { ...race, discardedDelta: race.late - before }, race2: { ...race2, openB: rB.ok }, broken: { ...broken, playReturn: brokenPlay, peakRms: brokenRms }, recover: { ok: recover.ok, ...recoverPlay } };
+  out.play04 = { race: { ...race, discardedDelta: race.late - before }, race2: { ...race2, openB: rB.ok }, race3: { ...race3, firstOpenOk: rA.ok }, race4, broken: { ...broken, playReturn: brokenPlay, peakRms: brokenRms }, recover: { ok: recover.ok, ...recoverPlay } };
 }
 out.finalCounters = await ev(() => tb.counters());
 out.violationsTotal = await ev(() => tb.violations.length);
