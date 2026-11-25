@@ -11,7 +11,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
@@ -33,6 +36,7 @@ import ulevelp.service.TabFileValidator
 import ulevelp.service.TabFormat
 import ulevelp.service.TabSongService
 import ulevelp.service.TabUploadInput
+import ulevelp.storage.StorageException
 import ulevelp.support.*
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -328,8 +332,56 @@ class TabSongApiTest {
 
         fake.onUploadSuccess = null; fake.failDelete = false; fake.failUpload = true
         val (uid3, token3) = client.newUser()
+        var failedUploadKey: String? = null
+        fake.onUploadStart = { failedUploadKey = it }
         assertStandardError(client.upload(token3, "a.gp", fixture("A.gp")).bodyAsText(), 502, "STORAGE_ERROR")
+        assertEquals(assertNotNull(failedUploadKey), fake.deleted.last())
         assertTrue(songRows(uid3).isEmpty())
+    }
+
+    @Test
+    fun `TB1-U7 저장 직후 업로드 예외면 파일을 지우고 502를 반환한다`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        val (uid, token) = client.newUser()
+        var storedKey: String? = null
+        fake.onUploadSuccess = { key ->
+            storedKey = key
+            throw StorageException("Upload response lost")
+        }
+
+        val response = client.upload(token, "a.gp", fixture("A.gp"))
+        assertEquals(HttpStatusCode.BadGateway, response.status)
+        assertStandardError(response.bodyAsText(), 502, "STORAGE_ERROR")
+
+        assertEquals(listOf(assertNotNull(storedKey)), fake.deleted.toList())
+        assertTrue(fake.objects.isEmpty())
+        assertTrue(songRows(uid).isEmpty())
+        assertEquals(0L, transaction(db) { StorageTrashTable.selectAll().count() })
+    }
+
+    @Test
+    fun `TB1-U7 저장 직후 요청 취소 및 삭제 실패면 파일 키를 휴지통에 남긴다`() = runBlocking {
+        val uid = seedUser("tab-upload-cancel@example.com")
+        val service = TabSongService(db, fake, SongService(db, FakeVideoMetaClient(), "https://x/"))
+        val cancellation = CancellationException("Client disconnected during upload")
+        var storedKey: String? = null
+        fake.failDelete = true
+        val upload = async {
+            val context = currentCoroutineContext()
+            fake.onUploadSuccess = { key ->
+                storedKey = key
+                context.cancel(cancellation)
+                context.ensureActive()
+            }
+            service.create(uid, input())
+        }
+
+        val thrown = assertFailsWith<CancellationException> { upload.await() }
+        assertEquals(cancellation.message, thrown.message)
+        val key = assertNotNull(storedKey)
+        assertEquals(setOf(key), fake.objects.keys)
+        assertEquals(listOf(key), transaction(db) { StorageTrashTable.selectAll().map { it[StorageTrashTable.storageKey] } })
+        assertTrue(songRows(uid).isEmpty())
     }
 
     private fun seedUser(email: String): UUID {

@@ -2,9 +2,10 @@
 
 ## 목표와 입력
 
-- **현재 단계** TB-1 **명세 승인**(2026-11-25, [명세/TB-1](명세/TB-1_구현명세.md) §3 T1~T7 추천안 승인), **시니어 구현 완료·push**(`feat/TB-1-tab-songs`, 커밋 2개), 다음은 주니어 4단계다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
+- **현재 단계** TB-1 **명세 승인**(2026-11-25, [명세/TB-1](명세/TB-1_구현명세.md) §3 T1~T7 추천안 승인), **시니어 구현 및 업로드 보상 정리 보완 완료**(`feat/TB-1-tab-songs`), 다음은 주니어 4단계다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
 - **근거** [기능확장.md](../기능확장.md) §2.3·§5·§6 및 [TB-0 스파이크 명세](명세/TB-0_스파이크명세.md).
 - **승인 범위**
+  - 2026-11-25 보완 구현: PR #69 Codex Review P2 중 업로드 실패·취소 보상 정리와 TB1-U7을 구현하고, `./gradlew test --tests '*Tab*'` 통과 후 작업 브랜치에 push하도록 사용자 승인. 전체 회귀·PR·CI는 주니어 4단계에 인계하고, 머지·운영 배포는 하지 않는다.
   - 2026-11-25 1차: TB-0 격리 재현물 실행을 요청받았다. 제품 소스·DB 마이그레이션·main 반영은 금지였다.
   - 2026-11-25 4차(TB-1 구현): T1~T7 추천안 승인과 "진행" 지시. 명세 §10 파일만 구현하고, `./gradlew test` 뒤 push한다. 머지·운영 배포는 하지 않는다.
   - 2026-11-25 3차(TB-1 명세): 명세 문서 `명세/TB-1_구현명세.md`만 작성하고, 진행 파일·인수인계 메모를 갱신하고, base main 명세 PR을 올린다. 제품 코드와 마이그레이션은 쓰지 않는다. 명세 승인 전에는 구현하지 않는다.
@@ -74,20 +75,27 @@
 - 미확인 해소: U3 한국어 파일 이름은 `filename="연습곡.gp"` 그대로 디코딩됨(TB1-U2). **U1(운영 `takes` 버킷 MIME·크기 제한)과 U2(운영 제약 이름)는 아직 확인하지 못했다.** U1은 배포 전에 반드시 확인한다. U2는 Testcontainers에서 V1 자동 이름으로 마이그레이션이 통과했다.
 - 미실행: `npm test`(프런트 무변경), PR·CI, 운영 배포.
 
+## TB-1 시니어 보완 기록 (2026-11-25 Mac)
+
+- 선행 확인: 명세 PR #69는 `main` `5942b5a`에 머지됐다. 시작 시 `feat/TB-1-tab-songs`는 리베이스된 `b248ba7`에 있었고 작업 트리는 깨끗했다. `git range-diff`에서 원격 `9962e17`까지의 구현 커밋 2개와 리베이스된 커밋 2개의 패치가 일치했다. 원격 SHA `9962e17612d32869a70fd5422ae3168f61475226`를 명시한 `--force-with-lease`로 검증된 보완 커밋을 게시한다.
+- 구현: `src/main/kotlin/ulevelp/service/TabSongService.kt:79`에서 업로드 예외·취소도 기존 `NonCancellable` 보상 정리로 보낸다. `StorageException`은 502 `STORAGE_ERROR`, 취소와 그 밖의 예외는 그대로 전파한다. 같은 키로 커밋된 곡이 있으면 파일을 보존하고, 삭제에 실패하면 `storage_trash`에 등록한다.
+- 검증: `src/test/kotlin/ulevelp/song/TabSongApiTest.kt`의 TB1-U7로 저장 전 실패의 삭제 시도, 저장 직후 오류의 파일 삭제와 502, 실제 코루틴 취소 중 삭제 실패의 휴지통 등록을 확인했다. 수정 전 `b248ba7` 격리 워크트리에서 테스트만 추가해 `./gradlew test -Pkotlin.incremental=false --tests '*TabSongApiTest.*TB1-U7*'`를 실행했고 삭제·휴지통 단언 3건이 예상대로 실패했다. 수정 후 `./gradlew test --tests '*Tab*'`는 23건 통과, 실패·건너뜀 0건이다.
+- 미실행: 전체 Kotlin 회귀, `npm test`, `npm run build`, 구현 PR·CI, 머지·운영 배포.
+
 ## 다음 행동
 
-1. 주니어 4단계: PR #69 머지 뒤 `feat/TB-1-tab-songs`를 main 기준으로 맞추고, 전체 회귀·PR·CI·`결과/TB-1.md`를 만든다(아래 멘트).
-2. 배포 전 사람 확인: 운영 `takes` 버킷 `allowed_mime_types`·`file_size_limit`(명세 §13 U1). 오디오 MIME만 허용이면 `application/octet-stream`을 더해야 한다.
+1. 주니어 4단계: `origin/feat/TB-1-tab-songs`의 보완 커밋과 `main` 기준 이력을 확인하고, 전체 회귀·PR·CI·`결과/TB-1.md`를 만든다(아래 멘트).
+2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다. `allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됐다.
 3. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다.
 4. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
 
 ## 다음 세션 시작 멘트
 
 ```text
-TB-1 4단계 검증·PR을 시작해. 나는 주니어야.
-먼저 읽어: 개발산출물/인수인계_메모.md §2, 개발산출물/진행_TB_악보플레이어.md("TB-1 시니어 구현 기록"·Step 표), 개발산출물/명세/TB-1_구현명세.md §10·§11·§13, .team_docs/주니어_체크리스트.md.
-git: PR #69(docs/TB-1-spec)가 머지된 뒤 main을 pull하고, feat/TB-1-tab-songs를 git rebase main으로 맞춘다(충돌이 나면 멈추고 묻는다). 머지 전이면 base를 docs/TB-1-spec으로 둔 PR을 만들지 말고 기다린다. gh 계정은 choise-hun 그대로다.
-시작하기 전에 확인: 명세 §13 U1(운영 takes 버킷 MIME·크기 제한)을 사람이 확인했는지 묻는다. 확인 전이면 PR 본문에 "배포 전 확인 필요"로 적는다.
-범위: 제품 코드는 고치지 않는다. ./gradlew clean test -Pkotlin.incremental=false, npm test, npm run build를 실행하고 결과를 적는다. 실패하면 고치지 말고 원문과 함께 시니어에게 넘긴다.
-끝나면 base main PR을 올리고 CI를 확인한 뒤 결과/TB-1.md, 진행 파일 Step 표, 인수인계 메모를 맞춘다. 머지와 운영 배포는 하지 않는다.
+# Gemini(주니어) — TB-1 4단계 최종 검증·문서·PR 마무리
+AGENTS.md, 개발산출물/진행_TB_악보플레이어.md의 시니어 보완 기록, 개발산출물/명세/TB-1_구현명세.md §10·§11·§13, .team_docs/주니어_체크리스트.md를 읽는다.
+선행 조건: 기존 변경을 보존하고 PR #69가 main에 머지됐으며 origin/feat/TB-1-tab-songs에 리베이스된 구현과 보완 커밋이 있는지 확인한다. 완료된 리베이스와 보완 구현은 반복하지 않는다.
+범위: 시니어 보완 diff 및 TB1-U7 결과를 검토하고 ./gradlew clean test -Pkotlin.incremental=false, npm test, npm run build를 실행한다. 운영 버킷 file_size_limit ≥ 10MB가 미확인이면 PR에 배포 전 확인 항목으로 기록한다.
+Git 처리: 허용된 문서 정리를 커밋·push하고 base main 구현 PR을 생성한다. 최신 head CI 및 리뷰를 확인하고 제품 코드 추가 수정·머지·운영 배포는 하지 않는다.
+완료 기준: 최종 코드와 대조한 회귀 결과·PR·최신 CI·리뷰 상태를 결과/TB-1.md와 진행 파일에 기록한다.
 ```

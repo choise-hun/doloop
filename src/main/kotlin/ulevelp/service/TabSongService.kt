@@ -78,10 +78,13 @@ class TabSongService(
         val key = "tabs/$userId/$songId.${input.format.ext}"
         try {
             client.upload(key, input.bytes, CONTENT_TYPE)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: StorageException) {
-            throw ApiException(HttpStatusCode.BadGateway, "STORAGE_ERROR", "악보 파일을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        } catch (t: Throwable) {
+            // 응답을 받기 전에 실패하거나 취소돼도 객체는 이미 저장됐을 수 있다.
+            cleanupUploadedFile(client, database, key)
+            if (t is StorageException) {
+                throw ApiException(HttpStatusCode.BadGateway, "STORAGE_ERROR", "악보 파일을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            }
+            throw t
         }
 
         // 3. 트랜잭션 B: 프로필 잠금 뒤 한도 재검사(동시 업로드 대비) + INSERT
