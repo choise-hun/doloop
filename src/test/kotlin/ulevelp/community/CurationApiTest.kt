@@ -455,6 +455,13 @@ class CurationApiTest {
         assertEquals(listOf(sharer.id.toString()),
             client.ok(HttpMethod.Get, "/api/v1/community/logs?scope=following", viewer.token).arr("logs").map { it["user"]!!.jsonObject.str("id") })
 
+        // TB-1 C5: TAB 곡은 공개 "오늘 곡"에 나오지 않는다(가장 오래 연습해도)
+        val tabSong = TestTab.insertTabSong(db, sharer.id, "TAB_TODAY_SENTINEL")
+        seedSession(sharer.id, tabSong.toString(), today, 900)
+        val withTab = client.ok(HttpMethod.Get, "/api/v1/community/logs?scope=all", viewer.token).arr("logs").single()
+        assertEquals(listOf(vid(1), vid(2)), withTab.arr("today").map { it.str("videoId") })
+        assertFalse(withTab.toString().contains("TAB_TODAY_SENTINEL"))
+
         // 사용자 페이지 practiceLog: 동의자만
         val page = client.send(HttpMethod.Get, "/api/v1/community/users/${sharer.id}", viewer.token).bodyAsText()
         assertNoPrivateText(page)

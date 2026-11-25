@@ -104,9 +104,9 @@ class DatabaseMigrationAndIntegrityTest {
     }
 
     @Test
-    fun `Flyway V1__init to V14__song_sort_order migrations apply cleanly and create all 30 tables`() {
-        assertEquals("14", targetSchemaVersion, "Flyway target schema version should be 14")
-        assertTrue(migrationsExecutedCount >= 14, "V1__init.sql ~ V14__song_sort_order.sql migrations must have executed")
+    fun `Flyway V1__init to V15__song_media_type_and_tabs migrations apply cleanly and create all 30 tables`() {
+        assertEquals("15", targetSchemaVersion, "Flyway target schema version should be 15")
+        assertTrue(migrationsExecutedCount >= 15, "V1__init.sql ~ V15__song_media_type_and_tabs.sql migrations must have executed")
         assertEquals(30, ALL_TABLES.size, "Exposed ALL_TABLES should contain 30 tables")
 
         val actualTables = mutableListOf<String>()
@@ -790,6 +790,80 @@ class DatabaseMigrationAndIntegrityTest {
                 }
                 if (!conn.autoCommit) conn.commit()
             }
+        } finally {
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO public")
+                    st.execute("DROP SCHEMA IF EXISTS $schema CASCADE")
+                }
+                if (!conn.autoCommit) conn.commit()
+            }
+        }
+    }
+
+    @Test
+    fun `TB1-M1~M3 V15는 기존 곡을 youtube로 보존하고 칸 모양과 부분 유니크를 강제한다`() {
+        val schema = "v15_check_schema"
+        val user = UUID.randomUUID()
+        val song = UUID.randomUUID()
+        fun exec(sql: String) = dataSource.connection.use { conn ->
+            conn.createStatement().use { st ->
+                st.execute("SET search_path TO $schema")
+                st.execute(sql)
+            }
+            if (!conn.autoCommit) conn.commit()
+        }
+        fun sqlState(sql: String): String? = assertFailsWith<java.sql.SQLException> { exec(sql) }.sqlState
+        fun migrateTo(v: String) = Flyway.configure().dataSource(dataSource).schemas(schema)
+            .locations("classpath:db/migration").target(v).load().migrate()
+
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { st ->
+                st.execute("DROP SCHEMA IF EXISTS $schema CASCADE")
+                st.execute("CREATE SCHEMA $schema")
+            }
+            if (!conn.autoCommit) conn.commit()
+        }
+        try {
+            migrateTo("14")
+            val t0 = java.sql.Timestamp.from(java.time.Instant.parse("2026-11-20T01:00:00Z"))
+            exec("INSERT INTO users (id, email) VALUES ('$user', 'tb1m@example.com')")
+            exec("INSERT INTO songs (id, user_id, title, video_id, updated_at) VALUES ('$song', '$user', 'Old', 'aaaaaaaaaaa', '$t0')")
+            migrateTo("15")
+
+            // M1: 기존 곡은 youtube, tab_* 비어 있음, updated_at 불변
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { st ->
+                    st.execute("SET search_path TO $schema")
+                    st.executeQuery("SELECT media_type, tab_storage_key, updated_at FROM songs WHERE id = '$song'").use { rs ->
+                        assertTrue(rs.next())
+                        assertEquals("youtube", rs.getString("media_type"))
+                        assertEquals(null, rs.getString("tab_storage_key"))
+                        assertEquals(t0.time, rs.getTimestamp("updated_at").time)
+                    }
+                }
+            }
+
+            // M2: 칸 모양 CHECK (23514 check_violation)
+            assertEquals("23514", sqlState("INSERT INTO songs (user_id, title, video_id) VALUES ('$user', 'NoVideo', NULL)"))
+            assertEquals("23514", sqlState(
+                "INSERT INTO songs (user_id, title, media_type) VALUES ('$user', 'TabNoKey', 'tab')"))
+            assertEquals("23514", sqlState(
+                "INSERT INTO songs (user_id, title, media_type, video_id, tab_storage_key, tab_file_name, tab_file_size, tab_format) " +
+                    "VALUES ('$user', 'TabWithVideo', 'tab', 'bbbbbbbbbbb', 'tabs/x/1.gp', 'a.gp', 10, 'gp')"))
+            assertEquals("23514", sqlState(
+                "INSERT INTO songs (user_id, title, media_type, tab_storage_key, tab_file_name, tab_file_size, tab_format) " +
+                    "VALUES ('$user', 'BadFormat', 'tab', 'tabs/x/2.gp5', 'a.gp5', 10, 'gp5')"))
+            assertEquals("23514", sqlState(
+                "INSERT INTO songs (user_id, title, video_id, tab_file_name) VALUES ('$user', 'YtWithTab', 'ccccccccccc', 'a.gp')"))
+
+            // M3: 같은 video_id 두 번은 거부(23505), video_id 없는 TAB 곡 둘은 허용, 같은 저장소 키는 거부
+            assertEquals("23505", sqlState("INSERT INTO songs (user_id, title, video_id) VALUES ('$user', 'Dup', 'aaaaaaaaaaa')"))
+            exec("INSERT INTO songs (user_id, title, media_type, tab_storage_key, tab_file_name, tab_file_size, tab_format) " +
+                "VALUES ('$user', 'Tab1', 'tab', 'tabs/x/3.gp', 'a.gp', 10, 'gp'), ('$user', 'Tab2', 'tab', 'tabs/x/4.xml', 'b.xml', 20, 'xml')")
+            assertEquals("23505", sqlState(
+                "INSERT INTO songs (user_id, title, media_type, tab_storage_key, tab_file_name, tab_file_size, tab_format) " +
+                    "VALUES ('$user', 'Tab3', 'tab', 'tabs/x/3.gp', 'c.gp', 10, 'gp')"))
         } finally {
             dataSource.connection.use { conn ->
                 conn.createStatement().use { st ->

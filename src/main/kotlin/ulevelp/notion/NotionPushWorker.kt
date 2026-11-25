@@ -359,7 +359,7 @@ class NotionPushWorker(
             "done" -> "완료"
             else -> "연습 중"
         }
-        val videoId = songRow[SongsTable.videoId]
+        val videoId = songRow[SongsTable.videoId] ?: return null // TAB 곡(video_id 없음)은 보내지 않는다
         val pos = songRow[SongsTable.pos]
         val a = songRow[SongsTable.a]
         val b = songRow[SongsTable.b]
@@ -367,7 +367,7 @@ class NotionPushWorker(
         val lastDate = songRow[SongsTable.lastDate]
         val memo = songRow[SongsTable.memo]
 
-        val resumeUrl = SongService.resumeUrl(publicAppUrl, videoId, pos, a, b, rate)
+        val resumeUrl = SongService.resumeUrl(publicAppUrl, videoId, songId, pos, a, b, rate)
 
         fun roundNumber(n: BigDecimal?): Double? =
             n?.toDouble()?.let { Math.round(it * 100.0) / 100.0 }

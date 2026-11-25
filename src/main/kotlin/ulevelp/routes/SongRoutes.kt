@@ -38,7 +38,7 @@ fun Route.registerSongRoutes(
                     ?: throw InvalidInputException("status 값이 올바르지 않습니다.")
             } else null
 
-            val list = songService.list(user.id, statusCode)
+            val list = songService.list(user.id, statusCode, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -169,7 +169,7 @@ fun Route.registerSongRoutes(
                 throw InvalidInputException("ids에 같은 곡이 두 번 있습니다.")
             }
 
-            val list = songService.reorder(user.id, ids)
+            val list = songService.reorder(user.id, ids, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -196,7 +196,7 @@ fun Route.registerSongRoutes(
                 }
                 id to rawTitle
             }
-            val list = songService.batchUpdateTitles(user.id, items)
+            val list = songService.batchUpdateTitles(user.id, items, call.includeTabParam())
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(HttpStatusCode.OK, SongListResponse(songs = list))
         }
@@ -343,4 +343,14 @@ fun Route.registerSongRoutes(
             call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
     }
+}
+
+/**
+ * TB-1 명세 T4: 목록 응답은 `?include=tab`일 때만 TAB 곡을 넣는다(이미 설치된 옛 앱은 videoId를 문자열로 가정).
+ * 없으면 false, 정확히 "tab"이면 true, 그 밖의 값은 400
+ */
+internal fun ApplicationCall.includeTabParam(): Boolean {
+    val raw = request.queryParameters["include"] ?: return false
+    if (raw != "tab") throw InvalidInputException("include 값이 올바르지 않습니다.")
+    return true
 }

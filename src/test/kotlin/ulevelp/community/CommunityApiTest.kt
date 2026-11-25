@@ -1,5 +1,7 @@
 package ulevelp.community
 
+import org.jetbrains.exposed.sql.insert
+
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
@@ -560,5 +562,29 @@ class CommunityApiTest {
         val actions = json(client.send(HttpMethod.Get, "/api/v1/admin/audit?targetUserId=${a.id}", owner.token).bodyAsText())["rows"]!!.jsonArray
             .map { it.jsonObject["action"]!!.jsonPrimitive.content }
         assertEquals(listOf("public_name_reset", "report_resolve", "folder_hide"), actions)
+    }
+
+    @Test
+    fun `TB1-C4 분류에 TAB 곡이 있어도 공개본 항목에는 유튜브 곡만 들어간다`() = testApplication {
+        configureApiTestApp(dbConfig, videoMetaClient = FakeVideoMetaClient())
+        val a = client.newUser(name = "탭맨")
+        val (cat, folderId) = client.publishedFolder(a)
+        val tab = TestTab.insertTabSong(db, a.id, "TAB_PRIVATE_SENTINEL")
+        transaction(db) {
+            SongCategoriesTable.insert {
+                it[SongCategoriesTable.userId] = a.id
+                it[SongCategoriesTable.songId] = tab
+                it[SongCategoriesTable.categoryId] = UUID.fromString(cat)
+            }
+        }
+        val rep = client.send(HttpMethod.Post, "/api/v1/categories/$cat/share/republish", a.token, """{}""")
+        assertEquals(HttpStatusCode.OK, rep.status, rep.bodyAsText())
+        val items = client.items(a.token, folderId)
+        assertEquals(setOf(vid(1), vid(2)), items.map { it["videoId"]!!.jsonPrimitive.content }.toSet())
+        assertFalse(client.detail(a.token, folderId).bodyAsText().contains("TAB_PRIVATE_SENTINEL"))
+        // 자동 연동 경로(곡 수정 → resync)에서도 들어가지 않는다
+        val upd = client.send(HttpMethod.Patch, "/api/v1/songs/$tab", a.token, """{"memo":"x"}""")
+        assertEquals(HttpStatusCode.OK, upd.status, upd.bodyAsText())
+        assertEquals(2, client.items(a.token, folderId).size)
     }
 }

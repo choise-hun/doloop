@@ -40,7 +40,8 @@ data class SessionWithSongDto(
     val songId: String,
     val songTitle: String,
     val songArtist: String,
-    val videoId: String,
+    /** 유튜브 곡만 값이 있다. TAB 곡 세션은 null(`include=tab`일 때만 응답에 실린다) */
+    val videoId: String?,
     val date: String,
     val seconds: Int,
     val minutes: Double,
@@ -52,7 +53,8 @@ data class SessionWithSongDto(
     val memo: String,
     val partStats: kotlinx.serialization.json.JsonElement? = null,
     val coveragePct: Int = 0,
-    val takes: List<TakeDto>
+    val takes: List<TakeDto>,
+    val mediaType: String = SongsTable.MEDIA_YOUTUBE
 )
 
 @Serializable
@@ -71,7 +73,11 @@ class SessionService(private val db: Database?) {
             message = "데이터베이스가 연결되어 있지 않습니다."
         )
 
-    suspend fun list(userId: UUID, from: LocalDate, to: LocalDate, today: LocalDate): SessionListResponse {
+    /**
+     * [includeTab]=false면 세션 목록에서 TAB 곡 세션을 뺀다(옛 클라이언트 보호, TB-1 T4).
+     * 주간·월간 합계와 달력은 실제 연습량이므로 곡 종류와 상관없이 모든 세션을 센다
+     */
+    suspend fun list(userId: UUID, from: LocalDate, to: LocalDate, today: LocalDate, includeTab: Boolean = false): SessionListResponse {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
             // 1. 주간·월간 범위 계산
@@ -115,8 +121,9 @@ class SessionService(private val db: Database?) {
                 )
                 .toList()
 
-            // 4. 기간 내 세션들의 녹음(takes) 일괄 조회
-            val sessionIds = sessionRows.map { it[SessionsTable.id] }
+            // 4. 기간 내 세션들의 녹음(takes) 일괄 조회 (응답에 실을 세션만)
+            val listedRows = if (includeTab) sessionRows else sessionRows.filter { it[SongsTable.mediaType] == SongsTable.MEDIA_YOUTUBE }
+            val sessionIds = listedRows.map { it[SessionsTable.id] }
             val takesBySessionId: Map<UUID, List<TakeDto>> = if (sessionIds.isNotEmpty()) {
                 TakesTable
                     .selectAll()
@@ -150,7 +157,7 @@ class SessionService(private val db: Database?) {
                 }
 
             // 세션 리스트 변환
-            val sessions = sessionRows.map { row ->
+            val sessions = listedRows.map { row ->
                 val sessionId = row[SessionsTable.id]
                 val sec = row[SessionsTable.seconds]
                 val aDec = row[SessionsTable.a]
@@ -172,7 +179,8 @@ class SessionService(private val db: Database?) {
                     memo = row[SessionsTable.memo],
                     partStats = row[SessionsTable.partStats],
                     coveragePct = row[SessionsTable.coveragePct],
-                    takes = takesBySessionId[sessionId] ?: emptyList()
+                    takes = takesBySessionId[sessionId] ?: emptyList(),
+                    mediaType = row[SongsTable.mediaType]
                 )
             }
 

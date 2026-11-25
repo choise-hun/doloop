@@ -272,7 +272,7 @@ class SessionApiTest {
         val expectedSessionKeys = setOf(
             "id", "songId", "songTitle", "songArtist", "videoId", "date",
             "seconds", "minutes", "loops", "a", "b", "segment", "rate", "memo", "takes",
-            "partStats", "coveragePct"
+            "partStats", "coveragePct", "mediaType" // TB-1: mediaType 추가
         )
         assertEquals(expectedSessionKeys, s0.keys)
         assertEquals(sessionId.toString(), s0["id"]!!.jsonPrimitive.content)

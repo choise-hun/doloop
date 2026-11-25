@@ -789,4 +789,24 @@ class ExportImportApiTest {
         assertContentEquals(audioA, fakeStorage.objects[bTakes[0][TakesTable.storageKey]])
         assertContentEquals(audioB, fakeStorage.objects[bTakes[1][TakesTable.storageKey]])
     }
+
+    @Test
+    fun `TB1-C6 ZIP 내보내기에는 TAB 곡과 그 세션이 없고 안내 줄이 있다`() = testApplication {
+        configureApiTestApp(dbConfig = dbConfig, storageClient = fakeStorage)
+        val tab = TestTab.insertTabSong(db, userA, "TAB_EXPORT_SENTINEL")
+        transaction(db) {
+            SessionsTable.insert {
+                it[userId] = userA; it[songId] = tab; it[date] = LocalDate.parse("2026-11-01"); it[seconds] = 60
+                it[memo] = "TAB_SESSION_SENTINEL"
+            }
+        }
+        val res = client.get("/api/v1/export/zip") { header(HttpHeaders.Authorization, "Bearer $tokenA") }
+        assertEquals(HttpStatusCode.OK, res.status)
+        val entries = readZipEntries(res.bodyAsBytes())
+        val songs = entries["연습 곡.csv"]!!.toString(StandardCharsets.UTF_8)
+        val sessions = entries["연습 기록.csv"]!!.toString(StandardCharsets.UTF_8)
+        assertFalse(songs.contains("TAB_EXPORT_SENTINEL"), songs)
+        assertFalse(sessions.contains("TAB_SESSION_SENTINEL") || sessions.contains("TAB_EXPORT_SENTINEL"), sessions)
+        assertTrue(entries["읽어주세요.txt"]!!.toString(StandardCharsets.UTF_8).contains("TAB 악보 곡과 그 연습 기록은 이 파일에 포함되지 않습니다."))
+    }
 }

@@ -126,11 +126,12 @@ class PracticeLogService(
             .select(SessionsTable.userId, SongsTable.videoId, SessionsTable.seconds, SessionsTable.loops)
             .where {
                 (SessionsTable.userId inList userIds.distinct()) and (SessionsTable.date eq today) and
-                    ((SessionsTable.seconds greater 0) or (SessionsTable.loops greater 0))
+                    ((SessionsTable.seconds greater 0) or (SessionsTable.loops greater 0)) and
+                    SongsTable.videoId.isNotNull() // TB-1: 공개 "오늘 곡"에 TAB 곡은 넣지 않는다
             }
             .orderBy(SessionsTable.seconds to SortOrder.DESC, SongsTable.videoId to SortOrder.ASC)
             .groupBy({ it[SessionsTable.userId] }) {
-                Triple(it[SongsTable.videoId], it[SessionsTable.seconds], it[SessionsTable.loops])
+                Triple(it[SongsTable.videoId]!!, it[SessionsTable.seconds], it[SessionsTable.loops])
             }
             .mapValues { it.value.take(MAX_TODAY_SONGS) }
     }

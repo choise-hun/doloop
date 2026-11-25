@@ -154,4 +154,13 @@ class EpisodeLogApiTest : EpisodeTestSupport() {
         }
         assertEquals(20,client.feed(b).size)
     }
+
+    @Test fun `TB1-C5 TAB 곡 연습 기록은 연습 카드로 공유되지 않는다`() = testApplication {
+        configureApiTestApp(config)
+        val a = client.user(); val s = session(a)
+        val songId = transaction(db) { SessionsTable.selectAll().where { SessionsTable.id eq s }.single()[SessionsTable.songId] }
+        TestTab.convertToTab(db, songId)
+        client.post(a, s).error(HttpStatusCode.Conflict, "SESSION_NOT_SHAREABLE")
+        assertEquals(0L, cardCount())
+    }
 }
