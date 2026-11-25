@@ -342,7 +342,13 @@ class ProfileService(private val db: Database?) {
                 .where { (TakesTable.userId eq userId) and (TakesTable.storage eq "supabase") }
                 .map { it[TakesTable.storageKey] }
 
-            for (key in supabaseStorageKeys) {
+            // TB-1: TAB 파일도 CASCADE로 지워지지 않으므로 같은 트랜잭션에서 휴지통에 넣는다
+            val tabStorageKeys = SongsTable
+                .select(SongsTable.tabStorageKey)
+                .where { (SongsTable.userId eq userId) and SongsTable.tabStorageKey.isNotNull() }
+                .mapNotNull { it[SongsTable.tabStorageKey] }
+
+            for (key in supabaseStorageKeys + tabStorageKeys) {
                 StorageTrashTable.insert {
                     it[storageKey] = key
                 }
@@ -462,7 +468,9 @@ class ProfileService(private val db: Database?) {
                 songs = songCount(userId),
                 categories = categoryCount(userId),
                 takeBytes = usedBytes,
-                takeSongs = serverTakeSongIds(userId).size.toLong()
+                takeSongs = serverTakeSongIds(userId).size.toLong(),
+                tabSongs = tabSongCount(userId),
+                tabBytes = tabBytesUsed(userId)
             ),
             credits = CreditsDto(row[ProfilesTable.monthlyCredits], row[ProfilesTable.purchasedCredits]),
             locale = row[ProfilesTable.locale],

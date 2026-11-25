@@ -207,7 +207,7 @@ data class SongDto(
 | 수정 | `service/SharedFolderSync.kt`, `service/EpisodeLogService.kt`, `service/PracticeLogService.kt`, `service/SessionService.kt`, `routes/SessionRoutes.kt`, `service/ExportImportService.kt`, `notion/NotionPushWorker.kt`(컴파일만), `service/CommunityService.kt`·`service/PlaylistImportService.kt`(컴파일만, 구현 중 추가) | ① |
 | 신규 | `service/TabSongService.kt`, `service/TabFileValidator.kt` | ② |
 | 수정 | `service/TierService.kt`(한도·사용량·DTO), `service/ProfileService.kt`(deleteMe), `Main.kt`(서비스 생성·라우트 인자) | ② |
-| 테스트 | `db/DatabaseMigrationAndIntegrityTest.kt`(버전 15 + V15 검사), `song/SongApiTest.kt`(하위 호환·`include`), `session/SessionApiTest.kt`·`community/CommunityApiTest.kt`·`community/EpisodeLogApiTest.kt`·`community/CurationApiTest.kt`·`nx/ExportImportApiTest.kt`(C2~C6과 키 집합 단언, 구현 중 추가), 신규 `song/TabSongApiTest.kt`, 신규 `song/TabFileValidatorTest.kt`, `support/ApiTestSupport.kt`(필요할 때만 인자 추가), `src/test/resources/tab/`(TB-0 fixture 4개 복사, 자체 제작이라 권리 문제 없음) | ①·② |
+| 테스트 | `db/DatabaseMigrationAndIntegrityTest.kt`(버전 15 + V15 검사), `song/SongApiTest.kt`(하위 호환·`include`), `session/SessionApiTest.kt`·`community/CommunityApiTest.kt`·`community/EpisodeLogApiTest.kt`·`community/CurationApiTest.kt`·`nx/ExportImportApiTest.kt`(C2~C6과 키 집합 단언, 구현 중 추가), 신규 `song/TabSongApiTest.kt`, 신규 `song/TabFileValidatorTest.kt`, `support/ApiTestSupport.kt`(TAB 곡 직접 넣기 도우미 `TestTab`), `support/FakeStorageClient.kt`(업로드 Content-Type 기록, 구현 중 추가), `src/test/resources/tab/`(TB-0 fixture 4개 복사, 자체 제작이라 권리 문제 없음) | ①·② |
 
 합계 약 20개. 이 표 밖의 파일을 고쳐야 하면 먼저 묻는다.
 

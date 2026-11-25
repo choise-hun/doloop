@@ -458,8 +458,13 @@ class SongService(
                 .where { (TakesTable.userId eq userId) and (TakesTable.songId eq songId) and (TakesTable.storage eq "supabase") }
                 .map { it[TakesTable.storageKey] }
 
+            // TB-1: TAB 곡이면 그 파일 키도 같은 트랜잭션에서 휴지통에 넣는다(라우트가 커밋 뒤 purge)
+            val tabStorageKey = SongsTable.select(SongsTable.tabStorageKey)
+                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                .single()[SongsTable.tabStorageKey]
+
             val trashIds = mutableListOf<Long>()
-            for (storageKey in supabaseStorageKeys) {
+            for (storageKey in supabaseStorageKeys + listOfNotNull(tabStorageKey)) {
                 val trashId = StorageTrashTable.insert {
                     it[StorageTrashTable.storageKey] = storageKey
                 } get StorageTrashTable.id

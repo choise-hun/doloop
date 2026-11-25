@@ -2,7 +2,7 @@
 
 ## 목표와 입력
 
-- **현재 단계** TB-1 **명세 승인**(2026-11-25, [명세/TB-1](명세/TB-1_구현명세.md) §3 T1~T7 추천안 승인), 시니어 구현 중. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
+- **현재 단계** TB-1 **명세 승인**(2026-11-25, [명세/TB-1](명세/TB-1_구현명세.md) §3 T1~T7 추천안 승인), **시니어 구현 완료·push**(`feat/TB-1-tab-songs`, 커밋 2개), 다음은 주니어 4단계다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
 - **근거** [기능확장.md](../기능확장.md) §2.3·§5·§6 및 [TB-0 스파이크 명세](명세/TB-0_스파이크명세.md).
 - **승인 범위**
   - 2026-11-25 1차: TB-0 격리 재현물 실행을 요청받았다. 제품 소스·DB 마이그레이션·main 반영은 금지였다.
@@ -33,7 +33,7 @@
 | Step | 입력 → 결과 | 완료 기준 | 상태 | 권장 effort |
 |---|---|---|---|---|
 | TB-0 스파이크 | 명세/TB-0 → 결과/TB-0 | 사용자 승인 조건부 통과(R1~R4 이월) | **완료** 2026-11-25 · PR [#68](https://github.com/choise-hun/doloop/pull/68) | — |
-| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → 결과/TB-1 | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **구현 중** 명세 승인 2026-11-25(PR [#69](https://github.com/choise-hun/doloop/pull/69)) · 브랜치 `feat/TB-1-tab-songs` | high |
+| TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → 결과/TB-1 | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **시니어 구현 완료** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) · 브랜치 `feat/TB-1-tab-songs`(PR 없음, 주니어 4단계 대기) | high |
 | TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → 시안 → 결과/TB-2 | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환 §5 합격선 통과 | 대기 | high |
 | TB 출시 전 관문 | 결과/TB-0 §0 R1·R3·R4 | 실기기 확인, SF2 근거·교체, 포맷 4종 검증 | 대기(`상용_서비스_계획.md` §4) | — |
 
@@ -64,19 +64,30 @@
 - 코드로 확인한 것: Flyway 마지막 버전 V14(V15 비어 있음), `songs` 유일성 `UNIQUE(user_id, video_id)`, `SongsTable.videoId` 읽는 경로 전수(명세 §2 P17·§7), `StorageClient` 4개 메서드와 `takes` 단일 버킷, `storage_trash` 칸·cron, `TierLimits` 상수, 계정 삭제가 녹음 키만 휴지통에 넣는 점(P14).
 - 확인하지 못한 것: 운영 `takes` 버킷의 MIME·크기 제한(이 세션의 Supabase 연결 계정에 doloop 프로젝트가 없음). 구현 전에 확인한다(명세 §13 U1).
 
+## TB-1 시니어 구현 기록 (2026-11-25 Mac)
+
+- 브랜치 `feat/TB-1-tab-songs`는 `docs/TB-1-spec` 위에 쌓았다(PR #69 미머지). #69가 머지되면 main 기준으로 다시 맞춘다(아래 멘트).
+- 커밋 ① `c40f496`: V15 + `video_id` nullable 파급 + 목록 `include=tab` + 공개본·연습 카드·공개 오늘 곡·ZIP 내보내기 TAB 제외.
+- 커밋 ②: `TabFileValidator`·`TabSongService`, `POST /songs/tab`, `GET /songs/{id}/tab-file`, 곡·계정 삭제 시 TAB 키 휴지통, 티어 `tabSongs`·`tabBytes`(`GET /me` 한도·사용량에도 노출).
+- 검증: `./gradlew clean test -Pkotlin.incremental=false` **430 tests, 실패 0**(기존 409 + 새 21: TabSongApiTest 15, TabFileValidatorTest 6. 커밋 ①의 M1~M3·C1~C6은 기존 수에 포함). 변이 3건을 확인했다: tx B 재검사 제거 → U6 실패, `media_type` 조건 제거 → F1 실패, `includeTab` 조건 제거 → C2 실패. 셋 다 되돌린 뒤 통과.
+- 명세와 달라진 점(명세에 반영함): ① `GET /sessions`의 합계·달력은 TAB 세션까지 센다(목록만 거른다). ② `CommunityService`·`PlaylistImportService`는 nullable 타입 때문에 한 줄씩 고쳤다(동작 변화 없음). ③ 응답 키 집합을 단언하는 기존 테스트 3건(SongApiTest S1·S13, SessionApiTest L3)을 새 칸에 맞췄다. ④ `FakeStorageClient`에 Content-Type 기록을 더했다.
+- 미확인 해소: U3 한국어 파일 이름은 `filename="연습곡.gp"` 그대로 디코딩됨(TB1-U2). **U1(운영 `takes` 버킷 MIME·크기 제한)과 U2(운영 제약 이름)는 아직 확인하지 못했다.** U1은 배포 전에 반드시 확인한다. U2는 Testcontainers에서 V1 자동 이름으로 마이그레이션이 통과했다.
+- 미실행: `npm test`(프런트 무변경), PR·CI, 운영 배포.
+
 ## 다음 행동
 
-1. 사용자가 명세 §3 T1~T7을 결정하면 명세 상태를 "승인"으로 바꾸고 TB-1 구현을 시작한다(아래 멘트).
-2. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다(명세/TB-1 §7·T4).
-3. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
+1. 주니어 4단계: PR #69 머지 뒤 `feat/TB-1-tab-songs`를 main 기준으로 맞추고, 전체 회귀·PR·CI·`결과/TB-1.md`를 만든다(아래 멘트).
+2. 배포 전 사람 확인: 운영 `takes` 버킷 `allowed_mime_types`·`file_size_limit`(명세 §13 U1). 오디오 MIME만 허용이면 `application/octet-stream`을 더해야 한다.
+3. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다.
+4. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
 
 ## 다음 세션 시작 멘트
 
 ```text
-TB-1 백엔드 구현을 시작해. 나는 시니어야.
-먼저 읽어: 개발산출물/인수인계_메모.md §2, 개발산출물/진행_TB_악보플레이어.md(Step 표·승인 범위), 개발산출물/명세/TB-1_구현명세.md 전체(특히 §3 결정·§5·§7·§11), .team_docs/rules/backend-kotlin.md.
-git: 명세 PR(docs/TB-1-spec)이 머지된 뒤 main으로 전환해 git pull --ff-only를 한다. 새 브랜치는 feat/TB-1-tab-songs다. 미커밋 변경이 있으면 보존한다.
-시작하기 전에 확인: 명세 §3 T1~T7의 사용자 결정(추천안과 다르면 명세 해당 줄부터 고친다), §13 U1 운영 takes 버킷 allowed_mime_types·file_size_limit, U2 운영 songs 유일성 제약 이름, U3 Ktor 한국어 파일 이름 디코딩.
-범위: 명세 §10 파일만 고친다(약 20개, 커밋 ① V15+nullable 파급+include=tab, ② 업로드·파일 주소·삭제 정리·한도). 프런트·CSP·Notion 기능은 건드리지 않는다. §10 밖의 파일이 필요하면 먼저 묻는다.
-끝나면 ./gradlew test 통과와 변이 3건 확인을 진행 파일에 적고, push 뒤 주니어 4단계(전체 회귀·PR·CI·결과/TB-1.md)로 넘긴다. 머지와 운영 배포는 하지 않는다.
+TB-1 4단계 검증·PR을 시작해. 나는 주니어야.
+먼저 읽어: 개발산출물/인수인계_메모.md §2, 개발산출물/진행_TB_악보플레이어.md("TB-1 시니어 구현 기록"·Step 표), 개발산출물/명세/TB-1_구현명세.md §10·§11·§13, .team_docs/주니어_체크리스트.md.
+git: PR #69(docs/TB-1-spec)가 머지된 뒤 main을 pull하고, feat/TB-1-tab-songs를 git rebase main으로 맞춘다(충돌이 나면 멈추고 묻는다). 머지 전이면 base를 docs/TB-1-spec으로 둔 PR을 만들지 말고 기다린다. gh 계정은 choise-hun 그대로다.
+시작하기 전에 확인: 명세 §13 U1(운영 takes 버킷 MIME·크기 제한)을 사람이 확인했는지 묻는다. 확인 전이면 PR 본문에 "배포 전 확인 필요"로 적는다.
+범위: 제품 코드는 고치지 않는다. ./gradlew clean test -Pkotlin.incremental=false, npm test, npm run build를 실행하고 결과를 적는다. 실패하면 고치지 말고 원문과 함께 시니어에게 넘긴다.
+끝나면 base main PR을 올리고 CI를 확인한 뒤 결과/TB-1.md, 진행 파일 Step 표, 인수인계 메모를 맞춘다. 머지와 운영 배포는 하지 않는다.
 ```
