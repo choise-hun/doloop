@@ -263,3 +263,45 @@
 2. **NT-2b** 브랜치 `feat/NT-2b-doc-viewer`(NT-2a 머지 뒤 `main`에서): U1~U4 확인 → 의존성 추가 커밋 → 뷰어·주석·캐시 구현 → 표적 ★ → 커밋 `feat(NT-2b): 자료 뷰어·주석·rev 합치기·기기 캐시` → push → 주니어 4단계(`결과/NT-2b.md`, NT2B-M1 기록). NT-2b 마지막에 NT-3 착수 조건만 진행 파일에 적는다(NT는 NT-3이 남아 완료 이동하지 않는다).
 
 - 금지: 서버 계약 변경(필요해 보이면 멈추고 묻는다), 블록 노트 만들기 진입점, 토큰 밖 색, 새 라이브러리(`pdfjs-dist` 외).
+
+## 11. 구현 기록 (NT-2a, 2026-11-27 Mac Claude 시니어 · `feat/NT-2a-note-workspace-ui` `1b845d4`)
+
+### 11.1 착수 확인
+
+- PR #73 머지 확인(`3736831`, 2026-11-26). 서버 전제 P1(`NoteWorkspaceRoutes.kt:66-269`)·P4(`TierService.kt` 한도 표 `:52-63`·관리자 `:66-80`)·P7(`NotesPage.tsx`)이 머지된 `main`과 맞았다. DTO는 `NoteFolderService.kt:19-34`·`NoteDocService.kt:25-77`·`NoteFileService.kt:30-41`과 대조했다.
+- 요금제 링크: `SettingsPage.tsx`에 `#plan` 앵커가 없다. 구독·크레딧 섹션 `#credits`를 쓴다(기존 `notes.linkSettingsCredits`와 같다). Drive 연결 안내는 `#account`(`driveStoragePanel`이 있는 섹션). Drive 연결 판정은 `me.storageProvider === 'drive'`.
+- 브랜치: 문서 커밋 `docs/NT-2-spec`(`061b309`, push) 위에서 `feat/NT-2a-note-workspace-ui`를 만들었다(PR은 하나 — 주니어가 base `main`으로 연다. 문서 커밋이 함께 들어간다).
+
+### 11.2 파일 (18개 — §7.1 15개 + 사용자 승인 3개, 2026-11-27)
+
+| 구분 | 파일 |
+| --- | --- |
+| 화면 | `pages/NotesPage.tsx`·`NotesPage.module.css`, 새 `components/notes/NoteFolderNav.tsx`(목록·칩 줄 + 노트북/PRO 대화상자)·`NoteUploadDialog.tsx`·`NoteCard.tsx`·`notes.module.css` |
+| 라이브러리 | `lib/apiClient.ts`(`apiClient.noteWorkspace.*` 18개 + `notes.setFolder`, 타입 6개, `NoteSummaryDto.folderId`), `lib/auth.ts`(한도·사용량 선택 칸), `lib/drive.ts`(`ensureFolder(preferredId, name)`·`DRIVE_NOTES_FOLDER_NAME`·`deleteFile` 공개), **승인 추가** 새 `lib/noteWorkspace.mts`(순수 함수 — node 단위 테스트용) |
+| 문구 | `lib/i18n/ko·en·ja.mts`(`notes.ws.*` 51 · `notes.upload.*` 34, `tab.quota` 합산 문구) |
+| 테스트 | `test/e2e/layout/notes.spec.js`(ws·free 상태, NT2A-L1), 새 `test/e2e/notes-workspace.spec.js`, 새 `test/nt2a_note_upload.test.js`, **승인 추가** `test/e2e/layout/ui-polish.spec.js`(DS24-N1 필 = `#noteUploadBtn`·카드 왼쪽 3px 스파인, DS24-D1 접힌 `#form`은 attached 대기)·`test/e2e/xss.spec.js`(E10 접힘 상자 열기 한 줄) |
+
+### 11.3 명세와 다른 점·구현 결정
+
+- **배치 약속**: 제목줄 버튼은 `notesTitle`이 아니라 새 그룹 `notesActions:center-y`. 390에서 큰 제목(36~56px)과 버튼 두 개가 한 줄에 들어가지 않아 버튼 줄이 아래로 내려간다(`notesTitle`은 제목·BETA 그대로). `notesWs:top@961`은 `nav#noteFolders` ↔ `#noteFolderHead`, `noteCards:top,bottom`은 카드.
+- **작업 목록**: `#jobs`(제목 포함)를 AI 접힘 상자 안에 둔다. 상자가 접혀 있고 진행·실패 작업이 있으면 띠 `#noteJobsStrip` + `작업 보기 →`(상자를 열고 `#jobs`로 스크롤). 상자 펼침 = 사용자 선택 우선, 없으면 로그인 전·노트 0개일 때 펼침(목록 응답 전에는 접힘). 키 게이트 `#keyGateBox`도 상자 안.
+- **`#submit`** 은 사각 버튼(`ghostBtn` + 먹색 테두리)으로 바꿨다 — 대표 필은 `＋ 자료 올리기` 하나(Q1). 로그인 전에는 제목줄 버튼이 없다.
+- **카드**: 카드 전체 링크는 제목 링크를 카드 위로 늘리는 방식(`::after`). AI 카드는 기존 단언 때문에 `.note-card`·`.note-card-title`·`.note-actions`(연습·상세 링크)를 유지한다. 카드 `⋯` 메뉴는 AI·자료 모두 이동·이름 바꾸기·삭제(AI 삭제 문구는 `note.confirmDelete` 재사용). **`Drive` 표시는 뺐다** — 목록 DTO(`NoteDocSummaryDto.firstFile{id,mime}`)에 저장 위치가 없다(서버 계약 변경 필요 → 하지 않음).
+- **노트북 색**: 지역 CSS 변수는 DR-7에 걸려 새 변수 대신 기존 `--section-spine`을 `[data-fold]`로 덮는다. 색 없음 = `--seam-hairline`(선택 항목은 먹색).
+- **Drive 학습자료 폴더 id**: `drive.ts`는 localStorage 쓰기가 금지(R0-T8)라 `NoteUploadDialog.tsx`가 `ulp:drive-notes-folder:<uid>`를 읽고 쓴다. `ensureFolder`는 녹음 폴더일 때만 옛 이름(`ULeveLP 녹음`)을 조회하고, 생성 이름 분기는 BR1-7 단언을 지키는 모양으로 썼다.
+- **업로드**: 한도·업그레이드·`STORAGE_UNAVAILABLE` 오류는 남은 파일을 시도하지 않고 실패로 돌린다. 부분 성공 뒤 대화상자에 남은(실패) 파일만 두고 다시 `올리기`하면 **같은 노트**에 붙인다(제목·노트북 칸 잠금). 용량·크기 초과이고 Drive를 쓸 수 있으면 `Drive에 저장` 버튼이 저장 위치를 Drive로 바꾼다. 닫기·계정 전환은 `AbortController`로 끊고, 같은 계정이면 방금 만든 빈 노트를 지운다(다른 계정이면 지우지 않는다 — 요청이 새 세션으로 나간다).
+- **390 첫 화면**(notes-form N1, 0노트 사용자): 머리 버튼 줄·요약 줄 때문에 `#submit`이 탭 바 아래로 밀려 ≤600에서 요약 보조 문구 숨김·폼 안쪽 여백 16px·간격 축소로 맞췄다.
+- **AI 상자 요약 줄**: `display:flex`로 기본 펼침 표시가 사라져 오른쪽 끝에 `＋/−`를 둔다.
+
+### 11.4 시니어 표적 검증 (2026-11-27 Mac)
+
+| 명령 | 결과 |
+| --- | --- |
+| `npx playwright test test/e2e/layout/notes.spec.js` (구현 전) | ws 상태·NT2A-L1 **실패 확인**(카드 2개만 — 순서 ②) |
+| `npx tsc --noEmit` · `npx vite build` | 통과 |
+| `npm test` (node 단위 전체) | **555/555** (새 `nt2a_note_upload` 4건 포함 · i18n I0-6·LA-1·LB·DR-7·보안 (g)·BR1-7·R0-T8 통과) |
+| `npx playwright test` layout/notes · notes-workspace · notes-form · notes-range · beta-badge · xss · layout/ui-polish · practice-record | **105/105** (★ NT2A-L1 4폭·W1·U1 2건·T1 2건·R1 + W2) |
+| 위 묶음 + i18n-lang · layout.spec · theme-footer · note-actions · tab-player (`tab.quota`·드라이브 변경 영향) | 129/129 (중간 실행, 이후 CSS만 바뀌어 notes 묶음 57/57 재확인) |
+| `LAYOUT_SHOTS=1` ws 1280·390, free 390 | 직접 확인(V1 B 목록/칩 줄·스파인·필 1개). **4폭 Q1~Q9 표는 주니어** |
+
+- 미실행(주니어 4단계): 전체 `npm run test:e2e`·`./gradlew test` 회귀, 4폭×상태 스크린샷 Q1~Q9 표, PR·CI. NT2A-V1(Drive 실제 업로드·등록 실패 시 `drive.deleteFile`)은 Google 토큰 흐름이 있어 가짜 API E2E를 만들지 않았다 — 코드 경로는 `NoteUploadDialog.tsx` `submit`. 실제 Drive·운영 확인은 사람(출시 전).
