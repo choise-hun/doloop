@@ -262,8 +262,82 @@ export interface NoteSummaryDto {
   difficulty?: string | null;
   model: string;
   collectProgressions?: boolean;
+  /** NT-1: 노트북. null = 기본 노트북 */
+  folderId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// NT-2a: 학습 노트 워크스페이스(NT-1 서버 DTO — NoteFolderService.kt·NoteDocService.kt·NoteFileService.kt)
+export interface NoteFolderDto {
+  id: string;
+  name: string;
+  color: string | null;
+  sortOrder: number;
+  docCount: number;
+  aiNoteCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NoteDocKind = 'document' | 'block';
+
+export interface NoteFileBriefDto {
+  id: string;
+  mime: string;
+}
+
+export interface NoteDocSummaryDto {
+  id: string;
+  kind: NoteDocKind | string;
+  title: string;
+  folderId: string | null;
+  rev: number;
+  fileCount: number;
+  firstFile: NoteFileBriefDto | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteFileDto {
+  id: string;
+  docId: string;
+  storage: 'supabase' | 'drive' | string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface NoteDocDetailDto extends NoteDocSummaryDto {
+  body: Record<string, unknown>;
+  files: NoteFileDto[];
+}
+
+/** `GET /note-files/{id}/url` — supabase면 서명 주소, drive면 파일 ID(합집합) */
+export interface NoteFileUrlDto {
+  storage: 'supabase' | 'drive' | string;
+  url?: string | null;
+  expiresIn?: number | null;
+  storageKey?: string | null;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+}
+
+export interface NoteAnnotationDto {
+  page: number;
+  data: Record<string, unknown>;
+  rev: number;
+  updatedAt: string;
+}
+
+export interface NoteDriveFileInput {
+  storageKey: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
 }
 
 export interface NoteDetailDto extends NoteSummaryDto {
@@ -1634,6 +1708,170 @@ async function setNoteCollect(noteId: string, collect: boolean): Promise<NoteCol
   };
 }
 
+// ---- NT-2a: 학습 노트 워크스페이스 (NT-1 NoteWorkspaceRoutes.kt · NoteRoutes.kt PUT /notes/{id}/folder) ----
+
+const enc = encodeURIComponent;
+
+async function listNoteFolders(signal?: AbortSignal): Promise<NoteFolderDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/note-folders', { signal, cache: 'no-store' });
+  return r && Array.isArray(r.folders) ? r.folders : [];
+}
+
+async function createNoteFolder(input: { name: string; color?: string | null }): Promise<NoteFolderDto | null> {
+  requireLogin();
+  const body: Record<string, unknown> = { name: input.name };
+  if (input.color) body.color = input.color;
+  const r = await getAuthRef().apiFetch('/api/v1/note-folders', { method: 'POST', body: JSON.stringify(body) });
+  return r && r.folder ? r.folder : null;
+}
+
+async function updateNoteFolder(folderId: string, patch: { name?: string; color?: string | null }): Promise<NoteFolderDto | null> {
+  requireLogin();
+  const body: Record<string, unknown> = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.color !== undefined) body.color = patch.color;
+  const r = await getAuthRef().apiFetch('/api/v1/note-folders/' + enc(folderId), { method: 'PATCH', body: JSON.stringify(body) });
+  return r && r.folder ? r.folder : null;
+}
+
+async function reorderNoteFolders(ids: string[]): Promise<NoteFolderDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/note-folders/order', { method: 'PUT', body: JSON.stringify({ ids }) });
+  return r && Array.isArray(r.folders) ? r.folders : [];
+}
+
+async function deleteNoteFolder(folderId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  await getAuthRef().apiFetch('/api/v1/note-folders/' + enc(folderId), { method: 'DELETE' });
+  return { ok: true };
+}
+
+/** folder: 없으면 전부, 'none'이면 기본 노트북, uuid면 그 노트북 */
+async function listNoteDocs(folder?: string, signal?: AbortSignal): Promise<NoteDocSummaryDto[]> {
+  requireLogin();
+  const path = '/api/v1/note-docs' + (folder ? '?folder=' + enc(folder) : '');
+  const r = await getAuthRef().apiFetch(path, { signal, cache: 'no-store' });
+  return r && Array.isArray(r.docs) ? r.docs : [];
+}
+
+async function createNoteDoc(
+  input: { kind: NoteDocKind; title: string; folderId?: string | null; body?: Record<string, unknown> },
+  signal?: AbortSignal,
+): Promise<NoteDocDetailDto> {
+  requireLogin();
+  const body: Record<string, unknown> = { kind: input.kind, title: input.title, folderId: input.folderId ?? null };
+  if (input.body !== undefined) body.body = input.body;
+  const r = await getAuthRef().apiFetch('/api/v1/note-docs', { method: 'POST', body: JSON.stringify(body), signal });
+  if (!r || !r.doc) throw new Error(t('notes.upload.err.storage'));
+  return r.doc;
+}
+
+async function getNoteDoc(docId: string, signal?: AbortSignal): Promise<NoteDocDetailDto | null> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/note-docs/' + enc(docId), { signal, cache: 'no-store' });
+  return r && r.doc ? r.doc : null;
+}
+
+async function updateNoteDoc(
+  docId: string,
+  patch: { title?: string; folderId?: string | null; body?: Record<string, unknown>; rev?: number },
+): Promise<NoteDocDetailDto | null> {
+  requireLogin();
+  const body: Record<string, unknown> = {};
+  if (patch.title !== undefined) body.title = patch.title;
+  if (patch.folderId !== undefined) body.folderId = patch.folderId;
+  if (patch.body !== undefined) body.body = patch.body;
+  if (patch.rev !== undefined) body.rev = patch.rev;
+  const r = await getAuthRef().apiFetch('/api/v1/note-docs/' + enc(docId), { method: 'PATCH', body: JSON.stringify(body) });
+  return r && r.doc ? r.doc : null;
+}
+
+async function deleteNoteDoc(docId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  await getAuthRef().apiFetch('/api/v1/note-docs/' + enc(docId), { method: 'DELETE' });
+  return { ok: true };
+}
+
+/** RE:DO 저장공간 업로드(multipart 파트 `file`, TB-2 uploadTab과 같은 방식 — 진행률 없음) */
+async function uploadNoteFile(docId: string, file: File, signal: AbortSignal): Promise<NoteFileDto> {
+  requireLogin();
+  const account = getAuthRef();
+  const checkSession = captureSession(account);
+  const body = new FormData();
+  body.set('file', file);
+  const r = await account.apiFetch('/api/v1/note-docs/' + enc(docId) + '/files', { method: 'POST', body, signal });
+  checkSession();
+  signal.throwIfAborted();
+  if (!r || !r.file) throw new Error(t('notes.upload.err.storage'));
+  return r.file;
+}
+
+/** Drive에 올린 파일을 노트 첨부로 등록(JSON, storage = drive) */
+async function registerDriveNoteFile(docId: string, input: NoteDriveFileInput, signal: AbortSignal): Promise<NoteFileDto> {
+  requireLogin();
+  const account = getAuthRef();
+  const checkSession = captureSession(account);
+  const r = await account.apiFetch('/api/v1/note-docs/' + enc(docId) + '/files', {
+    method: 'POST',
+    body: JSON.stringify({ storage: 'drive', ...input }),
+    signal,
+  });
+  checkSession();
+  signal.throwIfAborted();
+  if (!r || !r.file) throw new Error(t('notes.upload.err.storage'));
+  return r.file;
+}
+
+async function getNoteFileUrl(fileId: string, signal?: AbortSignal): Promise<NoteFileUrlDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/note-files/' + enc(fileId) + '/url', { signal, cache: 'no-store' });
+}
+
+async function deleteNoteFile(fileId: string): Promise<{ ok: boolean }> {
+  requireLogin();
+  await getAuthRef().apiFetch('/api/v1/note-files/' + enc(fileId), { method: 'DELETE' });
+  return { ok: true };
+}
+
+/** AI 영상 노트를 노트북에 넣기/빼기(null = 기본 노트북) */
+async function setNoteFolder(noteId: string, folderId: string | null): Promise<NoteDetailDto | null> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/notes/' + enc(noteId) + '/folder', {
+    method: 'PUT',
+    body: JSON.stringify({ folderId }),
+  });
+  return r && r.note ? r.note : null;
+}
+
+async function listNoteAnnotations(fileId: string, signal?: AbortSignal): Promise<NoteAnnotationDto[]> {
+  requireLogin();
+  const r = await getAuthRef().apiFetch('/api/v1/note-files/' + enc(fileId) + '/annotations', { signal, cache: 'no-store' });
+  return r && Array.isArray(r.pages) ? r.pages : [];
+}
+
+/** rev = 마지막으로 받은 쪽 rev(새 쪽은 0). 다르면 409(NT-1 N9) */
+async function putNoteAnnotation(
+  fileId: string,
+  page: number,
+  data: Record<string, unknown>,
+  rev: number,
+  signal?: AbortSignal,
+): Promise<NoteAnnotationDto> {
+  requireLogin();
+  return await getAuthRef().apiFetch('/api/v1/note-files/' + enc(fileId) + '/annotations/' + enc(String(page)), {
+    method: 'PUT',
+    body: JSON.stringify({ data, rev }),
+    signal,
+  });
+}
+
+async function deleteNoteAnnotation(fileId: string, page: number): Promise<{ ok: boolean }> {
+  requireLogin();
+  await getAuthRef().apiFetch('/api/v1/note-files/' + enc(fileId) + '/annotations/' + enc(String(page)), { method: 'DELETE' });
+  return { ok: true };
+}
+
 async function listProgressions(scope?: ProgressionScope): Promise<ProgressionDto[]> {
   requireLogin();
   let path = '/api/v1/progressions';
@@ -2140,6 +2378,28 @@ export const apiClient = {
     update: updateNote,
     remove: removeNote,
     setCollect: setNoteCollect,
+    setFolder: setNoteFolder,
+  },
+  // NT-2a: 노트북·자료 노트·첨부·주석(주석 셋은 NT-2b 뷰어가 쓴다)
+  noteWorkspace: {
+    listNoteFolders,
+    createNoteFolder,
+    updateNoteFolder,
+    reorderNoteFolders,
+    deleteNoteFolder,
+    listNoteDocs,
+    createNoteDoc,
+    getNoteDoc,
+    updateNoteDoc,
+    deleteNoteDoc,
+    uploadNoteFile,
+    registerDriveNoteFile,
+    getNoteFileUrl,
+    deleteNoteFile,
+    setNoteFolder,
+    listNoteAnnotations,
+    putNoteAnnotation,
+    deleteNoteAnnotation,
   },
   progressions: {
     list: listProgressions,

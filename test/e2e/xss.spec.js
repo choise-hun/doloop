@@ -644,7 +644,9 @@ test('E10 학습 노트(notes.html) 및 노트 상세(note.html) XSS 페이로�
   // 1. /notes.html 진입
   await page.goto('/notes.html');
 
-  // 작업 행 및 노트 카드 렌더링 확인
+  // 작업 행 및 노트 카드 렌더링 확인(NT-2a: 노트가 있으면 AI 상자가 접혀 있다 — 열고 본다)
+  await page.locator('#notesList .note-card').first().waitFor();
+  await page.locator('#aiNoteBox > summary').click();
   const jobsList = page.locator('#jobs');
   await expect(jobsList).toBeVisible();
   await expect(jobsList).toContainText(PAYLOADS.P_IMG);

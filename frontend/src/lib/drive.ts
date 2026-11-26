@@ -5,6 +5,7 @@ import { apiClient, TakeDto, TakeUploadMeta } from './apiClient';
 
 const DRIVE_FOLDER_NAME = 'REDO 녹음'; // i18n-keep: 구글 드라이브 고정 폴더명(D5-4, BR-1)
 const LEGACY_DRIVE_FOLDER_NAME = 'ULeveLP 녹음'; // i18n-keep: BR-1 이전 폴더명(기존 사용자 폴더 조회)
+export const DRIVE_NOTES_FOLDER_NAME = 'REDO 학습자료'; // i18n-keep: NT-2a 학습 노트 자료 고정 폴더명(명세/NT-2 §4.4)
 
 export interface DriveMigrationProgress {
   current: number;
@@ -161,7 +162,8 @@ function createDriveModule() {
     }
   }
 
-  async function ensureFolder(preferredId?: string | null): Promise<string> {
+  /** NT-2a: [name] 폴더를 찾거나 만든다. 기본값은 녹음 폴더(옛 이름 조회 포함) */
+  async function ensureFolder(preferredId?: string | null, name: string = DRIVE_FOLDER_NAME): Promise<string> {
     const token = await requestToken();
 
     if (preferredId) {
@@ -204,8 +206,9 @@ function createDriveModule() {
     }
 
     const existingId =
-      (await findFolderByName(token, DRIVE_FOLDER_NAME)) ??
-      (await findFolderByName(token, LEGACY_DRIVE_FOLDER_NAME));
+      name === DRIVE_FOLDER_NAME
+        ? (await findFolderByName(token, DRIVE_FOLDER_NAME)) ?? (await findFolderByName(token, LEGACY_DRIVE_FOLDER_NAME))
+        : await findFolderByName(token, name);
     if (existingId) {
       return existingId;
     }
@@ -216,10 +219,12 @@ function createDriveModule() {
         Authorization: 'Bearer ' + token,
         'Content-Type': 'application/json; charset=UTF-8',
       },
-      body: JSON.stringify({
-        name: DRIVE_FOLDER_NAME,
-        mimeType: 'application/vnd.google-apps.folder',
-      }),
+      // 녹음 폴더는 늘 새 이름으로 만든다(BR-1 D7). 다른 폴더(NT-2a 학습자료)는 받은 이름 그대로
+      body: JSON.stringify(
+        name === DRIVE_FOLDER_NAME
+          ? { name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }
+          : { name, mimeType: 'application/vnd.google-apps.folder' }
+      ),
     });
     if (!createRes.ok) {
       throw new Error(t('drive.createFolderFailed', { status: createRes.status }));
@@ -452,6 +457,7 @@ function createDriveModule() {
   return {
     requestToken,
     ensureFolder,
+    deleteFile,
     uploadBlob,
     uploadTake,
     fetchMediaBlob,

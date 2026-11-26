@@ -16,11 +16,12 @@
 
 | Step | 입력 → 결과 | 완료 기준 | 담당 | 상태 | 권장 effort |
 |---|---|---|---|---|---|
-| NT-1 서버 계약·구현 | 기능확장 §3.2·§4·D4~D8, 명세/TB-1 → [명세/NT-1](명세/NT-1_구현명세.md) → [결과/NT-1](결과/NT-1.md) | 명세 §3 N1~N10 승인 → V16·노트북·자료/블록 노트·첨부(업로드·Drive 참조·주소·삭제 정리)·주석(`rev`)·티어 한도·`/me` 사용량 구현, 명세 §12 Kotlin 테스트, PR CI 통과 | [시니어 직접 구현] → 주니어 4단계 | **구현·전체 회귀(450/450)·PR #73 CI 통과·리뷰 완료(머지 대기)** 2026-11-26 `feat/NT-1-note-workspace` | high |
-| NT-2 GoodNotes형 화면 | NT-1 계약 → HTML 시안·`명세/NT-2_구현명세.md` → `결과/NT-2.md` | 시안 확정 → 노트북 목록·자료 노트 업로드(Supabase·Drive)·PDF(`pdfjs-dist`)/이미지 뷰어·주석(형광펜·펜 3~4색·지우개·텍스트 핀, Apple Pencil/터치 분리)·기기 캐시(계정 분리)·CSP 개정·보안 테스트 | 명세 때 판정 | 대기(NT-1 머지 뒤) | high |
-| NT-3 Notion형 블록 에디터 | NT-1·NT-2 → 에디터 선택(Tiptap vs BlockNote, iOS WebView 키보드 검증) → `명세/NT-3_구현명세.md` → `결과/NT-3.md` | 시안 확정 → 블록 에디터·음악 블록(타임스탬프→PLAYER, 코드 다이어그램)·이미지 블록(NT-1 첨부)·`rev` 충돌 처리 | 명세 때 판정 | 대기(NT-2 머지 뒤) | high |
+| NT-1 서버 계약·구현 | 기능확장 §3.2·§4·D4~D8, 명세/TB-1 → [명세/NT-1](명세/NT-1_구현명세.md) → [결과/NT-1](결과/NT-1.md) | 명세 §3 N1~N10 승인 → V16·노트북·자료/블록 노트·첨부(업로드·Drive 참조·주소·삭제 정리)·주석(`rev`)·티어 한도·`/me` 사용량 구현, 명세 §12 Kotlin 테스트, PR CI 통과 | [시니어 직접 구현] → 주니어 4단계 | **완료** — PR #73 머지(`3736831`, 2026-11-26) | high |
+| NT-2a 워크스페이스·업로드 | [명세/NT-2](명세/NT-2_구현명세.md) §4·§6·§7.1·§8.1 + [시안](명세/NT-2_시안.html) → [결과/NT-2a](결과/NT-2a.md) | 노트북 목록(V1 B)·통합 그리드·AI 폼 접힘(V2 B)·노트북 CRUD·순서·자료 올리기(RE:DO·Drive, V7 A)·한도/무료 안내·AI 노트 이동, NT2A ★ 통과 → 전체 회귀·4폭 스크린샷·PR CI 통과 | [시니어 직접 구현] → 주니어 4단계 | **PR #74 3-P 반영·CI 통과 · 머지 대기(2026-11-27)**: `loadWorkspace` 조회 중 쓰기(`foldersSeqRef`) 재조회 수정 + E2E `NT2A-R2` 반영(`5203281`), `build` 0 · `notes-workspace` 8/8 · `npm test` 555/555 · `test:e2e` 992/992 · PR #74 CI 5/5 통과 및 Codex P2 스레드 답변 완료(기존 4폭 Q1~Q9 ○ · `./gradlew test` 유지) | high |
+| NT-2b 뷰어·주석·캐시·CSP | 명세/NT-2 §5·§7.2·§8.2·§9 U1~U5 + NT-2a 결과 → `결과/NT-2b.md` | `note.html?doc=` 뷰어(V3 A)·pdfjs/이미지 캔버스·한 쪽씩(V4 A)·주석(V5 A·V6 A 토큰)·`rev` 합치기·기기 캐시(V8 A)·CSP 위반 0, NT2B ★ 통과 → 전체 회귀·PR CI 통과 | [시니어 직접 구현] → 주니어 4단계 | 대기(NT-2a 머지 뒤) | high |
+| NT-3 Notion형 블록 에디터 | NT-1·NT-2 → 에디터 선택(Tiptap vs BlockNote, iOS WebView 키보드 검증) → `명세/NT-3_구현명세.md` → `결과/NT-3.md` | 시안 확정 → 블록 에디터·음악 블록(타임스탬프→PLAYER, 코드 다이어그램)·이미지 블록(NT-1 첨부)·`rev` 충돌 처리 | 명세 때 판정 | 대기(NT-2b 머지 뒤) | high |
 
-- 대기능 NT는 Step 3개다(협업 §1.2 권장 상한). NT-2가 골디락스 상한을 넘으면 NT-2 명세 때 한 번만 나눌 수 있다(최대 4). NT-1은 한 Step 유지를 추천(명세 N10).
+- 대기능 NT는 **Step 4개(상한)**다: NT-1·NT-2a·NT-2b·NT-3. NT-2를 골디락스 상한(7 파일) 초과로 2a·2b로 나눴다(사용자 V9 승인, 2026-11-26). 더 나누지 않는다 — NT-3이 커지면 범위를 줄이거나 새 대기능으로 뺀다.
 
 ## 단계별 실행 명령과 확인 기준
 
@@ -41,6 +42,7 @@ git switch -c feat/NT-1-note-workspace
 
 | 날짜 | 결정 | 근거 |
 |---|---|---|
+| 2026-11-26 | **확정** NT-2 시안 V1~V9 추천안 그대로: V1 B 왼쪽 노트북 목록, V2 B AI 폼 접힘 상자 유지(대표 필 `＋ 자료 올리기`), V3 A `note.html?doc=`(진입 페이지 무변경), V4 A 한 쪽씩, V5 A 펜·마우스=쓰기·손가락=이동(+`손가락으로 쓰기` 토글), V6 A 새 토큰 `--anno-*`·`--page-paper`, V7 A 올릴 때 저장 위치 선택, V8 A 캐시 계정별 20개·150MB, V9 NT-2a/2b 분할 | [명세/NT-2 §3](명세/NT-2_구현명세.md#3-사용자-결정-2026-11-26-확정--전부-추천안) · [시안](명세/NT-2_시안.html) |
 | 2026-11-26 | **승인** NT-1 사용자 결정 N1~N10 추천안 그대로. 추가: N3·N4 한도는 관리자 계정에서 항상 해제(구현 = `role = owner` → `ownerLimits`). 내용: N1 새 테이블 `note_docs`, N2 무료 기본 노트북만, N3 15/30 평면, N4 30/1000/2000, N5 TAB과 합산 풀, N6 PDF·PNG·JPEG·WebP 20MB·노트당 20개, N7 Drive 참조 포함, N8 다운그레이드 데이터 유지, N9 `rev` 검사, N10 한 Step 커밋 3개 | [명세/NT-1 §3](명세/NT-1_구현명세.md#3-사용자-결정-승인-필요) |
 
 ## NT-1 확인·구현 기록 (2026-11-26 Mac Claude 시니어)
@@ -56,8 +58,15 @@ git switch -c feat/NT-1-note-workspace
 - 기능확장.md §1·§3.2의 `Tables.kt` 줄 번호(`NotesTable` 171-191, `StorageTrashTable` 297-306)는 TB-1 뒤 밀렸다. 현재 `Tables.kt:181-201`, `:307-316`. NT 명세는 `main` `8824cc4` 기준 줄 번호를 쓴다.
 - 기능확장 §3.2는 `notes` 테이블 확장(`video_id` nullable)을 적었지만, 코드 대조 결과 옛 앱·ZIP·태그 규칙 파급이 커서 새 테이블안(N1 A)을 추천으로 올렸다. 사용자 결정 전까지 둘 다 열려 있다.
 
+## NT-2a 구현 기록 (2026-11-27 Mac Claude 시니어)
+
+- 파일 18개(§7.1 15 + 사용자 승인 3: `lib/noteWorkspace.mts`, `layout/ui-polish.spec.js` DS24-N1·D1, `xss.spec.js` E10 한 줄). 명세와 다른 점·결정은 [명세/NT-2](명세/NT-2_구현명세.md) §11.
+- 표적: `npm test` 555/555, 노트 관련 E2E 105/105(★ NT2A-L1·W1·U1·T1·R1 + W2). 전체 E2E·Gradle 회귀·4폭 Q1~Q9 표·PR·CI는 주니어.
+- 브랜치: `docs/NT-2-spec`(`061b309`, NT-2 시안·명세 문서) 위에 `feat/NT-2a-note-workspace-ui`. PR은 `feat/NT-2a-note-workspace-ui` → `main` 하나로 연다(문서 커밋 포함). `docs/NT-2-spec` 브랜치는 따로 PR을 열지 않는다.
+
 ## 다음 세션 시작 지시
 
-- 주니어 4단계: `feat/NT-1-note-workspace`를 받아 전체 `./gradlew test` → main 대상 PR 생성 → `gh pr checks --watch` → 리뷰 확인 → `결과/NT-1.md` 작성 → 이 표의 NT-1 행 갱신. 제품 코드는 고치지 않고 실패는 시니어에게 인계한다.
-- NT-1 머지 뒤 NT-2 시안 단계(HTML 시안·선택지 먼저, 프로젝트 규칙).
-- `docs/NT-1-spec` 로컬 브랜치는 문서 초안만 있던 브랜치다(미커밋 변경은 구현 브랜치로 옮겨 커밋). 지워도 된다.
+- 주니어 4단계(NT-2a): `feat/NT-2a-note-workspace-ui`를 받아 `npm ci` → `npm run build` → `npm test` → `npm run test:e2e` → `./gradlew test` → `LAYOUT_SHOTS=1 npx playwright test test/e2e/layout/notes.spec.js`로 4폭(390·768·1150·1280)×상태(ws·free·userData + 다크) Q1~Q9 표 → main 대상 PR 생성 → `gh pr checks --watch` → 리뷰 확인 → `결과/NT-2a.md` → 이 표의 NT-2a 행 갱신. 제품 코드는 고치지 않고 실패는 시니어에게 인계한다.
+- NT-2b는 NT-2a 머지 뒤. 착수 전에 명세 §9 U1~U4(`pdfjs-dist` 버전·WASM·CSP·MIME)를 공식 문서로 확인한다. `'wasm-unsafe-eval'`이 필요하면 사용자에게 먼저 묻는다.
+- Mac 함정: TB 머지 뒤 `node_modules`에 alphatab이 없으면 `vite build`가 `vite.config.ts` `tabAssets()`에서 ENOENT로 실패한다 → `npm ci`.
+- `docs/NT-1-spec` 로컬 브랜치는 문서 초안만 있던 브랜치다. 지워도 된다.
