@@ -48,6 +48,7 @@ import ulevelp.routes.registerShareLifecycleRoutes
 import ulevelp.routes.registerInternalCronRoutes
 import ulevelp.routes.registerMeRoutes
 import ulevelp.routes.registerNoteRoutes
+import ulevelp.routes.registerNoteWorkspaceRoutes
 import ulevelp.routes.registerNotionSyncRoutes
 import ulevelp.routes.registerPracticeRoutes
 import ulevelp.routes.registerProgressionRoutes
@@ -210,6 +211,9 @@ fun Application.module(
     val practiceLogService = PracticeLogService(db, communityService)
     val storageTrashService = StorageTrashService(db, storageClient)
     val tabSongService = TabSongService(db, storageClient, songService)
+    val noteFolderService = ulevelp.service.NoteFolderService(db)
+    val noteDocService = ulevelp.service.NoteDocService(db)
+    val noteFileService = ulevelp.service.NoteFileService(db, storageClient)
     val shareAttachmentService = ulevelp.service.ShareAttachmentService(db, storageClient, storageTrashService)
     val episodeLogService = ulevelp.service.EpisodeLogService(db, communityService, shareAttachmentService)
     val playlistImportService = PlaylistImportService(db, playlistClient)
@@ -372,6 +376,7 @@ fun Application.module(
             registerIntegrationRoutes(jwtVerifier, profileService, integrationService)
             registerNotionSyncRoutes(jwtVerifier, profileService, notionPushWorker, notionSyncService)
             registerNoteRoutes(jwtVerifier, profileService, noteService, effectiveDispatcher)
+            registerNoteWorkspaceRoutes(jwtVerifier, profileService, noteFolderService, noteDocService, noteFileService, storageTrashService)
             registerAdminRoutes(jwtVerifier, profileService, adminService, communityService)
             registerCreditRoutes(jwtVerifier, profileService, creditService)
 

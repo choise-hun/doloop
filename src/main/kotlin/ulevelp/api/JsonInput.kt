@@ -1,7 +1,11 @@
 package ulevelp.api
 
 import io.ktor.server.application.*
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import kotlinx.serialization.json.*
 import java.time.Instant
 import java.time.LocalDate
@@ -17,6 +21,29 @@ private val MIN_INSTANT = OffsetDateTime.of(2000, 1, 1, 0, 0, 0, 0, ZoneOffset.U
 
 suspend fun ApplicationCall.receiveJsonObject(): JsonObject {
     val raw = receiveText()
+    if (raw.isBlank()) {
+        throw InvalidInputException("요청 본문(JSON)이 비어 있습니다.")
+    }
+    val element = try {
+        Json.parseToJsonElement(raw)
+    } catch (_: Exception) {
+        throw InvalidInputException("올바른 JSON 형식이 아닙니다.")
+    }
+    return element as? JsonObject
+        ?: throw InvalidInputException("요청 본문은 JSON 객체여야 합니다.")
+}
+
+/**
+ * NT-1: 본문이 [maxBytes]를 넘으면 413 [tooLargeCode]. Content-Length로 먼저 거르고, 없어도 maxBytes + 1까지만 읽는다.
+ * 기존 [receiveJsonObject]는 바꾸지 않는다(상한 없는 기존 경로 유지)
+ */
+suspend fun ApplicationCall.receiveJsonObjectLimited(maxBytes: Long, tooLargeCode: String, tooLargeMessage: String): JsonObject {
+    val tooLarge = ApiException(HttpStatusCode.PayloadTooLarge, tooLargeCode, tooLargeMessage)
+    val contentLength = request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+    if (contentLength != null && contentLength > maxBytes) throw tooLarge
+    val bytes = receiveChannel().readRemaining(maxBytes + 1).readByteArray()
+    if (bytes.size > maxBytes) throw tooLarge
+    val raw = bytes.toString(Charsets.UTF_8)
     if (raw.isBlank()) {
         throw InvalidInputException("요청 본문(JSON)이 비어 있습니다.")
     }

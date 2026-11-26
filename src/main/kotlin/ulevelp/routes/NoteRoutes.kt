@@ -158,6 +158,18 @@ fun Route.registerNoteRoutes(
             call.respond(HttpStatusCode.OK, NoteDetailResponse(updated))
         }
 
+        // NT-1: AI 영상 노트를 노트북에 넣기/빼기(folderId: uuid | null)
+        put("/{noteId}/folder") {
+            val user = call.requireAuthUser()
+            val noteId = parsePathUuid(call.parameters["noteId"])
+            val body = call.receiveJsonObject()
+            if (!body.containsKey("folderId")) throw InvalidInputException("folderId 값이 필요합니다.")
+            val folderId = if (body["folderId"] is JsonNull) null else body.requireUuid("folderId")
+            val response = noteService.setFolder(user.id, noteId, folderId)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, NoteDetailResponse(response))
+        }
+
         put("/{noteId}/collect") {
             val user = call.requireAuthUser()
             val noteId = parsePathUuid(call.parameters["noteId"])

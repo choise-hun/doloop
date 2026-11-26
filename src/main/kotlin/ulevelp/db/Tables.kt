@@ -194,10 +194,79 @@ object NotesTable : Table("notes") {
     val diagramsSvg = jsonb<JsonElement>("diagrams_svg", Json).default(JsonArray(emptyList()))
     val model = text("model").default("")
     val collectProgressions = bool("collect_progressions").default(false)
+    /** V16(NT-1): 노트북. NULL = 기본 노트북 */
+    val folderId = uuid("folder_id").references(NoteFoldersTable.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
     override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * 6.1 note_folders (V16, NT-1: 학습 노트 노트북. 평면. 무료는 행을 만들지 않는다)
+ */
+object NoteFoldersTable : Table("note_folders") {
+    val id = uuid("id").autoGenerate()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val name = text("name")
+    val color = text("color").nullable()
+    val sortOrder = integer("sort_order").default(0)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * 6.2 note_docs (V16, NT-1: 자료 노트 document · 블록 노트 block)
+ */
+object NoteDocsTable : Table("note_docs") {
+    val id = uuid("id").autoGenerate()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val folderId = uuid("folder_id").references(NoteFoldersTable.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val kind = text("kind")
+    val title = text("title")
+    val body = jsonb<JsonElement>("body", Json).default(JsonObject(emptyMap()))
+    val rev = integer("rev").default(1)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+
+    const val KIND_DOCUMENT = "document"
+    const val KIND_BLOCK = "block"
+}
+
+/**
+ * 6.3 note_files (V16, NT-1: 노트 첨부. storage = supabase | drive)
+ */
+object NoteFilesTable : Table("note_files") {
+    val id = uuid("id").autoGenerate()
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val docId = uuid("doc_id").references(NoteDocsTable.id, onDelete = ReferenceOption.CASCADE)
+    val storage = text("storage")
+    val storageKey = text("storage_key")
+    val fileName = text("file_name")
+    val mime = text("mime")
+    val sizeBytes = long("size_bytes")
+    val sortOrder = integer("sort_order").default(0)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * 6.4 note_annotations (V16, NT-1: 파일 쪽별 주석. 이미지는 page = 1)
+ */
+object NoteAnnotationsTable : Table("note_annotations") {
+    val fileId = uuid("file_id").references(NoteFilesTable.id, onDelete = ReferenceOption.CASCADE)
+    val userId = uuid("user_id").references(UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val page = integer("page")
+    val data = jsonb<JsonElement>("data", Json)
+    val rev = integer("rev").default(1)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+
+    override val primaryKey = PrimaryKey(fileId, page)
 }
 
 /**
@@ -424,7 +493,11 @@ val ALL_TABLES: List<Table> = listOf(
     SongsTable,
     SessionsTable,
     TakesTable,
+    NoteFoldersTable,
     NotesTable,
+    NoteDocsTable,
+    NoteFilesTable,
+    NoteAnnotationsTable,
     AnalysisJobsTable,
     IntegrationsTable,
     NotionSyncTable,
