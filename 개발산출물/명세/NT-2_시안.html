@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NOTES 학습 노트 워크스페이스 시안 (NT-2)</title>
+  <link rel="stylesheet" href="../../frontend/src/styles/tokens.css">
+  <style>
+    /* 시안 전용 제안 토큰(V6 A). 채택되면 tokens.css 세 블록에 같은 값으로 넣는다 — 종이(PDF 쪽)는 다크에서도 밝게 그리므로 값이 같다 */
+    :root {
+      --anno-ink: #1D1D1F; --anno-red: #C62828; --anno-blue: #1F4FC3; --anno-green: #2E7D32; --anno-hl: #F5D90A;
+      --page-paper: #FBFBF8;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; }
+    main, .nav { width: min(calc(100% - 32px), 1120px); margin-inline: auto; }
+    .mast { border-bottom: 1px solid var(--line); background: var(--surface); }
+    .nav { min-height: 60px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 8px; }
+    .brand { font-size: 24px; font-weight: 700; margin-right: 12px; }
+    .nav strong { border-bottom: 2px solid var(--ink); padding: 8px 4px; }
+    main { padding-block: 20px 44px; display: grid; gap: 16px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 24px; font-weight: 300; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 16px; }
+    p { line-height: 1.55; }
+    .meta, small { font-family: var(--font-mono); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-size: 12px; }
+    a { color: var(--ink); text-underline-offset: 3px; }
+    button, input, select, textarea, summary { font-family: inherit; font-size: 14px; color: inherit; }
+    button, select, input[type="text"], textarea { border: 1px solid var(--line); border-radius: var(--radius-block); background: var(--paper); min-height: 44px; padding: 6px 10px; }
+    button { cursor: pointer; }
+    button:hover, select:hover { border-color: var(--ink); }
+    button[aria-pressed="true"] { border-color: var(--ink); font-weight: 700; background: var(--surface2); }
+    button:disabled { opacity: .4; cursor: default; }
+    .primary { min-height: 48px; background: var(--fill1); color: var(--ink); border-color: var(--ink); border-radius: var(--radius-pill); font-weight: 700; font-size: 17px; padding-inline: 20px; }
+    .text-btn { border: 0; background: none; font-weight: 700; padding-inline: 4px; }
+    .lock::after { content: " · PRO"; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .card { border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); background: var(--paper); box-shadow: 0 1px 0 var(--relief-bottom-mid), var(--card-shadow); }
+    .tag { border: 1px solid var(--line); border-radius: var(--radius-block); padding: 2px 6px; font-size: 12px; white-space: nowrap; }
+
+    /* 검토 패널 */
+    .review { display: grid; gap: 12px; background: var(--cream); padding: 14px; border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); }
+    .review-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .controls label { display: grid; gap: 4px; font-size: 13px; }
+    .controls select { width: 100%; }
+
+    /* 워크스페이스 */
+    .head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .head-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .ai-box { padding: 12px 14px; }
+    .ai-box summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+    .ai-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding-top: 8px; }
+    .ai-form input { width: 100%; min-width: 0; }
+    .jobs-strip { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px dashed var(--line); border-radius: var(--radius-block); }
+    .ws { display: grid; gap: 16px; }
+    .folders-side { display: grid; gap: 4px; align-content: start; padding: 10px; }
+    .folders-side button { text-align: left; display: flex; justify-content: space-between; gap: 8px; border-color: transparent; background: none; border-left: var(--spine-width) solid transparent; }
+    .folders-side button[aria-pressed="true"] { border-left-color: var(--fold, var(--ink)); background: var(--surface2); }
+    .folders-side .side-title { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 8px; }
+    .folders-chips { display: none; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    .folders-chips button { white-space: nowrap; flex: none; }
+    .covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+    .cover { display: grid; gap: 8px; text-align: left; padding: 0; border: 0; background: none; }
+    .cover .book { aspect-ratio: 3 / 4; border: 1px solid var(--seam-hairline); border-left: 12px solid var(--fold, var(--fill2)); border-radius: var(--radius-block); background: var(--paper); display: grid; align-content: end; padding: 10px; box-shadow: 0 1px 0 var(--relief-bottom-mid), var(--card-shadow); }
+    .cover .book b { font-size: 16px; }
+    .crumb { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .filter { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter button { min-height: 36px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+    .ncard { display: grid; grid-template-rows: auto 1fr; overflow: hidden; border-left: var(--spine-width) solid var(--fold, var(--fill2)); }
+    .ncard .thumb { aspect-ratio: 4 / 3; background: var(--surface2); display: grid; place-items: center; font-family: var(--font-mono); font-size: 24px; font-weight: 500; color: var(--ink); border-bottom: 1px solid var(--seam-hairline); }
+    .ncard .thumb.yt { background: var(--media-bg); color: var(--accent-ink); font-size: 14px; }
+    .ncard .body { display: grid; gap: 6px; padding: 10px 12px 12px; align-content: start; }
+    .ncard .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .empty { padding: 28px; text-align: center; display: grid; gap: 10px; justify-items: center; }
+    .quota { display: grid; gap: 4px; padding: 10px; }
+    .bar { height: 6px; background: var(--surface2); border-radius: var(--radius-block); overflow: hidden; }
+    .bar i { display: block; height: 100%; width: var(--w); background: var(--ink); }
+
+    /* 대화상자 */
+    .dlg { width: min(100%, 520px); padding: 18px; display: grid; gap: 14px; justify-self: center; }
+    .dlg label, .dlg fieldset { display: grid; gap: 6px; }
+    .dlg fieldset { border: 1px solid var(--line); border-radius: var(--radius-block); padding: 10px 12px; margin: 0; }
+    .dlg legend { padding: 0 4px; font-weight: 700; }
+    .drop { border: 1px dashed var(--ink); border-radius: var(--radius-block); padding: 22px; text-align: center; display: grid; gap: 6px; background: var(--cream); }
+    .radio { display: flex !important; gap: 8px; align-items: flex-start; min-height: 44px; padding-top: 6px; }
+    .radio input { margin-top: 4px; }
+    .dlg-acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .progress { display: grid; gap: 6px; }
+    .menu { display: grid; padding: 6px; width: min(100%, 300px); justify-self: end; }
+    .menu button { text-align: left; border-color: transparent; background: none; display: grid; gap: 2px; padding-block: 8px; }
+
+    /* 뷰어 */
+    .viewer { display: grid; gap: 10px; }
+    .vbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+    .vbar .grp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .files { display: flex; gap: 6px; overflow-x: auto; }
+    .files button { white-space: nowrap; flex: none; min-height: 36px; }
+    .tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 10px; position: sticky; top: 0; z-index: 2; background: var(--panel-frosted); }
+    .tools .sep { width: 1px; align-self: stretch; background: var(--line); margin-inline: 2px; }
+    .tools button { min-width: 44px; }
+    .swatch { width: 44px; padding: 0; display: grid; place-items: center; }
+    .swatch i { width: 20px; height: 20px; border-radius: 50%; background: var(--c); border: 1px solid var(--line); }
+    .swatch[aria-pressed="true"] i { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .finger { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+    .save { margin-left: auto; }
+    .stage { background: var(--surface2); border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); padding: 16px; overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 16px; height: clamp(420px, 70dvh, 900px); touch-action: pan-x pan-y pinch-zoom; }
+    .page { position: relative; width: min(100%, 620px); aspect-ratio: 1 / 1.414; background: var(--page-paper); box-shadow: 0 1px 0 var(--relief-bottom-mid), var(--card-shadow); flex: none; }
+    .page .staves { position: absolute; inset: 8% 7%; display: grid; gap: 7%; align-content: start; }
+    .page .staff { height: 30px; background: repeating-linear-gradient(to bottom, var(--muted) 0 1px, transparent 1px 7px); opacity: .6; }
+    .page .ptitle { position: absolute; top: 3%; left: 0; right: 0; text-align: center; font-size: 13px; color: var(--muted); }
+    .page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .page .pin { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--paper); border: 2px solid var(--anno-ink); display: grid; place-items: center; font-weight: 700; font-size: 12px; transform: translate(-50%, -50%); }
+    .pop { position: absolute; width: 220px; padding: 10px; display: grid; gap: 6px; z-index: 3; }
+    .pop textarea { min-height: 72px; resize: vertical; }
+    .pager { display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pager input { width: 64px; text-align: center; }
+    .toast { padding: 10px 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-left: var(--spine-width) solid var(--ink); }
+    .state-box { min-height: 320px; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 24px; }
+    .error { color: var(--bad); }
+
+    @media (min-width: 961px) {
+      .ws.side { grid-template-columns: 240px minmax(0, 1fr); align-items: start; }
+    }
+    @media (max-width: 960px) {
+      .ws.side .folders-side { display: none; }
+      .ws.side .folders-chips { display: flex; }
+    }
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ai-form { grid-template-columns: minmax(0, 1fr); }
+      .tools { gap: 4px; }
+      .save { margin-left: 0; width: 100%; }
+      .stage { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="mast">
+    <div class="nav"><b class="brand">RE:DO</b><span>HOME</span><span>▶ PLAYER</span><span>LEARN</span><span>TRAILS</span><span>CHORDS</span><strong>NOTES</strong></div>
+  </header>
+  <main>
+    <section class="review" aria-label="시안 선택">
+      <div class="review-head"><h1>NT-2 학습 노트 시안</h1><span class="meta">확정 2026-11-26 · V1~V9 전부 추천안(기본값) · 명세 NT-2_구현명세.md</span></div>
+      <div class="controls">
+        <label>V1 노트북 배치
+          <select id="v1"><option value="b">B · 왼쪽 노트북 목록 + 노트 그리드 (추천)</option><option value="a">A · 노트북 표지 그리드 → 들어가기</option></select>
+        </label>
+        <label>V2 AI 영상 분석 입력
+          <select id="v2"><option value="b">B · 위에 접힘 상자로 유지 (추천)</option><option value="a">A · 새 노트 메뉴 → 대화상자</option></select>
+        </label>
+        <label>V3 뷰어 주소
+          <select id="v3"><option value="a">A · note.html?doc=… (추천)</option><option value="b">B · 새 doc.html</option></select>
+        </label>
+        <label>V4 쪽 보기
+          <select id="v4"><option value="a">A · 한 쪽씩 넘기기 (추천)</option><option value="b">B · 세로 연속 스크롤</option></select>
+        </label>
+        <label>V5 펜·손가락 분리
+          <select id="v5"><option value="a">A · 펜·마우스=쓰기, 손가락=이동 (추천)</option><option value="b">B · 도구 고르면 모든 입력=쓰기</option></select>
+        </label>
+        <label>V6 주석 색
+          <select id="v6"><option value="a">A · 새 토큰 먹·빨강·파랑·초록 + 노랑 형광 (추천)</option><option value="b">B · 기존 토큰만 (먹·--bad·--fill1·--fill2, 형광 --now)</option></select>
+        </label>
+        <label>V7 저장 위치 고르기
+          <select id="v7"><option value="a">A · 올릴 때마다 고름, 기본은 내 설정 (추천)</option><option value="b">B · 설정을 따르고 표시만</option></select>
+        </label>
+        <label>V8 기기 캐시
+          <select id="v8"><option value="a">A · 계정별 최근 20개·150MB (추천)</option><option value="b">B · 연 파일 + 직전 1개 (TAB과 같음)</option></select>
+        </label>
+        <label>화면 상태
+          <select id="st">
+            <option value="list">노트 목록 (PRO)</option>
+            <option value="free">노트 목록 (무료)</option>
+            <option value="empty">처음 사용 (빈 상태)</option>
+            <option value="new">새 노트 메뉴</option>
+            <option value="upload">자료 올리기 대화상자</option>
+            <option value="uploading">올리는 중 / 용량 초과</option>
+            <option value="viewer">뷰어 + 주석 (PDF)</option>
+            <option value="pin">뷰어 · 텍스트 핀 메모</option>
+            <option value="conflict">뷰어 · 다른 기기 변경 합침</option>
+            <option value="vload">뷰어 · 불러오는 중 / 오류</option>
+          </select>
+        </label>
+      </div>
+      <p class="meta" id="spec-note">가로 · 노트북 목록 240px(961px 이상) · 카드 최소 210px / 세로 · 뷰어 무대 420–900px · 터치 44px 이상 / 글자 · 조작 14px, 메타 12px mono</p>
+    </section>
+
+    <!-- ========== 워크스페이스 ========== -->
+    <section id="workspace" class="ws-wrap" style="display:grid;gap:16px">
+      <div class="head">
+        <div><h1>NOTES</h1><p class="meta">AI 영상 노트 · 자료 노트 · 블록 노트(NT-3)</p></div>
+        <div class="head-acts">
+          <button id="btn-folder" class="needs-pro">＋ 노트북</button>
+          <button class="primary" id="btn-new">＋ 새 노트</button>
+        </div>
+      </div>
+
+      <details class="card ai-box" id="ai-box">
+        <summary>AI 영상 노트 만들기 <span class="meta" style="margin-left:8px">YouTube 주소 → 분석 · 기존 폼 그대로</span></summary>
+        <div class="ai-form"><input type="text" placeholder="https://youtu.be/…" aria-label="YouTube 주소"><button>분석 요청</button></div>
+        <p class="meta" style="margin-top:6px">태그 · 구간 · 메모 칸은 현재 화면과 같다 (id·테스트 유지)</p>
+      </details>
+      <div class="jobs-strip" id="jobs"><span class="meta">분석 중 1건</span><span>“Autumn Leaves 레슨” · 2/3 단계</span><button class="text-btn">작업 보기 →</button></div>
+
+      <div id="menu" class="card menu" hidden>
+        <button><b>PDF · 이미지 올리기</b><span class="meta">악보 · 교재 · 사진</span></button>
+        <button id="menu-ai"><b>AI 영상 노트</b><span class="meta">YouTube 분석</span></button>
+        <button disabled><b>블록 노트</b><span class="meta">NT-3에서 열림 · 지금은 숨김</span></button>
+      </div>
+
+      <div id="ws" class="ws side">
+        <nav class="card folders-side" aria-label="노트북">
+          <div class="side-title"><b>노트북</b><span class="meta">4 / 15</span></div>
+          <button aria-pressed="false"><span>전체</span><span class="meta">23</span></button>
+          <button aria-pressed="true" style="--fold:var(--fill1)"><span>재즈 화성</span><span class="meta">8</span></button>
+          <button style="--fold:var(--fill2)"><span>클래식 기타 교재</span><span class="meta">6</span></button>
+          <button style="--fold:var(--fill3)"><span>레슨 숙제</span><span class="meta">5</span></button>
+          <button><span>기본 노트북</span><span class="meta">4</span></button>
+          <div class="quota"><span class="meta">파일 저장 312MB / 500MB</span><div class="bar"><i style="--w:62%"></i></div><span class="meta">TAB 악보 포함 · Drive는 제외</span></div>
+        </nav>
+        <div style="display:grid;gap:12px;min-width:0">
+          <div class="folders-chips" aria-label="노트북">
+            <button>전체 23</button><button aria-pressed="true">재즈 화성 8</button><button>클래식 기타 교재 6</button><button>레슨 숙제 5</button><button>기본 4</button>
+          </div>
+          <div class="covers" id="covers" hidden>
+            <button class="cover" style="--fold:var(--fill1)"><span class="book"><b>재즈 화성</b><span class="meta">8 노트</span></span></button>
+            <button class="cover" style="--fold:var(--fill2)"><span class="book"><b>클래식 기타 교재</b><span class="meta">6 노트</span></span></button>
+            <button class="cover" style="--fold:var(--fill3)"><span class="book"><b>레슨 숙제</b><span class="meta">5 노트</span></span></button>
+            <button class="cover"><span class="book"><b>기본 노트북</b><span class="meta">4 노트</span></span></button>
+          </div>
+          <div class="crumb" id="crumb">
+            <h2 id="crumb-title">재즈 화성</h2>
+            <button class="text-btn">이름 바꾸기</button><button class="text-btn">색</button><button class="text-btn">삭제</button>
+          </div>
+          <div class="filter" role="group" aria-label="종류">
+            <button aria-pressed="true">전체</button><button>AI 영상</button><button>자료</button><button>최근 수정순 ▾</button>
+          </div>
+          <div class="grid" id="grid">
+            <article class="card ncard" style="--fold:var(--fill1)">
+              <div class="thumb">PDF</div>
+              <div class="body"><h3>Real Book 발췌 — ii-V-I</h3><div class="row"><span class="tag">자료</span><span class="meta">파일 2 · 주석 5쪽</span></div><span class="meta">2시간 전</span></div>
+            </article>
+            <article class="card ncard" style="--fold:var(--fill1)">
+              <div class="thumb yt">▶ YouTube</div>
+              <div class="body"><h3>Autumn Leaves 컴핑 분석</h3><div class="row"><span class="tag">AI 영상</span><span class="tag">재즈</span></div><span class="meta">어제</span></div>
+            </article>
+            <article class="card ncard" style="--fold:var(--fill1)">
+              <div class="thumb">IMG</div>
+              <div class="body"><h3>레슨 판서 사진</h3><div class="row"><span class="tag">자료</span><span class="meta">Drive · 파일 3</span></div><span class="meta">3일 전</span></div>
+            </article>
+            <article class="card ncard" style="--fold:var(--fill1)">
+              <div class="thumb">PDF</div>
+              <div class="body"><h3>보이싱 연습표</h3><div class="row"><span class="tag">자료</span><span class="meta">파일 1</span></div><span class="meta">11월 12일</span></div>
+            </article>
+          </div>
+          <div class="card empty" id="empty" hidden>
+            <h2>아직 노트가 없습니다</h2>
+            <p>PDF 악보·교재나 사진을 올려 주석을 달거나, YouTube 영상을 AI로 분석해 보세요.</p>
+            <p class="meta">PDF · PNG · JPEG · WebP · 20MB 이하</p>
+          </div>
+          <div class="card toast" id="free-note" hidden>
+            <span>무료 계정은 기본 노트북 하나에서 AI 영상 노트를 쓸 수 있습니다. 노트북 나누기와 PDF·이미지 올리기는 PRO부터입니다.</span>
+            <button class="text-btn">요금제 보기 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 업로드 대화상자 -->
+      <section class="card dlg" id="dlg-upload" hidden aria-label="자료 올리기">
+        <h2>자료 올리기</h2>
+        <div class="drop"><b>파일을 끌어 놓거나 고르기</b><span class="meta">PDF · PNG · JPEG · WebP · RE:DO 20MB 이하</span><button>파일 고르기</button></div>
+        <label>제목<input type="text" value="Real Book 발췌 — ii-V-I"></label>
+        <label>노트북<select><option>재즈 화성</option><option>기본 노트북</option></select></label>
+        <fieldset id="storage-pick">
+          <legend>저장 위치</legend>
+          <label class="radio"><input type="radio" name="sto" checked><span><b>RE:DO 저장공간</b><br><span class="meta">남은 188MB / 500MB · 어느 기기에서나 바로 열림</span></span></label>
+          <label class="radio"><input type="radio" name="sto"><span><b>내 Google Drive</b> <span class="meta">“REDO 학습자료” 폴더</span><br><span class="meta">RE:DO 용량을 쓰지 않음 · 20MB 넘는 파일 가능 · 다른 기기에서는 Drive 연결이 필요</span></span></label>
+        </fieldset>
+        <p class="meta" id="storage-fixed" hidden>저장 위치 · RE:DO 저장공간 (설정 › 저장 위치에서 바꿈)</p>
+        <div class="dlg-acts"><button>취소</button><button>올리기</button></div>
+      </section>
+
+      <section class="card dlg" id="dlg-uploading" hidden aria-label="올리는 중">
+        <h2>올리는 중</h2>
+        <div class="progress"><span>Real Book 발췌.pdf · 14.2MB</span><div class="bar"><i style="--w:100%;opacity:.35"></i></div><span class="meta">올리는 중(진행률 없음 — 기존 apiFetch 업로드) · 닫으면 취소</span></div>
+        <div class="card toast" style="box-shadow:none"><span class="error">파일 저장 한도(500MB)를 넘습니다. 지금 312MB 사용 중 · 이 파일 210MB.</span><span>Drive에 저장하거나 다른 첨부·TAB 악보를 지우면 올릴 수 있습니다.</span></div>
+        <div class="dlg-acts"><button>Drive에 저장</button><button>닫기</button></div>
+      </section>
+    </section>
+
+    <!-- ========== 뷰어 ========== -->
+    <section id="viewer" class="viewer" hidden>
+      <div class="card vbar">
+        <div class="grp"><button class="text-btn">← 재즈 화성</button><h2>Real Book 발췌 — ii-V-I</h2></div>
+        <div class="grp"><span class="meta" id="addr">note.html?doc=…</span><button class="text-btn">파일 추가</button><button class="text-btn">⋯</button></div>
+      </div>
+      <div class="files" aria-label="첨부 파일"><button aria-pressed="true">1 · ii-V-I.pdf (12쪽)</button><button>2 · 손글씨.jpg</button></div>
+      <div class="card tools" role="toolbar" aria-label="주석 도구">
+        <button aria-pressed="false" title="보기">✋ 보기</button>
+        <button aria-pressed="true" title="펜">✎ 펜</button>
+        <button title="형광펜">▮ 형광</button>
+        <button title="지우개">⌫ 지우개</button>
+        <button title="텍스트 핀">◉ 메모</button>
+        <span class="sep"></span>
+        <span id="sw-a" style="display:contents">
+          <button class="swatch" aria-pressed="true" style="--c:var(--anno-ink)" aria-label="먹"><i></i></button>
+          <button class="swatch" style="--c:var(--anno-red)" aria-label="빨강"><i></i></button>
+          <button class="swatch" style="--c:var(--anno-blue)" aria-label="파랑"><i></i></button>
+          <button class="swatch" style="--c:var(--anno-green)" aria-label="초록"><i></i></button>
+        </span>
+        <span id="sw-b" style="display:contents" hidden>
+          <button class="swatch" aria-pressed="true" style="--c:var(--ink)" aria-label="먹"><i></i></button>
+          <button class="swatch" style="--c:var(--bad)" aria-label="빨강"><i></i></button>
+          <button class="swatch" style="--c:var(--fill1)" aria-label="주황"><i></i></button>
+          <button class="swatch" style="--c:var(--fill2)" aria-label="청회"><i></i></button>
+        </span>
+        <span class="sep"></span>
+        <button title="되돌리기">↶</button><button title="다시">↷</button>
+        <label class="finger" id="finger"><input type="checkbox"> 손가락으로 쓰기</label>
+        <span class="meta save" id="save">저장됨 · 방금</span>
+      </div>
+      <div class="card toast" id="conflict" hidden><span>다른 기기에서 이 쪽을 고쳤습니다. 그쪽 변경 위에 지금 그린 내용을 합쳐 저장했습니다.</span><button class="text-btn">확인</button></div>
+
+      <div class="stage" id="stage">
+        <div class="page" id="p1">
+          <span class="ptitle">ii – V – I in 12 Keys · p.3</span>
+          <div class="staves"><div class="staff"></div><div class="staff"></div><div class="staff"></div><div class="staff"></div><div class="staff"></div></div>
+          <svg viewBox="0 0 100 141.4" preserveAspectRatio="none" aria-hidden="true">
+            <rect x="9" y="22" width="34" height="5" fill="var(--hl)" opacity=".45"/>
+            <path d="M58 40 q6 -6 12 0 t12 0" stroke="var(--c1)" stroke-width=".7" fill="none" stroke-linecap="round"/>
+            <path d="M12 62 l20 0 m-3 -2 l3 2 l-3 2" stroke="var(--c2)" stroke-width=".6" fill="none" stroke-linecap="round"/>
+            <ellipse cx="72" cy="83" rx="9" ry="5" stroke="var(--c3)" stroke-width=".6" fill="none"/>
+          </svg>
+          <span class="pin" style="left:80%;top:20%">1</span>
+          <div class="card pop" id="pop" style="left:46%;top:24%" hidden>
+            <b>메모 1</b>
+            <textarea aria-label="메모">여기서 Dm7 → G7 → Cmaj7, 셋째 마디 텐션 9 넣기</textarea>
+            <div class="dlg-acts"><button>삭제</button><button>완료</button></div>
+          </div>
+        </div>
+        <div class="page" id="p2" hidden><span class="ptitle">p.4</span><div class="staves"><div class="staff"></div><div class="staff"></div><div class="staff"></div></div></div>
+      </div>
+      <div class="pager" id="pager"><button>‹ 이전</button><input type="text" value="3" aria-label="쪽"><span class="meta">/ 12</span><button>다음 ›</button><span class="sep"></span><button>－</button><span class="meta">맞춤 · 100%</span><button>＋</button><button>전체 화면</button></div>
+
+      <div class="card state-box" id="vload" hidden>
+        <b>불러오는 중…</b><span class="meta">이 기기에 저장된 사본이 있으면 바로 열림</span>
+        <p class="error">파일을 열 수 없습니다 — Drive 연결이 끊겼습니다.</p>
+        <button>Drive 다시 연결</button>
+      </div>
+    </section>
+  </main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const val = (id) => $(id).value;
+  function render() {
+    const st = val('st');
+    const v1 = val('v1'), v2 = val('v2'), v3 = val('v3'), v4 = val('v4'), v5 = val('v5'), v6 = val('v6'), v7 = val('v7');
+    const inViewer = ['viewer', 'pin', 'conflict', 'vload'].includes(st);
+    $('workspace').hidden = inViewer;
+    $('viewer').hidden = !inViewer;
+    // V1
+    $('ws').classList.toggle('side', v1 === 'b');
+    document.querySelector('.folders-side').hidden = v1 === 'a';
+    document.querySelector('.folders-chips').hidden = v1 === 'a';
+    $('covers').hidden = v1 !== 'a' || st === 'empty';
+    $('crumb').querySelector('.text-btn').parentElement.hidden = false;
+    $('crumb-title').textContent = v1 === 'a' ? '← 노트북 · 재즈 화성' : '재즈 화성';
+    // V2
+    $('ai-box').hidden = v2 === 'a';
+    $('menu-ai').hidden = v2 === 'b';
+    // V2 B(확정): AI 폼이 위에 있고 블록 노트는 NT-3까지 숨기므로 메뉴 없이 대표 버튼이 바로 업로드를 연다
+    $('btn-new').textContent = v2 === 'b' ? '＋ 자료 올리기' : '＋ 새 노트';
+    $('btn-new').classList.toggle('lock', st === 'free');
+    // 상태
+    const free = st === 'free';
+    $('free-note').hidden = !free;
+    document.querySelectorAll('.needs-pro').forEach((b) => b.classList.toggle('lock', free));
+    $('grid').hidden = st === 'empty';
+    $('empty').hidden = st !== 'empty';
+    $('menu').hidden = st !== 'new';
+    $('dlg-upload').hidden = st !== 'upload';
+    $('dlg-uploading').hidden = st !== 'uploading';
+    $('jobs').hidden = st === 'empty';
+    $('storage-pick').hidden = v7 !== 'a';
+    $('storage-fixed').hidden = v7 !== 'b';
+    // 뷰어
+    $('addr').textContent = v3 === 'a' ? 'note.html?doc=<id>&file=<id>&page=3' : 'doc.html?id=<id>&file=<id>&page=3';
+    $('p2').hidden = v4 !== 'b';
+    $('pager').querySelectorAll('button')[0].hidden = v4 === 'b';
+    $('pager').querySelectorAll('button')[1].hidden = v4 === 'b';
+    $('finger').hidden = v5 !== 'a';
+    $('sw-a').hidden = v6 !== 'a';
+    $('sw-b').hidden = v6 !== 'b';
+    const page = $('p1');
+    const pal = v6 === 'a'
+      ? { c1: 'var(--anno-ink)', c2: 'var(--anno-red)', c3: 'var(--anno-blue)', hl: 'var(--anno-hl)' }
+      : { c1: 'var(--ink)', c2: 'var(--bad)', c3: 'var(--fill2)', hl: 'var(--now)' };
+    for (const [k, v] of Object.entries(pal)) page.style.setProperty('--' + k, v);
+    $('pop').hidden = st !== 'pin';
+    $('conflict').hidden = st !== 'conflict';
+    $('save').textContent = st === 'conflict' ? '합쳐서 저장됨 · 방금' : '저장됨 · 방금';
+    $('stage').hidden = st === 'vload';
+    $('pager').hidden = st === 'vload';
+    $('vload').hidden = st !== 'vload';
+  }
+  document.querySelectorAll('select').forEach((s) => s.addEventListener('change', render));
+  render();
+})();
+</script>
+</body>
+</html>
