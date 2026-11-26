@@ -229,10 +229,18 @@ export function NotesPage(): React.ReactElement {
       setDocs([]);
       return;
     }
-    const [f, d] = await Promise.all([
-      apiClient.noteWorkspace.listNoteFolders().catch(() => null),
-      apiClient.noteWorkspace.listNoteDocs().catch(() => null),
-    ]);
+    // 조회 중 쓰기(업로드·노트북 변경 → reloadFolders가 foldersSeqRef를 올림)가 끝났다면 옛 스냅샷이므로 다시 받는다
+    let f: NoteFolderDto[] | null = null;
+    let d: NoteDocSummaryDto[] | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const writeMark = foldersSeqRef.current;
+      [f, d] = await Promise.all([
+        apiClient.noteWorkspace.listNoteFolders().catch(() => null),
+        apiClient.noteWorkspace.listNoteDocs().catch(() => null),
+      ]);
+      if (mySeq !== wsSeqRef.current || auth.getUser()?.id !== uid) return;
+      if (writeMark === foldersSeqRef.current) break;
+    }
     if (mySeq !== wsSeqRef.current || auth.getUser()?.id !== uid) return;
     if (f) setFolders(f);
     if (d) setDocs(d);

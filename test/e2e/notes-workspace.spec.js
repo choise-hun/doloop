@@ -313,3 +313,36 @@ test('NT2A-R1 ★ 계정 A→B: 붙잡힌 A 목록 응답은 버리고 B 목록�
   await expect(cards(page)).toHaveCount(1);
   await expect(page.locator('#notesList')).not.toContainText('자료 1');
 });
+
+test('NT2A-R2 ★ 느린 첫 목록 조회 중 끝난 업로드를 옛 스냅샷이 덮어쓰지 않는다', async ({ page }) => {
+  const db = fixture();
+  let release = null;
+  const held = new Promise((resolve) => { release = resolve; });
+  let heldOnce = false;
+  let stale = null;
+  let staleServed = false;
+  const opts = {
+    holdDocs: async () => {
+      if (!heldOnce) {
+        heldOnce = true;
+        stale = db.docs.slice(); // 업로드 전 옛 스냅샷
+        await held;
+      }
+    },
+    docsFor: () => {
+      if (stale && !staleServed) { staleServed = true; return stale; } // 붙잡힌 첫 응답만 옛 스냅샷
+      return db.docs;
+    },
+  };
+  test.skip(!(await open(page, { db, opts })), 'legacy 모드: React 화면 아님');
+  await expect(cards(page)).toHaveCount(2); // 자료 목록은 붙잡혀 있다
+  await page.locator('#noteUploadBtn').click();
+  await page.setInputFiles('#noteUploadInput', [PDF('늦은 경합.pdf')]);
+  await page.locator('#noteUploadSubmit').click();
+  await expect(page.locator('#noteUploadDialog')).toHaveCount(0);
+  await expect(cards(page).first()).toContainText('늦은 경합');
+  release();
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(cards(page).first()).toContainText('늦은 경합');
+  await expect(cards(page)).toHaveCount(6); // 자료 3 + 방금 올린 1 + AI 노트 2
+});
