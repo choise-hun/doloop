@@ -51,4 +51,8 @@
 
 ## 4. PR 및 CI · 리뷰 상태
 
-- PR 생성 후 갱신 예정 (`feat/NT-2a-note-workspace-ui` → `main`).
+- **PR:** [#74](https://github.com/choise-hun/doloop/pull/74) (`feat/NT-2a-note-workspace-ui` → `main`, 코드+초기 결과 head `9baa447`)
+- **CI (`9baa447`):** 5 successful, 1 skipped, 0 failing (`CI ok`, `Detect code changes`, `Test (Node 22)`, `Docker build & smoke`, `E2E XSS & CSP (Playwright)` 통과; `Kotlin test` skipped)
+- **리뷰 확인 (`chatgpt-codex-connector[bot]`):**
+  - **P2** [`NotesPage.tsx:236-238`](https://github.com/choise-hun/doloop/pull/74#discussion_r4710620479): `loadWorkspace`의 `Promise.all([listNoteFolders, listNoteDocs])`가 완료되기 전에 업로드(`onUploaded`)나 노트북 쓰기(`reloadFolders`)가 먼저 끝나면, 뒤늦게 끝난 `loadWorkspace`가 옛 스냅샷 `f`/`d`로 `setFolders`/`setDocs`를 덮어써 새 항목이 사라질 수 있음(`foldersSeqRef` 미확인 포함).
+  - **판정:** 실제 코드(`NotesPage.tsx:224-240`, `:243-254`) 대조 결과 **타당**. 주니어 4단계 제품 코드 무수정 범위에 따라 시니어 §3-P 핀포인트 수정으로 인계(머지 보류).
