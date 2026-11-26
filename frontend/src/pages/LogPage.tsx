@@ -1,4 +1,5 @@
 // frontend/src/pages/LogPage.tsx
+import { buildPracticeResumeHref } from '../lib/progressions';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { AppSelect } from '../components/common/AppSelect';
@@ -79,8 +80,9 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }:
     };
   }, []);
 
-  const safeResumeHref =
-    (song.resumeUrl ? safeUrl(song.resumeUrl) : '') || `practice.html?v=${encodeURIComponent(song.videoId || '')}`;
+  const safeResumeHref = song.mediaType === 'tab'
+    ? buildPracticeResumeHref({ ...song, songId: song.id })
+    : (song.resumeUrl ? safeUrl(song.resumeUrl) : '') || buildPracticeResumeHref(song);
 
   return (
     <div className={`card song-card ${styles.card}`}>
@@ -93,7 +95,7 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }:
             onOpenDetail(song.id);
           }}
         >
-          <b>{song.title}</b>
+          <b>{song.mediaType === 'tab' && 'TAB · '}{song.title}</b>
           {song.artist && <span className={`meta ${styles.meta}`}> · {song.artist}</span>}
         </a>
         <SafeLink className={`ghost mini ${styles.ghostMini}`} href={safeResumeHref}>
@@ -166,7 +168,7 @@ function SongCardItem({ song, onOpenDetail, onUpdated, onRemoved, captureView }:
           onClick={async () => {
             setBusyDel(true);
             const isViewValid = captureView();
-            const impact = await apiClient.community.shareImpactOrNull({ songId: song.id });
+            const impact = song.mediaType === 'tab' ? null : await apiClient.community.shareImpactOrNull({ songId: song.id });
             // 조회 대기 중 화면 전환·언마운트·계정 변경이면 확인창·삭제를 하지 않는다
             if (!mountedRef.current) return;
             if (!isViewValid()) { setBusyDel(false); return; }
@@ -268,7 +270,7 @@ function OwnedLogPage(): React.ReactElement {
     const tDate = getLogTodayStr();
     setMsg({ text: t('log.loadingRecords'), kind: '' });
     try {
-      const data = await apiClient.sessions.list({ today: tDate });
+      const data = await apiClient.sessions.list({ today: tDate, includeTab: true });
       if (mySeq !== logReqSeqRef.current || auth.getUser()?.id !== uid) return;
       const safeData = data || {
         summary: { thisWeekSeconds: 0, thisMonthSeconds: 0 },
@@ -295,7 +297,7 @@ function OwnedLogPage(): React.ReactElement {
     const mySeq = ++songsReqSeqRef.current;
     setMsg({ text: t('log.loadingSongs'), kind: '' });
     try {
-      const list = await apiClient.songs.list(statusFilter);
+      const list = await apiClient.songs.list(statusFilter, { includeTab: true });
       if (mySeq !== songsReqSeqRef.current || auth.getUser()?.id !== uid) return;
       setSongsList(Array.isArray(list) ? list : []);
       setMsg({ text: '', kind: '' });
@@ -382,8 +384,9 @@ function OwnedLogPage(): React.ReactElement {
   const detailSessions = detailData?.sessions || [];
 
   const detailResumeHref = detailSong
-    ? (detailSong.resumeUrl ? safeUrl(detailSong.resumeUrl) : '') ||
-      `practice.html?v=${encodeURIComponent(detailSong.videoId || '')}`
+    ? detailSong.mediaType === 'tab'
+      ? buildPracticeResumeHref({ ...detailSong, songId: detailSong.id })
+      : (detailSong.resumeUrl ? safeUrl(detailSong.resumeUrl) : '') || buildPracticeResumeHref(detailSong)
     : '#';
 
   return (
@@ -686,7 +689,7 @@ function OwnedLogPage(): React.ReactElement {
                   if (!detailSong) return;
                   const targetId = detailSong.id;
                   const isViewValid = captureView();
-                  const impact = await apiClient.community.shareImpactOrNull({ songId: targetId });
+                  const impact = detailSong.mediaType === 'tab' ? null : await apiClient.community.shareImpactOrNull({ songId: targetId });
                   // 조회 대기 중 목록·다른 곡으로 옮겼거나 계정이 바뀌었으면 확인창·삭제를 하지 않는다
                   if (!isViewValid()) return;
                   if (!window.confirm(deleteConfirmText('song', impact))) return;

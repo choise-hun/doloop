@@ -3,13 +3,33 @@ import { t, getLang } from './i18n.mts';
 import { resolveApiUrl } from './apiUrl';
 import { auth, ApiClientError, KeySummaryDto, MeProfile, ProfilePatchInput } from './auth';
 
-export interface SongDto {
+export type TabFormat = 'gp' | 'xml' | 'mxl';
+export const MAX_TAB_BYTES = 10 * 1024 * 1024;
+export const isTabFormat = (value: unknown): value is TabFormat =>
+  value === 'gp' || value === 'xml' || value === 'mxl';
+
+type SongMedia =
+  | { mediaType: 'youtube'; videoId: string }
+  | { mediaType: 'tab'; videoId: null };
+
+type TabMetadata = { tabFileName: string; tabFormat: TabFormat; tabFileSize: number };
+export type TabSongDto = SongFields & Extract<SongMedia, { mediaType: 'tab' }> & TabMetadata;
+export type SongDto = (SongFields & Extract<SongMedia, { mediaType: 'youtube' }>) | TabSongDto;
+
+export interface TabFileDto {
+  url: string;
+  expiresIn: number;
+  fileName: string;
+  format: TabFormat;
+  sizeBytes: number;
+}
+
+interface SongFields {
   id: string;
   title: string;
   artist: string;
   status: string;
   statusCode: string;
-  videoId: string;
   pos: number | null;
   a: number | null;
   b: number | null;
@@ -111,13 +131,12 @@ export interface CalendarDayDto {
   level: number;
 }
 
-export interface SessionWithSongDto extends SongSessionDto {
+export type SessionWithSongDto = SongSessionDto & SongMedia & {
   songId: string;
   songTitle: string;
   songArtist: string;
-  videoId: string;
   takes: TakeDto[];
-}
+};
 
 export interface SessionListResponse {
   summary: SessionSummaryDto;
@@ -693,21 +712,80 @@ function requireLogin(): void {
   }
 }
 
-async function listSongs(status?: string): Promise<SongDto[]> {
+function parseMedia<T extends Partial<{ mediaType: unknown; videoId: unknown }>>(
+  dto: T,
+  allowLegacyEmptyVideo = false,
+): T & SongMedia {
+  if (dto?.mediaType === 'tab' && dto.videoId === null) return { ...dto, mediaType: 'tab', videoId: null };
+  if ((dto?.mediaType === undefined || dto.mediaType === 'youtube') &&
+      typeof dto?.videoId === 'string' && dto.videoId.trim().length > 0) {
+    return { ...dto, mediaType: 'youtube', videoId: dto.videoId };
+  }
+  if (allowLegacyEmptyVideo && dto?.mediaType === undefined && (dto?.videoId === undefined || dto?.videoId === '')) {
+    return { ...dto, mediaType: 'youtube', videoId: '' };
+  }
+  throw new Error(t('practice.songsLoadFailed'));
+}
+
+function parseSong(dto: SongDto): SongDto {
+  const song = parseMedia(dto);
+  if (song.mediaType === 'tab' && (typeof song.tabFileName !== 'string' || !song.tabFileName ||
+      !isTabFormat(song.tabFormat) || !Number.isSafeInteger(song.tabFileSize) ||
+      song.tabFileSize < 1 || song.tabFileSize > MAX_TAB_BYTES)) {
+    throw new Error(t('practice.songsLoadFailed'));
+  }
+  return song;
+}
+
+function songListPath(path: string, options?: { includeTab?: boolean }, status?: string): string {
+  const qs = new URLSearchParams();
+  if (status) qs.set('status', status);
+  if (options?.includeTab) qs.set('include', 'tab');
+  return qs.size ? path + '?' + qs.toString() : path;
+}
+
+async function uploadTab(file: File, title: string, artist: string, signal: AbortSignal): Promise<TabSongDto> {
   requireLogin();
-  let path = '/api/v1/songs';
-  if (status) path += '?status=' + encodeURIComponent(status);
+  const account = getAuthRef();
+  const checkSession = captureSession(account);
+  const body = new FormData();
+  body.set('file', file);
+  if (title.trim()) body.set('title', title.trim());
+  if (artist.trim()) body.set('artist', artist.trim());
+  const result = await account.apiFetch('/api/v1/songs/tab', { method: 'POST', body, signal });
+  checkSession();
+  signal.throwIfAborted();
+  const song = parseSong(result?.song);
+  if (song.mediaType !== 'tab') throw new Error(t('practice.songsLoadFailed'));
+  return song;
+}
+
+async function getTabFile(songId: string, signal: AbortSignal): Promise<TabFileDto> {
+  requireLogin();
+  const account = getAuthRef();
+  const checkSession = captureSession(account);
+  const result = await account.apiFetch('/api/v1/songs/' + encodeURIComponent(songId) + '/tab-file', {
+    signal, cache: 'no-store',
+  });
+  checkSession();
+  signal.throwIfAborted();
+  return result;
+}
+
+async function listSongs(status?: string, options?: { includeTab?: boolean }): Promise<SongDto[]> {
+  requireLogin();
+  const path = songListPath('/api/v1/songs', options, status);
   const r = await getAuthRef().apiFetch(path);
   // 응답 형태가 다르면 빈 목록으로 숨기지 않고 오류로 올린다(UXR-3: 성공 0곡과 구분)
   if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.songsLoadFailed'));
-  return r.songs;
+  return r.songs.map(parseSong);
 }
 
 async function byVideo(videoId: string): Promise<SongDto | null> {
   requireLogin();
   const path = '/api/v1/songs/by-video/' + encodeURIComponent(videoId);
   const r = await getAuthRef().apiFetch(path);
-  return r && r.song !== undefined ? r.song : null;
+  return r?.song == null ? null : parseSong(r.song);
 }
 
 async function createSong(input: { videoId: string; title?: string; artist?: string; rate?: number; a?: number; b?: number }): Promise<SongDto | null> {
@@ -724,13 +802,14 @@ async function createSong(input: { videoId: string; title?: string; artist?: str
     method: 'POST',
     body,
   });
-  return r ? r.song : null;
+  return r?.song == null ? null : parseSong(r.song);
 }
 
-async function getSong(songId: string): Promise<SongDetailResponse> {
+async function getSong(songId: string, signal?: AbortSignal): Promise<SongDetailResponse> {
   requireLogin();
   const path = '/api/v1/songs/' + encodeURIComponent(songId);
-  return await getAuthRef().apiFetch(path);
+  const r = await getAuthRef().apiFetch(path, { signal });
+  return { ...r, song: parseSong(r?.song) };
 }
 
 async function updateSong(
@@ -807,25 +886,25 @@ async function removeCategory(categoryId: string): Promise<{ ok: boolean }> {
 }
 
 // SL-2 ⑥: 보이는 폴더의 곡 id를 새 순서대로 보낸다. 응답 = GET /songs와 같은 전체 목록·순서
-async function reorderSongs(ids: string[]): Promise<SongDto[]> {
+async function reorderSongs(ids: string[], options?: { includeTab?: boolean }): Promise<SongDto[]> {
   requireLogin();
-  const r = await getAuthRef().apiFetch('/api/v1/songs/order', {
+  const r = await getAuthRef().apiFetch(songListPath('/api/v1/songs/order', options), {
     method: 'PUT',
     body: JSON.stringify({ ids }),
   });
   if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.orderSaveFailed'));
-  return r.songs;
+  return r.songs.map(parseSong);
 }
 
 // UXP: 곡 제목 일괄 변경. 응답 = GET /songs와 같은 전체 목록
-async function batchUpdateSongTitles(items: Array<{ id: string; title: string }>): Promise<SongDto[]> {
+async function batchUpdateSongTitles(items: Array<{ id: string; title: string }>, options?: { includeTab?: boolean }): Promise<SongDto[]> {
   requireLogin();
-  const r = await getAuthRef().apiFetch('/api/v1/songs/titles', {
+  const r = await getAuthRef().apiFetch(songListPath('/api/v1/songs/titles', options), {
     method: 'PATCH',
     body: JSON.stringify({ items }),
   });
   if (!r || !Array.isArray(r.songs)) throw new Error(t('practice.songSaveFailed'));
-  return r.songs;
+  return r.songs.map(parseSong);
 }
 
 async function removeSong(songId: string): Promise<{ ok: boolean }> {
@@ -1004,16 +1083,18 @@ export function listLocalSongs(): LocalSongRecord[] {
   return items;
 }
 
-async function listSessions(params?: { from?: string; to?: string; today?: string }): Promise<SessionListResponse> {
+async function listSessions(params?: { from?: string; to?: string; today?: string; includeTab?: boolean }): Promise<SessionListResponse> {
   requireLogin();
   const p = params || {};
   const qs = new URLSearchParams();
   if (p.from) qs.set('from', p.from);
   if (p.to) qs.set('to', p.to);
   if (p.today) qs.set('today', p.today);
+  if (p.includeTab) qs.set('include', 'tab');
   const queryString = qs.toString();
   const path = '/api/v1/sessions' + (queryString ? '?' + queryString : '');
-  return await getAuthRef().apiFetch(path);
+  const r = await getAuthRef().apiFetch(path);
+  return { ...r, sessions: r.sessions.map((item: SessionWithSongDto) => parseMedia(item, true)) };
 }
 
 async function updateMemo(sessionId: string, memo: string): Promise<{ ok: boolean }> {
@@ -1961,6 +2042,8 @@ export const apiClient = {
     list: listSongs,
     byVideo,
     create: createSong,
+    uploadTab,
+    getTabFile,
     get: getSong,
     update: updateSong,
     reorder: reorderSongs,

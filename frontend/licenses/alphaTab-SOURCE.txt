@@ -1,0 +1,4 @@
+alphaTab 1.9.0 (MPL-2.0)
+Source: https://github.com/CoderLine/alphaTab/tree/v1.9.0
+The distributed alphaTab.core.mjs includes a local patch for Worklet lifetime and detached Canvas caching.
+Patch source: /at/worklet-patch-source.txt (MPL-2.0).

@@ -6,7 +6,7 @@ import { SafeLink } from '../components/common/SafeLink';
 import { AppSelect } from '../components/common/AppSelect';
 import { SongRecordPanel } from '../components/songRecord/SongRecordPanel';
 import { auth, useAuth } from '../lib/auth';
-import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto } from '../lib/apiClient';
+import { apiClient, CategoryDto, SongDto, SongPresetDto, TakeDto, TabSongDto } from '../lib/apiClient';
 import { takeOpenCategory } from '../lib/categories';
 import { playlistUrlFrom } from '../lib/community.mts';
 import { deleteConfirmText } from '../lib/episode.mts';
@@ -19,9 +19,15 @@ import {
 } from '../lib/songTitleBulk.mts';
 import { drive } from '../lib/drive';
 import { json, videoIdFrom } from '../lib/security';
-import { createRemotePlayer, shouldUseRemotePlayer } from '../lib/ytBridge';
+import { shouldUseRemotePlayer } from '../lib/ytBridge';
+import { createYouTubeEngine, type YouTubePlayer } from '../lib/youtubeEngine';
+import type { PracticePlayerEngine } from '../lib/playerEngine';
+import { TabEngine, TabPlaybackError, type TabViewState } from '../lib/tabEngine';
+import { evictTab, fetchTabBytes, rememberTab } from '../lib/tabFiles';
+import { TabPlayerView } from '../components/practice/TabPlayerView';
+import { TabUploadDialog } from '../components/practice/TabUploadDialog';
 import { PlaylistImportModal } from '../components/community/PlaylistImportModal';
-import { t } from '../lib/i18n.mts';
+import { t, type I18nKey } from '../lib/i18n.mts';
 import styles from './PracticePage.module.css';
 import { blockNativeNavigation, useNativeNavigationBlock } from '../lib/nativeNavigation';
 
@@ -73,13 +79,14 @@ export function parseFiniteNum(v: string | null): number | null {
 }
 
 export function buildPlayerResumeSearch(s: {
-  videoId: string;
+  videoId?: string | null;
+  songId?: string;
   pos?: number | null;
   a?: number | null;
   b?: number | null;
   rate?: number | null;
 }): string {
-  const q = new URLSearchParams({ v: s.videoId });
+  const q = new URLSearchParams(s.songId ? { song: s.songId } : { v: s.videoId || '' });
   const t = s.pos != null ? s.pos : s.a;
   if (t) q.set('t', String(Math.floor(t)));
   if (s.a != null) q.set('a', String(s.a));
@@ -100,7 +107,8 @@ export interface PendingTakeState {
   mime: string;
   seconds: number;
   done: boolean;
-  videoId: string;
+  videoId: string | null;
+  uid: string | null;
   song: SongDto | null;
   date: string;
   time: string;
@@ -116,6 +124,10 @@ const UNCATEGORIZED_FOLDER = '__uncategorized';
 // 인라인 곡 목록의 "전체 곡" 가상 선택지(서버 분류 ID와 겹치지 않는다)
 const ALL_FOLDER = '__all';
 
+type ResumeParams = { a: number | null; b: number | null; rate: number; t: number | null };
+const INCLUDE_TAB = { includeTab: true };
+const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
 type ListStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function PracticePage(): React.ReactElement {
@@ -125,6 +137,36 @@ export function PracticePage(): React.ReactElement {
 
   // 플레이어 상태
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [tabId, setTabId] = useState<string | null>(null);
+  const [tabView, setTabView] = useState<TabViewState | null>(null);
+  const [tabStatus, setTabStatus] = useState<{ key: I18nKey; retry: boolean } | null>(null);
+  const [uploadTrigger, setUploadTrigger] = useState<HTMLElement | null>(null);
+  const tabHost = useRef<HTMLDivElement>(null);
+  const tabScroll = useRef<HTMLDivElement>(null);
+  const tabEngine = useRef<TabEngine | null>(null);
+  const tabRequest = useRef<AbortController | null>(null);
+  const tabRestore = useRef<ResumeParams | null>(null);
+  const youtubeMount = useRef<HTMLDivElement>(null);
+  const youtubeEpoch = useRef(0);
+  const disposeYoutube = () => {
+    ++youtubeEpoch.current;
+    pendingLoadRef.current = null;
+    if (playerRef.current && playerRef.current !== tabEngine.current) {
+      const player = playerRef.current;
+      playerRef.current = null;
+      void player.destroy();
+      const mount = document.createElement('div');
+      mount.id = 'player';
+      youtubeMount.current?.replaceChildren(mount);
+    }
+  };
+  const disposeTab = () => {
+    tabRequest.current?.abort();
+    const engine = tabEngine.current;
+    tabEngine.current = null;
+    if (playerRef.current === engine) playerRef.current = null;
+    if (engine) void engine.destroy().catch(() => setTabStatus({ key: 'tab.reload', retry: false }));
+  };
   const [song, setSong] = useState<SongDto | null>(null);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -265,7 +307,7 @@ export function PracticePage(): React.ReactElement {
   const [srReloadKey, setSrReloadKey] = useState(0);
 
   // 내부 가변 참조 (인터벌·콜백 최신 상태 유지)
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<PracticePlayerEngine | null>(null);
   const ytReadyRef = useRef(false);
   const pendingLoadRef = useRef<{ id: string; start: number } | null>(null);
   const seekingRef = useRef(false);
@@ -274,15 +316,18 @@ export function PracticePage(): React.ReactElement {
   const unsavedLoopsRef = useRef(0);
   const savingRef = useRef(false);
   const savePendingRef = useRef(false);
+  const saveFinishedRef = useRef<Promise<void> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startAtRef = useRef(0);
   const songReqSeqRef = useRef(0);
+  const selectionIntent = useRef(0);
   const songsListReqSeqRef = useRef(0);
   const migrationAttemptedRef = useRef<Record<string, boolean>>({});
   const lastUidRef = useRef<string | null>(null);
 
   const stRef = useRef({
     videoId: null as string | null,
+    tabId: null as string | null,
     song: null as SongDto | null,
     ready: false,
     playing: false,
@@ -298,6 +343,7 @@ export function PracticePage(): React.ReactElement {
   });
   stRef.current = {
     videoId,
+    tabId,
     song,
     ready,
     playing,
@@ -318,9 +364,12 @@ export function PracticePage(): React.ReactElement {
   const chunksRef = useRef<Blob[]>([]);
   const recStartedAtRef = useRef(0);
   const recRequestRef = useRef(0);
+  const recordingFinishedRef = useRef<Promise<void> | null>(null);
+  const takeUploadFinishedRef = useRef<Promise<void> | null>(null);
   const recNavigationReleaseRef = useRef<(() => void) | null>(null);
   const recMetaRef = useRef<{
-    videoId: string;
+    videoId: string | null;
+    uid: string | null;
     song: SongDto | null;
     date: string;
     time: string;
@@ -385,18 +434,20 @@ export function PracticePage(): React.ReactElement {
   }>) => {
     const cur = stRef.current;
     const vid = override?.videoId !== undefined ? override.videoId : cur.videoId;
-    if (!vid) return;
+    const tab = cur.tabId;
+    if (!vid && !tab) return;
     const snap = {
       videoId: vid,
+      songId: tab ?? undefined,
       pos: override?.pos !== undefined ? override.pos : cur.ready ? computeCurrentPos() : startAtRef.current,
       a: override?.a !== undefined ? override.a : cur.a,
       b: override?.b !== undefined ? override.b : cur.b,
       rate: override?.rate !== undefined ? override.rate : cur.rate,
     };
-    json.set(`ulp:v:${vid}`, { ...snap, date: getTodayStr() });
+    if (vid) json.set(`ulp:v:${vid}`, { ...snap, date: getTodayStr() });
     try {
       const search = buildPlayerResumeSearch(snap);
-      window.history.replaceState(null, '', `${window.location.pathname}${search}`);
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}`);
     } catch {
       /* ignore */
     }
@@ -420,12 +471,14 @@ export function PracticePage(): React.ReactElement {
     if (stRef.current.song) return stRef.current.song;
     const vid = stRef.current.videoId;
     if (!vid) throw new Error(t('practice.errNoPlayingVideo'));
+    const current = selectionGuard();
     const created = await apiClient.songs.create({
       videoId: vid,
       title: getVideoTitle(),
       artist: getVideoAuthor(),
       rate: stRef.current.rate,
     });
+    if (!current()) throw new DOMException('Obsolete media selection', 'AbortError');
     if (!created) throw new Error(t('practice.errCreateSongFailed'));
     stRef.current.song = created;
     setSong(created);
@@ -433,10 +486,18 @@ export function PracticePage(): React.ReactElement {
     return created;
   };
 
-  const saveProgressNow = async (reason: 'auto' | 'manual', opts?: { keepalive?: boolean }) => {
+  const selectionGuard = () => {
+    const op = songReqSeqRef.current;
+    const uid = auth.getUser()?.id ?? null;
+    const generation = auth.getSessionGeneration();
+    return () => op === songReqSeqRef.current && uid === (auth.getUser()?.id ?? null) &&
+      generation === auth.getSessionGeneration();
+  };
+
+  const saveProgressNow = async (reason: 'auto' | 'manual', opts?: { keepalive?: boolean; preserveUrl?: boolean }) => {
     const cur = stRef.current;
-    if (!cur.videoId) return;
-    persistLocalSnapshot();
+    if (!cur.videoId && (!cur.tabId || !cur.song)) return;
+    if (!opts?.preserveUrl) persistLocalSnapshot();
     if (!apiClient.isLoggedIn()) {
       if (reason === 'manual') {
         setSyncMsg({ text: t('practice.syncLocalSaved'), err: false });
@@ -452,11 +513,16 @@ export function PracticePage(): React.ReactElement {
     const addLoops = unsavedLoopsRef.current;
     if (reason === 'auto' && !cur.dirty && addSec < 15) return;
 
+    const current = selectionGuard();
+    const pos = cur.ready ? computeCurrentPos() : startAtRef.current;
+    const saveUid = auth.getUser()?.id ?? null;
     savingRef.current = true;
+    let finishSave: () => void = () => undefined;
+    saveFinishedRef.current = new Promise((resolve) => { finishSave = resolve; });
     setSyncMsg({ text: '', err: false });
     try {
       const targetSong = cur.song || (await ensureAccountSong());
-      const pos = cur.ready ? computeCurrentPos() : startAtRef.current;
+      if (!current()) return;
       const r = await apiClient.saveProgress(
         {
           songId: targetSong.id,
@@ -470,10 +536,12 @@ export function PracticePage(): React.ReactElement {
         },
         opts
       );
-      if (!r.keep) {
+      if (!r.keep && (auth.getUser()?.id ?? null) === saveUid &&
+          (cur.song?.id === stRef.current.song?.id && cur.videoId === stRef.current.videoId && cur.tabId === stRef.current.tabId)) {
         unsavedSecRef.current = Math.max(0, unsavedSecRef.current - addSec);
         unsavedLoopsRef.current = Math.max(0, unsavedLoopsRef.current - addLoops);
       }
+      if (!current()) return;
       stRef.current.dirty = false;
       setDirty(false);
       const updatedSong: SongDto = {
@@ -489,6 +557,7 @@ export function PracticePage(): React.ReactElement {
       setSrReloadKey((k) => k + 1);
       setSyncMsg({ text: '', err: false });
     } catch (e: any) {
+      if (!current()) return;
       if (e && e.status === 404) {
         stRef.current.song = null;
         setSong(null);
@@ -498,6 +567,8 @@ export function PracticePage(): React.ReactElement {
       }
     } finally {
       savingRef.current = false;
+      saveFinishedRef.current = null;
+      finishSave();
       if (savePendingRef.current) {
         savePendingRef.current = false;
         void saveProgressNow('auto');
@@ -533,18 +604,25 @@ export function PracticePage(): React.ReactElement {
     }
   };
 
-  const startCountdownAndPlay = (targetTime: number) => {
+  const clearLoopCountdown = () => {
     if (countdownTimerRef.current) {
       window.clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
+    setCountdownSec(null);
+  };
+
+  const startCountdownAndPlay = (targetTime: number) => {
+    clearLoopCountdown();
+    seekGuardUntilRef.current = Date.now() + 400;
+    const current = selectionGuard();
     // 50ms 감시 타이머·단축키는 마운트 시점 클로저라 상태 대신 stRef로 읽는다
-    const curWait = stRef.current.waitLeadSec > 0 || stRef.current.waitTimerOn ? 3 : 0;
+    const curWait = stRef.current.waitLeadSec || (stRef.current.waitTimerOn ? 3 : 0);
     if (!curWait || curWait <= 0) {
       seekGuardUntilRef.current = Date.now() + 400;
       try {
         playerRef.current?.seekTo?.(targetTime, true);
-        playerRef.current?.playVideo?.();
+        playerRef.current?.play();
         setCurrentTime(targetTime);
       } catch {
         /* ignore */
@@ -554,13 +632,14 @@ export function PracticePage(): React.ReactElement {
     let remain = curWait;
     setCountdownSec(remain);
     try {
-      playerRef.current?.pauseVideo?.();
+      playerRef.current?.pause();
       playerRef.current?.seekTo?.(targetTime, true);
       setCurrentTime(targetTime);
     } catch {
       /* ignore */
     }
     countdownTimerRef.current = window.setInterval(() => {
+      if (!current()) { clearLoopCountdown(); return; }
       remain -= 1;
       if (remain <= 0) {
         if (countdownTimerRef.current) {
@@ -570,7 +649,7 @@ export function PracticePage(): React.ReactElement {
         setCountdownSec(null);
         seekGuardUntilRef.current = Date.now() + 400;
         try {
-          playerRef.current?.playVideo?.();
+          playerRef.current?.play();
         } catch {
           /* ignore */
         }
@@ -598,7 +677,7 @@ export function PracticePage(): React.ReactElement {
   };
 
   const createOrCuePlayer = (id: string, startSec: number) => {
-    const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
+    const win = window as YouTubePlayer;
     // M1A-2: iOS 앱은 원격 플레이어(ytBridge)라 YT 스크립트 준비를 기다리지 않는다
     const remote = shouldUseRemotePlayer();
     if (!remote && (!ytReadyRef.current || !win.YT || typeof win.YT.Player !== 'function')) {
@@ -613,9 +692,11 @@ export function PracticePage(): React.ReactElement {
         /* fallback to new player */
       }
     }
-    // 두 분기(직접 임베드·원격)가 같은 이벤트 객체를 쓴다
+    const epoch = ++youtubeEpoch.current;
+    const current = () => epoch === youtubeEpoch.current && !stRef.current.tabId;
     const events = {
       onReady() {
+        if (!current()) return;
         stRef.current.ready = true;
         setReady(true);
         applyPlayerRate(stRef.current.rate);
@@ -627,7 +708,8 @@ export function PracticePage(): React.ReactElement {
         stRef.current.duration = dur;
         setDuration(dur);
       },
-      onStateChange(e: any) {
+      onStateChange(e: { data: number }) {
+        if (!current()) return;
         const S = win.YT?.PlayerState || { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3 };
         const wasPlaying = stRef.current.playing;
         const nowPlaying = e.data === S.PLAYING || e.data === S.BUFFERING;
@@ -645,13 +727,14 @@ export function PracticePage(): React.ReactElement {
           stRef.current.loops += 1;
           unsavedLoopsRef.current += 1;
           setLoops(stRef.current.loops);
-          playerRef.current?.playVideo?.();
+          playerRef.current?.play();
         }
         if (wasPlaying && e.data === S.PAUSED) {
           scheduleAutoSave(1500);
         }
       },
-      onPlaybackRateChange(e: any) {
+      onPlaybackRateChange(e: { data: number }) {
+        if (!current()) return;
         const nextR = Number(e.data);
         if (Number.isFinite(nextR) && Math.abs(nextR - stRef.current.rate) > 0.001) {
           stRef.current.rate = nextR;
@@ -660,6 +743,7 @@ export function PracticePage(): React.ReactElement {
         }
       },
       onError() {
+        if (!current()) return;
         setSyncMsg({
           text: t('practice.embedBlocked'),
           err: true,
@@ -667,39 +751,73 @@ export function PracticePage(): React.ReactElement {
       },
     };
     try {
-      playerRef.current = remote
-        ? createRemotePlayer('player', { videoId: id, startSeconds: startSec, events })
-        : new win.YT.Player('player', {
-            videoId: id,
-            playerVars: {
-              playsinline: 1,
-              rel: 0,
-              modestbranding: 1,
-              start: Math.floor(startSec || 0),
-              origin: window.location.origin,
-            },
-            events,
-          });
+      playerRef.current = createYouTubeEngine('player', id, startSec, remote, events);
     } catch {
       setSyncMsg({ text: t('practice.ytInitFailed'), err: true });
     }
   };
 
-  const openSongById = async (
-    id: string,
-    opts?: {
-      params?: { a: number | null; b: number | null; rate: number; t: number | null } | null;
-      song?: SongDto | null;
-    }
-  ) => {
-    stopRecordingNow();
-    if (stRef.current.videoId && stRef.current.videoId !== id) {
-      await saveProgressNow('auto');
-    }
-    const mySeq = ++songReqSeqRef.current;
-    const myUid = auth.getUser()?.id ?? null;
+  const moveToMediaUrl = (id: string, isTab: boolean, history: boolean) => {
+    if (!history) return;
+    const search = new URLSearchParams(window.location.search);
+    if (isTab ? search.get('song') === id && !search.has('v') : search.get('v') === id && !search.has('song')) return;
+    const url = buildPlayerResumeSearch(isTab ? { songId: id } : { videoId: id });
+    window.history.pushState(window.history.state, '', url);
+  };
 
-    setVideoId(id);
+  const startSelection = async (keepYoutube: boolean, preserveUrl = false) => {
+    const intent = ++selectionIntent.current;
+    const sameAccount = selectionGuard();
+    const intended = () => intent === selectionIntent.current && sameAccount();
+    const pendingRecording = recordingFinishedRef.current;
+    if (pendingRecording || takeUploadFinishedRef.current || takeRef.current) {
+      playerRef.current?.pause();
+      clearLoopCountdown();
+      stopRecordingNow();
+      await pendingRecording;
+      await takeUploadFinishedRef.current;
+      if (!intended()) return null;
+      if (takeRef.current && !takeRef.current.done) {
+        const discard = await confirmModal({
+          title: t('practice.confirmRecDiscardTitle'), message: t('practice.confirmDiscardUnsavedRec'),
+        });
+        if (!discard || !intended()) return null;
+      }
+      if (takeRef.current?.url) URL.revokeObjectURL(takeRef.current.url);
+      takeRef.current = null;
+      setTakeState(null);
+      setRecMsg({ text: '', err: false });
+      setRecPopOpen(false);
+      setTakeLimitModalOpen(false);
+    }
+    tabRequest.current?.abort();
+    tabEngine.current?.deactivate();
+    if (playerRef.current !== tabEngine.current) playerRef.current?.pause();
+    clearLoopCountdown();
+    recRequestRef.current++;
+    stopRecordingNow();
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const op = ++songReqSeqRef.current;
+    const current = selectionGuard();
+    setSwitchingSong(true);
+    try {
+      await saveFinishedRef.current;
+      if (!current()) return null;
+      await saveProgressNow('auto', { preserveUrl });
+      if (!current()) return null;
+    } finally {
+      setSwitchingSong(false);
+    }
+    if (playerRef.current === tabEngine.current) playerRef.current = null;
+    const canCue = keepYoutube && Boolean(playerRef.current?.cueVideoById) && stRef.current.ready;
+    if (!keepYoutube) disposeYoutube();
+    const next = {
+      ...stRef.current, videoId: null, tabId: null, song: null, ready: canCue, playing: false,
+      a: null, b: null, loopOn: false, duration: 0, loops: 0, dirty: false,
+    };
+    stRef.current = next;
+    setReady(canCue);
+    setPlaying(false);
     setSong(null);
     setPointA(null);
     setPointB(null);
@@ -711,63 +829,207 @@ export function PracticePage(): React.ReactElement {
     unsavedSecRef.current = 0;
     unsavedLoopsRef.current = 0;
     setSyncMsg({ text: '', err: false });
+    setTabView(null);
+    setTabStatus(null);
+    return op;
+  };
 
-    const local = json.get<{
-      videoId?: string;
-      pos?: number | null;
-      a?: number | null;
-      b?: number | null;
-      rate?: number | null;
-    } | null>(`ulp:v:${id}`, null);
-    const src = opts?.params || null;
-    let resolvedSong = opts?.song || null;
+  const restoreMedia = (resolved: SongDto | null, params: ResumeParams | null, local?: unknown, limit = Infinity) => {
+    const base = (params || resolved || local || {}) as Partial<ResumeParams & { pos: number | null }>;
+    const validTime = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= limit;
+    const a = validTime(base.a) ? base.a : null;
+    const b = validTime(base.b) ? base.b : null;
+    const nextRate = RATES.includes(Number(base.rate)) ? Number(base.rate) : 1;
+    const loop = a != null && b != null && b > a;
+    const rawStart = base.t ?? base.pos ?? 0;
+    let start = Math.max(0, Math.min(limit, Number.isFinite(rawStart) ? rawStart : 0));
+    if (loop && (start < a - 3 || start >= b)) start = a;
+    startAtRef.current = start;
+    Object.assign(stRef.current, { song: resolved, a, b, rate: nextRate, loopOn: loop });
+    setSong(resolved);
+    setPointA(a);
+    setPointB(b);
+    setRateState(nextRate);
+    setLoopOn(loop);
+    setCurrentTime(start);
+    return { start, a, b, rate: nextRate };
+  };
 
-    if (!resolvedSong && apiClient.isLoggedIn()) {
+  const openSongById = async (id: string, opts?: { params?: ResumeParams | null; song?: SongDto | null; history?: boolean }) => {
+    const op = await startSelection(true, opts?.history === false);
+    if (op == null || op !== songReqSeqRef.current) return;
+    const current = selectionGuard();
+    moveToMediaUrl(id, false, opts?.history !== false);
+    stRef.current.videoId = id;
+    stRef.current.tabId = null;
+    setTabId(null);
+    setVideoId(id);
+    const local = json.get<unknown>(`ulp:v:${id}`, null);
+    let resolved = opts?.song ?? null;
+    if (!resolved && apiClient.isLoggedIn()) {
       setSyncMsg({ text: t('practice.checkingAccountRecord'), err: false });
       try {
-        const fetched = await apiClient.songs.byVideo(id);
-        if (mySeq !== songReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
-        resolvedSong = fetched;
-        setSyncMsg({ text: fetched ? t('practice.accountRecordLoaded') : t('practice.notInAccount'), err: false });
-      } catch (e: any) {
-        if (mySeq !== songReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
-        setSyncMsg({ text: (e && e.message) || t('practice.checkAccountRecordFailed'), err: true });
+        resolved = await apiClient.songs.byVideo(id);
+        if (!current()) return;
+        setSyncMsg({ text: t(resolved ? 'practice.accountRecordLoaded' : 'practice.notInAccount'), err: false });
+      } catch (error) {
+        if (!current()) return;
+        setSyncMsg({ text: error instanceof Error ? error.message : t('practice.checkAccountRecordFailed'), err: true });
       }
     }
+    const restored = restoreMedia(resolved, opts?.params ?? null, local);
+    createOrCuePlayer(id, restored.start);
+    applyPlayerRate(restored.rate);
+    persistLocalSnapshot({ videoId: id, pos: restored.start, a: restored.a, b: restored.b, rate: restored.rate });
+  };
 
-    const base: any = src || resolvedSong || local || {};
-    const nextA = typeof base.a === 'number' && Number.isFinite(base.a) ? base.a : null;
-    const nextB = typeof base.b === 'number' && Number.isFinite(base.b) ? base.b : null;
-    const nextRate = RATES.includes(Number(base.rate)) ? Number(base.rate) : 1;
-    const nextLoopOn = nextA != null && nextB != null && nextB > nextA;
-    let startSec =
-      typeof base.t === 'number' && Number.isFinite(base.t)
-        ? base.t
-        : typeof base.pos === 'number' && Number.isFinite(base.pos)
-          ? base.pos
-          : 0;
-    if (nextLoopOn && nextA != null && nextB != null && (startSec < nextA - 3 || startSec >= nextB)) {
-      startSec = Math.max(0, nextA);
+  const openSavedSong = async (id: string, params: ResumeParams | null, history: boolean, known?: SongDto) => {
+    if (known?.mediaType === 'youtube') {
+      await openSongById(known.videoId, { song: known, params, history });
+      return;
     }
+    const op = await startSelection(false, !history);
+    if (op == null || op !== songReqSeqRef.current) return;
+    const run = new AbortController();
+    tabRequest.current = run;
+    const sameSelection = selectionGuard();
+    const current = () => !run.signal.aborted && sameSelection();
+    moveToMediaUrl(id, true, history);
+    tabRestore.current = params;
+    stRef.current.tabId = id;
+    stRef.current.videoId = null;
+    setTabId(id);
+    setVideoId(null);
+    setTabStatus({ key: 'tab.loading', retry: false });
+    let loaded: TabSongDto | undefined;
+    const uid = auth.getUser()?.id;
+    const showError = (key: I18nKey, retry = false) => {
+      if (!current()) return;
+      tabEngine.current?.deactivate();
+      playerRef.current = null;
+      stRef.current.ready = false;
+      stRef.current.playing = false;
+      setReady(false);
+      setPlaying(false);
+      setTabView(null);
+      setTabStatus({ key, retry });
+    };
+    try {
+      if (!UUID.test(id)) return showError('tab.missing');
+      if (!uid) return showError('tab.login');
+      const found = known ?? (await apiClient.songs.get(id, run.signal)).song;
+      if (!current()) return;
+      if (found.mediaType === 'youtube') {
+        await openSongById(found.videoId, { song: found, params, history: false });
+        return;
+      }
+      loaded = found;
+      stRef.current.song = found;
+      setSong(found);
+      const bytes = await fetchTabBytes(uid, found, run.signal);
+      if (!current()) return;
+      if (!tabHost.current || !tabScroll.current) return;
+      const engine = tabEngine.current ?? await TabEngine.open(tabHost.current, tabScroll.current, run.signal);
+      if (!current()) {
+        if (engine !== tabEngine.current) void engine.destroy().catch(() => undefined);
+        return;
+      }
+      tabEngine.current = engine;
+      const view = await engine.load(bytes, run.signal);
+      if (!current()) return;
+      const total = engine.getDuration();
+      const restored = restoreMedia(found, params, undefined, total);
+      engine.activate({
+        playing: (value) => {
+          if (!current()) return;
+          stRef.current.playing = value;
+          setPlaying(value);
+          if (!value) scheduleAutoSave(1500);
+        },
+        position: (sec) => { if (current() && !seekingRef.current) setCurrentTime(sec); },
+        ended: () => {
+          if (!current()) return;
+          if (stRef.current.loopOn && stRef.current.a != null && stRef.current.b === total &&
+              Date.now() > seekGuardUntilRef.current) {
+            startCountdownAndPlay(stRef.current.a);
+            stRef.current.loops++;
+            unsavedLoopsRef.current++;
+            setLoops(stRef.current.loops);
+          }
+        },
+        range: (a, b) => {
+          if (!current() || a < 0 || b <= a || b > total) return;
+          stRef.current.a = a;
+          stRef.current.b = b;
+          stRef.current.loopOn = true;
+          stRef.current.loops = 0;
+          setLoops(0);
+          setPointA(a);
+          setPointB(b);
+          setLoopOn(true);
+          markDirty({ a, b });
+        },
+        error: () => showError('tab.reload'),
+      });
+      playerRef.current = engine;
+      stRef.current.ready = true;
+      stRef.current.duration = total;
+      setReady(true);
+      setDuration(total);
+      setTabView(view);
+      setTabStatus(null);
+      updateRateAvailability();
+      applyPlayerRate(restored.rate);
+      engine.seekTo(restored.start);
+      persistLocalSnapshot({ pos: restored.start });
+      void rememberTab(uid, found, bytes, run.signal);
+    } catch (cause) {
+      if (!current()) return;
+      const status = (cause as { status?: number })?.status;
+      if (cause instanceof TabPlaybackError) {
+        if (cause.kind === 'parse' && loaded && uid) void evictTab(uid, loaded.id);
+        const key = cause.kind === 'parse' ? 'tab.parse' : cause.kind === 'audio' ? 'tab.audio' : 'tab.reload';
+        showError(key, cause.kind === 'parse');
+      } else if (status === 401 || status === 404) {
+        showError(status === 401 ? 'tab.login' : 'tab.missing');
+      } else {
+        showError('tab.download', true);
+      }
+    }
+  };
 
-    startAtRef.current = startSec;
-    stRef.current.videoId = id;
-    stRef.current.song = resolvedSong;
-    stRef.current.a = nextA;
-    stRef.current.b = nextB;
-    stRef.current.rate = nextRate;
-    stRef.current.loopOn = nextLoopOn;
+  const changeTabTrack = (index: number, staff: boolean) => {
+    const controller = tabRequest.current;
+    if (!controller || !tabEngine.current) return;
+    void tabEngine.current.displayTrack(index, staff, controller.signal)
+      .then((view) => { if (!controller.signal.aborted) setTabView(view); })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        tabEngine.current?.deactivate();
+        setReady(false);
+        setPlaying(false);
+        setTabView(null);
+        setTabStatus({ key: 'tab.reload', retry: false });
+      });
+  };
 
-    setSong(resolvedSong);
-    setPointA(nextA);
-    setPointB(nextB);
-    setRateState(nextRate);
-    setLoopOn(nextLoopOn);
-    setCurrentTime(startSec);
-
-    createOrCuePlayer(id, startSec);
-    applyPlayerRate(nextRate);
-    persistLocalSnapshot({ videoId: id, pos: startSec, a: nextA, b: nextB, rate: nextRate });
+  const restoreFromUrl = async () => {
+    const q = new URLSearchParams(window.location.search);
+    const params = ['a', 'b', 'r', 't'].some((name) => q.has(name)) ? {
+      a: parseFiniteNum(q.get('a')), b: parseFiniteNum(q.get('b')),
+      rate: parseFiniteNum(q.get('r')) || 1, t: parseFiniteNum(q.get('t')),
+    } : null;
+    if (q.has('song')) await openSavedSong(q.get('song') || '', params, false);
+    else {
+      const id = videoIdFrom(q.get('v') || '');
+      if (id) await openSongById(id, { params, history: false });
+      else if (stRef.current.tabId !== null || stRef.current.videoId) {
+        const op = await startSelection(false, true);
+        if (op == null || op !== songReqSeqRef.current) return;
+        setVideoId(null);
+        setTabId(null);
+      }
+    }
   };
 
   // ---------- 배속 및 구간 조작 ----------
@@ -782,7 +1044,7 @@ export function PracticePage(): React.ReactElement {
     if (!stRef.current.ready && explicitTime == null) return;
     const d = stRef.current.duration || Infinity;
     const rawT = explicitTime == null ? safePlayerTime() : explicitTime;
-    const t = round1(Math.max(0, Math.min(rawT, d)));
+    const t = Math.max(0, Math.min(round1(rawT), d));
     let nextA = stRef.current.a;
     let nextB = stRef.current.b;
     let nextLoopOn = stRef.current.loopOn;
@@ -822,7 +1084,7 @@ export function PracticePage(): React.ReactElement {
 
   const handleToggleLoop = () => {
     const cur = stRef.current;
-    if (cur.a == null || cur.b == null) return;
+    if (!cur.ready || cur.a == null || cur.b == null || cur.a < 0 || cur.b <= cur.a || cur.b > cur.duration) return;
     const next = !cur.loopOn;
     stRef.current.loopOn = next;
     stRef.current.loops = 0;
@@ -1036,11 +1298,12 @@ export function PracticePage(): React.ReactElement {
   };
 
   const handleTogglePlay = () => {
+    if (countdownTimerRef.current) { clearLoopCountdown(); return; }
     if (!playerRef.current || !stRef.current.ready) return;
     if (stRef.current.playing) {
-      playerRef.current.pauseVideo?.();
+      playerRef.current.pause();
     } else {
-      playerRef.current.playVideo?.();
+      playerRef.current.play();
     }
   };
 
@@ -1063,21 +1326,30 @@ export function PracticePage(): React.ReactElement {
     }
   };
 
+  const targetSongMatches = (take: PendingTakeState) => take.song
+    ? take.song.id === stRef.current.song?.id
+    : Boolean(take.videoId && stRef.current.videoId === take.videoId);
+
   const uploadTakeNow = async (opts?: { replaceOldSongTakes?: boolean; targetTake?: PendingTakeState }) => {
     const tk = opts?.targetTake || takeRef.current;
     if (!tk || tk.done || uploadingRef.current) return;
+    const generation = auth.getSessionGeneration();
+    const sameAccount = () => tk.uid === (auth.getUser()?.id ?? null) && generation === auth.getSessionGeneration();
+    if (!sameAccount()) return;
     if (!apiClient.isLoggedIn()) {
       setRecMsg({ text: t('practice.recLoginPrompt'), err: true });
       return;
     }
 
+    let finishUpload: () => void = () => undefined;
+    takeUploadFinishedRef.current = new Promise((resolve) => { finishUpload = resolve; });
     uploadingRef.current = true;
     setUploadingTake(true);
     setRecMsg({ text: t('practice.recUploading'), err: false });
 
     try {
       let targetSong = tk.song;
-      if (!targetSong && stRef.current.videoId === tk.videoId) {
+      if (!targetSong && tk.videoId && stRef.current.videoId === tk.videoId) {
         targetSong = await ensureAccountSong();
         tk.song = targetSong;
       }
@@ -1085,6 +1357,7 @@ export function PracticePage(): React.ReactElement {
         throw new Error(t('practice.errNoSongInfo'));
       }
 
+      if (!sameAccount()) return;
       const uploaded = await apiClient.takes.upload(
         {
           songId: targetSong.id,
@@ -1100,6 +1373,7 @@ export function PracticePage(): React.ReactElement {
         tk.blob
       );
 
+      if (!sameAccount() || takeRef.current !== tk) return;
       const nextTake: PendingTakeState = {
         ...tk,
         song: targetSong,
@@ -1117,6 +1391,7 @@ export function PracticePage(): React.ReactElement {
         err: false,
       });
     } catch (e: any) {
+      if (!sameAccount() || takeRef.current !== tk) return;
       if (e && e.status === 403 && e.code === 'FREE_TAKE_SONG_LIMIT_EXCEEDED') {
         const limitNum = Number((e.data as any)?.detail?.limit) || 2;
         setTakeLimitCount(limitNum);
@@ -1131,7 +1406,7 @@ export function PracticePage(): React.ReactElement {
         const clearedTake: PendingTakeState = { ...tk, song: null };
         takeRef.current = clearedTake;
         setTakeState(clearedTake);
-        if (stRef.current.videoId === tk.videoId) {
+        if (targetSongMatches(tk)) {
           stRef.current.song = null;
           setSong(null);
         }
@@ -1141,6 +1416,8 @@ export function PracticePage(): React.ReactElement {
       }
     } finally {
       uploadingRef.current = false;
+      takeUploadFinishedRef.current = null;
+      finishUpload();
       setUploadingTake(false);
     }
   };
@@ -1174,7 +1451,8 @@ export function PracticePage(): React.ReactElement {
   };
 
   const startRecordingNow = async () => {
-    if (mrRef.current || !stRef.current.videoId) return;
+    if (mrRef.current || (!stRef.current.videoId && (!stRef.current.tabId || !stRef.current.ready))) return;
+    const selection = selectionGuard();
     if (
       typeof navigator === 'undefined' ||
       !navigator.mediaDevices ||
@@ -1195,10 +1473,10 @@ export function PracticePage(): React.ReactElement {
       return;
     }
 
-    if (recNavigationReleaseRef.current) return;
+    if (recNavigationReleaseRef.current || !selection()) return;
     const request = ++recRequestRef.current;
     const requestUid = auth.getUser()?.id || null;
-    const requestVideo = stRef.current.videoId;
+    const requestGeneration = auth.getSessionGeneration();
     const releaseLock = blockNativeNavigation();
     const releaseNavigation = () => {
       releaseLock();
@@ -1212,6 +1490,7 @@ export function PracticePage(): React.ReactElement {
       });
     } catch (e: any) {
       releaseNavigation();
+      if (!selection()) return;
       setRecMsg({
         text:
           e && e.name === 'NotAllowedError'
@@ -1222,7 +1501,7 @@ export function PracticePage(): React.ReactElement {
       return;
     }
 
-    if (request !== recRequestRef.current || requestUid !== (auth.getUser()?.id || null) || requestVideo !== stRef.current.videoId) {
+    if (request !== recRequestRef.current || requestGeneration !== auth.getSessionGeneration() || !selection()) {
       stream.getTracks().forEach(track => track.stop());
       releaseNavigation();
       return;
@@ -1247,6 +1526,7 @@ export function PracticePage(): React.ReactElement {
     streamRef.current = stream;
     recMetaRef.current = {
       videoId: stRef.current.videoId,
+      uid: requestUid,
       song: stRef.current.song,
       date: getTodayStr(),
       time: getNowHhMm(),
@@ -1258,6 +1538,14 @@ export function PracticePage(): React.ReactElement {
 
     mr.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
+    };
+
+    let finishRecording: () => void = () => undefined;
+    recordingFinishedRef.current = new Promise((resolve) => { finishRecording = resolve; });
+    const markRecordingFinished = () => {
+      recordingFinishedRef.current = null;
+      finishRecording();
+      releaseNavigation();
     };
 
     mr.onstop = () => {
@@ -1273,7 +1561,10 @@ export function PracticePage(): React.ReactElement {
 
       const meta = recMetaRef.current;
       recMetaRef.current = null;
-      if (!meta) { releaseNavigation(); return; }
+      if (!meta || requestGeneration !== auth.getSessionGeneration() || requestUid !== (auth.getUser()?.id ?? null)) {
+        markRecordingFinished();
+        return;
+      }
 
       if (takeRef.current?.url) {
         try {
@@ -1293,8 +1584,7 @@ export function PracticePage(): React.ReactElement {
       };
       takeRef.current = createdTake;
       setTakeState(createdTake);
-      void uploadTakeNow({ targetTake: createdTake });
-      releaseNavigation();
+      void uploadTakeNow({ targetTake: createdTake }).finally(markRecordingFinished);
     };
 
     mrRef.current = mr;
@@ -1308,7 +1598,7 @@ export function PracticePage(): React.ReactElement {
       streamRef.current = null;
       recMetaRef.current = null;
       setRecording(false);
-      releaseNavigation();
+      markRecordingFinished();
       setRecMsg({ text: t('practice.micOpenFailed'), err: true });
       return;
     }
@@ -1367,7 +1657,7 @@ export function PracticePage(): React.ReactElement {
       setListUid(myUid);
     }
     try {
-      const [list, cats] = await Promise.all([apiClient.songs.list(), apiClient.categories.list()]);
+      const [list, cats] = await Promise.all([apiClient.songs.list(undefined, INCLUDE_TAB), apiClient.categories.list()]);
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
       setCategories(cats);
       setSongsList(list);
@@ -1454,7 +1744,7 @@ export function PracticePage(): React.ReactElement {
   const sameUid = (uid: string | null) => (auth.getUser()?.id ?? null) === uid;
 
   // 곡 하나의 바뀐 칸을 목록과 현재 곡에 함께 반영한다
-  const applySongPatch = (id: string, patch: Partial<SongDto>) => {
+  const applySongPatch = (id: string, patch: Partial<Pick<SongDto, 'title' | 'categoryIds' | 'status' | 'statusCode' | 'memo'>>) => {
     if (stRef.current.song && stRef.current.song.id === id) {
       const merged = { ...stRef.current.song, ...patch };
       stRef.current.song = merged;
@@ -1487,7 +1777,7 @@ export function PracticePage(): React.ReactElement {
   /** 곡 삭제(기록 화면과 같은 확인 문구). 취소 = '', 실패 = 문구, 성공·계정 변경 = null */
   const deleteSong = async (s: SongDto): Promise<string | null> => {
     const myUid = auth.getUser()?.id ?? null;
-    const impact = await apiClient.community.shareImpactOrNull({ songId: s.id });
+    const impact = s.mediaType === 'tab' ? null : await apiClient.community.shareImpactOrNull({ songId: s.id });
     if (!sameUid(myUid)) return null;
     const ok = await confirmModal({
       title: t('practice.confirmDeleteTitle'),
@@ -1502,9 +1792,24 @@ export function PracticePage(): React.ReactElement {
       return (e && e.message) || t('practice.songDeleteFailed');
     }
     if (!sameUid(myUid)) return null;
+    if (myUid && s.mediaType === 'tab') void evictTab(myUid, s.id);
     setSongsList((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
     if (stRef.current.song && stRef.current.song.id === s.id) {
-      // 영상은 그대로 두고 계정 곡만 뗀다(저장하면 새 곡으로 다시 만든다)
+      if (s.mediaType === 'tab') {
+        ++songReqSeqRef.current;
+        tabRequest.current?.abort();
+        tabEngine.current?.deactivate();
+        playerRef.current = null;
+        clearLoopCountdown();
+        stopRecordingNow();
+        stRef.current.ready = false;
+        stRef.current.playing = false;
+        setReady(false);
+        setPlaying(false);
+        setTabView(null);
+        setTabStatus({ key: 'tab.missing', retry: false });
+      }
+      // YouTube 영상은 계정 곡을 삭제해도 재생할 수 있다.
       stRef.current.song = null;
       setSong(null);
       setSyncMsg({ text: t('practice.songDeleted'), err: false });
@@ -1573,11 +1878,11 @@ export function PracticePage(): React.ReactElement {
   // ---------- 초기화, YouTube API 로드, 인터벌, 키보드 단축키 ----------
   useEffect(() => {
     document.title = t('practice.documentTitle');
-    const win: Record<string, any> = typeof window !== 'undefined' ? (window as any) : {};
+    const win = window as YouTubePlayer;
+    const prevReady = win.onYouTubeIframeAPIReady;
 
     // M1A-2: 원격 플레이어(iOS 앱)는 iframe_api를 넣지 않는다. 첫 영상은 createOrCuePlayer 원격 분기로 바로 간다
     if (!shouldUseRemotePlayer()) {
-      const prevReady = win.onYouTubeIframeAPIReady;
       win.onYouTubeIframeAPIReady = () => {
         ytReadyRef.current = true;
         if (typeof prevReady === 'function') prevReady();
@@ -1595,35 +1900,31 @@ export function PracticePage(): React.ReactElement {
         s.src = 'https://www.youtube.com/iframe_api';
         s.onload = () => {
           if (!ytReadyRef.current && win.YT && typeof win.YT.Player === 'function') {
-            win.onYouTubeIframeAPIReady();
+            win.onYouTubeIframeAPIReady?.();
           }
         };
         s.onerror = () => {
-          setSyncMsg({ text: t('practice.ytLoadFailed'), err: true });
+          if (stRef.current.tabId !== null || !stRef.current.videoId) return;
+          setSyncMsg((previous) => previous.text ? previous : { text: t('practice.ytLoadFailed'), err: true });
         };
         document.head.appendChild(s);
       }
     }
 
-    const q = new URLSearchParams(window.location.search);
-    const startId = videoIdFrom(q.get('v') || '');
-    const initialParams =
-      q.has('a') || q.has('b') || q.has('r') || q.has('t')
-        ? {
-            a: parseFiniteNum(q.get('a')),
-            b: parseFiniteNum(q.get('b')),
-            rate: parseFiniteNum(q.get('r')) || 1,
-            t: parseFiniteNum(q.get('t')),
-          }
-        : null;
-
+    let mounted = true;
+    const onPopState = () => {
+      if (window.location.pathname !== '/practice.html') return;
+      setUploadTrigger(null);
+      void restoreFromUrl();
+    };
+    window.addEventListener('popstate', onPopState);
     void (async () => {
       await auth.getAccessToken();
+      if (!mounted) return;
       const u = auth.getUser();
-      lastUidRef.current = u ? u.id : null;
-      if (startId) {
-        await openSongById(startId, { params: initialParams });
-      }
+      lastUidRef.current = u?.id ?? null;
+      await restoreFromUrl();
+      if (!mounted) return;
       const me = auth.getMe();
       if (me && !me.migratedLocalAt && lastUidRef.current && !migrationAttemptedRef.current[lastUidRef.current]) {
         migrationAttemptedRef.current[lastUidRef.current] = true;
@@ -1653,7 +1954,7 @@ export function PracticePage(): React.ReactElement {
       if (playerRef.current && cur.ready && cur.playing) {
         unsavedSecRef.current += Math.min(2, (now - lastTick) / 1000);
         const t = safePlayerTime();
-        if (cur.loopOn && cur.a != null && cur.b != null && now > seekGuardUntilRef.current && t >= cur.b) {
+        if (cur.loopOn && cur.a != null && cur.b != null && cur.b > cur.a && cur.b <= cur.duration && now > seekGuardUntilRef.current && t >= cur.b) {
           jumpToLoopStart();
           cur.loops += 1;
           unsavedLoopsRef.current += 1;
@@ -1689,6 +1990,11 @@ export function PracticePage(): React.ReactElement {
     };
     const onPageHide = () => {
       void saveProgressNow('auto', { keepalive: true });
+      clearLoopCountdown();
+      disposeTab();
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && stRef.current.tabId !== null) void restoreFromUrl();
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (mrRef.current || uploadingRef.current || (takeRef.current && !takeRef.current.done)) {
@@ -1699,7 +2005,8 @@ export function PracticePage(): React.ReactElement {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (target && (target.closest('dialog[open]') || target.isContentEditable ||
+          /^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY|A)$/.test(target.tagName))) return;
       if (e.key === 'Escape') {
         setLibOpen(false);
         setTakeLimitModalOpen(false);
@@ -1729,15 +2036,26 @@ export function PracticePage(): React.ReactElement {
 
     document.addEventListener('visibilitychange', onVisChange);
     window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('keydown', onKeyDown);
 
     return () => {
+      mounted = false;
+      ++songReqSeqRef.current;
+      ++selectionIntent.current;
+      win.onYouTubeIframeAPIReady = prevReady;
+      window.removeEventListener('popstate', onPopState);
+      clearLoopCountdown();
+      recMetaRef.current = null;
+      disposeTab();
+      disposeYoutube();
       window.clearInterval(loopInterval);
       window.clearInterval(autoSaveInterval);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       document.removeEventListener('visibilitychange', onVisChange);
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('keydown', onKeyDown);
       recRequestRef.current++;
@@ -1749,11 +2067,6 @@ export function PracticePage(): React.ReactElement {
         } catch {
           /* ignore */
         }
-      }
-      try {
-        playerRef.current?.destroy?.();
-      } catch {
-        /* ignore */
       }
     };
   }, []);
@@ -1770,17 +2083,36 @@ export function PracticePage(): React.ReactElement {
     setOrderDraft(null);
     setOrderSaving(false);
     setOrderErr('');
+    const previousTab = stRef.current.tabId;
+    const params = tabRestore.current;
+    disposeTab();
+    clearLoopCountdown();
+    recRequestRef.current++;
+    recMetaRef.current = null;
+    stopRecordingNow();
+    recNavigationReleaseRef.current?.();
+    if (takeRef.current?.url) URL.revokeObjectURL(takeRef.current.url);
+    takeRef.current = null;
+    setTakeState(null);
+    setRecMsg({ text: '', err: false });
+    setTakeLimitModalOpen(false);
+    setUploadTrigger(null);
+    ++selectionIntent.current;
     stRef.current.song = null;
+    unsavedSecRef.current = 0;
+    unsavedLoopsRef.current = 0;
+    setDirty(false);
     setSong(null);
     setSongsList(null);
     setSongsErr('');
-    if (takeRef.current && !takeRef.current.done) {
-      const updated = { ...takeRef.current, song: null };
-      takeRef.current = updated;
-      setTakeState(updated);
-    }
-    if (recMetaRef.current) {
-      recMetaRef.current.song = null;
+    if (previousTab !== null) {
+      stRef.current.ready = false;
+      stRef.current.playing = false;
+      setReady(false);
+      setPlaying(false);
+      setTabView(null);
+      if (activeUid) void openSavedSong(previousTab, params, false);
+      else setTabStatus({ key: 'tab.login', retry: false });
     }
     if (activeUid && stRef.current.videoId) {
       const vid = stRef.current.videoId;
@@ -1864,7 +2196,11 @@ export function PracticePage(): React.ReactElement {
 
   // 진행 바 SVG 좌표 계산 (0 ~ 1000 천분율)
   const fillPermille = duration > 0 ? Math.max(0, Math.min(1000, Math.round((currentTime / duration) * 1000))) : 0;
-  const hasLoopRange = duration > 0 && pointA != null && pointB != null && pointB > pointA;
+  const hasLoopRange = ready && pointA != null && pointB != null && pointA >= 0 && pointB > pointA && pointB <= duration;
+  useEffect(() => {
+    if (tabId === null || !ready) return;
+    tabEngine.current?.setLoopRange(hasLoopRange ? { a: pointA!, b: pointB! } : null);
+  }, [tabId, ready, hasLoopRange, pointA, pointB, tabView?.selected, tabView?.staff]);
   const loopXPermille = hasLoopRange ? Math.max(0, Math.min(1000, Math.round((pointA! / duration) * 1000))) : 0;
   const loopWPermille = hasLoopRange
     ? Math.max(0, Math.min(1000 - loopXPermille, Math.round(((pointB! - pointA!) / duration) * 1000)))
@@ -1974,7 +2310,7 @@ export function PracticePage(): React.ReactElement {
   const editSong = editingList && editSongId ? allSongs.find((x) => x.id === editSongId) || null : null;
   const catEditTarget = catPopOpen && catEditing && catEditId ? sortedCategories.find((c) => c.id === catEditId) || null : null;
   const currentNotInFolder =
-    listState === 'success' && Boolean(song) && Boolean(videoId) && !visibleSongs.some((x) => x.videoId === videoId);
+    listState === 'success' && song != null && !visibleSongs.some((x) => x.id === song.id);
 
   // 폴더를 바꾸면 목록 안에서만 맨 위로 되돌리고, 현재 곡이 있으면 그 행만 보이게 한다(문서 스크롤 없음)
   useEffect(() => {
@@ -2001,7 +2337,7 @@ export function PracticePage(): React.ReactElement {
     const myOrder = ++orderSeqRef.current;
     setOrderSaving(true);
     try {
-      const list = await apiClient.songs.reorder(ids);
+      const list = await apiClient.songs.reorder(ids, INCLUDE_TAB);
       if (mySeq !== songsListReqSeqRef.current || (auth.getUser()?.id ?? null) !== myUid) return;
       setSongsList(list);
     } catch (e: any) {
@@ -2109,13 +2445,13 @@ export function PracticePage(): React.ReactElement {
     if (handle && document.activeElement !== handle) handle.focus();
   });
 
-  const switchToSong = async (s: SongDto) => {
-    setSwitchingSong(true);
-    try {
-      await openSongById(s.videoId, { song: s });
-    } finally {
-      setSwitchingSong(false);
-    }
+  const switchToSong = (picked: SongDto) => openSavedSong(picked.id, null, true, picked);
+
+  const handleUploadedTab = (uploaded: TabSongDto) => {
+    ++songsListReqSeqRef.current;
+    setSongsList((list) => [uploaded, ...(list ?? []).filter((entry) => entry.id !== uploaded.id)]);
+    void loadSongList({ silent: true });
+    void switchToSong(uploaded);
   };
 
   const commitInlineTitle = async (s: SongDto, rawVal: string) => {
@@ -2139,7 +2475,7 @@ export function PracticePage(): React.ReactElement {
     if (s.a != null && s.b != null) parts.push(`${formatPlayerTime(s.a)}–${formatPlayerTime(s.b)}`);
     if (s.rate) parts.push(`${s.rate}×`);
     if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
-    const isCurrent = s.videoId === videoId;
+    const isCurrent = song ? s.id === song.id : s.mediaType === 'tab' ? s.id === tabId : s.videoId === videoId;
     const withHandle = inline && showDragHandles;
     const isCardEditing = (inline && editingList) || (!inline && drawerEditing);
     const cardKey = `${itemFolderId}:${s.id}`;
@@ -2207,7 +2543,6 @@ export function PracticePage(): React.ReactElement {
                   return;
                 }
                 if (!inline) closeDrawer();
-                // 현재 곡 재클릭은 재시작·녹음 중지를 일으키지 않는다. 전환 중에는 중복 클릭을 막는다
                 if (isCurrent || switchingSong) return;
                 if (!inline) {
                   setSelectedFolderId(itemFolderId);
@@ -2216,7 +2551,7 @@ export function PracticePage(): React.ReactElement {
                 void switchToSong(s);
               }}
             >
-              <span className={`t ${styles.ppSongTitle}`}>{s.title}</span>
+              <span className={`t ${styles.ppSongTitle}`}>{s.mediaType === 'tab' && <small className={styles.tabTag}>TAB</small>}{s.title}</span>
               <span className={`m ${styles.ppSongMeta}`}>{parts.join(' · ')}</span>
             </button>
           )}
@@ -2266,6 +2601,7 @@ export function PracticePage(): React.ReactElement {
         <header className={`pp-head ${styles.ppHead}`}>
           <div className={`pp-title ${styles.ppTitle}`}>
             <b id="songTitle">{displayTitle}</b>
+            {song?.mediaType === 'tab' && <small className={styles.tabFileName}>TAB · {song.tabFileName}</small>}
             <span className={styles.ppSyncRow}>
               {song && (
                 <button
@@ -2391,37 +2727,32 @@ export function PracticePage(): React.ReactElement {
           </div>
         </header>
 
-        <div className={`pp-main ${styles.ppMain}`}>
+        {!videoId && tabId === null && (
+          <form className={`pp-url ${styles.tabAdd}`} id="urlForm" data-testid="tab-add"
+            onSubmit={handleUrlSubmit(urlInput1, () => setUrlInput1(''))}>
+            <input type="url" id="urlInput" className={styles.ppUrlInput} placeholder="https://youtu.be/…"
+              data-align-group="tab-add:top,bottom,height@601"
+              inputMode="url" autoComplete="off" aria-label={t('practice.ariaYoutubeUrl')} value={urlInput1}
+              onChange={(event) => setUrlInput1(event.target.value)} />
+            <button className="pillBtn" type="submit" data-align-group="tab-add:top,bottom,height@601">{t('practice.btnOpen')}</button>
+            <button className={`ghostBtn ${styles.tabAddButton}`} type="button" data-align-group="tab-add:top,bottom,height@601"
+              onClick={(event) => setUploadTrigger(event.currentTarget)}>{t('tab.upload')}</button>
+          </form>
+        )}
+        <div className={`pp-main ${styles.ppMain}`} data-tab={tabId !== null}>
+          <TabPlayerView visible={tabId !== null} view={tabView} status={tabStatus} host={tabHost} scroll={tabScroll}
+            retry={() => { if (tabId !== null) void openSavedSong(tabId, tabRestore.current, false); }}
+            onTrack={changeTabTrack}
+            onMix={(index, update) => { if (tabEngine.current && stRef.current.ready) setTabView(tabEngine.current.updateTrack(index, update)); }}
+            onMetronome={() => { if (tabEngine.current && stRef.current.ready) setTabView(tabEngine.current.toggleMetronome()); }} />
           <section className={`pp-stage ${styles.ppStage}`} data-align-group="sr-left:left">
-            <div className={`pp-video ${styles.ppVideo}`} id="videoBox" data-align-group="practice-top:top@961">
-              <div className={styles.playerMount}>
+            <div className={`pp-video ${styles.ppVideo}`} id="videoBox" data-align-group="practice-top:top@961" hidden={tabId !== null}>
+              <div className={styles.playerMount} ref={youtubeMount}>
                 <div id="player" />
               </div>
               <div className={`pp-empty ${styles.ppEmpty}`} id="emptyState" hidden={Boolean(videoId)}>
-                <p>
-                  <b>{t('practice.pickVideoPrompt')}</b>
-                </p>
+                <p><b>{t('practice.pickVideoPrompt')}</b></p>
                 <p className="note">{t('practice.pickVideoSub')}</p>
-                <form
-                  className={`pp-url ${styles.ppUrlForm}`}
-                  id="urlForm"
-                  onSubmit={handleUrlSubmit(urlInput1, () => setUrlInput1(''))}
-                >
-                  <input
-                    type="url"
-                    id="urlInput"
-                    className={styles.ppUrlInput}
-                    placeholder="https://youtu.be/…"
-                    inputMode="url"
-                    autoComplete="off"
-                    aria-label={t('practice.ariaYoutubeUrl')}
-                    value={urlInput1}
-                    onChange={(e) => setUrlInput1(e.target.value)}
-                  />
-                  <button className="pillBtn" type="submit">
-                    {t('practice.btnOpen')}
-                  </button>
-                </form>
               </div>
             </div>
 
@@ -2630,6 +2961,7 @@ export function PracticePage(): React.ReactElement {
                 id="playBtn"
                 data-align-group="transport:top,bottom,height"
                 aria-label={playing ? t('practice.ariaPause') : t('practice.ariaPlay')}
+                disabled={tabId !== null && !ready}
                 onClick={handleTogglePlay}
               >
                 {playing ? '❚❚' : '▶'}
@@ -2653,7 +2985,7 @@ export function PracticePage(): React.ReactElement {
                 aria-pressed={recording}
                 aria-label={recording ? t('practice.ariaStopRecUpload') : t('practice.ariaStartRec')}
                 title={t('practice.secRecToday')}
-                disabled={!recording && (!videoId || uploadingTake)}
+                disabled={!recording && ((!videoId && !ready) || uploadingTake)}
                 onClick={handleToggleRec}
               >
                 {recording ? `■ ${formatPlayerTime(recElapsedSec)}` : t('practice.btnStartRec')}
@@ -2816,7 +3148,7 @@ export function PracticePage(): React.ReactElement {
                   id="saveBtn"
                   data-align-group="looprow:top,bottom,height"
                   aria-label={t('practice.btnSave')}
-                  disabled={!videoId}
+                  disabled={!videoId && !ready}
                   onClick={() => void saveProgressNow('manual')}
                 >
                   {saveBtnLabel}
@@ -3019,7 +3351,7 @@ export function PracticePage(): React.ReactElement {
           </div>
         </div>
 
-        {Boolean(videoId) && (
+        {(videoId || song?.mediaType === 'tab') && (
           <section id="songRecord" className={styles.songRecord} aria-label={t('practice.ariaSongRecord')}>
             <SongRecordPanel
               songId={song?.id ?? null}
@@ -3032,6 +3364,9 @@ export function PracticePage(): React.ReactElement {
       </div>
 
       {/* 우측 곡 목록 서랍 */}
+      {uploadTrigger && <TabUploadDialog uid={activeUid} trigger={uploadTrigger}
+        onClose={() => setUploadTrigger(null)} onUpload={handleUploadedTab}
+        onUncertain={() => loadSongList({ silent: true })} />}
       <aside className={`pp-lib ${styles.ppLib}`} id="lib" hidden={!libOpen} data-editing={drawerEditing || undefined}>
         <div className={`pp-lib-head ${styles.ppLibHead}`}>
           <b>{t('practice.titleSongDrawer')}</b>
@@ -3089,6 +3424,9 @@ export function PracticePage(): React.ReactElement {
           />
           <button className="pillBtn" type="submit">
             {t('practice.btnOpen')}
+          </button>
+          <button className="pillBtn" type="button" onClick={(event) => setUploadTrigger(event.currentTarget)}>
+            {t('tab.upload')}
           </button>
         </form>
         {apiClient.isLoggedIn() && songsList && songsList.length > 0 && (
@@ -3289,7 +3627,7 @@ export function PracticePage(): React.ReactElement {
           onApply={async (items) => {
             const myUid = auth.getUser()?.id ?? null;
             try {
-              const updated = await apiClient.songs.batchUpdateTitles(items);
+              const updated = await apiClient.songs.batchUpdateTitles(items, INCLUDE_TAB);
               if (!sameUid(myUid)) return null;
               setSongsList(updated);
               if (stRef.current.song) {

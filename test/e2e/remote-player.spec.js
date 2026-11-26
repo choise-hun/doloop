@@ -75,7 +75,12 @@ test('R1 iOS 원격 분기: YT 스크립트 없이 #player iframe이 플레이�
   const rateBtn = (label) => page.locator('#rates button', { hasText: new RegExp(`^${label.replace('.', '\\.')}$`) });
   await expect(rateBtn('0.25')).toBeEnabled();
   await expect(rateBtn('0.75')).toBeEnabled();
-  await page.locator('#playBtn').click();
+  const play = page.locator('#playBtn');
+  await play.scrollIntoViewIfNeeded();
+  // An out-of-process iframe can otherwise receive the input before Edge's
+  // compositor has applied the scroll that brought the button into view.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await play.click();
   await expect.poll(() => player.evaluate(() => window.__cmds.map((c) => c.cmd))).toContain('play');
   await expect(page.locator('#playBtn')).toHaveText('❚❚');
   await expect(page.locator('#tNow')).toHaveText(/^0:4[2-3]$/);

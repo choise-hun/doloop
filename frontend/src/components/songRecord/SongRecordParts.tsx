@@ -422,7 +422,7 @@ export function AbCompare({ abPair, activeUid, idPrefix = '' }: AbCompareProps):
 
 export interface SessionTimelineProps {
   sessions: SongSessionDto[];
-  song?: { videoId?: string; title?: string; artist?: string } | null;
+  song?: { id?: string; mediaType?: 'tab' | 'youtube'; videoId?: string | null; title?: string; artist?: string } | null;
   takes?: TakeDto[];
   onTakeRemoved?: (sessionId: string, takeId: string) => void;
   onTakeCompleted?: (take: TakeDto) => void;

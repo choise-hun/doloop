@@ -1,0 +1,89 @@
+.stage {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+.stage[data-tab-visible='false'] {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  width: 100%;
+  height: 0;
+}
+.score, .mixer { min-width: 0; }
+.viewport {
+  position: relative;
+  height: clamp(280px, 50dvh, 520px);
+  background: var(--surface);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.viewport[data-ready='false'] .host { visibility: hidden; }
+.host {
+  color: var(--ink);
+  background: var(--paper);
+  min-height: 100%;
+}
+.status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 20px;
+}
+.toolbar, .dialogHead {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.score > .toolbar { margin-bottom: 8px; }
+.stage button, .stage select, .stage summary, .stage input,
+.dialog button, .dialog input { min-height: 44px; }
+.stage button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: currentColor;
+}
+.mixer {
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  padding: 0 12px;
+  max-height: calc(clamp(280px, 50dvh, 520px) + 52px);
+  overflow: auto;
+}
+.mixer summary { cursor: pointer; align-content: center; font-weight: 700; }
+.trackList, .track, .dialog form { display: grid; gap: 8px; }
+.trackList { padding-bottom: 12px; }
+.track {
+  padding-top: 8px;
+  border-top: 1px solid var(--seam-hairline);
+  overflow-wrap: anywhere;
+}
+.trackList label, .dialog label { display: grid; gap: 4px; min-width: 0; }
+.trackList label > *, .dialog input { min-width: 0; width: 100%; }
+.dialog {
+  width: min(calc(100% - 32px), 480px);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-card);
+  padding: 18px;
+}
+.dialog::backdrop { background: var(--scrim); }
+.dialogHead { justify-content: space-between; margin-bottom: 8px; }
+.dialogHead h2 { margin: 0; font-size: 18px; }
+.dialog input { font: inherit; color: inherit; }
+.dialog form > button { justify-self: end; }
+.error { color: var(--bad); }
+@media (min-width: 961px) {
+  .stage { grid-template-columns: minmax(0, 1fr) 240px; align-items: start; }
+  .stage:has(.mixer[hidden]) { grid-template-columns: minmax(0, 1fr); }
+}
