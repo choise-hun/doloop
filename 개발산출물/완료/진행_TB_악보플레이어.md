@@ -2,7 +2,7 @@
 
 ## 목표와 입력
 
-- **현재 단계** TB-2-2 구현·표적 검수 및 TB2-M 조건부 통과(2026-11-26 사용자 승인, 실기기 메모리 R1 이월). `feat/TB-2-tab-player` 커밋·push·main PR 생성 및 CI 확인 진행. [PR #70](https://github.com/choise-hun/doloop/pull/70) 머지 완료. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
+- **현재 단계** **TB 마감 완료 (2026-11-26)** — TB-2 [PR #71](https://github.com/choise-hun/doloop/pull/71) `main` 머지(`65a3657`) 및 `완료/` 이동 완료. TB-0은 **조건부 통과**(2026-11-25 사용자 승인, [결과/TB-0](../결과/TB-0_스파이크.md)), TB-1은 [PR #70](https://github.com/choise-hun/doloop/pull/70) 머지 완료([결과/TB-1](../결과/TB-1.md)), TB-2는 TB2-M 조건부 통과 후 [PR #71](https://github.com/choise-hun/doloop/pull/71) 머지 완료([결과/TB-2](../결과/TB-2.md)). 남은 출시 전 관문(R1·R3·R4·운영 `takes` 버킷 10MB 확인)은 [상용 서비스 계획 §4](../../계획/상용_서비스_계획.md#4-유지보수외부-확인-대기-목록)에서 관리한다.
 - **근거** [기능확장.md](../기능확장.md) §2.3·§5·§6 및 [TB-0 스파이크 명세](명세/TB-0_스파이크명세.md).
 - **승인 범위**
   - 2026-11-26 TB-2-2 조건부 통과 및 Git 게시: 자원 카운터 0·JS Heap 안정·톱니파 자연 회수를 근거로 TB2-M 조건부 통과(실기기 메모리 R1 이월)를 문서에 기록하고, `feat/TB-2-tab-player` 커밋·push·main PR 생성 및 CI 확인까지 사용자 승인. PR 머지·운영 배포는 제외한다.
@@ -38,7 +38,7 @@
 |---|---|---|---|---|
 | TB-0 스파이크 | 명세/TB-0 → 결과/TB-0 | 사용자 승인 조건부 통과(R1~R4 이월) | **완료** 2026-11-25 · PR [#68](https://github.com/choise-hun/doloop/pull/68) | — |
 | TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → [결과/TB-1](결과/TB-1.md) | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **4단계 통과 / 3-P 수정 반영** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) 머지 · 구현 PR [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs`) · 최신 CI는 [Checks](https://github.com/choise-hun/doloop/pull/70/checks) 참조 | high |
-| TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → [HTML 시안](명세/TB-2_시안.html)·[명세 초안](명세/TB-2_구현명세.md) → [결과/TB-2](결과/TB-2.md) | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환(TB-2 명세 §7) 통과 | **TB-2-2 조건부 통과(R1 이월) · PR/CI 확인 중** (`feat/TB-2-tab-player`) | high |
+| TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → [HTML 시안](../명세/TB-2_시안.html)·[명세 초안](../명세/TB-2_구현명세.md) → [결과/TB-2](../결과/TB-2.md) | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환(TB-2 명세 §7) 통과 | **완료** 2026-11-26 · PR [#71](https://github.com/choise-hun/doloop/pull/71) 머지(`65a3657`) — 조건부 통과(R1 이월) | high |
 | TB 출시 전 관문 | 결과/TB-0 §0 R1·R3·R4 | 실기기 확인, SF2 근거·교체, 포맷 4종 검증 | 대기(`상용_서비스_계획.md` §4) | — |
 
 ## TB-0 관문 표
@@ -87,9 +87,9 @@
 
 ## 다음 행동
 
-1. D1–D3 A안과 TB-2-2 구현이 승인됐다. 이번 회차 검수와 후속 범위는 아래 TB-2-2 기록에 둔다.
-2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다. `allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됐다.
-3. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
+1. TB-0(#68)·TB-1(#69/#70)·TB-2(#71 `65a3657`) 모두 `main` 머지 및 `완료/` 이동까지 마감됐다.
+2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다(`allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됨).
+3. 출시 전 관문 R1·R3·R4 및 운영 `takes` 버킷 10MB 확인은 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
 
 ## TB-1 주니어 4단계 기록 (2026-11-25 Mac)
 
