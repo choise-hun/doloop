@@ -107,7 +107,9 @@ data class NoteSummaryDto(
     val model: String,
     val collectProgressions: Boolean,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    /** V16(NT-1): 노트북. null = 기본 노트북 */
+    val folderId: String? = null
 )
 
 @Serializable
@@ -133,7 +135,9 @@ data class NoteDetailDto(
     val model: String,
     val collectProgressions: Boolean,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    /** V16(NT-1): 노트북. null = 기본 노트북 */
+    val folderId: String? = null
 )
 
 @Serializable
@@ -674,6 +678,25 @@ class NoteService(
     }
 
     /**
+     * NT-1 `PUT /notes/{noteId}/folder`: AI 영상 노트를 노트북에 넣거나(folderId) 기본 노트북으로 뺀다(null).
+     * 남의 노트·남의 노트북은 404. 새 경로라 outbox(폐기 기능) 호출은 넣지 않는다
+     */
+    suspend fun setFolder(userId: UUID, noteId: UUID, folderId: UUID?): NoteDetailDto {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            if (folderId != null) requireOwnFolder(userId, folderId)
+            val updated = NotesTable.update({ (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }) {
+                it[NotesTable.folderId] = folderId
+            }
+            if (updated == 0) throw NotFoundException("학습 노트를 찾을 수 없습니다.")
+            val row = NotesTable.selectAll()
+                .where { (NotesTable.id eq noteId) and (NotesTable.userId eq userId) }
+                .single()
+            rowToNoteDetailDto(row)
+        }
+    }
+
+    /**
      * "코드 진행 수집에 넣기" 토글 (설계 §2-2·§3-6). 켜면 노트의 화성 진행마다 행 생성(이미 있는 순번은 건너뜀),
      * 끄면 그 노트에서 온 행을 모두 지운다(사람이 고친 행 포함). 토글 값은 진행이 0개여도 저장한다
      */
@@ -745,7 +768,8 @@ class NoteService(
         model = row[NotesTable.model],
         collectProgressions = row[NotesTable.collectProgressions],
         createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
-        updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
+        updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt]),
+        folderId = row[NotesTable.folderId]?.toString()
     )
 
     private fun rowToNoteDetailDto(row: ResultRow): NoteDetailDto {
@@ -768,7 +792,8 @@ class NoteService(
             model = row[NotesTable.model],
             collectProgressions = row[NotesTable.collectProgressions],
             createdAt = formatTimestampNotNull(row[NotesTable.createdAt]),
-            updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt])
+            updatedAt = formatTimestampNotNull(row[NotesTable.updatedAt]),
+            folderId = row[NotesTable.folderId]?.toString()
         )
     }
 }

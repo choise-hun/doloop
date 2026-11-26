@@ -33,8 +33,16 @@ data class TierLimits(
     val monthlyCredits: Int = 0,
     /** TB-1 T1: TAB 곡 수. null = 제한 없음(곡 한도 안) */
     val tabSongs: Int? = null,
-    /** TB-1 T2: TAB 파일 총량(bytes). null = 제한 없음 */
-    val tabBytes: Long? = null
+    /** TB-1 T2: TAB 파일 총량(bytes). null = 제한 없음. NT-1부터는 [fileBytes]와 같은 값(옛 클라이언트 표시용) */
+    val tabBytes: Long? = null,
+    /** NT-1 N2·N3: 노트북 수. 0 = 만들 수 없음(무료), null = 제한 없음 */
+    val noteFolders: Int? = null,
+    /** NT-1 N4: 자료·블록 노트 수(AI 노트 제외). null = 제한 없음 */
+    val noteDocs: Int? = null,
+    /** NT-1: 자료 노트·첨부 업로드 가능 여부 */
+    val noteFiles: Boolean = true,
+    /** NT-1 N5: 파일 총량 = TAB 파일 + 노트 첨부(Supabase). null = 제한 없음 */
+    val fileBytes: Long? = null
 ) {
     companion object {
         const val FREE = "free"
@@ -44,14 +52,17 @@ data class TierLimits(
 
         private val BY_TIER = mapOf(
             FREE to TierLimits(100, 5, 5_242_880L, 2, 120, drive = false, ai = false, communityWrite = false,
-                tabSongs = 5, tabBytes = 20_971_520L),
+                tabSongs = 5, tabBytes = 20_971_520L,
+                noteFolders = 0, noteDocs = 30, noteFiles = false, fileBytes = 20_971_520L),
             PRO to TierLimits(1000, 15, 104_857_600L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 170,
-                tabSongs = null, tabBytes = 524_288_000L),
+                tabSongs = null, tabBytes = 524_288_000L,
+                noteFolders = 15, noteDocs = 1000, noteFiles = true, fileBytes = 524_288_000L),
             PRO_PLUS to TierLimits(2000, 30, 209_715_200L, null, null, drive = true, ai = true, communityWrite = true, monthlyCredits = 350,
-                tabSongs = null, tabBytes = 1_073_741_824L)
+                tabSongs = null, tabBytes = 1_073_741_824L,
+                noteFolders = 30, noteDocs = 2000, noteFiles = true, fileBytes = 1_073_741_824L)
         )
 
-        /** 관리자(role == "owner")용 한도: 크레딧만 기존 티어 정책 유지, 곡·분류·녹음·Drive·AI·커뮤니티 제약 전면 해제 */
+        /** 관리자(role == "owner")용 한도: 크레딧만 기존 티어 정책 유지, 곡·분류·녹음·Drive·AI·커뮤니티·TAB·노트(NT-1) 제약 전면 해제 */
         fun ownerLimits(tier: String): TierLimits = TierLimits(
             songs = null,
             categories = null,
@@ -61,7 +72,11 @@ data class TierLimits(
             drive = true,
             ai = true,
             communityWrite = true,
-            monthlyCredits = of(tier).monthlyCredits
+            monthlyCredits = of(tier).monthlyCredits,
+            noteFolders = null,
+            noteDocs = null,
+            noteFiles = true,
+            fileBytes = null
         )
 
         fun of(tier: String): TierLimits = BY_TIER[tier] ?: BY_TIER.getValue(FREE)
@@ -88,7 +103,11 @@ data class TierLimitsDto(
     val ai: Boolean,
     val communityWrite: Boolean,
     val tabSongs: Int? = null,
-    val tabBytes: Long? = null
+    val tabBytes: Long? = null,
+    val noteFolders: Int? = null,
+    val noteDocs: Int? = null,
+    val noteFiles: Boolean = true,
+    val fileBytes: Long? = null
 )
 
 @Serializable
@@ -98,13 +117,20 @@ data class TierUsageDto(
     val takeBytes: Long,
     val takeSongs: Long,
     val tabSongs: Long = 0,
-    val tabBytes: Long = 0
+    val tabBytes: Long = 0,
+    val noteFolders: Long = 0,
+    val noteDocs: Long = 0,
+    val noteFileBytes: Long = 0,
+    val fileBytes: Long = 0
 )
 
 @Serializable
 data class CreditsDto(val monthly: Int, val purchased: Int)
 
-fun TierLimits.toDto() = TierLimitsDto(songs, categories, takeBytes, takeSongs, takeDurationSec, drive, ai, communityWrite, tabSongs, tabBytes)
+fun TierLimits.toDto() = TierLimitsDto(
+    songs, categories, takeBytes, takeSongs, takeDurationSec, drive, ai, communityWrite, tabSongs, tabBytes,
+    noteFolders, noteDocs, noteFiles, fileBytes
+)
 
 /**
  * 실제 티어 = 기한 안의 tier_override, 아니면 billing_tier (§1-1). 서버 코드는 이 함수로만 계산한다
@@ -164,6 +190,25 @@ fun Transaction.tabBytesUsed(userId: UUID): Long {
         .where { (SongsTable.userId eq userId) and (SongsTable.mediaType eq SongsTable.MEDIA_TAB) }
         .singleOrNull()?.get(sumExpr) ?: 0L
 }
+
+/** NT-1: 노트북 수 */
+fun Transaction.noteFolderCount(userId: UUID): Long =
+    NoteFoldersTable.selectAll().where { NoteFoldersTable.userId eq userId }.count()
+
+/** NT-1: 자료·블록 노트 수(AI 노트 제외) */
+fun Transaction.noteDocCount(userId: UUID): Long =
+    NoteDocsTable.selectAll().where { NoteDocsTable.userId eq userId }.count()
+
+/** NT-1: 노트 첨부 중 서버(Supabase)에 둔 파일 총량. Drive 참조는 세지 않는다 */
+fun Transaction.noteFileBytesUsed(userId: UUID): Long {
+    val sumExpr = NoteFilesTable.sizeBytes.sum()
+    return NoteFilesTable.select(sumExpr)
+        .where { (NoteFilesTable.userId eq userId) and (NoteFilesTable.storage eq "supabase") }
+        .singleOrNull()?.get(sumExpr) ?: 0L
+}
+
+/** NT-1 N5: 파일 총량 = TAB 파일 + 노트 첨부(Supabase) */
+fun Transaction.fileBytesUsed(userId: UUID): Long = tabBytesUsed(userId) + noteFileBytesUsed(userId)
 
 fun Transaction.categoryCount(userId: UUID): Long =
     CategoriesTable.selectAll().where { CategoriesTable.userId eq userId }.count()
@@ -253,10 +298,13 @@ fun Transaction.requireTabSlots(ctx: TierContext) {
     }
 }
 
-/** TB-1 T2: TAB 파일 [adding]바이트를 더 넣을 수 있는지. 넘으면 413 `TAB_QUOTA_EXCEEDED` */
+/**
+ * TB-1 T2: TAB 파일 [adding]바이트를 더 넣을 수 있는지. 넘으면 413 `TAB_QUOTA_EXCEEDED`.
+ * NT-1 N5부터 총량은 노트 첨부와 합산한 파일 풀이다(코드·상태·detail 모양은 그대로)
+ */
 fun Transaction.requireTabBytes(ctx: TierContext, adding: Long) {
-    val limit = ctx.limits.tabBytes ?: return
-    val used = tabBytesUsed(ctx.userId)
+    val limit = ctx.limits.fileBytes ?: return
+    val used = fileBytesUsed(ctx.userId)
     if (used + adding > limit) {
         throw ApiException(
             HttpStatusCode.PayloadTooLarge,
@@ -268,6 +316,64 @@ fun Transaction.requireTabBytes(ctx: TierContext, adding: Long) {
                 put("tier", ctx.tier)
                 put("nextTier", TierLimits.nextTier(ctx.tier))
                 put("nextLimit", nextLimitOf(ctx.tier) { it.tabBytes })
+            }
+        )
+    }
+}
+
+/** NT-1: 노트북을 하나 더 만들 수 있는지. 무료(0) 403 `TIER_UPGRADE_REQUIRED`, 넘으면 403 `NOTE_FOLDER_LIMIT_EXCEEDED` */
+fun Transaction.requireNoteFolderSlot(ctx: TierContext) {
+    val limit = ctx.limits.noteFolders ?: return
+    if (limit == 0) {
+        throw tierUpgradeRequired("note_folders", ctx.tier, "노트북은 유료 플랜에서 만들 수 있습니다.")
+    }
+    val used = noteFolderCount(ctx.userId)
+    if (used + 1 > limit) {
+        throw ApiException(
+            HttpStatusCode.Forbidden,
+            "NOTE_FOLDER_LIMIT_EXCEEDED",
+            "노트북은 ${limit}개까지 만들 수 있습니다.",
+            detail = limitDetail(used, limit, ctx.tier, nextLimitOf(ctx.tier) { it.noteFolders })
+        )
+    }
+}
+
+/** NT-1: 자료·블록 노트를 하나 더 만들 수 있는지. 넘으면 403 `NOTE_DOC_LIMIT_EXCEEDED` */
+fun Transaction.requireNoteDocSlot(ctx: TierContext) {
+    val limit = ctx.limits.noteDocs ?: return
+    val used = noteDocCount(ctx.userId)
+    if (used + 1 > limit) {
+        throw ApiException(
+            HttpStatusCode.Forbidden,
+            "NOTE_DOC_LIMIT_EXCEEDED",
+            "노트는 ${limit}개까지 만들 수 있습니다.",
+            detail = limitDetail(used, limit, ctx.tier, nextLimitOf(ctx.tier) { it.noteDocs })
+        )
+    }
+}
+
+/** NT-1: 자료 노트·첨부 업로드는 유료. 무료 403 `TIER_UPGRADE_REQUIRED`(feature `note_files`) */
+fun requireNoteFiles(ctx: TierContext) {
+    if (!ctx.limits.noteFiles) {
+        throw tierUpgradeRequired("note_files", ctx.tier, "PDF·이미지 자료 노트는 유료 플랜에서 쓸 수 있습니다.")
+    }
+}
+
+/** NT-1 N5: 노트 첨부 [adding]바이트를 더 넣을 수 있는지(TAB과 합산). 넘으면 413 `FILE_QUOTA_EXCEEDED` */
+fun Transaction.requireFileBytes(ctx: TierContext, adding: Long) {
+    val limit = ctx.limits.fileBytes ?: return
+    val used = fileBytesUsed(ctx.userId)
+    if (used + adding > limit) {
+        throw ApiException(
+            HttpStatusCode.PayloadTooLarge,
+            "FILE_QUOTA_EXCEEDED",
+            "파일 저장 한도(${limit / 1_048_576}MB)를 넘습니다. 쓰지 않는 파일을 지운 뒤 다시 올려 주세요.",
+            detail = buildJsonObject {
+                put("limitBytes", limit)
+                put("usedBytes", used)
+                put("tier", ctx.tier)
+                put("nextTier", TierLimits.nextTier(ctx.tier))
+                put("nextLimit", nextLimitOf(ctx.tier) { it.fileBytes })
             }
         )
     }
