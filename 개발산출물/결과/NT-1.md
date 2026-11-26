@@ -1,8 +1,8 @@
 # NT-1 결과 — 학습 노트 워크스페이스 서버 (V16 · 노트북 · 자료/블록 노트 · 첨부 · 주석 · 합산 파일 한도)
 
-> 작업: NT-1 (시니어 직접 구현 → 주니어 4단계 전체 회귀·PR·CI·결과 정리) | 브랜치: `feat/NT-1-note-workspace` | PR: 생성 예정
+> 작업: NT-1 (시니어 직접 구현 → 주니어 4단계 전체 회귀·PR·CI·결과 정리) | 브랜치: `feat/NT-1-note-workspace` | PR: [#73](https://github.com/choise-hun/doloop/pull/73)
 > 기준 명세: [NT-1_구현명세.md](../명세/NT-1_구현명세.md) (§12·§13.1·§14) | 진행 파일: [진행_NT_학습노트.md](../진행_NT_학습노트.md)
-> 상태: **전체 Kotlin 회귀 450/450 통과 (PR 생성 및 CI 대기 중)**
+> 상태: **전체 Kotlin 회귀 450/450 통과 · PR #73 CI 6/6 통과 · Codex 리뷰 이상 없음 (머지 대기)**
 
 ## 1. 구현 요약 및 커밋
 
@@ -58,4 +58,7 @@ BUILD SUCCESSFUL in 50s
 
 ## 5. PR 및 CI · 리뷰 상태
 
-- PR: 생성 예정 (`feat/NT-1-note-workspace` → `main`)
+- PR: [#73](https://github.com/choise-hun/doloop/pull/73) (`feat/NT-1-note-workspace` → `main`)
+- CI (`afd4987`, `gh pr checks 73 --watch`): **6/6 성공** (`CI/Detect code changes` 5s, `CI/Test (Node 22)` 37s, `CI/Kotlin test (JDK 21)` 2m51s, `CI/Docker build & smoke test` 1m53s, `CI/E2E XSS & CSP (Playwright, spa)` 11m59s, `CI/CI ok` 4s).
+- 리뷰 코멘트: `chatgpt-codex-connector[bot]` 코드 리뷰 완료(`afd4987`, `has_any_findings: false`, `has_unresolved_findings: false`), PR 리뷰·라인 코멘트 0건.
+- 머지·운영 배포: 사용자 몫(미실행).
