@@ -191,17 +191,18 @@ test('DS24-C2 textarea.inpField 3px · 홈 #goNote 회귀 없음 (1280)', async 
   expect(await page.locator('#goNote').evaluate((el) => window.getComputedStyle(el).borderTopLeftRadius)).toBe('3px');
 });
 
-test('DS24-N1 Notes: 폼 스파인 fill2 · 필은 #submit 1개 · 태그·목록 3px (1280)', async ({ page }) => {
+// NT-2a(명세/NT-2 V2 B): 노트가 있으면 AI 상자는 접히고 대표 필은 `＋ 자료 올리기`(#noteUploadBtn) 하나 · 카드 왼쪽은 노트북 색 스파인
+test('DS24-N1 Notes: 폼 스파인 fill2 · 필은 #noteUploadBtn 1개 · 태그·목록 3px (1280)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApp(page, { ...STATES.userData, community: false });
   await page.goto('/notes.html', { waitUntil: 'load' });
   await page.locator('.note-card').first().waitFor();
   const colors = await ds24Colors(page);
   await expectSpine(page.locator('#form'), colors.fill2, colors, '#form');
-  expect(await visiblePills(page)).toEqual(['submit']);
+  expect(await visiblePills(page)).toEqual(['noteUploadBtn']);
   expect(await page.locator('#tags button').evaluateAll((els) => [...new Set(els.map((el) => window.getComputedStyle(el).borderTopLeftRadius))])).toEqual(['3px']);
   const card = await ds24Box(page.locator('.note-card').first());
-  expect(card.leftW).toBe('1px');
+  expect(card.leftW).toBe('3px');
   expect(card.radius).toBe('3px');
   expect(card.bg).toBe(colors.paper);
 });
@@ -348,7 +349,7 @@ test('DS24-D1 다크: 스파인·본체 값 (1280)', async ({ page }) => {
 
   await mockApp(page, { ...STATES.userData, community: false });
   await page.goto('/notes.html', { waitUntil: 'load' });
-  await page.locator('#form').waitFor();
+  await page.locator('#form').waitFor({ state: 'attached' }); // NT-2a: 노트가 있으면 AI 상자가 접혀 있다(계산된 색만 본다)
   await dark();
   expect(await leftC('#form')).toBe('rgb(236, 236, 228)'); // UF-1: 다크 fill2 화이트
 

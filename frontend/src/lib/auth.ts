@@ -46,6 +46,12 @@ export interface TierUsageDto {
   categories: number;
   takeBytes: number;
   takeSongs: number;
+  // NT-2a: NT-1 /me 사용량(TierService). 옛 서버 응답에도 깨지지 않게 모두 선택 칸
+  noteFolders?: number;
+  noteDocs?: number;
+  noteFileBytes?: number;
+  /** TAB 파일 + 노트 첨부(Supabase) 합산(NT-1 N5) */
+  fileBytes?: number;
 }
 
 export interface TierLimitsDto {
@@ -57,6 +63,11 @@ export interface TierLimitsDto {
   drive: boolean;
   ai: boolean;
   communityWrite: boolean;
+  // NT-2a: NT-1 노트 한도. null = 제한 없음(관리자), 0 = 만들 수 없음(무료 노트북)
+  noteFolders?: number | null;
+  noteDocs?: number | null;
+  noteFiles?: boolean;
+  fileBytes?: number | null;
 }
 
 /** AI 영상 분석(노트·코드 진행)을 요청할 수 있는 계정인지 — 서버 /me limits.ai(무료 false, 유료 → 무료 유예 중은 true — M1-3e) */

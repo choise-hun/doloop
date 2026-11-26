@@ -1,0 +1,569 @@
+/* NT-2a 학습 노트 워크스페이스(노트북 목록 · 노트 카드 · 자료 올리기 · 노트북 대화상자). 명세/NT-2_구현명세.md §4·§6 */
+
+/* 노트북 색 키 → 스파인 색(§4.1, 새 토큰 없음 — 기존 --section-spine을 요소 안에서 덮는다) */
+[data-fold="orange"] { --section-spine: var(--fill1); }
+[data-fold="slate"] { --section-spine: var(--fill2); }
+[data-fold="sage"] { --section-spine: var(--fill3); }
+[data-fold="none"] { --section-spine: var(--seam-hairline); }
+
+.meta {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.textBtn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0 6px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.textBtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.textBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- 노트북 목록(961 이상 왼쪽 · 960 이하는 칩 줄) ---- */
+.side {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: var(--paper);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  box-shadow: var(--card-shadow);
+  min-width: 0;
+}
+
+.sideTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sideRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sideItem {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: var(--spine-width) solid transparent;
+  border-radius: var(--radius-block);
+  cursor: pointer;
+}
+
+.sideItem span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sideItem[aria-pressed="true"] {
+  background: var(--surface2);
+  border-left-color: var(--section-spine);
+  font-weight: 700;
+}
+
+.sideItem[data-fold="none"][aria-pressed="true"],
+.chip[data-fold="none"][aria-pressed="true"] {
+  border-left-color: var(--ink);
+}
+
+.sideItem:hover:not([aria-pressed="true"]) {
+  background: var(--cream);
+}
+
+.orderBtn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  min-width: 28px;
+  min-height: 44px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.orderBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.quota {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px 4px;
+  margin-top: 6px;
+  border-top: 1px solid var(--seam-hairline);
+}
+
+.bar {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: var(--radius-block);
+  overflow: hidden;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+
+/* ---- 노트북 칩 줄(960 이하 위) ---- */
+.chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  min-width: 0;
+}
+
+.chip {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  flex: none;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 12px;
+  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-left: var(--spine-width) solid var(--section-spine);
+  border-radius: var(--radius-block);
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--surface2);
+  border-color: var(--ink);
+  border-left-color: var(--section-spine);
+  font-weight: 700;
+}
+
+@media (min-width: 961px) {
+  .side {
+    display: flex;
+  }
+
+  .chips {
+    display: none;
+  }
+}
+
+/* ---- 노트 카드 ---- */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid var(--seam-hairline);
+  border-left: var(--spine-width) solid var(--section-spine);
+  border-radius: var(--radius-block);
+  box-shadow: var(--card-shadow);
+}
+
+.thumb {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--seam-hairline);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 24px;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--media-bg);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding-top: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.title a:hover {
+  text-decoration: underline;
+}
+
+/* 카드 전체가 링크(제목 링크를 카드 위로 늘린다). 보조 행동은 그 위에 둔다 */
+.title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.menuBtn,
+.actions,
+.menu {
+  position: relative;
+  z-index: 1;
+}
+
+.menuBtn {
+  flex: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tag {
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: center;
+  margin-top: auto;
+}
+
+.actions a {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.actions a:hover {
+  text-decoration: underline;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--cream);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+}
+
+.menu label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.menu select,
+.menu input,
+.dialog select,
+.dialog input[type="text"] {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  min-height: 44px;
+  padding: 0 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.menuActs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 대화상자(자료 올리기 · 노트북 · PRO 안내) ---- */
+.dialog {
+  width: min(calc(100% - 32px), 520px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--seam-hairline);
+  border-radius: var(--radius-block);
+  padding: 18px;
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialogHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialogHead h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.dialog label,
+.dialog fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.dialog fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-block);
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.dialog legend {
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px;
+  text-align: center;
+  background: var(--cream);
+  border: 1px dashed var(--ink);
+  border-radius: var(--radius-block);
+}
+
+.drop[data-over="true"] {
+  background: var(--surface2);
+}
+
+.fileList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fileList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.fileList li > span:first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dialog .radio {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 400;
+  min-height: 44px;
+  padding-top: 6px;
+}
+
+.dialog .radio input {
+  margin-top: 4px;
+}
+
+.dialog .radio b {
+  font-weight: 700;
+}
+
+.dialog .radio a {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.dialogActs {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dialogActs button {
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.busyBar {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: var(--radius-block);
+  overflow: hidden;
+}
+
+.busyBar > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--ink);
+  opacity: 0.35;
+}
+
+.colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.colorOpt {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  min-height: 44px;
+  padding: 0 12px;
+  background: var(--bg);
+  border: 1px solid var(--seam-hairline);
+  border-left: var(--spine-width) solid var(--section-spine);
+  border-radius: var(--radius-block);
+  cursor: pointer;
+}
+
+.colorOpt[aria-pressed="true"] {
+  border-color: var(--ink);
+  border-left-color: var(--section-spine);
+  font-weight: 700;
+}
+
+.dialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dialog p a {
+  color: var(--ink);
+  font-weight: 700;
+}
