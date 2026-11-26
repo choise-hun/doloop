@@ -9,7 +9,8 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const loadBuilder = () => import(path.join(ROOT, 'scripts/build-app-web.mjs'));
+const { pathToFileURL } = require('node:url');
+const loadBuilder = () => import(pathToFileURL(path.join(ROOT, 'scripts/build-app-web.mjs')).href);
 
 const CSP_INDEX = '<!doctype html><html><head>'
   + '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; frame-src https://www.youtube.com https://accounts.google.com; connect-src \'self\'; object-src \'none\'">'

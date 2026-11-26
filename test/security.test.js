@@ -12,11 +12,11 @@ const ROOT = path.join(__dirname, '..');
 // ================= 정책 값 =================
 
 // 모든 public/*.html의 CSP meta 원문. step마다 docs/03 2.3 표대로 늘린다(R2 결과 7.2 = X1 시점 원문)
-const CSP = [
+const SPA_CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client",
-  "style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw=' 'sha256-88QphsXJQwxKP9xXR175ZSMzpaq6Swzj9u3QQ+G2Wig='",
-  'font-src https://fonts.gstatic.com',
+  "style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw=' 'sha256-88QphsXJQwxKP9xXR175ZSMzpaq6Swzj9u3QQ+G2Wig=' 'sha256-EIR5s3Qp1PxPxW4Koopu9nVN+I2chNMT0ImH3VG/s+c=' 'sha256-ago6aunBhfAMrD80tguQXUt95n6srkO3pzX2dUHs0gs='",
+  "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co",
   "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://www.googleapis.com",
@@ -24,8 +24,13 @@ const CSP = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",
-  "worker-src 'none'",
+  "worker-src 'self'",
 ].join('; ');
+
+const EMBED_CSP = SPA_CSP
+  .replace(" 'sha256-EIR5s3Qp1PxPxW4Koopu9nVN+I2chNMT0ImH3VG/s+c=' 'sha256-ago6aunBhfAMrD80tguQXUt95n6srkO3pzX2dUHs0gs='", '')
+  .replace("font-src 'self' ", 'font-src ')
+  .replace("worker-src 'self'", "worker-src 'none'");
 
 // SRI를 걸 수 없는 외부 주소(제공자가 내용을 고정하지 않음). CSP에서 경로로만 허용한다 (docs/03 2.2)
 const SRI_EXEMPT_SCRIPT = ['https://www.youtube.com/iframe_api', 'https://accounts.google.com/gsi/client'];
@@ -325,7 +330,7 @@ function scanHtml(f, rep) {
   const metas = [...s.matchAll(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"\s*\/?>/gi)];
   if (metas.length !== 1) rep('a', 1, 'CSP meta가 ' + metas.length + '개');
   else {
-    if (metas[0][1] !== CSP) rep('a', lineOf(s, metas[0].index), 'CSP 원문과 다름');
+    if (metas[0][1] !== (f.name === 'public/player-embed.html' ? EMBED_CSP : SPA_CSP)) rep('a', lineOf(s, metas[0].index), 'CSP 원문과 다름');
     const firstRes = Math.min(...['<link', '<script', '<style'].map((x) => { const i = s.indexOf(x); return i < 0 ? Infinity : i; }));
     if (metas[0].index > firstRes) rep('a', lineOf(s, metas[0].index), 'CSP meta가 link/script보다 뒤에 있음');
   }
@@ -573,7 +578,7 @@ test('허용 목록에 안 쓰이는 항목이 없다 (지운 코드의 허용 �
 });
 
 test('CSP 원문: 스크립트·스타일에 unsafe-* / 와일드카드 없음, object·base는 none', () => {
-  const d = Object.fromEntries(CSP.split(';').map((x) => x.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+  const d = Object.fromEntries(SPA_CSP.split(';').map((x) => x.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
   for (const k of ['script-src', 'style-src', 'default-src']) {
     for (const bad of ["'unsafe-inline'", "'unsafe-eval'", '*', 'https:', 'http:', 'data:', 'blob:']) assert.ok(!d[k].includes(bad), k + ' ' + bad);
   }

@@ -6,6 +6,7 @@ import { t, getLang, type LocaleCode } from './i18n.mts';
 export interface PracticeSessionCardModel {
   sessionId: string;
   videoId: string;
+  tabSongId?: string;
   songTitle?: string | null;
   songArtist?: string | null;
   date: string;
@@ -125,10 +126,11 @@ export function buildEpisodePracticeUrl(
   videoId: string,
   a?: number | null,
   b?: number | null,
-  rate?: number | null
+  rate?: number | null,
+  tabSongId?: string,
 ): string {
   const vid = encodeURIComponent(String(videoId || '').trim());
-  let href = `practice.html?v=${vid}`;
+  let href = tabSongId ? `practice.html?song=${encodeURIComponent(tabSongId)}` : `practice.html?v=${vid}`;
   if (typeof a === 'number' && Number.isFinite(a) && a >= 0) {
     href += `&a=${a}`;
   }
@@ -211,6 +213,7 @@ export function fromSessionWithSong(s: SessionWithSongDto): PracticeSessionCardM
   return {
     sessionId: s.id,
     videoId: s.videoId || '',
+    ...(s.mediaType === 'tab' ? { tabSongId: s.songId } : {}),
     songTitle: s.songTitle,
     songArtist: s.songArtist,
     date: s.date,
@@ -229,13 +232,14 @@ export function fromSessionWithSong(s: SessionWithSongDto): PracticeSessionCardM
 /** SongSessionDto(곡 상세/플레이어 세션) -> PracticeSessionCardModel 어댑터 */
 export function fromSongSession(
   s: SongSessionDto,
-  song?: { videoId?: string; title?: string; artist?: string } | null,
+  song?: { id?: string; mediaType?: 'tab' | 'youtube'; videoId?: string | null; title?: string; artist?: string } | null,
   takes?: TakeDto[]
 ): PracticeSessionCardModel {
   const filteredTakes = Array.isArray(takes) ? takes.filter((t) => t.sessionId === s.id) : [];
   return {
     sessionId: s.id,
     videoId: song?.videoId || '',
+    ...(song?.mediaType === 'tab' ? { tabSongId: song.id } : {}),
     songTitle: song?.title,
     songArtist: song?.artist,
     date: s.date,

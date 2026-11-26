@@ -276,16 +276,19 @@ export function formatRecentSongSegment(song: {
 
 /** 최근 연습 곡의 플레이어 이어하기 상대 경로를 생성한다 */
 export function buildPracticeResumeHref(song: {
-  videoId: string;
+  videoId: string | null;
+  mediaType?: 'tab' | 'youtube';
+  songId?: string;
   pos?: number | null;
   a?: number | null;
   b?: number | null;
   rate?: number | null;
 }): string {
-  const vid = videoIdFrom(song.videoId) || '';
-  if (!vid) return 'practice.html';
+  const vid = videoIdFrom(song.videoId || '');
   const params = new URLSearchParams();
-  params.set('v', vid);
+  if (song.mediaType === 'tab' && song.songId) params.set('song', song.songId);
+  else if (vid) params.set('v', vid);
+  else return 'practice.html';
   if (typeof song.pos === 'number' && Number.isFinite(song.pos) && song.pos > 0) {
     params.set('t', String(Math.floor(song.pos)));
   }

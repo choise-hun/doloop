@@ -18,6 +18,12 @@ const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.otf': 'font/otf',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -236,7 +242,7 @@ function serveStatic(req, res, pathname) {
   if (rel === '/' || rel === '') rel = '/index.html';
   let root = PUBLIC_DIR;
   if (SPA_PAGES.has(rel)) { root = DIST_DIR; rel = '/index.html'; }
-  else if (rel.startsWith('/assets/')) root = DIST_DIR;
+  else if (rel.startsWith('/assets/') || rel.startsWith('/at/')) root = DIST_DIR;
   const file = path.normalize(path.join(root, rel));
   if (!file.startsWith(root + path.sep)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
   fs.stat(file, (err, st) => {

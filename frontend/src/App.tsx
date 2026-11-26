@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { communityEnabled } from './lib/features';
 import { onLangChange } from './lib/i18n.mts';
+import { auth } from './lib/auth';
+import { clearOtherTabAccounts } from './lib/tabFiles';
 import { HomePage } from './pages/HomePage';
 import { ChordsPage } from './pages/ChordsPage';
 import { PracticePage } from './pages/PracticePage';
@@ -28,6 +30,22 @@ const queryClient = new QueryClient({
 export function App(): React.ReactElement {
   const [, setLangTick] = useState(0);
   useEffect(() => onLangChange(() => setLangTick((n) => n + 1)), []);
+  useEffect(() => {
+    let stopped = false;
+    let unsubscribe: (() => void) | undefined;
+    let previous: string | null | undefined;
+    const subscribe = () => {
+      if (stopped) return;
+      unsubscribe = auth.onChange(({ user }) => {
+        const uid = user?.id ?? null;
+        if (previous === uid) return;
+        previous = uid;
+        void clearOtherTabAccounts(uid);
+      });
+    };
+    void auth.getAccessToken().then(subscribe, subscribe);
+    return () => { stopped = true; unsubscribe?.(); };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

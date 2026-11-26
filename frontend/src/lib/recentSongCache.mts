@@ -6,15 +6,15 @@
 export const RECENT_SONG_KEY = 'ulp:recentSong';
 const AUTH_KEY = 'ulp:auth';
 
-export interface RecentSongCache {
-  videoId: string;
+type RecentMedia = { videoId: string; mediaType?: 'youtube' } | { videoId: null; mediaType: 'tab'; songId: string };
+export type RecentSongCache = RecentMedia & {
   title: string;
   a: number | null;
   b: number | null;
   pos: number | null;
   rate: number | null;
   memo: string;
-}
+};
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -48,9 +48,15 @@ export function readRecentSongCache(
     const parsed = JSON.parse(storage?.getItem(RECENT_SONG_KEY) || 'null');
     if (!parsed || parsed.uid !== uid) return null;
     const s = parsed.song;
-    if (!s || typeof s.videoId !== 'string' || !s.videoId || typeof s.title !== 'string') return null;
+    if (!s || typeof s.title !== 'string') return null;
+    let media: RecentMedia;
+    if (s.mediaType === 'tab' && typeof s.songId === 'string' && s.songId) {
+      media = { mediaType: 'tab', songId: s.songId, videoId: null };
+    } else if ((s.mediaType === undefined || s.mediaType === 'youtube') && typeof s.videoId === 'string' && s.videoId) {
+      media = { videoId: s.videoId };
+    } else return null;
     return {
-      videoId: s.videoId,
+      ...media,
       title: s.title,
       a: numOrNull(s.a),
       b: numOrNull(s.b),

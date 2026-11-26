@@ -33,6 +33,7 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /workspace/build/install/ulevelp-server/lib ./lib
 COPY public ./public
 COPY --from=frontend-build /workspace/dist/assets ./public/assets
+COPY --from=frontend-build /workspace/dist/at ./public/at
 COPY --from=frontend-build /workspace/dist/index.html ./public/spa.html
 
 USER app

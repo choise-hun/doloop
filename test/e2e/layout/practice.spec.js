@@ -1181,7 +1181,7 @@ for (const width of [390, 768, 1150, 1280]) {
       expect(size.minHeight).toBeGreaterThanOrEqual(44);
     }
     const box = await input.boundingBox();
-    const open = await page.locator('#urlForm button').boundingBox();
+    const open = await page.locator('#urlForm button[type="submit"]').boundingBox();
     expect(box.x + box.width).toBeLessThanOrEqual(open.x);
     expect(open.x + open.width).toBeLessThanOrEqual(width);
     if (process.env.LAYOUT_SHOTS) {
@@ -1193,7 +1193,7 @@ for (const width of [390, 768, 1150, 1280]) {
     await expect(drawerInput).toBeVisible();
     await expect(drawerInput).toHaveCSS('font-size', '16px');
     const drawer = await drawerInput.boundingBox();
-    const drawerOpen = await page.locator('#urlForm2 button').boundingBox();
+    const drawerOpen = await page.locator('#urlForm2 button[type="submit"]').boundingBox();
     expect(drawer.x + drawer.width).toBeLessThanOrEqual(drawerOpen.x);
     expect(drawerOpen.x + drawerOpen.width).toBeLessThanOrEqual(width);
     if (process.env.LAYOUT_SHOTS) {
@@ -1551,8 +1551,8 @@ test('SL2-02: 키보드 ↓ 한 칸 이동 → PUT 본문 = 새 순서, 응답 �
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#folderEditBtn').click();
   await handleOf(page, S1).focus();
-  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order') && r.method() === 'PUT');
-  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  const reqP = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/v1/songs/order' && r.method() === 'PUT');
+  const resP = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/songs/order');
   await page.keyboard.press('ArrowDown');
   expect((await reqP).postDataJSON()).toEqual({ ids: [S2, S1, S3] });
   await resP;
@@ -1578,7 +1578,7 @@ test('SL2-03: 포인터로 끌어 맨 위로 옮기면 저장', async ({ page })
   const fx = from.x + from.width / 2;
   const fy = from.y + from.height / 2;
   expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.dataset?.dragId, [fx, fy])).toBe(S2);
-  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order') && r.method() === 'PUT');
+  const reqP = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/v1/songs/order' && r.method() === 'PUT');
   await page.mouse.move(fx, fy);
   await page.mouse.down();
   await expect(page.locator(`#folderList li[data-song-id="${S2}"]`)).toHaveAttribute('data-dragging', 'true');
@@ -1605,7 +1605,7 @@ test('SL2-03b: 4px 미만으로 움직이고 놓으면 저장하지 않는다', 
   await expect(page.locator('#folderList li[data-dragging]')).toHaveCount(0);
   // 다음 키보드 저장이 첫 요청이어야 한다(앞의 놓기는 요청을 만들지 않음)
   await handleOf(page, S1).focus();
-  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order'));
+  const reqP = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/v1/songs/order');
   await page.keyboard.press('ArrowDown');
   await reqP;
   expect(orders).toEqual([[S2, S1, S3]]);
@@ -1620,7 +1620,7 @@ test('SL2-04: 저장 실패 500 → 원래 순서로 되돌리고 #folderOrderEr
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#folderEditBtn').click();
   await handleOf(page, S2).focus();
-  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  const resP = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/songs/order');
   await page.keyboard.press('ArrowUp');
   await resP;
   await expect(page.locator('#folderOrderErr')).toHaveText('순서 저장 실패(테스트)');
@@ -1654,7 +1654,7 @@ test('SL2-05: 저장 응답을 붙잡은 채 다른 계정으로 바뀌면 늦�
   await page.goto('/practice.html?v=jNQXAC9IVRw', { waitUntil: 'load' });
   await page.locator('#folderEditBtn').click();
   await handleOf(page, S1).focus();
-  const reqP = page.waitForRequest((r) => r.url().endsWith('/api/v1/songs/order'));
+  const reqP = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/v1/songs/order');
   await page.keyboard.press('ArrowDown');
   await reqP;
   expect(await songRowIds(page)).toEqual([S2, S1, S3]); // 낙관적 반영
@@ -1668,7 +1668,7 @@ test('SL2-05: 저장 응답을 붙잡은 채 다른 계정으로 바뀌면 늦�
   }, userBId);
   const panel = page.locator('#ppFolderPanel');
   await expect(panel).toContainText('User B Song');
-  const resP = page.waitForResponse((r) => r.url().endsWith('/api/v1/songs/order'));
+  const resP = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/songs/order');
   release();
   await resP;
   await expect(panel).toContainText('User B Song');

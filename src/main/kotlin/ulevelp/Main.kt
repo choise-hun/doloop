@@ -437,7 +437,11 @@ fun Application.module(
                 val contentType = when (ext) {
                     "html" -> ContentType.Text.Html.withCharset(Charsets.UTF_8)
                     "css" -> ContentType.Text.CSS.withCharset(Charsets.UTF_8)
-                    "js" -> ContentType.Text.JavaScript.withCharset(Charsets.UTF_8)
+                    "js", "mjs" -> ContentType.Text.JavaScript.withCharset(Charsets.UTF_8)
+                    "woff" -> ContentType("font", "woff")
+                    "woff2" -> ContentType("font", "woff2")
+                    "otf" -> ContentType("font", "otf")
+                    "eot" -> ContentType("application", "vnd.ms-fontobject")
                     "json" -> ContentType.Application.Json.withCharset(Charsets.UTF_8)
                     "svg" -> ContentType.Image.SVG
                     "png" -> ContentType.Image.PNG

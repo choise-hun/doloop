@@ -110,7 +110,7 @@ function OwnedPracticeSessionCard({
   const titleText = `${session.songTitle || t('log.noTitleSong')}${
     session.songArtist ? ' · ' + session.songArtist : ''
   }`;
-  const playHref = buildEpisodePracticeUrl(session.videoId, session.a, session.b, session.rate);
+  const playHref = buildEpisodePracticeUrl(session.videoId, session.a, session.b, session.rate, session.tabSongId);
 
   const segInfo = segText(session.a, session.b, session.rate);
   const coverage = session.coveragePct || 0;
@@ -331,7 +331,7 @@ function OwnedPracticeSessionCard({
           <SafeLink className={`ghost mini ${styles.ghostMini}`} href={playHref}>
             {t('log.btnPractice')}
           </SafeLink>
-          {communityEnabled() ? shareIcon : null}
+          {communityEnabled() && !session.tabSongId ? shareIcon : null}
         </div>
       </div>
 
@@ -446,7 +446,7 @@ function OwnedPracticeSessionCard({
       </div>
 
       {/* 8. 커뮤니티 공유 상태 / 행동 (명세 §4.2) */}
-      <div className={styles.shareSection}>
+      <div className={styles.shareSection} hidden={Boolean(session.tabSongId)}>
         <div className={styles.shareStatusRow}>
           {sharesLoading && !sharesComplete && !sharePost ? (
             <span className={styles.shareBadgeChecking}>{t('episode.share.checking')}</span>
@@ -493,7 +493,7 @@ function OwnedPracticeSessionCard({
         {actionMsg && <p className={styles.actionMsg}>{actionMsg}</p>}
       </div>
 
-      {shareDialogOpen && (
+      {shareDialogOpen && !session.tabSongId && (
         <EpisodeShareDialog
           session={session}
           existingShare={sharePost}

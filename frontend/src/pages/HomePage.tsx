@@ -391,7 +391,7 @@ export function HomePage(): React.ReactElement {
 
     // 곡 목록 조회
     apiClient.songs
-      .list()
+      .list(undefined, { includeTab: true })
       .then((list) => {
         if (reqSeqRef.current !== mySeq || activeUid !== myUid) return;
         const safeList = Array.isArray(list) ? list : [];
@@ -401,7 +401,9 @@ export function HomePage(): React.ReactElement {
         const first = safeList[0];
         const summary: RecentSongCache | null = first
           ? {
-              videoId: first.videoId,
+              ...(first.mediaType === 'tab'
+                ? { mediaType: 'tab', songId: first.id, videoId: null }
+                : { videoId: first.videoId }),
               title: first.title,
               a: first.a,
               b: first.b,
@@ -490,7 +492,9 @@ export function HomePage(): React.ReactElement {
   const recentSong: RecentSongCache | null = activeUid
     ? songs[0]
       ? {
-          videoId: songs[0].videoId,
+          ...(songs[0].mediaType === 'tab'
+            ? { mediaType: 'tab', songId: songs[0].id, videoId: null }
+            : { videoId: songs[0].videoId }),
           title: songs[0].title,
           a: songs[0].a,
           b: songs[0].b,
@@ -668,13 +672,13 @@ export function HomePage(): React.ReactElement {
                 id="recentSongThumbLink"
                 aria-label={recentSong.title}
               >
-                <img
+                {recentSong.mediaType === "tab" ? <span id="recentSongThumb">TAB</span> : <img
                   id="recentSongThumb"
                   className={styles.recentThumb}
                   data-align-group="songBody:top"
                   src={thumb(recentSong.videoId)}
                   alt=""
-                />
+                />}
               </SafeLink>
               <div className={styles.recentInfo} data-align-group="songBody:top; songText:left">
                 <SafeLink
@@ -802,7 +806,7 @@ export function HomePage(): React.ReactElement {
                       .join(' · ');
                     return (
                       <li key={s.id}>
-                        <SafeLink href={`practice.html?v=${encodeURIComponent(s.videoId)}`}>
+                        <SafeLink href={s.mediaType === 'tab' ? `practice.html?song=${encodeURIComponent(s.id)}` : `practice.html?v=${encodeURIComponent(s.videoId)}`}>
                           <span
                             className={`t ${styles.itemTitle}`}
                             data-layout-ignore="G3: 곡 목록 제목은 한 줄 말줄임(목록 줄 높이 고정)" // i18n-keep: G3 레이아웃 무시 속성(D5-3)
