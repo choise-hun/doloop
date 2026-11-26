@@ -2,9 +2,11 @@
 
 ## 목표와 입력
 
-- **현재 단계** TB-1 주니어 4단계와 시니어 3-P 수정 반영. [PR #70](https://github.com/choise-hun/doloop/pull/70)의 최신 CI 성공 및 사용자 머지 확인 뒤 TB-2를 착수한다. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
+- **현재 단계** TB-2-2 구현·표적 검수 및 TB2-M 조건부 통과(2026-11-26 사용자 승인, 실기기 메모리 R1 이월). `feat/TB-2-tab-player` 커밋·push·main PR 생성 및 CI 확인 진행. [PR #70](https://github.com/choise-hun/doloop/pull/70) 머지 완료. TB-0은 **조건부 통과**(2026-11-25 사용자 승인)다. 결과는 [결과/TB-0](결과/TB-0_스파이크.md), 재현물은 [자료/TB-0_재현물](자료/TB-0_재현물/README.md)에 있다.
 - **근거** [기능확장.md](../기능확장.md) §2.3·§5·§6 및 [TB-0 스파이크 명세](명세/TB-0_스파이크명세.md).
 - **승인 범위**
+  - 2026-11-26 TB-2-2 조건부 통과 및 Git 게시: 자원 카운터 0·JS Heap 안정·톱니파 자연 회수를 근거로 TB2-M 조건부 통과(실기기 메모리 R1 이월)를 문서에 기록하고, `feat/TB-2-tab-player` 커밋·push·main PR 생성 및 CI 확인까지 사용자 승인. PR 머지·운영 배포는 제외한다.
+  - 2026-11-26 TB-2-1. PR #70 머지 확인, 사용자 변경 보존, 로컬 main fast-forward 동기화, HTML 시안·선택지 및 상세 명세 초안 작성. 제품·테스트 구현, 빌드·테스트, Git 게시, PR 머지·운영 배포는 승인 범위 밖이다.
   - 2026-11-25 3-P: PR #70 ZIP 항목 수 P2 수정, 회귀 테스트 추가 및 `./gradlew test --tests '*Tab*'`, 결과·인수인계 갱신, `feat/TB-1-tab-songs` 커밋·push와 최신 CI 확인을 사용자 승인. 로컬 전체 회귀 반복·승인 범위 밖 계약 변경·머지·운영 배포는 제외한다.
   - 2026-11-25 보완 구현: PR #69 Codex Review P2 중 업로드 실패·취소 보상 정리와 TB1-U7을 구현하고, `./gradlew test --tests '*Tab*'` 통과 후 작업 브랜치에 push하도록 사용자 승인. 전체 회귀·PR·CI는 주니어 4단계에 인계하고, 머지·운영 배포는 하지 않는다.
   - 2026-11-25 1차: TB-0 격리 재현물 실행을 요청받았다. 제품 소스·DB 마이그레이션·main 반영은 금지였다.
@@ -36,7 +38,7 @@
 |---|---|---|---|---|
 | TB-0 스파이크 | 명세/TB-0 → 결과/TB-0 | 사용자 승인 조건부 통과(R1~R4 이월) | **완료** 2026-11-25 · PR [#68](https://github.com/choise-hun/doloop/pull/68) | — |
 | TB-1 백엔드 계약·구현 | 기능확장.md §2.3 C, 결과/TB-0 §0·§3 → [명세/TB-1](명세/TB-1_구현명세.md) → [결과/TB-1](결과/TB-1.md) | 명세 승인(T1~T7) 뒤 V15·`POST /songs/tab`·`GET /songs/{id}/tab-file`·삭제 정리·공유 제외·옛 클라이언트 보호(`include=tab`) 구현, 명세 §11 Kotlin 테스트, PR CI 통과 | **4단계 통과 / 3-P 수정 반영** 2026-11-25 · 명세 PR [#69](https://github.com/choise-hun/doloop/pull/69) 머지 · 구현 PR [#70](https://github.com/choise-hun/doloop/pull/70) (`feat/TB-1-tab-songs`) · 최신 CI는 [Checks](https://github.com/choise-hun/doloop/pull/70/checks) 참조 | high |
-| TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → 시안 → 결과/TB-2 | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환 §5 합격선 통과 | 대기 | high |
+| TB-2 프론트 시안·구현 | 결과/TB-0 §2.3·§3, TB-1 계약 → [HTML 시안](명세/TB-2_시안.html)·[명세 초안](명세/TB-2_구현명세.md) → [결과/TB-2](결과/TB-2.md) | HTML 시안 확정, `tabEngine`(인스턴스 재사용), CSP diff + 보안 테스트, 재사용 방식 데스크톱 10회 전환(TB-2 명세 §7) 통과 | **TB-2-2 조건부 통과(R1 이월) · PR/CI 확인 중** (`feat/TB-2-tab-player`) | high |
 | TB 출시 전 관문 | 결과/TB-0 §0 R1·R3·R4 | 실기기 확인, SF2 근거·교체, 포맷 4종 검증 | 대기(`상용_서비스_계획.md` §4) | — |
 
 ## TB-0 관문 표
@@ -85,10 +87,9 @@
 
 ## 다음 행동
 
-1. PR [#70](https://github.com/choise-hun/doloop/pull/70)의 최신 CI 성공과 실제 머지를 확인하고, 사용자 변경을 보존한 상태에서 `main`을 fast-forward로 동기화한 뒤 TB-2 시안·명세를 시작한다.
+1. D1–D3 A안과 TB-2-2 구현이 승인됐다. 이번 회차 검수와 후속 범위는 아래 TB-2-2 기록에 둔다.
 2. 배포 전 사람 확인: 운영 `takes` 버킷 `file_size_limit`이 10MB 이상인지 확인한다. `allowed_mime_types`는 명세 §13 U1에서 `ANY`로 확인됐다.
-3. TB-2 착수 때 결과/TB-0 §2.3의 CSP diff와 §0 R2의 인스턴스 재사용을 완료 기준에 넣는다. 목록 API는 `include=tab`을 보낸다.
-4. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
+3. 출시 전 관문 R1·R3·R4는 `계획/상용_서비스_계획.md` §4 TB 항목에서 관리한다.
 
 ## TB-1 주니어 4단계 기록 (2026-11-25 Mac)
 
@@ -96,12 +97,28 @@
 - 전체 검증(제품 코드 무수정): `./gradlew clean test -Pkotlin.incremental=false` **432 passed / 0 failed / 0 skipped**(`TabFileValidatorTest` 6건, `TabSongApiTest` 17건 포함), `npm test` **551 pass / 0 fail**(`58 suites`), `npm run build` 오류 0(`195 modules`).
 - PR 및 CI·리뷰: PR [#70](https://github.com/choise-hun/doloop/pull/70) 생성(`base: main`, `head: feat/TB-1-tab-songs`). `5ffed9c` 기준 CI **6/6 통과**. Codex Review P2 1건(`TabFileValidator.kt:115` ZIP 엔트리 수 카운팅) 타당 확인 → 제품 코드 무수정 규칙에 따라 시니어 핀포인트 수정 인계. 상세는 [결과/TB-1](결과/TB-1.md).
 
-## 다음 세션 시작 멘트
+## TB-2-1 작성 기록 (2026-11-26 Windows)
+
+- 시작 시 `git status --short --branch`에서 `main...origin/main`, 미커밋 변경 없음. `git worktree list`에서 별도 작업 트리를 확인했다.
+- `gh pr view 70`에서 base `main`, `MERGED`, `mergedAt=2026-11-25T12:55:19Z`, merge SHA `29a3bb41d170ac14bfc1feeb504b60e128ff2e4e`. PR 최신 head `a7c44ac`의 CI 6개 성공. `git fetch origin main` → 머지 SHA 조상 확인 → `git merge --ff-only origin/main`은 `Already up to date`. `git rev-parse HEAD origin/main` 양쪽이 위 merge SHA와 일치했다.
+- 산출물은 [TB-2 HTML 시안](명세/TB-2_시안.html)과 [TB-2 명세 초안](명세/TB-2_구현명세.md). Edge에서 시안의 1150/390px 배치와 390px 등록 오류 대화상자를 시각 확인했다. 문서 링크·UTF-8/LF·Git diff 범위를 확인하고 사용자 선택을 기다린다. 제품 소스·테스트 구현 및 실행, 빌드, Git 게시와 운영 배포는 미실행. TB-1 검증은 재실행하지 않았다.
+
+## 다음 세션 시작 멘트 (결정 확정 및 구현 승인 뒤)
 
 ```text
-# 시니어 (Codex) - TB-2-1 명세 및 계약 작성
-AGENTS.md, 개발산출물/진행_TB_악보플레이어.md, 개발산출물/결과/TB-0_스파이크.md §0·§2.3·§3·§5, 개발산출물/명세/TB-1_구현명세.md를 읽고 TB-2-1 명세 및 계약 작성을 진행한다.
-- 이번 세션 범위: PR #70의 실제 머지를 확인한 뒤 사용자 변경을 보존하고 main을 fast-forward로 동기화한다. TB-2 프론트 HTML 시안과 선택지, 상세 명세 초안을 작성한다.
-- 금지 범위: 제품 소스·테스트 구현, 빌드·테스트 실행, 커밋·push·PR 게시, 머지·운영 배포. TB-1 검증은 반복하지 않는다.
-- 완료 조건: 시안과 명세를 검토에 제시한다. 명세에 목록 include=tab, CSP diff, 플레이어 인스턴스 재사용 및 데스크톱 10회 전환 합격선을 포함한다.
+# 시니어 (Codex) - TB-2-2 구현
+AGENTS.md, 개발산출물/진행_TB_악보플레이어.md, 개발산출물/명세/TB-2_구현명세.md, 개발산출물/명세/TB-2_시안.html을 읽고 TB-2-2 구현을 진행한다.
+- 이번 세션 범위: 승인된 D1–D3와 현 브랜치·HEAD·status·diff를 확인하고 기존 작업을 보존한다. 승인 시안, 혼합 목록·플레이어 계약 및 CSP를 구현하고 검증한다.
+- 금지 범위: TB-1 재검증, 승인 밖 계약 변경, 미승인 Git 게시, PR 머지·운영 배포.
+- 완료 조건: 명세 §7에서 맡은 검수 범위를 통과하고 데스크톱 10회 전환 증거와 나머지 검수·Git 처리 인계 범위를 기록한다.
 ```
+
+
+## TB-2-2 시니어 구현 기록 (2026-11-26 Windows)
+
+- 승인 범위는 D1-A, D2-A, D3-A의 프런트·자산·CSP 및 담당 검수다. 구현 착수 기준은 PR #70 머지 커밋 `29a3bb41d170ac14bfc1feeb504b60e128ff2e4e`로, 시작 `main`과 `origin/main`이 일치했다. 작업 브랜치는 `feat/TB-2-tab-player`다. 시작 때 있던 인수인계·진행 파일 변경과 미추적 시안·명세를 보존했고, 진행 기록과 승인 결정만 이어서 반영했다.
+- PLAYER의 TAB 업로드·곁믹서·공통 조작, 혼합 목록과 HOME·기록 링크를 연결했다. 인증 서명 재확인, 정확한 origin과 바이트 수 검증, IndexedDB 사용자 분리·최신 두 곡 캐시를 적용했다. 이전 전환의 데이터·렌더·녹음은 각각 세대 검증과 종료 절차로 처리한다.
+- `@coderline/alphatab` 1.9.0을 고정하고 Vite·앱 번들·Docker 및 정적 MIME에 `/at/`를 연결했다. SPA에서만 CSS 해시 두 개와 self 폰트·Worker를 허용한다. 출처 확인이 남은 SF2는 공식 배포 산출물에서 제외하고 브라우저 검증 중 로컬 npm 자산으로 공급했다.
+- 최초 390px 제품 정렬 spec은 등록 버튼 부재로 실패했다. 제품 적용 후 601px 이상에서 입력 44px와 버튼 48px 차이를 발견해 같은 높이 48px로 정렬했다. P1에서 재사용 엔진이 준비에 실패한 예비 계측은 alphaSynth의 준비 이벤트가 MIDI 완료보다 앞서 도착하는 순서까지 재현했다. MIDI 완료 시 준비 상태를 함께 검사한 후 연속 전환을 다시 실행했다.
+- **2026-11-26 이어받기 보완 및 검수(Gemini):** Codex 세션 사용량 한도 중단 시점 이후를 이어받아 ① `A.gp` 오선지 전환 크래시(`tabEngine.ts` `showStandardNotation`/`showTablature` 보장), ② `PracticePage.module.css`/`TabPlayer.module.css` 디자인 규칙 위반 및 `PracticePage.tsx` `tab.audio` 정적 키, ③ `#urlForm` 곡 선택 전 조건부 표시·`악보 올리기` `ghostBtn` 전환(`DS23-P2/P3`, `WF2-W`) 및 `switchingSong` 잠금 복원(`UXR3-PL09`), ④ `layout/practice.spec.js`의 `SL2` URL 매칭·`UXN-Z` submit 버튼 셀렉터를 수정했다. 임시 디버그 파일 `test/e2e/tb2-track-debug.spec.js`는 삭제했다.
+- **검증 현황:** `npm run build` 통과, Node 단위 테스트 50건 + `I0-6` 통과, `tab-player.spec.js` 14/14, `home-category`·`player-category`·`remote-player` 13/13, `layout/practice.spec.js` 기존 72건 + 수정 표적 24건 전부 통과. **TB2-M(`run-12`, `run-13`)**은 피크(+85~87MB)·자원 카운터 0·JS Heap 안정·CSP 0을 통과했으나 Windows `PrivatePageCount` 잔류(`R_i−R0` 최대 +31.9/+35.0MB, `R_end−B0` +18.3/+14.7MB, 드리프트 +15.7/+7.6MB)가 D3-A 한도를 초과했다. 2026-11-26 사용자 승인으로 조건부 통과(실기기 저메모리 검증 R1 이월)를 [결과/TB-2](결과/TB-2.md)에 기록하고 `feat/TB-2-tab-player` 커밋·push·main PR 게시 및 CI 확인을 진행한다.

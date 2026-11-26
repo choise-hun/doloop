@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PLAYER 악보 시안</title>
+  <link rel="stylesheet" href="../../frontend/src/styles/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; }
+    main, .nav { width: min(calc(100% - 32px), 1120px); margin-inline: auto; }
+    .mast { border-bottom: 1px solid var(--line); background: var(--surface); }
+    .nav { min-height: 60px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 8px; }
+    .brand { font-size: 24px; font-weight: 700; margin-right: 12px; }
+    .nav strong { border: 1px solid var(--ink); border-bottom: 2px solid var(--fill1); border-radius: var(--radius-block); padding: 8px 12px; }
+    main { padding-block: 20px 44px; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 24px; font-weight: 300; }
+    h2 { font-size: 18px; }
+    p { line-height: 1.55; }
+    small, .meta { font-family: var(--font-mono); color: var(--muted); font-size: 12px; }
+    a { color: var(--ink); text-underline-offset: 3px; }
+    button, input, select, summary { font-family: inherit; font-size: 14px; color: inherit; }
+    button, select, .field { border: 1px solid var(--line); border-radius: var(--radius-block); background: var(--paper); min-height: 44px; padding: 6px 10px; }
+    button, summary, select { cursor: pointer; }
+    button:hover, select:hover { border-color: var(--ink); }
+    button[aria-pressed="true"], .selected { border-color: var(--ink); font-weight: 700; background: var(--surface2); }
+    button:disabled { opacity: .5; cursor: default; }
+    .primary { min-height: 48px; background: var(--fill1); color: var(--ink); border-color: var(--ink); border-radius: var(--radius-pill); font-weight: 700; font-size: 17px; padding-inline: 20px; }
+    .review, .section, .score, .mixer, .state, dialog { border: 1px solid var(--seam-hairline); border-radius: var(--radius-block); background: var(--paper); }
+    .review { display: grid; gap: 12px; background: var(--cream); padding: 14px; margin-bottom: 18px; }
+    .review-head { justify-content: space-between; }
+    .review-head, .controls, .toolbar, .song-head, .section-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .review label, dialog label { display: grid; gap: 5px; }
+    .app { display: grid; gap: 12px; }
+    .song-head { justify-content: space-between; padding: 10px 14px; border-left: var(--spine-width) solid var(--fill2); }
+    .add-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+    .add-row:has(.upload-top[hidden]) { grid-template-columns: minmax(0, 1fr) auto; }
+    .add-row input { width: 100%; min-width: 0; }
+    .add-row .upload-top[hidden] { display: none; }
+    .stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+    .score { overflow: auto; height: clamp(280px, 50dvh, 520px); padding: 14px; }
+    .toolbar { margin-bottom: 8px; justify-content: space-between; }
+    .score > header { padding: 10px 8px; }
+    .system { display: grid; grid-template-columns: repeat(var(--bars-per-system, 4), minmax(0, 1fr)); padding: 20px 8px 12px; }
+    .bar { position: relative; min-width: 0; height: 72px; display: grid; align-items: center; grid-template-columns: repeat(4, minmax(0, 1fr)); font-family: var(--font-mono); border: 0; border-right: 1px solid var(--muted); border-radius: 0; padding: 0 2px; background: repeating-linear-gradient(to bottom, var(--muted) 0 1px, transparent 1px 14px) top left / 100% 71px no-repeat; }
+    .bar:first-child { border-left: 1px solid var(--muted); }
+    .bar.current { background-color: var(--surface2); box-shadow: inset 3px 0 var(--fill2); }
+    .bar b { justify-self: center; background: var(--paper); font-size: 14px; padding-inline: 2px; transform: translateY(var(--note-offset)); }
+    .bar small { position: absolute; top: -20px; left: 6px; }
+    .bar b:nth-of-type(1) { --note-offset: -7px; }
+    .bar b:nth-of-type(2) { --note-offset: 7px; }
+    .bar b:nth-of-type(3) { --note-offset: 21px; }
+    .bar b:nth-of-type(4) { --note-offset: -21px; }
+    .staff .bar { background-size: 100% 57px; }
+    .mixer { padding: 0 12px 12px; }
+    .mixer summary, .library summary { min-height: 44px; padding-block: 12px; font-weight: 700; }
+    .mixer-body { display: grid; gap: 12px; }
+    .track { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 6px; }
+    .track label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; }
+    .track input { min-width: 0; min-height: 44px; }
+    input[type="range"] { accent-color: var(--ink); }
+    .player-bottom { display: grid; gap: 12px; }
+    .section { padding: 12px; }
+    .section-head { justify-content: space-between; margin-bottom: 6px; }
+    .listen, .range { display: grid; align-content: start; gap: 8px; }
+    .seek { width: 100%; min-height: 44px; }
+    .state { height: clamp(280px, 50dvh, 520px); display: grid; align-content: center; justify-items: center; gap: 12px; text-align: center; padding: 20px; }
+    .video { background: var(--media-bg); min-height: 0; height: auto; aspect-ratio: 16 / 9; align-self: start; }
+    .video small { background: var(--paper); color: var(--ink); padding: 6px 10px; }
+    .rows { display: grid; gap: 6px; }
+    .song-row { text-align: left; display: flex; gap: 8px; align-items: center; width: 100%; }
+    .tag { border: 1px solid var(--line); border-radius: var(--radius-block); padding: 2px 4px; white-space: nowrap; }
+    dialog { width: min(calc(100% - 32px), 480px); color: var(--ink); padding: 18px; }
+    dialog::backdrop { background: var(--scrim); }
+    dialog form { display: grid; gap: 12px; }
+    dialog input { min-width: 0; width: 100%; }
+    dialog .controls { justify-content: flex-end; }
+    .error { color: var(--bad); }
+    @media (min-width: 961px) {
+      .side-mixer .stage { grid-template-columns: minmax(0, 1fr) 240px; }
+      .player-bottom { grid-template-columns: minmax(0, 1fr) 360px; }
+      .app[data-state="youtube"] { grid-template-columns: minmax(0, 1fr) 360px; }
+      .app[data-state="youtube"] .song-head, .app[data-state="youtube"] .add-row,
+      .app[data-state="youtube"] .player-bottom { grid-column: 1 / -1; }
+    }
+    @media (max-width: 600px) {
+      .add-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .upload-top { grid-column: 1; justify-self: start; }
+      .system { --bars-per-system: 2; row-gap: 24px; }
+      .review .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .review label:last-child { grid-column: 1 / -1; }
+      .review select { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header class="mast">
+    <div class="nav"><b class="brand">RE:DO</b><span>HOME</span><strong>▶ PLAYER</strong><span>LEARN</span><span>TRAILS</span><span>CHORDS</span><span>NOTES</span></div>
+  </header>
+  <main>
+    <section class="review" aria-label="시안 선택">
+      <div class="review-head"><h1>PLAYER 악보 시안</h1><a href="TB-2_구현명세.md">명세 초안</a></div>
+      <div class="controls">
+        <label>악보 등록 위치
+          <select id="d1"><option value="a">A · 상단과 보관함</option><option value="b">B · 보관함 안</option></select>
+        </label>
+        <label>트랙 믹서 위치
+          <select id="d2"><option value="a">A · 넓으면 옆에</option><option value="b">B · 항상 아래</option></select>
+        </label>
+        <label>화면 상태
+          <select id="example"><option value="tab">악보 재생 준비</option><option value="youtube">YouTube 재생 준비</option><option value="empty">곡 선택 전</option><option value="loading">악보 불러오는 중</option><option value="error">악보 읽기 오류</option><option value="upload">악보 등록</option><option value="upload-error">악보 등록 오류</option></select>
+        </label>
+      </div>
+      <p class="meta">가로 · 악보 옆 믹서 240px(961px 이상) / 세로 · 악보 280–520px, 새 버튼 44px 이상 / 글자 · 일반 조작 14px</p>
+    </section>
+    <div id="app" class="app side-mixer" data-state="tab">
+      <header class="section song-head">
+        <div><h2 id="song-title">저녁 연습</h2><small id="song-meta">TAB · 저녁 연습.gp</small></div>
+        <button id="show-library" type="button">곡 보관함</button>
+      </header>
+      <div class="add-row">
+        <input class="field" type="url" aria-label="YouTube URL" placeholder="YouTube URL 붙여넣기">
+        <button type="button" id="open-video">열기</button>
+        <button type="button" class="upload-top" data-open-upload>악보 올리기</button>
+      </div>
+      <div class="stage" id="tab-stage">
+        <section aria-label="악보">
+          <div class="toolbar"><div class="controls" aria-label="악보 표기">
+            <button type="button" id="tab-mode" aria-pressed="true">타브</button>
+            <button type="button" id="staff-mode" aria-pressed="false">오선지</button>
+          </div><button type="button" data-toggle aria-pressed="false">메트로놈</button></div>
+          <div id="score" class="score" tabindex="0" aria-label="악보 스크롤 창">
+            <header><small>♩ = 96 · 4/4</small></header>
+            <div id="systems"></div>
+            <small>♪ alphaTab.net</small>
+          </div>
+        </section>
+        <details class="mixer" id="mixer">
+          <summary>트랙 믹서</summary>
+          <div class="mixer-body">
+            <label>표시 트랙 <select id="track-select"><option>기타</option><option>베이스</option><option>드럼</option></select></label>
+            <div class="track"><strong>기타</strong><div class="controls"><button type="button" data-toggle aria-label="기타 솔로" aria-pressed="false">솔로</button><button type="button" data-toggle aria-label="기타 뮤트" aria-pressed="false">뮤트</button></div><label>볼륨 <input type="range" aria-label="기타 볼륨" value="80"></label></div>
+            <div class="track"><strong>베이스</strong><div class="controls"><button type="button" data-toggle aria-label="베이스 솔로" aria-pressed="false">솔로</button><button type="button" data-toggle aria-label="베이스 뮤트" aria-pressed="false">뮤트</button></div><label>볼륨 <input type="range" aria-label="베이스 볼륨" value="70"></label></div>
+            <div class="track"><strong>드럼</strong><div class="controls"><button type="button" data-toggle aria-label="드럼 솔로" aria-pressed="false">솔로</button><button type="button" data-toggle aria-label="드럼 뮤트" aria-pressed="false">뮤트</button></div><label>볼륨 <input type="range" aria-label="드럼 볼륨" value="75"></label></div>
+          </div>
+        </details>
+      </div>
+      <section class="state video" id="video" hidden aria-label="YouTube 플레이어"><small>YouTube 영상 영역</small></section>
+      <section class="state" id="placeholder" hidden aria-live="polite">
+        <h2 id="state-title"></h2><p id="state-help"></p>
+        <button type="button" id="retry" hidden>다시 시도</button>
+      </section>
+      <div class="player-bottom">
+        <section class="section listen" aria-label="공통 재생 및 녹음">
+          <small id="position">00:07 / 01:32</small>
+          <input type="range" class="seek" aria-label="재생 위치" min="0" max="92" value="7">
+          <div class="controls">
+            <button class="primary" type="button" id="play" aria-pressed="false">▶ 재생</button>
+            <button type="button" data-toggle aria-pressed="false">마이크 녹음</button>
+            <label>배속 <select aria-label="배속"><option>100%</option><option>75%</option><option>50%</option><option>25%</option></select></label>
+          </div>
+        </section>
+        <div class="app">
+          <section class="section range" aria-label="구간 설정">
+            <div class="section-head"><h2>구간 설정</h2><small id="range-label">A 00:05 · B 00:12</small></div>
+            <div class="controls"><button type="button" id="point-a">A 지정</button><button type="button" id="point-b">B 지정</button><button type="button" data-toggle aria-pressed="false">반복</button></div>
+            <div class="controls"><label>대기 <select aria-label="반복 전 대기"><option>없음</option><option>3초</option><option>5초</option></select></label><select aria-label="프리셋"><option>프리셋 선택</option><option>도입부 반복</option></select><button type="button">프리셋 저장</button></div>
+          </section>
+          <details id="library" class="section library" open>
+            <summary>곡 보관함</summary>
+            <div class="section-head"><select aria-label="분류"><option>전체 곡</option><option>연습곡</option></select><button type="button" data-open-upload>악보 올리기</button></div>
+            <div class="rows">
+              <button type="button" class="song-row selected" data-song="tab" aria-current="true"><small class="tag">TAB</small> 저녁 연습</button>
+              <button type="button" class="song-row" data-song="youtube"><small class="tag">YouTube</small> 리듬 기타 연습</button>
+              <button type="button" class="song-row" data-song="tab-b"><small class="tag">TAB</small> 베이스 워밍업</button>
+            </div>
+          </details>
+        </div>
+      </div>
+      <section class="section" id="records"><div class="section-head"><h2>연습 기록</h2></div><p class="meta">최근 연습 · 12분 · 녹음 1개</p></section>
+    </div>
+  </main>
+  <dialog id="upload" aria-labelledby="upload-title">
+    <form id="upload-form">
+      <div class="section-head"><h2 id="upload-title">악보 올리기</h2><button type="button" id="cancel-upload" aria-label="등록 닫기">닫기</button></div>
+      <label>악보 파일 <input class="field" type="file" accept=".gp,.xml,.mxl" aria-describedby="formats"></label>
+      <p id="formats" class="meta">.gp, .xml, .mxl · 최대 10MB</p>
+      <label>곡 제목 (선택) <input class="field" maxlength="300" placeholder="비우면 파일 이름을 사용합니다"></label>
+      <label>아티스트 (선택) <input class="field" maxlength="200"></label>
+      <p id="upload-message" class="error" role="status" hidden>악보 파일을 읽을 수 없습니다. 다른 파일을 선택해 주세요.</p>
+      <div class="controls"><button class="primary" type="submit" id="submit" disabled>등록</button></div>
+    </form>
+  </dialog>
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const viewport = matchMedia('(min-width: 961px)');
+    const app = byId('app');
+    const dialog = byId('upload');
+    const mode = byId('example');
+    const seek = document.querySelector('.seek');
+    const file = dialog.querySelector('input[type="file"]');
+    let currentSong = 'tab';
+    let staff = false;
+    let points = [5, 12];
+    const time = (seconds) => String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+
+    function setPosition(position) {
+      const seconds = Number(position);
+      seek.value = String(seconds);
+      byId('position').textContent = time(seconds) + ' / 01:32';
+      document.querySelectorAll('.bar').forEach((bar, index) => bar.classList.toggle('current', index === Math.floor(seconds / 3)));
+    }
+
+    function drawScore() {
+      const frets = [[0, 2, 2, 0], [3, 2, 0, 2], [0, 0, 2, 3], [5, 3, 2, 0]];
+      const systems = byId('systems');
+      systems.replaceChildren();
+      byId('score').classList.toggle('staff', staff);
+      for (let row = 0; row < 4; row++) {
+        const system = document.createElement('div');
+        system.className = 'system';
+        for (let col = 0; col < 4; col++) {
+          const index = row * 4 + col;
+          const bar = document.createElement('button');
+          bar.type = 'button';
+          bar.className = 'bar';
+          bar.setAttribute('aria-label', (index + 1) + '마디로 이동');
+          const label = document.createElement('small');
+          label.textContent = index + 1;
+          bar.append(label);
+          for (const fret of frets[(row + col + (currentSong === 'tab-b' ? 1 : 0)) % frets.length]) {
+            const note = document.createElement('b');
+            note.setAttribute('aria-hidden', 'true');
+            note.textContent = staff ? '♩' : fret;
+            bar.append(note);
+          }
+          bar.addEventListener('click', () => setPosition(index * 3));
+          system.append(bar);
+        }
+        systems.append(system);
+      }
+      setPosition(seek.value);
+    }
+
+    function layoutMixer() {
+      const side = byId('d2').value === 'a';
+      app.classList.toggle('side-mixer', side);
+      byId('mixer').open = side && viewport.matches;
+    }
+
+    function showState(state, song = 'tab') {
+      currentSong = song;
+      const tab = state === 'tab';
+      const video = state === 'youtube';
+      app.dataset.state = state;
+      byId('tab-stage').hidden = !tab;
+      byId('video').hidden = !video;
+      byId('placeholder').hidden = tab || video;
+      byId('records').hidden = !tab && !video;
+      byId('play').disabled = !tab && !video;
+      seek.disabled = !tab && !video;
+      byId('song-title').textContent = video ? '리듬 기타 연습' : state === 'empty' ? '곡을 선택하세요' : song === 'tab-b' ? '베이스 워밍업' : '저녁 연습';
+      byId('song-meta').textContent = video ? 'YouTube' : state === 'empty' ? '' : song === 'tab-b' ? 'TAB · 베이스 워밍업.mxl' : 'TAB · 저녁 연습.gp';
+      const messages = {
+        empty: ['연습할 곡을 열어 주세요', 'YouTube URL을 입력하거나 보관함에서 곡을 선택할 수 있습니다.'],
+        loading: ['악보를 불러오는 중', '악보를 그리는 동안 잠시 기다려 주세요.'],
+        error: ['악보 파일을 읽을 수 없습니다', '다시 시도하거나 보관함에서 다른 곡을 선택해 주세요.'],
+      };
+      byId('state-title').textContent = messages[state]?.[0] || '';
+      byId('state-help').textContent = messages[state]?.[1] || '';
+      byId('retry').hidden = state !== 'error';
+      document.querySelectorAll('[data-song]').forEach((button) => {
+        const selected = (tab || video || state === 'loading' || state === 'error') && button.dataset.song === song;
+        button.classList.toggle('selected', selected);
+        button.setAttribute('aria-current', selected ? 'true' : 'false');
+      });
+      drawScore();
+    }
+
+    function openUpload(error = false) {
+      byId('upload-message').textContent = '악보 파일을 읽을 수 없습니다. 다른 파일을 선택해 주세요.';
+      byId('upload-message').hidden = !error;
+      if (!dialog.open) dialog.showModal();
+    }
+
+    byId('d1').addEventListener('change', (event) => { document.querySelector('.upload-top').hidden = event.target.value !== 'a'; });
+    byId('d2').addEventListener('change', layoutMixer);
+    viewport.addEventListener('change', layoutMixer);
+    mode.addEventListener('change', () => {
+      if (mode.value.startsWith('upload')) {
+        openUpload(mode.value === 'upload-error');
+        return;
+      }
+      showState(mode.value, mode.value === 'youtube' ? 'youtube' : 'tab');
+    });
+    byId('show-library').addEventListener('click', () => {
+      const library = byId('library');
+      library.open = true;
+      library.scrollIntoView({ block: 'nearest' });
+      library.querySelector('summary').focus();
+    });
+    for (const button of document.querySelectorAll('[data-open-upload]')) button.addEventListener('click', () => openUpload());
+    byId('cancel-upload').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => { if (mode.value.startsWith('upload')) mode.value = app.dataset.state; });
+    file.addEventListener('change', () => { byId('submit').disabled = file.files.length === 0; });
+    byId('upload-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      byId('upload-message').hidden = false;
+      byId('upload-message').textContent = '시안에서는 파일을 전송하지 않습니다.';
+    });
+    for (const button of document.querySelectorAll('[data-song]')) {
+      button.addEventListener('click', () => {
+        const song = button.dataset.song;
+        mode.value = song === 'youtube' ? 'youtube' : 'tab';
+        showState(mode.value, song);
+      });
+    }
+    byId('open-video').addEventListener('click', () => { mode.value = 'youtube'; showState('youtube', 'youtube'); });
+    byId('retry').addEventListener('click', () => { mode.value = 'loading'; showState('loading', currentSong); });
+    seek.addEventListener('input', () => setPosition(seek.value));
+    for (const [index, id] of ['point-a', 'point-b'].entries()) {
+      byId(id).addEventListener('click', () => {
+        points[index] = Number(seek.value);
+        byId('range-label').textContent = 'A ' + time(points[0]) + ' · B ' + time(points[1]);
+      });
+    }
+    for (const button of document.querySelectorAll('[data-toggle], #play')) {
+      button.addEventListener('click', () => {
+        const pressed = button.getAttribute('aria-pressed') === 'true';
+        button.setAttribute('aria-pressed', String(!pressed));
+        if (button.id === 'play') button.textContent = pressed ? '▶ 재생' : 'Ⅱ 일시정지';
+      });
+    }
+    for (const button of [byId('tab-mode'), byId('staff-mode')]) {
+      button.addEventListener('click', () => {
+        staff = button.id === 'staff-mode';
+        byId('staff-mode').setAttribute('aria-pressed', String(staff));
+        byId('tab-mode').setAttribute('aria-pressed', String(!staff));
+        drawScore();
+      });
+    }
+    layoutMixer();
+    showState('tab');
+  </script>
+</body>
+</html>
