@@ -712,11 +712,17 @@ function requireLogin(): void {
   }
 }
 
-function parseMedia<T extends Partial<{ mediaType: unknown; videoId: unknown }>>(dto: T): T & SongMedia {
+function parseMedia<T extends Partial<{ mediaType: unknown; videoId: unknown }>>(
+  dto: T,
+  allowLegacyEmptyVideo = false,
+): T & SongMedia {
   if (dto?.mediaType === 'tab' && dto.videoId === null) return { ...dto, mediaType: 'tab', videoId: null };
   if ((dto?.mediaType === undefined || dto.mediaType === 'youtube') &&
-      typeof dto?.videoId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(dto.videoId)) {
+      typeof dto?.videoId === 'string' && dto.videoId.trim().length > 0) {
     return { ...dto, mediaType: 'youtube', videoId: dto.videoId };
+  }
+  if (allowLegacyEmptyVideo && dto?.mediaType === undefined && (dto?.videoId === undefined || dto?.videoId === '')) {
+    return { ...dto, mediaType: 'youtube', videoId: '' };
   }
   throw new Error(t('practice.songsLoadFailed'));
 }
@@ -1088,7 +1094,7 @@ async function listSessions(params?: { from?: string; to?: string; today?: strin
   const queryString = qs.toString();
   const path = '/api/v1/sessions' + (queryString ? '?' + queryString : '');
   const r = await getAuthRef().apiFetch(path);
-  return { ...r, sessions: r.sessions.map(parseMedia) };
+  return { ...r, sessions: r.sessions.map((item: SessionWithSongDto) => parseMedia(item, true)) };
 }
 
 async function updateMemo(sessionId: string, memo: string): Promise<{ ok: boolean }> {

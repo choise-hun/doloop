@@ -45,6 +45,12 @@ export function createYouTubeEngine(
     setPlaybackRate: (rate) => player.setPlaybackRate(rate),
     getAvailablePlaybackRates: () => player.getAvailablePlaybackRates(),
     cueVideoById: (cue) => player.cueVideoById(cue),
-    destroy: () => player.destroy(),
+    destroy: () => {
+      try {
+        player.destroy?.();
+      } catch {
+        /* ignore */
+      }
+    },
   };
 }

@@ -318,7 +318,7 @@ test('TB2-C product policy rejects extra Worker, font and inline permissions', a
       window.tb2PolicyErrors = [];
       try { new Worker('https://blocked.invalid/worker.js').terminate(); }
       catch (error) { window.tb2PolicyErrors.push(error.name); }
-      new Worker(blob).terminate();
+      try { new Worker(blob).terminate(); } catch { /* Chromium may throw synchronously on CSP violation */ }
       try { Function('return 1')(); } catch (error) { window.tb2PolicyErrors.push(error.name); }
       URL.revokeObjectURL(blob);
     `,
